@@ -1,12 +1,6 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset">
-      <span class="item-wrapper" @click="audioPlay = !audioPlay">
-        <i i-carbon-pause-outline v-if="audioPlay" />
-        <i i-carbon-play-outline v-else />
-      </span>
-    </TopHeader>
-    <audio :src="audio" ref="audioRef" loop="true"></audio>
+    <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-card">
       <div class="score-item">
         <span class="label">{{ i18n('bestScore') }}</span>
@@ -75,15 +69,6 @@ import { ref, reactive, computed, watch, watchEffect } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import confetti from './confetti';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
-import audio from './assets/yzcw.mp3';
-
-const audioRef = ref(null);
-const audioPlay = ref(false);
-
-watch(audioPlay, val => {
-  if (val) audioRef.value.play();
-  else audioRef.value.pause();
-});
 
 const BIG_VAL = 3;
 const VIRTUAL_CLICK_EFFECT_DURATION = 220;
