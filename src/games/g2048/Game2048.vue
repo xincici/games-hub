@@ -63,8 +63,8 @@ function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (saved?.result === LOSE || !Array.isArray(saved?.tiles) || !saved.tiles.length) return false;
-    saved.tiles.forEach(t => { if (t.id > tileId) tileId = t.id; });
-    tiles.value = saved.tiles;
+    // 存档不含 id，必须重新分配自增 id：模板 :key 依赖 id，缺 id 会导致移动动画错乱
+    tiles.value = saved.tiles.map(t => ({ ...t, id: ++tileId }));
     score.value = Math.max(...saved.tiles.map(t => t.value));
     winShown = Boolean(saved.winShown);
     gameResult.value = GAMING;

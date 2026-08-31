@@ -59,7 +59,7 @@ const [GAMING, LOSE] = [0, 1];
 const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 5;
 const DIFFICULTY_KEY = '__snake_game__difficulty';
-const BEST_PREFIX = '__snake_game__best_';
+const BEST_KEY = '__snake_game__best';
 // 难度 → 移动间隔 ms（难度越高越快）与每食得分
 const SPEEDS = [400, 320, 250, 190, 140];
 const SCORE_PER_FOOD = [1, 2, 3, 4, 6];
@@ -76,7 +76,7 @@ function initDifficulty() {
   return saved >= MIN_DIFFICULTY && saved <= MAX_DIFFICULTY ? saved : 1;
 }
 const difficulty = ref(initDifficulty());
-const bestScore = ref(+(localStorage.getItem(`${BEST_PREFIX}${difficulty.value}`) || 0));
+const bestScore = ref(+(localStorage.getItem(BEST_KEY) || 0));
 
 const interval = computed(() => SPEEDS[difficulty.value - 1]);
 const canvasSize = 400;
@@ -90,7 +90,11 @@ let ctx = null;
 
 watch(difficulty, val => {
   localStorage.setItem(DIFFICULTY_KEY, val);
-  bestScore.value = +(localStorage.getItem(`${BEST_PREFIX}${val}`) || 0);
+  // 游戏进行中改难度：立即以新速度重启定时器
+  if (timer && !paused.value && gameResult.value === GAMING) {
+    stopTimer();
+    timer = setInterval(tick, interval.value);
+  }
   draw();
 });
 
@@ -175,17 +179,18 @@ function tick() {
     || snake.some(([r, c]) => r === head[0] && c === head[1])) {
     gameResult.value = LOSE;
     stopTimer();
-    if (score.value > bestScore.value) {
-      bestScore.value = score.value;
-      localStorage.setItem(`${BEST_PREFIX}${difficulty.value}`, score.value);
-      newBest.value = true;
-    }
     draw();
     return;
   }
   snake.unshift(head);
   if (head[0] === food[0] && head[1] === food[1]) {
     score.value += SCORE_PER_FOOD[difficulty.value - 1];
+    // 一超过历史最佳就实时更新并持久化
+    if (score.value > bestScore.value) {
+      bestScore.value = score.value;
+      localStorage.setItem(BEST_KEY, score.value);
+      newBest.value = true;
+    }
     spawnFood();
   } else {
     snake.pop();
