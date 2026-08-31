@@ -8,6 +8,7 @@
           :key="game.id"
           :to="game.path"
           class="game-card"
+          @click="setLaunchOrigin($event.currentTarget)"
         >
           <i :class="game.icon" />
           <span class="game-name">{{ dictOf(game.id)[language].gameTitle }}</span>
@@ -21,6 +22,7 @@
 import TopHeader from './TopHeader.vue';
 import { games } from '@/shared/games';
 import { language, dictOf } from '@/shared/i18n';
+import { setLaunchOrigin } from '@/shared/launch';
 </script>
 
 <style scoped lang="scss">

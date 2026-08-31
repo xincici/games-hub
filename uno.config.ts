@@ -29,5 +29,6 @@ export default defineConfig({
     'i-mdi-cards-outline',
     'i-mdi-puzzle',
     'i-mdi-numeric',
+    'i-mdi-snake',
   ],
 });

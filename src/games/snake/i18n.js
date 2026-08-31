@@ -1,0 +1,40 @@
+export default {
+  en: {
+    gameTitle: 'Snake',
+    bestScore: '🏆 Best Score',
+    score: '✨ Score',
+    start: '🎮 New Game',
+    pause: '⏸ Pause',
+    resume: '▶️ Resume',
+    helpTip: 'Click for help!',
+    helpMsg: 'Control the snake to eat the food. Each food makes the snake longer and earns points. The game ends when the snake hits the wall or its own body.',
+    help1: 'Control the snake with arrow keys (or WASD), or swipe on the screen.',
+    help2: 'Difficulty 1 ~ 5, the higher the difficulty, the faster the snake moves.',
+    help3: 'Higher difficulty gives more points per food.',
+    help4: 'The button next to the help icon toggles through-wall mode: the snake wraps around to the opposite side instead of dying when hitting a wall.',
+    confirmText: 'OK, I See',
+    newBest: 'New Best Score',
+    tipWin: 'You Win',
+    tipLost: 'Game Over',
+    rotateTip: 'Please rotate your device to portrait'
+  },
+  cn: {
+    gameTitle: '贪吃蛇',
+    bestScore: '🏆 最佳得分',
+    score: '✨ 当前得分',
+    start: '🎮 新游戏',
+    pause: '⏸ 暂停',
+    resume: '▶️ 继续',
+    helpTip: '查看帮助',
+    helpMsg: '控制贪吃蛇吃食物，每吃到一个食物蛇身变长并得分，撞墙或撞到自己的身体则游戏结束。',
+    help1: '方向键（或 WASD）控制蛇的移动方向，也可以在屏幕上滑动',
+    help2: '难度 1 ~ 5，难度越高蛇移动速度越快',
+    help3: '难度越高，每个食物的得分越高',
+    help4: '帮助图标旁的按钮可切换穿墙模式：开启后撞墙不死，蛇会从对面钻出来',
+    confirmText: '好的，明白',
+    newBest: '新纪录诞生',
+    tipWin: '你赢了',
+    tipLost: '游戏结束',
+    rotateTip: '请旋转设备至竖屏'
+  }
+};

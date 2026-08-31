@@ -1,5 +1,9 @@
 <template>
-  <router-view />
+  <router-view v-slot="{ Component, route }">
+    <Transition :name="route.meta.game === 'home' ? 'app-close' : 'app-open'">
+      <component :is="Component" :key="route.meta.game" />
+    </Transition>
+  </router-view>
   <div class="landscape-tip">
     <span>📱</span>
     <span>{{ i18n('rotateTip') }}</span>
@@ -31,6 +35,46 @@ html, body, #app {
 }
 .landscape-tip {
   display: none;
+}
+// iOS 风格的 App 打开 / 关闭过渡：游戏页从点击的图标位置缩放展开 / 缩回
+// 过渡期间进入的页面绝对定位覆盖在上层，避免与离开页面叠加撑高文档流
+.app-open-enter-active {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transform-origin: var(--launch-x, 50%) var(--launch-y, 50%);
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.32s ease-out;
+}
+.app-open-leave-active {
+  transition: transform 0.32s ease-in, opacity 0.32s ease-in;
+}
+.app-open-enter-from {
+  transform: scale(0.08);
+  opacity: 0;
+}
+.app-open-leave-to {
+  transform: scale(0.94);
+  opacity: 0;
+}
+.app-close-enter-active {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+.app-close-leave-active {
+  transform-origin: var(--launch-x, 50%) var(--launch-y, 50%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.7, 0.2), opacity 0.3s ease-in;
+}
+.app-close-enter-from {
+  transform: scale(0.94);
+  opacity: 0;
+}
+.app-close-leave-to {
+  transform: scale(0.08);
+  opacity: 0;
 }
 @media only screen and (orientation: landscape) and (max-height: 500px) {
   .landscape-tip {

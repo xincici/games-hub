@@ -45,7 +45,8 @@ src/
     ├── guess/            # GuessNumber.vue + CountTimer.vue + confetti/robot/i18n.js
     ├── poker/            # MainGame.vue + CardItem/RuleArea + bet/constants/dice/rules/i18n.js
     ├── puzzle/           # MainGame.vue + confetti/difficulty/rocker/i18n.js
-    └── g2048/            # Game2048.vue + confetti/i18n.js（route /2048，key 前缀 __game_2048__）
+    ├── g2048/            # Game2048.vue + confetti/i18n.js（route /2048，key 前缀 __game_2048__）
+    └── snake/            # SnakeGame.vue（canvas 渲染）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -62,6 +63,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - 德州扑克：`__poker_game_*`（constants.js）
   - 数字迷宫：`__number_puzzle__*`
   - 2048：`__game_2048__*`
+  - 贪吃蛇：`__snake_game__*`（难度 `__snake_game__difficulty`，最佳分按难度存 `__snake_game__best_<1-5>`，穿墙开关 `__snake_game__through_wall`）
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关（click：背景音乐；guess：机器人；poker：骰子/猜大小；puzzle：摇杆）。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、猜数字判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
 
