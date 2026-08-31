@@ -1,0 +1,29 @@
+{
+  "name": "games-hub",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "yarn@1.22.22",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@iconify-json/carbon": "^1.1.17",
+    "@iconify-json/mdi": "^1.0.12",
+    "canvas-confetti": "^1.9.2",
+    "lodash.samplesize": "^4.2.0",
+    "sass": "^1.63.3",
+    "vue": "^3.2.45",
+    "vue-router": "^4.2.5",
+    "workbox-window": "^7.0.0"
+  },
+  "devDependencies": {
+    "@unocss/vite": "^0.58.9",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "unocss": "^0.58.9",
+    "vite": "^5.2.0",
+    "vite-plugin-pwa": "^0.19.8"
+  }
+}
