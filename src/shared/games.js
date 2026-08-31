@@ -3,6 +3,7 @@ import clickDict from '@/games/click/i18n';
 import guessDict from '@/games/guess/i18n';
 import pokerDict from '@/games/poker/i18n';
 import puzzleDict from '@/games/puzzle/i18n';
+import g2048Dict from '@/games/g2048/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -29,6 +30,12 @@ export const games = [
     helpKey: '__poker_game_helped',
   },
   {
+    id: 'g2048',
+    path: '/2048',
+    icon: 'i-mdi-numeric',
+    helpKey: '__game_2048__help_showed',
+  },
+  {
     id: 'puzzle',
     path: '/puzzle',
     icon: 'i-mdi-puzzle',
@@ -46,4 +53,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['guess', guessDict],
   ['poker', pokerDict],
   ['puzzle', puzzleDict],
+  ['g2048', g2048Dict],
 ].forEach(([id, dict]) => registerGame(id, dict));

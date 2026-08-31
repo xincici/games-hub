@@ -28,5 +28,6 @@ export default defineConfig({
     'i-mdi-counter',
     'i-mdi-cards-outline',
     'i-mdi-puzzle',
+    'i-mdi-numeric',
   ],
 });

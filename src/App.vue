@@ -83,6 +83,8 @@ body {
   --enter-color: #1e9e5a;
   --del-bg: #fdeeee;
   --del-color: #d2504a;
+  --board-bg: #bbada0;
+  --cell-bg: rgba(238, 228, 218, 0.35);
   background: var(--bg-color);
   &.dark {
     --border-color: #4a4a4a;
@@ -111,6 +113,8 @@ body {
     --enter-color: #4ec98a;
     --del-bg: rgba(229, 127, 121, 0.16);
     --del-color: #e57f79;
+    --board-bg: #4a443e;
+    --cell-bg: rgba(255, 255, 255, 0.08);
   }
 }
 </style>
