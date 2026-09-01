@@ -95,6 +95,11 @@ onUnmounted(() => {
     font-size: 20px;
     color: var(--text-color);
     text-decoration: none;
+    // 关闭 iOS 系统 tap 高亮，让 :active 反馈成为唯一视觉反馈
+    -webkit-tap-highlight-color: transparent;
+    &:active {
+      opacity: 0.5;
+    }
   }
   :slotted(.item-wrapper) {
     flex-grow: 0;
@@ -102,6 +107,10 @@ onUnmounted(() => {
     padding: 0 8px;
     font-size: 20px;
     color: var(--text-color);
+    -webkit-tap-highlight-color: transparent;
+    &:active {
+      opacity: 0.5;
+    }
   }
 }
 </style>
