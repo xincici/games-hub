@@ -53,7 +53,6 @@
       <div v-if="phase === WON" class="result win">
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
         <span v-if="newBest">{{ i18n('newBest') }}</span>
-        <button class="game-icon keep" @click="initGame">{{ i18n('start') }}</button>
       </div>
     </div>
   </div>
@@ -181,7 +180,7 @@ function onCardClick(card) {
   if (firstCard.emoji === card.emoji) {
     firstCard.matched = card.matched = true;
     firstCard = null;
-    if (cards.value.every(c => c.matched)) setTimeout(win, 500);
+    if (cards.value.every(c => c.matched)) setTimeout(win, 1500);
   } else {
     lock = true;
     const prev = firstCard;
@@ -200,6 +199,7 @@ function win() {
   const best = bestTime.value;
   if (!best || elapsed < best) {
     localStorage.setItem(bestKey(), elapsed);
+    bestTime.value = elapsed;
     newBest.value = true;
   }
   confetti();
@@ -215,6 +215,17 @@ function win() {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes flash {
+  0%, 50%, 100% {
+    opacity: 1;
+    transform: rotateY(180deg) scale(1);
+  }
+  25%, 75% {
+    opacity: 0.15;
+    transform: rotateY(180deg) scale(1.08);
   }
 }
 
@@ -283,21 +294,26 @@ function win() {
     margin: 16px 0;
     height: 72px;
     .difficulty-wrapper {
-      flex: 1;
+      flex: 3;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 2px;
       .difficulty-value {
-        min-width: 52px;
+        min-width: 40px;
         text-align: center;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: bold;
+        white-space: nowrap;
         font-variant-numeric: tabular-nums;
+      }
+      .opt-icon {
+        padding: 4px;
+        font-size: 20px;
       }
     }
     .opt-half {
-      flex: 1;
+      flex: 3;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -312,7 +328,7 @@ function win() {
       }
     }
     .start-wrapper {
-      flex: 1;
+      flex: 4;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -333,16 +349,14 @@ function win() {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 20px;
+    padding: 8px 16px;
     font-size: 14px;
     font-weight: bold;
+    white-space: nowrap;
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
     border-radius: 8px;
-    &.keep {
-      background: var(--win-color);
-    }
   }
   .game-area {
     position: relative;
@@ -391,8 +405,9 @@ function win() {
     -webkit-tap-highlight-color: transparent;
     &.matched {
       pointer-events: none;
+      // 翻面 transition 0.4s → 先闪烁再消除，动画串行衔接
       .card-inner {
-        animation: 0.45s ease 0.1s forwards clear;
+        animation: flash 0.6s ease 0.45s, clear 0.35s ease 1.05s forwards;
       }
     }
     .card-inner {
