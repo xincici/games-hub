@@ -99,7 +99,7 @@ html, body, #app {
     }
   }
 }
-// 统一的浅色 / 深色主题变量（四个游戏变量的并集，取值保持一致）
+// 统一的浅色 / 深色主题变量（各游戏变量的并集，取值保持一致）
 body {
   --border-color: #eee;
   --card-border-color: #dcdfe6;

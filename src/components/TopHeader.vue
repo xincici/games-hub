@@ -1,6 +1,6 @@
 <template>
   <div class="header-wrapper">
-    <router-link to="/" class="item-wrapper home-btn">
+    <router-link v-if="!isHome" to="/" class="item-wrapper home-btn">
       <i i-carbon-home />
     </router-link>
     <span v-if="showHelp" class="item-wrapper">
@@ -26,6 +26,8 @@ import { toggle as toggleLanguage } from '@/shared/i18n';
 import { isDark, toggle as toggleTheme } from '@/shared/theme';
 import { activeGame } from '@/shared/i18n';
 import { gameConfig } from '@/shared/games';
+
+const isHome = computed(() => activeGame.value === 'home');
 
 defineProps({
   showHelp: {

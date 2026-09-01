@@ -1,6 +1,6 @@
 # Games Hub · 游戏合集
 
-四个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
+六个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
 
 | 游戏 | 玩法简介 |
 | --- | --- |
@@ -32,7 +32,7 @@
 ## 快速开始
 
 ```bash
-yarn install   # 或 corepack yarn install
+yarn install
 yarn dev       # 启动开发服务器
 yarn build     # 构建到 dist/
 yarn preview   # 本地预览构建产物
@@ -45,11 +45,11 @@ yarn preview   # 本地预览构建产物
 ```
 src/
 ├── App.vue          # 根组件 + 全局主题 CSS 变量（浅/深两套）
-├── router.js        # hash 路由：/ /click /guess /poker /puzzle
+├── router.js        # hash 路由：/ /click /guess /poker /puzzle /2048 /snake
 ├── shared/          # 共享模块：i18n（多语言）、theme（主题）、games（游戏注册表）
 ├── components/      # HomePage（首页）、TopHeader（标题栏）、HelpDialog（帮助弹窗）
-└── games/           # 四个游戏源码，每游戏一个目录
-    ├── click/  guess/  poker/  puzzle/
+└── games/           # 六个游戏源码，每游戏一个目录
+    ├── click/  guess/  poker/  puzzle/  g2048/  snake/
 scripts/             # 图标源文件（SVG + 512px PNG）
 public/              # favicon 与 PWA 图标
 ```

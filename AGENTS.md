@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、猜数字、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、猜数字、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048 和贪吃蛇，现共六个游戏。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -12,25 +12,25 @@
 - **构建**：Vite 5（`@` 别名指向 `src/`）
 - **样式**：SCSS + UnoCSS（presetUno / presetAttributify / presetIcons，图标用 carbon 和 mdi 集合）
 - **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）
-- **依赖管理**：yarn 1.22（通过 `corepack yarn <cmd>` 调用；全局 yarn 1.6 太旧）
+- **依赖管理**：yarn 1.22.22（package.json `packageManager` 已固定；全局 yarn 已升级至 1.22.22，可直接 `yarn <cmd>`）
 
 ## 常用命令
 
 ```bash
-corepack yarn install   # 安装依赖（项目 .yarnrc 已覆盖为 npm 官方源，勿用全局内网镜像配置）
-corepack yarn dev       # 启动开发服务器
-corepack yarn build     # 构建到 dist/
-corepack yarn preview   # 预览构建产物
+yarn install   # 安装依赖（项目 .yarnrc 已覆盖为 npm 官方源，勿用全局内网镜像配置）
+yarn dev       # 启动开发服务器
+yarn build     # 构建到 dist/
+yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`）做冒烟检查。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`）做冒烟检查。
 
 ## 目录结构
 
 ```
 src/
 ├── main.js               # 入口，注册 i18n 插件与路由
-├── App.vue               # 根组件：router-view + 横屏提示；定义全局 CSS 主题变量（浅/深两套，四游戏变量并集）
+├── App.vue               # 根组件：router-view + 横屏提示；定义全局 CSS 主题变量（浅/深两套，六游戏变量并集）
 ├── router.js             # hash 路由；afterEach 把 activeGame 切到对应游戏命名空间
 ├── shared/
 │   ├── i18n.js           # 共享 i18n：language ref（key __games_hub__language）、按游戏注册字典、i18n()/helpItems()
