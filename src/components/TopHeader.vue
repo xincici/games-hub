@@ -91,7 +91,7 @@ onUnmounted(() => {
   .item-wrapper {
     flex-grow: 0;
     cursor: pointer;
-    margin: 0 8px;
+    padding: 0 8px;
     font-size: 20px;
     color: var(--text-color);
     text-decoration: none;
@@ -99,7 +99,7 @@ onUnmounted(() => {
   :slotted(.item-wrapper) {
     flex-grow: 0;
     cursor: pointer;
-    margin: 0 8px;
+    padding: 0 8px;
     font-size: 20px;
     color: var(--text-color);
   }
