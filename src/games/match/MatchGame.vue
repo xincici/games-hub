@@ -218,20 +218,28 @@ function win() {
   }
 }
 
+// card-inner 上的 opacity < 1 会强制 3D 扁平化（preserve-3d 失效），
+// 翻面被中断会露出背面，因此明暗闪烁只放在正面 .front-face 上
 @keyframes flash {
   0%, 50%, 100% {
-    opacity: 1;
     transform: rotateY(180deg) scale(1);
   }
   25%, 75% {
-    opacity: 0.15;
     transform: rotateY(180deg) scale(1.08);
+  }
+}
+
+@keyframes blink {
+  0%, 50%, 100% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0.15;
   }
 }
 
 @keyframes clear {
   to {
-    opacity: 0;
     transform: rotateY(180deg) scale(0);
   }
 }
@@ -408,6 +416,9 @@ function win() {
       // 翻面 transition 0.4s → 先闪烁再消除，动画串行衔接
       .card-inner {
         animation: flash 0.6s ease 0.45s, clear 0.35s ease 1.05s forwards;
+        .front-face {
+          animation: blink 0.6s ease 0.45s;
+        }
       }
     }
     .card-inner {
