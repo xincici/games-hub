@@ -13,7 +13,12 @@
       </div>
     </div>
     <div class="card opt-area">
-      <button class="game-icon" @click="initGame">{{ i18n('start') }}</button>
+      <div class="opt-half">
+        <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" />
+      </div>
+      <div class="opt-half">
+        <button class="game-icon" @click="initGame">{{ i18n('start') }}</button>
+      </div>
     </div>
     <div class="game-area">
       <div class="grid">
@@ -39,9 +44,10 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import CountTimer from './CountTimer.vue';
 import confetti from './confetti';
 
 const SIZE = 4;
@@ -57,6 +63,10 @@ const newBest = ref(false);
 const tiles = ref([]);
 let tileId = 0;
 let winShown = false;
+
+const timerRef = ref(null);
+// 进行中才计时（含 2048 达成后的继续游戏）；失败/未开始时暂停
+const timerRunning = computed(() => gameResult.value === GAMING || gameResult.value === WIN);
 
 // 恢复上次进度：棋盘 + 得分 + 是否已展示过胜利（继续游戏状态）；失败局面不恢复
 function restore() {
@@ -74,18 +84,30 @@ function restore() {
   }
 }
 
-// 每步落定后持久化；失败局面保留棋盘展示但不写入（下次进来开新局）
+// 每步落定后持久化（含计时）；失败局面保留棋盘展示但不写入（下次进来开新局）
 watch(tiles, () => {
   if (gameResult.value === LOSE) return;
   localStorage.setItem(STATE_KEY, JSON.stringify({
     tiles: tiles.value.map(({ row, col, value }) => ({ row, col, value })),
     score: score.value,
+    time: timerRef.value?.seconds() || 0,
     winShown,
   }));
 }, { deep: true });
 
+// 失败时把最终耗时写入存档（恢复时失败局面不恢复，但 best 依赖存档时序无关）
+watch(gameResult, val => {
+  if (val === LOSE) timerRef.value?.stop();
+});
+
 onMounted(() => {
-  if (!restore()) initGame();
+  const restored = restore();
+  if (restored) {
+    const saved = JSON.parse(localStorage.getItem(STATE_KEY));
+    timerRef.value.restore(saved?.time);
+  } else {
+    initGame();
+  }
   window.addEventListener('keyup', onKeyUp);
 });
 
@@ -101,6 +123,14 @@ function onKeyUp(e) {
 
 function onScoreReset() {
   bestScore.value = 0;
+}
+
+// 计时每秒把时间写进存档（保持离开/刷新时的恢复精度）
+function onTimerTick() {
+  if (gameResult.value === LOSE) return;
+  const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+  saved.time = timerRef.value?.seconds() || 0;
+  localStorage.setItem(STATE_KEY, JSON.stringify(saved));
 }
 
 function tileStyle(tile) {
@@ -119,9 +149,11 @@ function initGame() {
   spawnTile();
   spawnTile();
   score.value = Math.max(...tiles.value.map(t => t.value));
+  timerRef.value?.reset();
   localStorage.setItem(STATE_KEY, JSON.stringify({
     tiles: tiles.value.map(({ row, col, value }) => ({ row, col, value })),
     score: 0,
+    time: 0,
     winShown: false,
   }));
 }
@@ -310,11 +342,29 @@ function onTouchEnd(e) {
     }
   }
   .opt-area {
-    margin: 16px 0;
-    padding: 10px 0;
     display: flex;
     align-items: center;
-    justify-content: center;
+    margin: 16px 0;
+    min-height: 64px;
+    .opt-half {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      &:first-child {
+        position: relative;
+        &:after {
+          content: "";
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          height: 24px;
+          border-right: 1px solid var(--border-color);
+          opacity: 0.6;
+        }
+      }
+    }
   }
   .game-icon {
     cursor: pointer;
@@ -383,6 +433,7 @@ function onTouchEnd(e) {
     height: 100%;
     left: 0;
     top: 0;
+    z-index: 2;
     border-radius: var(--card-radius);
     background: var(--mask-color);
     color: var(--win-color);

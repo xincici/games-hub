@@ -308,13 +308,17 @@ function onTouchEnd(e) {
     padding: 12px 0;
     display: flex;
     align-items: center;
+    // 难度区:两个按钮区 = 3:3.5:3.5
     .difficulty-wrapper,
     .start-wrapper {
-      flex: 1;
+      flex: 3.5;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 4px;
+    }
+    .difficulty-wrapper {
+      flex: 3;
     }
     .difficulty-value {
       margin: 0 8px;
@@ -341,7 +345,7 @@ function onTouchEnd(e) {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
+    padding: 8px 10px;
     font-size: 14px;
     font-weight: bold;
     background: var(--primary-bg);

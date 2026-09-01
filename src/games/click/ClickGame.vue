@@ -324,7 +324,7 @@ function userRedo() {
   .game-icon {
     cursor: pointer;
     display: inline-block;
-    padding: 8px 14px;
+    padding: 8px 10px;
     font-size: 14px;
     font-weight: bold;
     background: var(--primary-bg);
