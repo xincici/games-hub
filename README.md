@@ -1,6 +1,6 @@
 # Games Hub · 游戏合集
 
-六个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
+七个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
 
 | 游戏 | 玩法简介 |
 | --- | --- |
@@ -10,6 +10,7 @@
 | 🔢 2048 | 经典 2048：滑动合并相同数字，凑出 2048 获胜，之后可继续冲击高分 |
 | 🐍 贪吃蛇 | 方向键 / 滑屏控制蛇吃食物，1-5 级难度，难度越高速度越快、单食物得分越高 |
 | 🧩 数字迷宫 | 经典数字华容道：点击或摇杆/方向键滑动，把数字按顺序排列 |
+| 😊 Emoji 对对碰 | 记忆翻牌配对：预览后翻面，翻开两张相同的 emoji 即消除，清空棋盘获胜 |
 
 ## 功能特性
 
@@ -45,11 +46,11 @@ yarn preview   # 本地预览构建产物
 ```
 src/
 ├── App.vue          # 根组件 + 全局主题 CSS 变量（浅/深两套）
-├── router.js        # hash 路由：/ /click /guess /poker /puzzle /2048 /snake
+├── router.js        # hash 路由：/ /click /guess /poker /puzzle /2048 /snake /match
 ├── shared/          # 共享模块：i18n（多语言）、theme（主题）、games（游戏注册表）
 ├── components/      # HomePage（首页）、TopHeader（标题栏）、HelpDialog（帮助弹窗）
-└── games/           # 六个游戏源码，每游戏一个目录
-    ├── click/  guess/  poker/  puzzle/  g2048/  snake/
+└── games/           # 七个游戏源码，每游戏一个目录
+    ├── click/  guess/  poker/  puzzle/  g2048/  snake/  match/
 scripts/             # 图标源文件（SVG + 512px PNG）
 public/              # favicon 与 PWA 图标
 ```

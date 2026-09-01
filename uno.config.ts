@@ -30,5 +30,6 @@ export default defineConfig({
     'i-mdi-puzzle',
     'i-mdi-numeric',
     'i-mdi-snake',
+    'i-mdi-emoticon-happy-outline',
   ],
 });
