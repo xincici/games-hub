@@ -1,20 +1,27 @@
 <template>
   <div class="header-wrapper">
-    <router-link v-if="!isHome" to="/" class="item-wrapper home-btn">
-      <i i-carbon-home />
-    </router-link>
-    <span v-if="showHelp" class="item-wrapper">
-      <HelpDialog :help-key="config.helpKey" />
-    </span>
-    <slot />
+    <div class="side left">
+      <router-link v-if="!isHome" to="/" class="item-wrapper home-btn">
+        <i i-carbon-home />
+        <span class="home-text">{{ i18n('backHome') }}</span>
+      </router-link>
+    </div>
     <span class="title" @click.stop="onTitleClick">{{ i18n('gameTitle') }}</span>
-    <span class="item-wrapper" @click="toggleTheme">
-      <i i-carbon-moon v-if="isDark" />
-      <i i-carbon-sun v-else />
-    </span>
-    <span class="item-wrapper" @click="toggleLanguage">
-      <i i-carbon-ibm-watson-language-translator />
-    </span>
+    <div class="side right">
+      <template v-if="isHome">
+        <span class="item-wrapper" @click="toggleTheme">
+          <i i-carbon-moon v-if="isDark" />
+          <i i-carbon-sun v-else />
+        </span>
+        <span class="item-wrapper" @click="toggleLanguage">
+          <i i-carbon-ibm-watson-language-translator />
+        </span>
+      </template>
+      <slot />
+      <span v-if="showHelp" class="item-wrapper">
+        <HelpDialog :help-key="config.helpKey" />
+      </span>
+    </div>
   </div>
 </template>
 
@@ -73,7 +80,9 @@ onUnmounted(() => {
   max-width: var(--max-width);
   padding: 10px 8px;
   box-sizing: border-box;
-  display: flex;
+  // 两侧操作区等宽（1fr auto 1fr），标题列不受两侧内容影响，始终水平居中
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   position: fixed;
   top: 0;
@@ -84,11 +93,29 @@ onUnmounted(() => {
   border: 0 none;
   border-bottom: 1px solid var(--border-color);
   z-index: 1;
+  .side {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    &.left {
+      justify-content: flex-start;
+    }
+    &.right {
+      justify-content: flex-end;
+    }
+  }
   .title {
-    flex: 1;
     font-size: 18px;
     font-weight: bold;
     text-align: center;
+    white-space: nowrap;
+  }
+  .home-btn {
+    gap: 2px;
+    .home-text {
+      font-size: 15px;
+      font-weight: 500;
+    }
   }
   .item-wrapper {
     flex-grow: 0;
