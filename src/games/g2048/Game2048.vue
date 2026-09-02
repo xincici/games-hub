@@ -68,29 +68,29 @@ const timerRef = ref(null);
 // 进行中才计时（含 2048 达成后的继续游戏）；失败/未开始时暂停
 const timerRunning = computed(() => gameResult.value === GAMING || gameResult.value === WIN);
 
-// 恢复上次进度：棋盘 + 得分 + 是否已展示过胜利（继续游戏状态）；失败局面不恢复
+// 恢复上次进度：棋盘 + 得分 + 是否已展示过胜利（继续游戏状态）+ 失败局面
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
-    if (saved?.result === LOSE || !Array.isArray(saved?.tiles) || !saved.tiles.length) return false;
+    if (!Array.isArray(saved?.tiles) || !saved.tiles.length) return false;
     // 存档不含 id，必须重新分配自增 id：模板 :key 依赖 id，缺 id 会导致移动动画错乱
     tiles.value = saved.tiles.map(t => ({ ...t, id: ++tileId }));
     score.value = Math.max(...saved.tiles.map(t => t.value));
     winShown = Boolean(saved.winShown);
-    gameResult.value = GAMING;
+    gameResult.value = saved.result === LOSE ? LOSE : GAMING;
     return true;
   } catch {
     return false;
   }
 }
 
-// 每步落定后持久化（含计时）；失败局面保留棋盘展示但不写入（下次进来开新局）
+// 每步落定后持久化（含计时与胜负状态）
 watch(tiles, () => {
-  if (gameResult.value === LOSE) return;
   localStorage.setItem(STATE_KEY, JSON.stringify({
     tiles: tiles.value.map(({ row, col, value }) => ({ row, col, value })),
     score: score.value,
     time: timerRef.value?.seconds() || 0,
+    result: gameResult.value,
     winShown,
   }));
 }, { deep: true });
@@ -105,6 +105,8 @@ onMounted(() => {
   if (restored) {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     timerRef.value.restore(saved?.time);
+    // 恢复到失败局面时计时器保持停止，展示最终用时
+    if (gameResult.value === LOSE) timerRef.value.stop();
   } else {
     initGame();
   }
@@ -154,6 +156,7 @@ function initGame() {
     tiles: tiles.value.map(({ row, col, value }) => ({ row, col, value })),
     score: 0,
     time: 0,
+    result: GAMING,
     winShown: false,
   }));
 }

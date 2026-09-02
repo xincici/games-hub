@@ -32,6 +32,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  // 卸载时不清 interval 会让计时器在离开页面后继续走，onTick 回调里组件已失效
+  stop();
   onListener('remove');
 });
 

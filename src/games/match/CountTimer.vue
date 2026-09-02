@@ -32,6 +32,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  stop();
   onListener('remove');
 });
 
