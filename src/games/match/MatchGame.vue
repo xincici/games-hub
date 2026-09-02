@@ -65,20 +65,10 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from './CountTimer.vue';
 import confetti from './confetti';
 import { i18n } from '@/shared/i18n';
+import { EMOJIS } from '@/shared/emojis';
 
 const SIZES = [4, 6, 8];
 const PREVIEWS = [4000, 6000, 8000];
-// 池子去重后至少覆盖 8×8 = 32 对的上限
-const EMOJIS = [...new Set([
-  '🍎', '🍌', '🍊', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥝', '🍐', '🍏',
-  '🍆', '🥕', '🥑', '🍅', '🫐', '🥒', '🥦', '🍋', '🥔', '🌶️', '🍄', '🫛',
-  '🌺', '🌼', '🌸', '🌹', '🌷', '💐', '💮', '🥀', '🌱', '🌿', '🍃', '🌳', '🌻',
-  '🍂', '🍀', '🌾', '🌵', '🪴', '🎴', '🌴', '🌲', '☘️', '🪷', '🍁', '🥠',
-  '🚗', '🚙', '🚘', '🚓', '🚕', '🚌', '🏎️', '🚚', '🚛', '🛻', '🚑', '🚒', '🚔',
-  '🏍️', '🚨', '🚖', '🚋', '🚃', '🛺', '🏁', '🚜', '🚐',
-  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐸',
-  '🏗️', '🏢', '🏠', '🏛️', '🏘️', '🏬', '🏭',
-])];
 const [PREVIEW, PLAY, WON] = ['preview', 'play', 'won'];
 const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 3;

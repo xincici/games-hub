@@ -31,5 +31,6 @@ export default defineConfig({
     'i-mdi-numeric',
     'i-mdi-snake',
     'i-mdi-emoticon-happy-outline',
+    'i-mdi-link',
   ],
 });
