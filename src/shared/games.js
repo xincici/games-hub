@@ -60,7 +60,7 @@ export const games = [
     helpKey: '__emoji_link__help_showed',
     recordsPrefix: '__emoji_link__',
     minDifficulty: 1,
-    maxDifficulty: 3,
+    maxDifficulty: 5,
   },
   {
     id: 'puzzle',

@@ -77,11 +77,11 @@ import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, hasMove, shuffleBoard } from './board';
 
 // 棋盘比「满盘所需」适当放大，emoji 随机散布、允许留白（仍保证可解）
-const SIZES = [[6, 8], [8, 8], [8, 10]];
-const PAIRS = [12, 18, 24];
+const SIZES = [[6, 6], [6, 8], [8, 8], [8, 10], [10, 10]];
+const PAIRS = [12, 16, 20, 24, 30];
 const [PLAY, WON] = ['play', 'won'];
 const MIN_DIFFICULTY = 1;
-const MAX_DIFFICULTY = 3;
+const MAX_DIFFICULTY = 5;
 const KEY_PREFIX = '__emoji_link__';
 const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
 const STATE_KEY = `${KEY_PREFIX}state`;
@@ -119,10 +119,22 @@ const linkViewBox = computed(() => {
 });
 // 连线端点从牌中心沿路径方向内缩，让线贴近牌的边缘起止
 const ENDPOINT_INSET = 0.42;
+// 棋盘外一圈的虚拟通道渲染时贴着棋盘边缘（而非半格之外）：
+// 棋盘几乎占满屏宽（左右页边距仅 16px），绕左右两侧的线跑到半格外就会出屏
+const LANE_GAP = 0.2;
 const linkPoints = computed(() => {
   const pts = linkPath.value || [];
   if (pts.length < 2) return '';
-  const svg = pts.map(([r, c]) => [c + 1.5, r + 1.5]);
+  const [H, W] = size.value;
+  const svg = pts.map(([r, c]) => {
+    let x = c + 1.5;
+    let y = r + 1.5;
+    if (c === -1) x = 1 - LANE_GAP;
+    else if (c === W) x = W + 1 + LANE_GAP;
+    if (r === -1) y = 1 - LANE_GAP;
+    else if (r === H) y = H + 1 + LANE_GAP;
+    return [x, y];
+  });
   const inset = (idx, towards) => {
     const [x1, y1] = svg[idx];
     const [x2, y2] = svg[towards];
@@ -510,18 +522,28 @@ function win() {
     border-radius: var(--card-radius);
     &.size-1 {
       --rows: 6;
-      --cols: 8;
-      .tile { font-size: 24px; }
+      --cols: 6;
+      .tile { font-size: 26px; }
     }
     &.size-2 {
-      --rows: 8;
+      --rows: 6;
       --cols: 8;
-      .tile { font-size: 24px; }
+      .tile { font-size: 22px; }
     }
     &.size-3 {
       --rows: 8;
+      --cols: 8;
+      .tile { font-size: 22px; }
+    }
+    &.size-4 {
+      --rows: 8;
       --cols: 10;
-      .tile { font-size: 17px; }
+      .tile { font-size: 18px; }
+    }
+    &.size-5 {
+      --rows: 10;
+      --cols: 10;
+      .tile { font-size: 18px; }
     }
   }
   // 连线层比棋盘四周各大一格（虚拟外圈），viewBox 与格子等比例，
