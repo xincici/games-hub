@@ -113,6 +113,8 @@ onUnmounted(() => {
   .home-btn {
     gap: 2px;
     .home-text {
+      display: inline-block;
+      transform: translate(2px, 2px);
       font-size: 15px;
       font-weight: 500;
     }
