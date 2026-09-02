@@ -118,7 +118,7 @@ const linkViewBox = computed(() => {
   return `0 0 ${W + 2} ${H + 2}`;
 });
 // 连线端点从牌中心沿路径方向内缩，让线贴近牌的边缘起止
-const ENDPOINT_INSET = 0.32;
+const ENDPOINT_INSET = 0.42;
 const linkPoints = computed(() => {
   const pts = linkPath.value || [];
   if (pts.length < 2) return '';
