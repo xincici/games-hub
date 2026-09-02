@@ -39,6 +39,7 @@
               v-if="cell"
               class="tile"
               :class="{ selected: isSelected(r, c), shaking: isShaking(r, c) }"
+              :style="{ animationDelay: `${dealing ? tileIndex(r, c) * 25 : 0}ms` }"
               @click="onTileClick(r, c)"
             >{{ cell }}</button>
             <div v-else-if="ghostAt(r, c)" class="tile vanishing">{{ ghostAt(r, c).emoji }}</div>
@@ -96,6 +97,9 @@ const vanishing = ref([]);
 const linkPath = ref(null);
 const linkKey = ref(0);
 const shuffleTip = ref(false);
+// 发牌动画中：牌按序号逐个入场（与对对碰一致），结束后恢复无延迟
+const dealing = ref(false);
+let dealTimer = null;
 const newBest = ref(false);
 const bestTime = ref(0);
 const timerRef = ref(null);
@@ -103,6 +107,29 @@ const timerRef = ref(null);
 const size = computed(() => SIZES[difficulty.value - 1]);
 const leftPairs = computed(() => board.value.flat().filter(Boolean).length / 2);
 const timerRunning = computed(() => phase.value === PLAY);
+
+// 发牌序号：按阅读顺序只数有牌的格子，空白格不占号，让入场节奏均匀
+const tileOrder = computed(() => {
+  const order = new Map();
+  let idx = 0;
+  board.value.forEach((row, r) => row.forEach((cell, c) => {
+    if (cell) order.set(`${r},${c}`, idx++);
+  }));
+  return order;
+});
+function tileIndex(r, c) {
+  return tileOrder.value.get(`${r},${c}`) || 0;
+}
+
+// 触发逐个入场动画；totalDelay 后结束（动画本身 0.35s）
+function startDealing() {
+  clearTimeout(dealTimer);
+  dealing.value = true;
+  const count = tileOrder.value.size;
+  dealTimer = setTimeout(() => {
+    dealing.value = false;
+  }, count * 25 + 350);
+}
 
 const linkLayerStyle = computed(() => {
   const [H, W] = size.value;
@@ -196,6 +223,7 @@ function restore() {
     }
     difficulty.value = d;
     board.value = restored;
+    if (phase.value === PLAY) startDealing();
     return saved.time || 0;
   } catch {
     return null;
@@ -223,6 +251,9 @@ function onTimerTick() {
 function clearTransient() {
   clearTimeout(linkTimer);
   linkTimer = null;
+  clearTimeout(dealTimer);
+  dealTimer = null;
+  dealing.value = false;
   vanishTimers.forEach(clearTimeout);
   vanishTimers = [];
   clearTimeout(shuffleTimer);
@@ -247,6 +278,7 @@ function initGame() {
   newBest.value = false;
   bestTime.value = +(localStorage.getItem(bestKey()) || 0);
   timerRef.value?.reset();
+  startDealing();
   save();
 }
 
@@ -366,6 +398,17 @@ function win() {
 </script>
 
 <style scoped lang="scss">
+@keyframes deal {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
@@ -602,6 +645,11 @@ function win() {
     color: var(--text-color);
     -webkit-tap-highlight-color: transparent;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
+    // 发牌动画：deal 从缩放 0.4 淡入；dealing 结束后 animation-name 移除，
+    // 避免 transform 冲突 selected 缩放 / vanish 动画
+    &:not(.selected):not(.shaking):not(.vanishing) {
+      animation: 0.35s ease backwards deal;
+    }
     &.selected {
       transform: scale(1.12);
       background: var(--enter-bg);
@@ -609,13 +657,13 @@ function win() {
       z-index: 1;
     }
     &.shaking {
-      animation: shake 0.35s ease;
+      animation: shake 0.35s ease !important;
     }
     &.vanishing {
       pointer-events: none;
       background: var(--enter-bg);
       box-shadow: 0 0 0 2px var(--win-color);
-      animation: vanish 0.55s ease forwards;
+      animation: vanish 0.55s ease forwards !important;
     }
   }
   .shuffle-tip {
