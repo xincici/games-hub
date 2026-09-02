@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from './CountTimer.vue';
@@ -267,9 +267,13 @@ function clearTransient() {
   shuffleTip.value = false;
 }
 
-function initGame() {
+async function initGame() {
   clearTransient();
   const [H, W] = size.value;
+  // 先渲染空矩阵销毁全部旧牌元素再填充：牌按坐标 :key 复用，
+  // 若直接换盘，同坐标的旧元素不会重播发牌动画、旧 emoji 会瞬间可见
+  board.value = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
+  await nextTick();
   board.value = generateBoard(H, W, EMOJIS, Math.random, PAIRS[difficulty.value - 1]);
   phase.value = PLAY;
   showResult.value = false;
