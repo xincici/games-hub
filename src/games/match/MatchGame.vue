@@ -302,11 +302,11 @@ function win() {
     margin: 16px 0;
     height: 72px;
     .difficulty-wrapper {
-      flex: 3;
+      flex: 3.5;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 2px;
+      gap: 8px;
       .difficulty-value {
         min-width: 40px;
         text-align: center;
@@ -315,13 +315,9 @@ function win() {
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
       }
-      .opt-icon {
-        padding: 4px;
-        font-size: 20px;
-      }
     }
     .opt-half {
-      flex: 3;
+      flex: 2.5;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -343,15 +339,20 @@ function win() {
     }
     .opt-icon {
       cursor: pointer;
-      border: 0 none;
-      background: transparent;
-      padding: 6px;
-      font-size: 22px;
-      color: var(--text-color);
       display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--card-bg-color);
+      color: var(--text-color);
+      font-size: 15px;
       &.disable {
-        opacity: 0.3;
-        pointer-events: none;
+        color: var(--border-color);
+        cursor: not-allowed;
       }
     }
   }

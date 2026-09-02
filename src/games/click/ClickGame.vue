@@ -231,6 +231,8 @@ function userRedo() {
 
 <style scoped lang="scss">
 .wrapper {
+  // flow-root 建立 BFC，阻止 score-card 的 margin-top 穿透 wrapper 把文档撑出 100dvh 出现滚动条
+  display: flow-root;
   width: 100%;
   min-width: 360px;
   box-sizing: border-box;
