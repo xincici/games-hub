@@ -475,12 +475,21 @@ function getResult(cardsNum) {
         justify-content: center;
         line-height: 1.8;
         box-sizing: border-box;
-        border-right: 1px solid var(--border-color);
+        position: relative;
         font-size: 15px;
         font-weight: bold;
+        &:not(:last-child):after {
+          content: "";
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          height: 24px;
+          border-right: 1px solid var(--border-color);
+          opacity: 0.6;
+        }
         &:last-child {
           flex: 1 0 34%;
-          border-right: 0 none;
         }
         .title {
           font-size: 13px;

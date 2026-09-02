@@ -250,9 +250,10 @@ function userRedo() {
   }
   .divider {
     width: 1px;
-    align-self: stretch;
-    margin: 10px 0;
+    height: 24px;
+    align-self: center;
     background: var(--border-color);
+    opacity: 0.6;
   }
   button,button:disabled {
     touch-action: manipulation;

@@ -239,9 +239,11 @@ $card-radius: 16px;
           content: "";
           position: absolute;
           right: 0;
-          top: 12px;
-          bottom: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          height: 24px;
           border-right: 1px solid var(--border-color);
+          opacity: 0.6;
         }
       }
     }
