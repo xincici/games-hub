@@ -21,6 +21,15 @@ export const games = [
     maxDifficulty: 10,
   },
   {
+    id: 'puzzle',
+    path: '/puzzle',
+    icon: 'i-mdi-puzzle',
+    helpKey: '__number_puzzle__help_showed',
+    recordsPrefix: '__number_puzzle__',
+    minDifficulty: 3,
+    maxDifficulty: 6,
+  },
+  {
     id: 'guess',
     path: '/guess',
     icon: 'i-mdi-counter',
@@ -61,15 +70,6 @@ export const games = [
     recordsPrefix: '__emoji_link__',
     minDifficulty: 1,
     maxDifficulty: 5,
-  },
-  {
-    id: 'puzzle',
-    path: '/puzzle',
-    icon: 'i-mdi-puzzle',
-    helpKey: '__number_puzzle__help_showed',
-    recordsPrefix: '__number_puzzle__',
-    minDifficulty: 3,
-    maxDifficulty: 6,
   },
 ];
 
