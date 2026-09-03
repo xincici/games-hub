@@ -83,55 +83,43 @@ function shuffled(list, rand) {
   return arr;
 }
 
-// 逆向生成保证可解：从空盘开始，每一步在「当前盘面上互相连通」的
-// 两个空位上放一对相同 emoji。正向游玩时按加入的相反顺序消除即可通关
-// （消除第 k 对时盘面恰好等于生成时放入第 k 对的盘面）。
-// pairs 可小于 H*W/2：未用到的格子保持空白，emoji 随机散布在扩大的矩阵里。
-// walls（可选）先于牌放置：墙格既不放牌也阻挡连线，连通性判断含墙。
-// 返回 { board, solution }，solution 为按生成顺序加入的坐标对。
+// 随机生成牌局：从全部可用格子里随机挑 pairs 对位置放牌，不保证
+// 逐对可解（难度更高，死局交给游戏内自动重排），只要求初盘有解。
+// 放置时优先让牌与已放的牌互不相邻（上下左右），相邻对尽量少。
+// walls（可选）先于牌放置：墙格既不放牌也阻挡连线。
+// 返回 { board, solution }，solution 为按生成顺序加入的坐标对（调试用）。
 export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * W) / 2, walls) {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 40; attempt++) {
     const board = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
-    const emptyCells = [];
+    const freeCells = [];
     for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
-      if (!(walls && walls[r] && walls[r][c])) emptyCells.push([r, c]);
+      if (!(walls && walls[r] && walls[r][c])) freeCells.push([r, c]);
     }
+    if (freeCells.length < pairs * 2) break;
+    // 干净格池：当前与任何已放牌都不相邻的空位
+    const cleanCells = freeCells.map(p => p);
     const pool = shuffled(emojis, rand).slice(0, pairs);
     const solution = [];
     let placed = 0;
     let stuck = false;
     while (placed < pairs) {
-      // 随机顺序扫描空位对，攒够少量可连通候选即随机取一，
-      // 避免每步全量枚举（留白越多越容易命中）
-      const order = shuffled(emptyCells.map((_, i) => i), rand);
-      const candidates = [];
-      scan:
-      for (let a = 0; a < order.length; a++) {
-        const [r1, c1] = emptyCells[order[a]];
-        for (let b = a + 1; b < order.length; b++) {
-          const [r2, c2] = emptyCells[order[b]];
-          if (findPath(board, H, W, r1, c1, r2, c2, walls)) {
-            candidates.push([order[a], order[b]]);
-            if (candidates.length >= 6) break scan;
-          }
-        }
-      }
-      if (!candidates.length) { stuck = true; break; }
-      const [i, j] = candidates[~~(rand() * candidates.length)];
-      const p1 = emptyCells[i];
-      const p2 = emptyCells[j];
-      // order 乱序，i/j 大小不定，必须先删较大的索引
-      const [lo, hi] = i < j ? [i, j] : [j, i];
-      emptyCells.splice(hi, 1);
-      emptyCells.splice(lo, 1);
+      const picks = pickPair(freeCells, board, H, W, rand, cleanCells);
+      if (!picks) { stuck = true; break; }
+      const [p1, p2] = picks;
       board[p1[0]][p1[1]] = pool[placed];
       board[p2[0]][p2[1]] = pool[placed];
       solution.push([p1, p2]);
       placed++;
+      removeFrom(freeCells, p1);
+      removeFrom(freeCells, p2);
+      removeFrom(cleanCells, p1);
+      removeFrom(cleanCells, p2);
+      dirtyNeighbors(cleanCells, p1[0], p1[1]);
+      dirtyNeighbors(cleanCells, p2[0], p2[1]);
     }
-    if (!stuck) return { board, solution };
+    if (!stuck && hasMove(board, H, W, walls)) return { board, solution };
   }
-  // 兜底：按阅读顺序把每对牌左右相邻摆放——任意顺序都可通过（0 转折互达）
+  // 兜底：按阅读顺序把每对牌左右相邻摆放——0 转折互达必有解
   const board = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
   const pool = shuffled(emojis, rand).slice(0, pairs);
   const solution = [];
@@ -148,6 +136,44 @@ export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * 
     placed++;
   }
   return { board, solution };
+}
+
+function keyOf(p) {
+  return p[0] * 1000 + p[1];
+}
+
+function removeFrom(list, p) {
+  const idx = list.findIndex(q => keyOf(q) === keyOf(p));
+  if (idx >= 0) list.splice(idx, 1);
+}
+
+// (r,c) 四邻格上有多少张已放的牌
+function neighborCount(board, H, W, r, c) {
+  let n = 0;
+  if (r > 0 && board[r - 1][c]) n++;
+  if (r < H - 1 && board[r + 1][c]) n++;
+  if (c > 0 && board[r][c - 1]) n++;
+  if (c < W - 1 && board[r][c + 1]) n++;
+  return n;
+}
+
+// 随机挑一对位置：维护「无相邻牌」的干净格池，优先从中取对；
+// 干净格不足 2 个时才退回一般随机对（牌多时难免出现少量相邻）
+function pickPair(freeCells, board, H, W, rand, cleanCells) {
+  const pool = cleanCells.length >= 2 ? cleanCells : freeCells;
+  if (pool.length < 2) return null;
+  const i = ~~(rand() * pool.length);
+  let j = ~~(rand() * pool.length);
+  if (j === i) j = (j + 1) % pool.length;
+  return [pool[i], pool[j]];
+}
+
+// 放一张牌后，把它的四邻格从干净池中移除（它们不再无邻）
+function dirtyNeighbors(cleanCells, r, c) {
+  const toRemove = new Set([[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].map(keyOf));
+  for (let i = cleanCells.length - 1; i >= 0; i--) {
+    if (toRemove.has(keyOf(cleanCells[i]))) cleanCells.splice(i, 1);
+  }
 }
 
 export function generateBoard(H, W, emojis, rand, pairs, walls) {

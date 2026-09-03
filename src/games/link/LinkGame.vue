@@ -48,7 +48,7 @@
             <button
               v-if="cell"
               class="tile"
-              :class="{ selected: isSelected(r, c), shaking: isShaking(r, c) }"
+              :class="{ selected: isSelected(r, c), shaking: isShaking(r, c), dealing }"
               :style="{ animationDelay: `${dealing ? tileIndex(r, c) * 25 : 0}ms` }"
               @click="onTileClick(r, c)"
             >{{ cell }}</button>
@@ -88,9 +88,10 @@ import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, hasMove, shuffleBoard } from './board';
 
-// 棋盘比「满盘所需」适当放大，emoji 随机散布、允许留白（仍保证可解）
+// 棋盘比「满盘所需」适当放大，emoji 随机散布、留白约一半格子；
+// 生成时优先避开相邻摆放，密度 ~50% 让牌面不挤
 const SIZES = [[6, 6], [6, 8], [8, 8], [8, 10], [10, 10]];
-const PAIRS = [12, 16, 20, 24, 30];
+const PAIRS = [9, 12, 15, 20, 25];
 const [PLAY, WON] = ['play', 'won'];
 const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 5;
@@ -231,6 +232,7 @@ function fmt(sec) {
 }
 
 // 恢复退出前的局面：棋盘 + 难度 + 墙壁 + 用时 + 胜负状态
+let shuffledOnRestore = false;
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
@@ -251,8 +253,15 @@ function restore() {
       showResult.value = true;
     } else if (remaining) {
       phase.value = PLAY;
-      // 存档时正处于死局重排的间隙：恢复后立即重排
-      if (!hasMove(restored, H, W, restoredWalls)) restored = shuffleBoard(restored, H, W, Math.random, restoredWalls);
+      // 存档时正处于死局重排的间隙：恢复后立即重排（同样带发牌动画）
+      if (!hasMove(restored, H, W, restoredWalls)) {
+        const rest = restored.flat().filter(Boolean);
+        restored = shuffleBoard(restored, H, W, Math.random, restoredWalls);
+        if (!hasMove(restored, H, W, restoredWalls)) {
+          restored = generateBoard(H, W, rest, Math.random, rest.length / 2, restoredWalls);
+        }
+        shuffledOnRestore = true;
+      }
     } else {
       return null;
     }
@@ -260,6 +269,8 @@ function restore() {
     board.value = restored;
     walls.value = restoredWalls;
     if (phase.value === PLAY) startDealing();
+    if (shuffledOnRestore) shuffleTip.value = true;
+    shuffledOnRestore = false;
     return saved.time || 0;
   } catch {
     return null;
@@ -367,10 +378,14 @@ function onTileClick(r, c) {
     return;
   }
   const [H, W] = size.value;
-  const path = board.value[sr][sc] === board.value[r][c]
-    ? findPath(board.value, H, W, sr, sc, r, c, walls.value)
-    : null;
+  if (board.value[sr][sc] !== board.value[r][c]) {
+    // emoji 不同：静默把焦点切换到刚点的牌
+    selected.value = [r, c];
+    return;
+  }
+  const path = findPath(board.value, H, W, sr, sc, r, c, walls.value);
   if (!path) {
+    // 相同但路径不通：双牌抖动提示
     onMismatch([sr, sc], [r, c]);
     return;
   }
@@ -415,11 +430,24 @@ function removePair(path, a, b) {
     return;
   }
   if (!hasMove(board.value, H, W, walls.value)) {
-    // 等连线动画播完再重排，避免画面突变
-    shuffleTimer = setTimeout(() => {
+    // 等连线动画播完再重排；重排本身带逐个入场的 deal 动画
+    shuffleTimer = setTimeout(async () => {
       if (phase.value !== PLAY || hasMove(board.value, H, W, walls.value)) return;
-      board.value = shuffleBoard(board.value, H, W, Math.random, walls.value);
+      const before = board.value;
+      const rest = before.flat().filter(Boolean);
+      // 先在原位置集合上重排；若救不活（如仅剩的一对被墙围死，
+      // 任何排列都无解），退而重新生成一局等对数的新盘面
+      let next = shuffleBoard(before, H, W, Math.random, walls.value);
+      if (!hasMove(next, H, W, walls.value)) {
+        next = generateBoard(H, W, rest, Math.random, rest.length / 2, walls.value);
+      }
+      // 先清空渲染（销毁旧牌元素）再填充，让重排重播发牌动画
+      board.value = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
+      await nextTick();
+      board.value = next;
+      selected.value = null;
       shuffleTip.value = true;
+      startDealing();
       shuffleTipTimer = setTimeout(() => {
         shuffleTip.value = false;
       }, 1600);
@@ -700,9 +728,9 @@ function win() {
     color: var(--text-color);
     -webkit-tap-highlight-color: transparent;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
-    // 发牌动画：deal 从缩放 0.4 淡入；dealing 结束后 animation-name 移除，
-    // 避免 transform 冲突 selected 缩放 / vanish 动画
-    &:not(.selected):not(.shaking):not(.vanishing) {
+    // 发牌动画只在 dealing 期间生效：结束后规则彻底移除，
+    // 避免 selected/shaking 切换时 deal 规则重新应用导致牌「消失重现」
+    &.dealing:not(.selected):not(.shaking):not(.vanishing) {
       animation: 0.35s ease backwards deal;
     }
     &.selected {
