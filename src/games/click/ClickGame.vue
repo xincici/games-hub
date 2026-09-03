@@ -384,7 +384,7 @@ function userRedo() {
         height: 44px;
         line-height: 44px;
         padding: 0;
-        border: 1px solid #e1e1e1;
+        border: 1px solid var(--tile-border-color);
         border-radius: 8px;
         font-size: 16px;
         font-weight: bold;

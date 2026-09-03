@@ -102,11 +102,14 @@ const point = computed(() => props.num ? NUMS[props.num - 1] : '');
   height: var(--height);
   margin: var(--margin);
 }
-// 主牌区（非 mini）按容器可用宽度整体缩放：每行 5 张牌 + 10×margin。
-// clamp 三个参数必须同为长度：min 48px / 值 (100vw-100px)/350*60 / max 60px
+// 主牌区（非 mini）按可用宽度缩放：开销 = card-area 左右 padding 25×2 +
+// game-area padding 12×2 + 边框 2 = 74px；5 张牌（含 margin）需 350px。
+// 即视口 ≥ 424px 时保持 60×90 原尺寸，更窄时牌与 margin 一起等比缩小。
+// clamp 三个参数必须同为长度
 .card-area .card-wrapper:not(.card-wrapper-mini) {
-  --width: clamp(48px, (100vw - 100px) / 350 * 60, 60px);
-  --height: clamp(72px, (100vw - 100px) / 350 * 90, 90px);
+  --width: clamp(48px, (100vw - 74px) / 350 * 60, 60px);
+  --height: clamp(72px, (100vw - 74px) / 350 * 90, 90px);
+  --margin: clamp(3px, (100vw - 74px) / 350 * 5, 5px);
 }
 .card {
   display: inline-block;
