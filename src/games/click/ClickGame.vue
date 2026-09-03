@@ -375,7 +375,7 @@ function userRedo() {
         position: absolute;
         z-index: 1;
         background: #ccc;
-        border-radius: 2px;
+        border-radius: 8px;
       }
       .inner {
         cursor: pointer;
@@ -385,7 +385,7 @@ function userRedo() {
         line-height: 44px;
         padding: 0;
         border: 1px solid #e1e1e1;
-        border-radius: 2px;
+        border-radius: 8px;
         font-size: 16px;
         font-weight: bold;
         background: var(--one-bg-color);

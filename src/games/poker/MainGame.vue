@@ -527,6 +527,8 @@ function getResult(cardsNum) {
       position: relative;
       font-size: 0;
       overflow: hidden;
+      display: flex;
+      justify-content: center;
       .result-win,.result-lose,.result-guess-lose {
         background: var(--mask-color);
         position: absolute;

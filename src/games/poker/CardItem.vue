@@ -102,6 +102,12 @@ const point = computed(() => props.num ? NUMS[props.num - 1] : '');
   height: var(--height);
   margin: var(--margin);
 }
+// 主牌区（非 mini）按容器可用宽度整体缩放：每行 5 张牌 + 10×margin。
+// clamp 三个参数必须同为长度：min 48px / 值 (100vw-100px)/350*60 / max 60px
+.card-area .card-wrapper:not(.card-wrapper-mini) {
+  --width: clamp(48px, (100vw - 100px) / 350 * 60, 60px);
+  --height: clamp(72px, (100vw - 100px) / 350 * 90, 90px);
+}
 .card {
   display: inline-block;
   position: absolute;

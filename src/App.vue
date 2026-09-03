@@ -116,11 +116,11 @@ body {
   --primary-bg: #2ea464;
   --win-color: #1b1;
   --lose-color: #b11;
-  --zero-bg-color: #ddffdd;
-  --one-bg-color: #f5f5f5;
-  --two-bg-color: #e5e5e5;
-  --even-bg-color: #e9edf2;
-  --odd-bg-color: #d8f3dc;
+  --zero-bg-color: #d8f0e2;
+  --one-bg-color: #f2f4f7;
+  --two-bg-color: #e4e8ee;
+  --even-bg-color: #f2f4f7;
+  --odd-bg-color: #d8f0e2;
   --key-bg: #eef0f4;
   --key-active-bg: #dfe3ea;
   --enter-bg: #e5f6ec;
