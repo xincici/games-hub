@@ -6,10 +6,10 @@
     <div class="help-wrapper" v-show="helpShow" @click.self="helpShow = false">
       <Transition name="inner">
         <div class="help-inner" v-if="helpShow">
+          <p class="help-icon">
+            <i pointer i-carbon-help text-inherit />
+          </p>
           <div class="help-content">
-            <p class="help-icon">
-              <i pointer i-carbon-help text-inherit />
-            </p>
             <p class="help-text">{{ i18n('helpMsg') }}</p>
             <ul class="help-list">
               <li v-for="(item, idx) in helpItems()" :key="idx">{{ idx + 1 }}. {{ item }}</li>
@@ -99,10 +99,13 @@ watch(helpShow, val => {
       scrollbar-gutter: stable;
       -webkit-overflow-scrolling: touch;
     }
+    // 图标固定在滚动区之外（与底部按钮区对称的固定头部）
     .help-icon {
+      flex-shrink: 0;
       text-align: center;
       font-size: 28px;
-      margin: 0 0 10px;
+      margin: 0;
+      padding: 18px 24px 4px;
       color: rgba(60, 160, 60, 0.9);
     }
     .help-text {
