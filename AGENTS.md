@@ -68,7 +68,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - 2048：`__game_2048__*`
   - 贪吃蛇：`__snake_game__*`（难度 `__snake_game__difficulty`，跨难度共享最佳分 `__snake_game__best`，穿墙开关 `__snake_game__through_wall`）
   - Emoji 对对碰：`__emoji_match__*`（难度 `__emoji_match__difficulty`，各难度最佳用时存为前缀+难度数字，如 `__emoji_match__1`）
-  - Emoji 连连看：`__emoji_link__*`（难度 `__emoji_link__difficulty`，局面存档 `__emoji_link__state`，各难度最佳用时存为前缀+难度数字，如 `__emoji_link__1`）
+  - Emoji 连连看：`__emoji_link__*`（难度 `__emoji_link__difficulty`，局面存档 `__emoji_link__state`，墙壁模式偏好 `__emoji_link__walls`，各难度最佳用时存为前缀+难度数字，如 `__emoji_link__1`）
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关（click：背景音乐；guess：机器人；poker：骰子/猜大小；puzzle：摇杆）。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、猜数字判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
 

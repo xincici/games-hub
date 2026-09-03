@@ -1,6 +1,16 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <TopHeader @onScoreReset="onScoreReset">
+      <span
+        class="item-wrapper wall-toggle"
+        :class="{ 'wall-toggle-disable': !wallToggleable }"
+        :title="i18n('wallModeTip')"
+        @click="toggleWallMode"
+      >
+        <i i-mdi-wall v-if="wallsActive" />
+        <i i-mdi-wall v-else style="opacity: 0.35" />
+      </span>
+    </TopHeader>
     <div class="card score-area">
       <div class="stat">
         <span class="stat-label">{{ i18n('bestScore') }}</span>
@@ -43,6 +53,7 @@
               @click="onTileClick(r, c)"
             >{{ cell }}</button>
             <div v-else-if="ghostAt(r, c)" class="tile vanishing">{{ ghostAt(r, c).emoji }}</div>
+            <div v-else-if="walls[r] && walls[r][c]" class="wall-block"></div>
           </div>
         </template>
         <svg
@@ -86,9 +97,16 @@ const MAX_DIFFICULTY = 5;
 const KEY_PREFIX = '__emoji_link__';
 const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
 const STATE_KEY = `${KEY_PREFIX}state`;
+const WALL_MODE_KEY = `${KEY_PREFIX}walls`;
+// 墙壁密度：约 15% 的格子随机成为墙
+const WALL_DENSITY = 0.15;
 
 const difficulty = ref(+(localStorage.getItem(DIFFICULTY_KEY) || 1));
 const board = ref([]);
+// 当前局的墙壁网格（H×W 0/1），无墙时为 []
+const walls = ref([]);
+// 墙壁模式偏好（影响新开的一局）
+const wallMode = ref(localStorage.getItem(WALL_MODE_KEY) === '1');
 const phase = ref(PLAY);
 const showResult = ref(false);
 const selected = ref(null);
@@ -107,6 +125,18 @@ const timerRef = ref(null);
 const size = computed(() => SIZES[difficulty.value - 1]);
 const leftPairs = computed(() => board.value.flat().filter(Boolean).length / 2);
 const timerRunning = computed(() => phase.value === PLAY);
+const wallsActive = computed(() => walls.value.length > 0 && walls.value.some(row => row.some(Boolean)));
+// 已连过至少一对（或已通关）后不可再切换墙壁模式——中途换墙会破坏进行中的局面
+const wallToggleable = computed(() => phase.value === WON
+  || leftPairs.value === PAIRS[difficulty.value - 1]);
+
+function toggleWallMode() {
+  if (!wallToggleable.value) return;
+  wallMode.value = !wallMode.value;
+  if (wallMode.value) localStorage.setItem(WALL_MODE_KEY, '1');
+  else localStorage.removeItem(WALL_MODE_KEY);
+  initGame();
+}
 
 // 发牌序号：按阅读顺序只数有牌的格子，空白格不占号，让入场节奏均匀
 const tileOrder = computed(() => {
@@ -200,7 +230,7 @@ function fmt(sec) {
   return ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
 }
 
-// 恢复退出前的局面：棋盘 + 难度 + 用时 + 胜负状态
+// 恢复退出前的局面：棋盘 + 难度 + 墙壁 + 用时 + 胜负状态
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
@@ -208,6 +238,11 @@ function restore() {
     const d = Math.min(MAX_DIFFICULTY, Math.max(MIN_DIFFICULTY, +(saved.difficulty || 1)));
     const [H, W] = SIZES[d - 1];
     if (saved.board.length !== H || !Array.isArray(saved.board[0]) || saved.board[0].length !== W) return null;
+    let restoredWalls = [];
+    if (Array.isArray(saved.walls) && saved.walls.length === H
+      && Array.isArray(saved.walls[0]) && saved.walls[0].length === W) {
+      restoredWalls = saved.walls.map(row => row.slice());
+    }
     let restored = saved.board.map(row => row.slice());
     const remaining = restored.flat().filter(Boolean).length;
     bestTime.value = +(localStorage.getItem(KEY_PREFIX + d) || 0);
@@ -217,12 +252,13 @@ function restore() {
     } else if (remaining) {
       phase.value = PLAY;
       // 存档时正处于死局重排的间隙：恢复后立即重排
-      if (!hasMove(restored, H, W)) restored = shuffleBoard(restored, H, W);
+      if (!hasMove(restored, H, W, restoredWalls)) restored = shuffleBoard(restored, H, W, Math.random, restoredWalls);
     } else {
       return null;
     }
     difficulty.value = d;
     board.value = restored;
+    walls.value = restoredWalls;
     if (phase.value === PLAY) startDealing();
     return saved.time || 0;
   } catch {
@@ -233,6 +269,7 @@ function restore() {
 function save() {
   localStorage.setItem(STATE_KEY, JSON.stringify({
     board: board.value,
+    walls: walls.value,
     difficulty: difficulty.value,
     time: timerRef.value?.seconds() || 0,
     phase: phase.value,
@@ -267,14 +304,21 @@ function clearTransient() {
   shuffleTip.value = false;
 }
 
+// 随机生成墙壁网格（先于牌生成，保证可解性判断含墙）
+function generateWalls(H, W) {
+  return Array.from({ length: H }, () => Array.from({ length: W }, () => Math.random() < WALL_DENSITY ? 1 : 0));
+}
+
 async function initGame() {
   clearTransient();
   const [H, W] = size.value;
+  const newWalls = wallMode.value ? generateWalls(H, W) : [];
   // 先渲染空矩阵销毁全部旧牌元素再填充：牌按坐标 :key 复用，
   // 若直接换盘，同坐标的旧元素不会重播发牌动画、旧 emoji 会瞬间可见
   board.value = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
+  walls.value = newWalls;
   await nextTick();
-  board.value = generateBoard(H, W, EMOJIS, Math.random, PAIRS[difficulty.value - 1]);
+  board.value = generateBoard(H, W, EMOJIS, Math.random, PAIRS[difficulty.value - 1], newWalls);
   phase.value = PLAY;
   showResult.value = false;
   selected.value = null;
@@ -323,7 +367,9 @@ function onTileClick(r, c) {
     return;
   }
   const [H, W] = size.value;
-  const path = board.value[sr][sc] === board.value[r][c] ? findPath(board.value, H, W, sr, sc, r, c) : null;
+  const path = board.value[sr][sc] === board.value[r][c]
+    ? findPath(board.value, H, W, sr, sc, r, c, walls.value)
+    : null;
   if (!path) {
     onMismatch([sr, sc], [r, c]);
     return;
@@ -368,11 +414,11 @@ function removePair(path, a, b) {
     win();
     return;
   }
-  if (!hasMove(board.value, H, W)) {
+  if (!hasMove(board.value, H, W, walls.value)) {
     // 等连线动画播完再重排，避免画面突变
     shuffleTimer = setTimeout(() => {
-      if (phase.value !== PLAY || hasMove(board.value, H, W)) return;
-      board.value = shuffleBoard(board.value, H, W);
+      if (phase.value !== PLAY || hasMove(board.value, H, W, walls.value)) return;
+      board.value = shuffleBoard(board.value, H, W, Math.random, walls.value);
       shuffleTip.value = true;
       shuffleTipTimer = setTimeout(() => {
         shuffleTip.value = false;
@@ -553,6 +599,11 @@ function win() {
     border: 0 none;
     border-radius: 8px;
   }
+  // 已开局后墙壁开关禁用态
+  .wall-toggle-disable {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
   .game-area {
     position: relative;
     width: calc(100% - 32px);
@@ -669,6 +720,18 @@ function win() {
       box-shadow: 0 0 0 2px var(--win-color);
       animation: vanish 0.55s ease forwards !important;
     }
+  }
+  // 墙壁：比牌更暗的斜纹块，不可点击、不参与消除
+  .wall-block {
+    position: absolute;
+    inset: 3px;
+    border-radius: 6px;
+    background: var(--two-bg-color);
+    background-image: repeating-linear-gradient(45deg,
+      transparent 0 6px,
+      rgba(0, 0, 0, 0.14) 6px 9px);
+    border: 1px solid var(--tile-border-color);
+    box-sizing: border-box;
   }
   .shuffle-tip {
     position: absolute;
