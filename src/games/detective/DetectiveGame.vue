@@ -46,6 +46,12 @@
           <button class="game-icon primary" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </div>
       </div>
+      <div v-else-if="phase === LOST" class="result lose">
+        <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
+        <div class="result-actions">
+          <button class="game-icon primary" @click="retryLevel">{{ i18n('retry') }}</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -61,9 +67,9 @@ import { EMOJIS } from '@/shared/emojis';
 
 // 2×2 / 2×3 / 3×3 / 3×4 / 4×4 / 4×5 / 5×5 共 7 关；观察时长随棋盘增大递增
 const SIZES = [[2, 2], [2, 3], [3, 3], [3, 4], [4, 4], [4, 5], [5, 5]];
-const MEMORIES = [2000, 2500, 3000, 3500, 4000, 4500, 5000];
+const MEMORIES = [3000, 4000, 4500, 5500, 6000, 7000, 8000];
 const FLIP_MS = 1000;
-const [MEMORY, FLIP, ANSWER, WON] = ['memory', 'flip', 'answer', 'won'];
+const [MEMORY, FLIP, ANSWER, WON, LOST] = ['memory', 'flip', 'answer', 'won', 'lost'];
 const KEY_PREFIX = '__emoji_detective__';
 const LEVEL_KEY = `${KEY_PREFIX}level`;
 const BEST_KEY = `${KEY_PREFIX}best`;
@@ -97,7 +103,7 @@ const boardStyle = computed(() => {
   };
 });
 // 全程计时（观察/翻面/作答都在走），仅结算后暂停
-const timerRunning = computed(() => phase.value !== WON);
+const timerRunning = computed(() => phase.value !== WON && phase.value !== LOST);
 
 let memoryTimer = null;
 let memoryTicker = null;
@@ -183,6 +189,7 @@ function onCellClick(idx) {
   if (phase.value !== ANSWER) return;
   if (idx === swappedIdx.value) {
     phase.value = WON;
+    timerRef.value?.stop();
     if (level.value + 1 > bestLevel.value) {
       bestLevel.value = level.value + 1;
       localStorage.setItem(BEST_KEY, bestLevel.value);
@@ -192,6 +199,14 @@ function onCellClick(idx) {
   } else {
     shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
+    if (hearts.value <= 0) {
+      // 生命耗尽：失败结算，计时器停止
+      setTimeout(() => {
+        phase.value = LOST;
+        timerRef.value?.stop();
+        save();
+      }, 600);
+    }
     setTimeout(() => {
       if (shakeIdx.value === idx) shakeIdx.value = -1;
     }, 600);
