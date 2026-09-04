@@ -79,7 +79,7 @@ export const games = [
     helpKey: '__emoji_detective__help_showed',
     recordsPrefix: '__emoji_detective__',
     minDifficulty: 1,
-    maxDifficulty: 7,
+    maxDifficulty: 9,
   },
 ];
 

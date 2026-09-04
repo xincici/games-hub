@@ -13,10 +13,10 @@ export default {
     tipLost: 'Out of Hearts',
     helpTip: 'Click for help!',
     helpMsg: 'Memorize all emojis during the preview. After the cards flip over, one emoji is secretly swapped — when they flip back, spot the imposter among all the face-up emojis and tap it!',
-    help1: 'Levels go 2×2, 2×3, 3×3, 3×4, 4×4, 4×5 and 5×5; the preview time grows from 3s to 8s as the board gets bigger.',
+    help1: 'Levels go 1×3, 2×2, 2×3, 2×4, 3×3, 3×4, 3×5, 4×4 and 4×5; the preview time grows from 2s to 7s as the board gets bigger.',
     help2: 'After the preview all cards flip over for 1 second — the swap happens mid-flip — then they all flip back face-up.',
     help3: 'Tap the swapped emoji to win; tapping a wrong card shakes it and costs a heart.',
-    help4: 'Each win offers Replay and Next Level. New games always start from 2×2.',
+    help4: 'Each win offers Replay and Next Level. New games always start from 1×3.',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -34,10 +34,10 @@ export default {
     tipLost: '生命耗尽',
     helpTip: '查看帮助',
     helpMsg: '展示阶段记住盘面上所有的 emoji。卡片全部翻面时其中一个会被偷偷替换，全部翻回正面后——从正面朝上的 emoji 里找出那个冒牌货！',
-    help1: '关卡依次为 2×2、2×3、3×3、3×4、4×4、4×5、5×5 共七关，棋盘越大观察时间越长（3 秒 ~ 8 秒）。',
+    help1: '关卡依次为 1×3、2×2、2×3、2×4、3×3、3×4、3×5、4×4、4×5 共九关，棋盘越大观察时间越长（2 秒 ~ 7 秒）。',
     help2: '观察结束后全部卡片翻面停留 1 秒，替换发生在翻面过程中，随后全部翻回正面朝上。',
     help3: '点出被替换的那个 emoji 即胜利；点错牌会抖动并损失一颗心。',
-    help4: '胜利后可选「重玩本关」或「下一关」。新游戏永远从 2×2 开始。',
+    help4: '胜利后可选「重玩本关」或「下一关」。新游戏永远从 1×3 开始。',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }

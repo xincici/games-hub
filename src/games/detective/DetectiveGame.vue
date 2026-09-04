@@ -65,9 +65,9 @@ import confetti from './confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 
-// 2×2 / 2×3 / 3×3 / 3×4 / 4×4 / 4×5 / 5×5 共 7 关；观察时长随棋盘增大递增
-const SIZES = [[2, 2], [2, 3], [3, 3], [3, 4], [4, 4], [4, 5], [5, 5]];
-const MEMORIES = [3000, 4000, 4500, 5500, 6000, 7000, 8000];
+// 1×3 / 2×2 / 2×3 / 2×4 / 3×3 / 3×4 / 3×5 / 4×4 / 4×5 共 9 关；观察时长随棋盘增大递增
+const SIZES = [[1, 3], [2, 2], [2, 3], [2, 4], [3, 3], [3, 4], [3, 5], [4, 4], [4, 5]];
+const MEMORIES = [2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000];
 const FLIP_MS = 1000;
 const [MEMORY, FLIP, ANSWER, WON, LOST] = ['memory', 'flip', 'answer', 'won', 'lost'];
 const KEY_PREFIX = '__emoji_detective__';
