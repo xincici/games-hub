@@ -33,5 +33,6 @@ export default defineConfig({
     'i-mdi-emoticon-happy-outline',
     'i-mdi-link',
     'i-mdi-incognito',
+    'i-mdi-target',
   ],
 });

@@ -8,6 +8,7 @@ import snakeDict from '@/games/snake/i18n';
 import matchDict from '@/games/match/i18n';
 import linkDict from '@/games/link/i18n';
 import detectiveDict from '@/games/detective/i18n';
+import hunterDict from '@/games/hunter/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -81,6 +82,15 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 9,
   },
+  {
+    id: 'hunter',
+    path: '/hunter',
+    icon: 'i-mdi-target',
+    helpKey: '__emoji_hunter__help_showed',
+    recordsPrefix: '__emoji_hunter__',
+    minDifficulty: 1,
+    maxDifficulty: 6,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -95,4 +105,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['match', matchDict],
   ['link', linkDict],
   ['detective', detectiveDict],
+  ['hunter', hunterDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

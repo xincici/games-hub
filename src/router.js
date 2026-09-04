@@ -11,6 +11,7 @@ import SnakeGame from './games/snake/SnakeGame.vue';
 import MatchGame from './games/match/MatchGame.vue';
 import LinkGame from './games/link/LinkGame.vue';
 import DetectiveGame from './games/detective/DetectiveGame.vue';
+import HunterGame from './games/hunter/HunterGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -23,6 +24,7 @@ const routes = [
   { path: '/match', component: MatchGame, meta: { game: 'match' } },
   { path: '/link', component: LinkGame, meta: { game: 'link' } },
   { path: '/detective', component: DetectiveGame, meta: { game: 'detective' } },
+  { path: '/hunter', component: HunterGame, meta: { game: 'hunter' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 
