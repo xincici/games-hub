@@ -48,10 +48,10 @@
             <button
               v-if="cell"
               class="tile"
-              :class="{ selected: isSelected(r, c), shaking: isShaking(r, c), dealing }"
+              :class="{ selected: isSelected(r, c), shaking: isShaking(r, c), hinting: isHinting(r, c), dealing }"
               :style="{ animationDelay: `${dealing ? tileIndex(r, c) * 25 : 0}ms` }"
               @click="onTileClick(r, c)"
-            >{{ cell }}</button>
+            ><span class="tile-face">{{ cell }}</span></button>
             <div v-else-if="ghostAt(r, c)" class="tile vanishing">{{ ghostAt(r, c).emoji }}</div>
             <div v-else-if="walls[r] && walls[r][c]" class="wall-block"></div>
           </div>
@@ -119,6 +119,11 @@ const shuffleTip = ref(false);
 // 发牌动画中：牌按序号逐个入场（与对对碰一致），结束后恢复无延迟
 const dealing = ref(false);
 let dealTimer = null;
+// 空闲提示：6s 无操作时高亮一对可连的牌
+const IDLE_HINT_MS = 6000;
+const hintPair = ref(null);
+let idleTimer = null;
+let hintTimer = null;
 const newBest = ref(false);
 const bestTime = ref(0);
 const timerRef = ref(null);
@@ -160,6 +165,47 @@ function startDealing() {
   dealTimer = setTimeout(() => {
     dealing.value = false;
   }, count * 25 + 350);
+}
+
+// ---------- 空闲提示 ----------
+// 任何玩家交互后调用：清掉提示并重新起 6s 计时
+function pokeIdle() {
+  hintPair.value = null;
+  clearTimeout(hintTimer);
+  clearTimeout(idleTimer);
+  if (phase.value !== PLAY) return;
+  idleTimer = setTimeout(showHint, IDLE_HINT_MS);
+}
+
+// 找一对可连的牌播放呼吸缩放；播完（2 次循环 ≈ 1.6s）后重新计时
+function showHint() {
+  if (phase.value !== PLAY) return;
+  const [H, W] = size.value;
+  const byEmoji = new Map();
+  board.value.forEach((row, r) => row.forEach((v, c) => {
+    if (!v) return;
+    if (!byEmoji.has(v)) byEmoji.set(v, []);
+    byEmoji.get(v).push([r, c]);
+  }));
+  for (const positions of byEmoji.values()) {
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const [r1, c1] = positions[i];
+        const [r2, c2] = positions[j];
+        if (findPath(board.value, H, W, r1, c1, r2, c2, walls.value)) {
+          hintPair.value = [[r1, c1], [r2, c2]];
+          hintTimer = setTimeout(pokeIdle, 1700);
+          return;
+        }
+      }
+    }
+  }
+  // 无可连对（死局重排即将触发）时不提示
+  hintTimer = setTimeout(pokeIdle, IDLE_HINT_MS);
+}
+
+function isHinting(r, c) {
+  return !!hintPair.value && hintPair.value.some(([hr, hc]) => hr === r && hc === c);
 }
 
 const linkLayerStyle = computed(() => {
@@ -218,6 +264,7 @@ onMounted(() => {
   } else {
     timerRef.value.restore(savedTime);
     if (phase.value === WON) timerRef.value.stop();
+    else pokeIdle();
   }
 });
 
@@ -302,6 +349,11 @@ function clearTransient() {
   clearTimeout(dealTimer);
   dealTimer = null;
   dealing.value = false;
+  clearTimeout(idleTimer);
+  idleTimer = null;
+  clearTimeout(hintTimer);
+  hintTimer = null;
+  hintPair.value = null;
   vanishTimers.forEach(clearTimeout);
   vanishTimers = [];
   clearTimeout(shuffleTimer);
@@ -338,6 +390,7 @@ async function initGame() {
   bestTime.value = +(localStorage.getItem(bestKey()) || 0);
   timerRef.value?.reset();
   startDealing();
+  pokeIdle();
   save();
 }
 
@@ -368,6 +421,7 @@ function ghostAt(r, c) {
 
 function onTileClick(r, c) {
   if (phase.value !== PLAY || !board.value[r][c] || mismatch.value) return;
+  pokeIdle();
   if (!selected.value) {
     selected.value = [r, c];
     return;
@@ -448,6 +502,7 @@ function removePair(path, a, b) {
       selected.value = null;
       shuffleTip.value = true;
       startDealing();
+      pokeIdle();
       shuffleTipTimer = setTimeout(() => {
         shuffleTip.value = false;
       }, 1600);
@@ -485,6 +540,14 @@ function win() {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+// 空闲提示：只缩放 emoji 本身（.tile-face），背景卡片不动；
+// 0.8 ↔ 1.2 缓慢呼吸两个来回（约 1.6s，播两次循环）
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.2); }
+  75% { transform: scale(0.8); }
 }
 
 @keyframes shake {
@@ -741,6 +804,14 @@ function win() {
     }
     &.shaking {
       animation: shake 0.35s ease !important;
+    }
+    // 空闲提示的呼吸缩放只作用于 emoji 文本层，卡片背景保持静止
+    &.hinting {
+      z-index: 1;
+      .tile-face {
+        display: inline-block;
+        animation: breathe 0.8s ease-in-out 2;
+      }
     }
     &.vanishing {
       pointer-events: none;
