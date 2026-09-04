@@ -88,10 +88,10 @@ import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, hasMove, shuffleBoard } from './board';
 
-// 棋盘比「满盘所需」适当放大，emoji 随机散布、留白约一半格子；
+// 方形棋盘 6×6 ~ 10×10 五档，emoji 随机散布、留白约一半格子；
 // 生成时优先避开相邻摆放，密度 ~50% 让牌面不挤
-const SIZES = [[6, 6], [6, 8], [8, 8], [8, 10], [10, 10]];
-const PAIRS = [9, 12, 15, 20, 25];
+const SIZES = [[6, 6], [7, 7], [8, 8], [9, 9], [10, 10]];
+const PAIRS = [9, 12, 16, 20, 25];
 const [PLAY, WON] = ['play', 'won'];
 const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 5;
@@ -732,24 +732,24 @@ function win() {
       .tile { font-size: 26px; }
     }
     &.size-2 {
-      --rows: 6;
-      --cols: 8;
-      .tile { font-size: 22px; }
+      --rows: 7;
+      --cols: 7;
+      .tile { font-size: 23px; }
     }
     &.size-3 {
       --rows: 8;
       --cols: 8;
-      .tile { font-size: 22px; }
+      .tile { font-size: 21px; }
     }
     &.size-4 {
-      --rows: 8;
-      --cols: 10;
-      .tile { font-size: 18px; }
+      --rows: 9;
+      --cols: 9;
+      .tile { font-size: 19px; }
     }
     &.size-5 {
       --rows: 10;
       --cols: 10;
-      .tile { font-size: 18px; }
+      .tile { font-size: 17px; }
     }
   }
   // 连线层比棋盘四周各大一格（虚拟外圈），viewBox 与格子等比例，

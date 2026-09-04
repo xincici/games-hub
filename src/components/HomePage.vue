@@ -46,16 +46,16 @@ import { setLaunchOrigin } from '@/shared/launch';
   min-height: calc(100dvh - 94px);
   > .list-inner {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
   .game-card {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 28px 12px;
+    gap: 10px;
+    padding: 20px 8px;
     text-decoration: none;
     color: var(--text-color);
     background: var(--card-bg-color);
@@ -63,12 +63,13 @@ import { setLaunchOrigin } from '@/shared/launch';
     border-radius: var(--card-radius);
     box-shadow: var(--card-shadow);
     i {
-      font-size: 44px;
+      font-size: 36px;
       color: var(--primary-bg);
     }
     .game-name {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: bold;
+      white-space: nowrap;
     }
     &:active {
       transform: scale(0.97);
