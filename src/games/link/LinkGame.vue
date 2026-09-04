@@ -122,6 +122,8 @@ let dealTimer = null;
 // 空闲提示：6s 无操作时高亮一对可连的牌
 const IDLE_HINT_MS = 6000;
 const hintPair = ref(null);
+// 上一次提示的对（pokeIdle 清 hintPair 但保留它，用于连续提示时换一对）
+let lastHintPair = null;
 let idleTimer = null;
 let hintTimer = null;
 const newBest = ref(false);
@@ -177,7 +179,8 @@ function pokeIdle() {
   idleTimer = setTimeout(showHint, IDLE_HINT_MS);
 }
 
-// 找一对可连的牌播放呼吸缩放；播完（2 次循环 ≈ 1.6s）后重新计时
+// 找一对可连的牌播放呼吸缩放；播完（2 次循环 ≈ 1.6s）后重新计时。
+// 连续提示时换一对不同的（排除上一次提示过的那对，随机挑选）
 function showHint() {
   if (phase.value !== PLAY) return;
   const [H, W] = size.value;
@@ -187,18 +190,31 @@ function showHint() {
     if (!byEmoji.has(v)) byEmoji.set(v, []);
     byEmoji.get(v).push([r, c]);
   }));
+  const connectable = [];
   for (const positions of byEmoji.values()) {
     for (let i = 0; i < positions.length; i++) {
       for (let j = i + 1; j < positions.length; j++) {
         const [r1, c1] = positions[i];
         const [r2, c2] = positions[j];
         if (findPath(board.value, H, W, r1, c1, r2, c2, walls.value)) {
-          hintPair.value = [[r1, c1], [r2, c2]];
-          hintTimer = setTimeout(pokeIdle, 1700);
-          return;
+          connectable.push([[r1, c1], [r2, c2]]);
         }
       }
     }
+  }
+  if (connectable.length) {
+    let pool = connectable;
+    if (lastHintPair && connectable.length > 1) {
+      const [pr1, pc1] = lastHintPair[0];
+      const [pr2, pc2] = lastHintPair[1];
+      const same = ([[a], [b]]) => a[0] === pr1 && a[1] === pc1 && b[0] === pr2 && b[1] === pc2;
+      pool = connectable.filter(p => !same(p));
+    }
+    const pick = pool[~~(Math.random() * pool.length)];
+    hintPair.value = pick;
+    lastHintPair = pick;
+    hintTimer = setTimeout(pokeIdle, 1700);
+    return;
   }
   // 无可连对（死局重排即将触发）时不提示
   hintTimer = setTimeout(pokeIdle, IDLE_HINT_MS);
@@ -354,6 +370,7 @@ function clearTransient() {
   clearTimeout(hintTimer);
   hintTimer = null;
   hintPair.value = null;
+  lastHintPair = null;
   vanishTimers.forEach(clearTimeout);
   vanishTimers = [];
   clearTimeout(shuffleTimer);
