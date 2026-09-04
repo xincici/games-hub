@@ -36,14 +36,14 @@
           </div>
         </div>
       </div>
-      <div v-if="phase === ANSWER" class="candidate-area" :style="{ '--c-cols': grid[1] }">
-        <div v-for="(opt, idx) in candidates" :key="idx" class="candidate-cell">
-          <div
-            class="candidate-tile"
-            :class="{ found: foundSet.has(opt), wrong: wrongPick === idx }"
-            @click="pick(idx)"
-          >{{ opt }}</div>
-        </div>
+      <div v-if="phase === ANSWER" class="candidate-area" :style="candidateStyle">
+        <div
+          v-for="(opt, idx) in candidates"
+          :key="idx"
+          class="candidate-tile"
+          :class="{ found: foundSet.has(opt), wrong: wrongPick === idx }"
+          @click="pick(idx)"
+        >{{ opt }}</div>
       </div>
       <div v-if="phase === MEMORY" class="phase-tip">{{ i18n('phaseMemory') }}</div>
       <div v-else-if="phase === FLIP" class="phase-tip">{{ i18n('phaseFlip') }}</div>
@@ -106,6 +106,18 @@ const stageStyle = computed(() => {
   const cell = Math.min(64, Math.floor((avail - 8 - (n - 1) * 8) / n));
   return { '--stage-cell': `${cell}px` };
 });
+
+// 候选区格子边长：按可用宽度均分（含 8px gap 与 padding），不依赖 100vw
+const candCellPx = computed(() => {
+  const [, cols] = LEVELS[level.value].grid;
+  const avail = Math.min(window.innerWidth || 420, 440) - 32;
+  return Math.floor((avail - 16 - (cols - 1) * 8) / cols);
+});
+const candidateStyle = computed(() => ({
+  '--c-cols': LEVELS[level.value].grid[1],
+  '--cand-cell': `${candCellPx.value}px`,
+  '--cand-font': `${Math.floor(candCellPx.value * 0.5)}px`,
+}));
 
 let memoryTimer = null;
 
@@ -389,27 +401,28 @@ function onScoreReset() {
   .front-face {
     background: var(--card-bg-color);
   }
-  // 候选区
+  // 候选区：宽度收缩到内容并居中（与展示区一致），
+  // 格子边长与字号由 JS 按 --cand-cell 计算，不依赖 100vw
   .candidate-area {
     display: grid;
-    grid-template-columns: repeat(var(--c-cols), 1fr);
+    grid-template-columns: repeat(var(--c-cols), var(--cand-cell));
+    grid-auto-rows: var(--cand-cell);
     gap: 8px;
-    --c-cols: 3;
+    width: fit-content;
+    margin: 0 auto;
     padding: 8px;
     background: var(--board-bg);
     border-radius: var(--card-radius);
   }
-  .candidate-cell {
-    aspect-ratio: 1;
-  }
   .candidate-tile {
     cursor: pointer;
-    width: 100%;
-    height: 100%;
+    width: var(--cand-cell);
+    height: var(--cand-cell);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: calc((100vw - 80px) / var(--c-cols) * 0.55);
+    font-size: var(--cand-font);
+    line-height: 1;
     border-radius: 10px;
     background: var(--card-bg-color);
     border: 1px solid var(--tile-border-color);
