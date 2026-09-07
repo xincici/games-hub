@@ -45,10 +45,12 @@ const rows = computed(() => {
 });
 
 // 入场动画：每个六边形以各自的延迟/幅度跳动后稳定。
-// 延迟由 id 哈希派生（同一局内确定、不同格子互不相同），整体 ~700ms 内先后起跳
+// 延迟由 id 哈希派生（同一局内确定、不同格子互不相同），
+// 整体延迟 350ms 起跳（等页面级过渡先完成），~1.5s 内先后稳定
 const entering = ref(true);
 let enterTimer = null;
-const ENTER_SPREAD = 280; // 各格起跳延迟的最大散布（ms）
+const ENTER_BASE = 350;  // 整体起跳基础延迟（页面过渡 300ms 完成后）
+const ENTER_SPREAD = 400; // 各格起跳延迟的最大散布（ms）
 
 function hash(str) {
   let h = 0;
@@ -60,8 +62,8 @@ function hash(str) {
 
 function enterStyle(id) {
   const h = hash(id);
-  const delay = h % ENTER_SPREAD;
-  const duration = 320 + (h % 140); // 320~460ms，各格时长略不同
+  const delay = ENTER_BASE + (h % ENTER_SPREAD);
+  const duration = 520 + (h % 160); // 520~680ms，各格时长略不同
   return {
     animationDelay: `${delay}ms`,
     animationDuration: `${duration}ms`,
@@ -74,10 +76,10 @@ function playEnter() {
   // 强制样式重排后重新置起，否则 class 不变不会重启动画
   void document.querySelector('.honeycomb')?.offsetWidth;
   entering.value = true;
-  // 总时长 = 最大延迟 + 最长动画 + 余量
+  // 总时长 = 基础延迟 + 最大散布 + 最长动画 + 余量
   enterTimer = setTimeout(() => {
     entering.value = false;
-  }, ENTER_SPREAD + 460 + 60);
+  }, ENTER_BASE + ENTER_SPREAD + 680 + 80);
 }
 
 onMounted(() => {
@@ -131,15 +133,15 @@ function onVisibility() {
 // 延迟与时长由 JS 按 id 哈希注入（animationDelay / animationDuration）
 @keyframes hex-pop {
   0% {
-    transform: scale(0.88);
+    transform: scale(0.82);
     opacity: 0;
   }
   55% {
-    transform: scale(1.06);
+    transform: scale(1.09);
     opacity: 1;
   }
   78% {
-    transform: scale(0.985);
+    transform: scale(0.97);
   }
   100% {
     transform: scale(1);

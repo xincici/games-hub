@@ -65,7 +65,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/games/link/CountTimer.vue';
@@ -149,9 +149,9 @@ function pickEmojis(n) {
   return out;
 }
 
-// 展示牌是否背面：记忆结束后未被找回的
+// 展示牌是否背面：记忆结束后未被找回的；结算（胜负）后全部翻正供复盘
 function isStageFaceDown(idx) {
-  if (phase.value === MEMORY) return false;
+  if (phase.value === MEMORY || phase.value === WON || phase.value === LOST) return false;
   return !foundSet.value.has(stage.value[idx]);
 }
 
@@ -162,7 +162,7 @@ function isCandFaceDown(opt) {
   return false;
 }
 
-function startLevel() {
+async function startLevel() {
   clearTimers();
   foundSet.value = new Set();
   wrongSet.value = new Set();
@@ -174,6 +174,12 @@ function startLevel() {
   const rest = all.slice(lv.show);
   // 候选区：展示牌 + 干扰项打乱
   candidates.value = [...stage.value, ...rest].sort(() => Math.random() - 0.5);
+  // 先以「全正面」渲染并 paint 一帧新内容，再进入记忆阶段（翻背面）：
+  // nextTick 只等 DOM 更新，同一 paint 前移除/添加 flipped 会被合并成瞬变，
+  // 必须跨过一次 requestAnimationFrame 让浏览器先画「正面」起始帧
+  phase.value = ANSWER;
+  await nextTick();
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   phase.value = MEMORY;
   timerRef.value?.reset();
   memoryTimer = setTimeout(() => {
