@@ -21,6 +21,7 @@
       <div class="opt-half">
         <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" />
       </div>
+      <div class="divider"></div>
       <div class="opt-half">
         <button class="game-icon" @click="initGame">{{ i18n('start') }}</button>
       </div>
