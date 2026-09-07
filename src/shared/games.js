@@ -9,6 +9,7 @@ import matchDict from '@/games/match/i18n';
 import linkDict from '@/games/link/i18n';
 import detectiveDict from '@/games/detective/i18n';
 import hunterDict from '@/games/hunter/i18n';
+import threeDict from '@/games/three/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -44,9 +45,17 @@ export const games = [
     helpKey: '__poker_game_helped',
   },
   {
+    id: 'three',
+    path: '/three',
+    icon: 'i-mdi-numeric-3',
+    iconScale: 1.5,
+    helpKey: '__threes_game__help_showed',
+  },
+  {
     id: 'g2048',
     path: '/2048',
     icon: 'i-mdi-numeric',
+    iconScale: 1.2,
     helpKey: '__game_2048__help_showed',
   },
   {
@@ -106,4 +115,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['link', linkDict],
   ['detective', detectiveDict],
   ['hunter', hunterDict],
+  ['three', threeDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

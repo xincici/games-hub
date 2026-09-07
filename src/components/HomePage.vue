@@ -13,7 +13,7 @@
             @click="setLaunchOrigin($event.currentTarget)"
           >
             <span class="hex-body">
-              <i :class="game.icon" />
+              <i :class="game.icon" :style="game.iconScale ? { transform: `scale(${game.iconScale})` } : null" />
               <span class="game-name">{{ dictOf(game.id)[language].gameTitle }}</span>
             </span>
           </router-link>
@@ -32,7 +32,7 @@ import { language, dictOf } from '@/shared/i18n';
 import { setLaunchOrigin } from '@/shared/launch';
 
 // 蜂窝布局：按行分组，2/3/2/3 交替让每行都咬合
-const ROW_SIZES = [2, 3, 2, 3];
+const ROW_SIZES = [1, 2, 3, 2, 3];
 const rows = computed(() => {
   const out = [];
   let i = 0;
