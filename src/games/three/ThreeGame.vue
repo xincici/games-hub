@@ -127,52 +127,55 @@ function capValue(v) {
   return Math.min(v, 6144);
 }
 
-// ---------- 移动（与 2048 相同的逐线分组，配对条件换成 Threes 规则） ----------
+// ---------- 移动（经典 Threes 语义：每张牌每次最多移动一格） ----------
 
-function linesOf(dir) {
-  const lines = [];
-  for (const i of [0, 1, 2, 3]) {
-    const line = [];
-    for (const j of [0, 1, 2, 3]) {
-      if (dir === 'left') line.push([i, j]);
-      else if (dir === 'right') line.push([i, 3 - j]);
-      else if (dir === 'up') line.push([j, i]);
-      else line.push([3 - j, i]);
-    }
-    lines.push(line);
-  }
-  return lines;
-}
+const DIRS = {
+  left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0],
+};
 
+// 纯函数：基于 tiles 副本计算一步移动，不修改入参。
+// 每张牌沿方向最多走一格：前方空则进一格；前方是可合且本步未合成的牌
+// 则贴上合成；被挡则不动。目标侧的牌先处理，后面的牌才能跟进补位
 function computeMove(dir) {
-  const map = new Map();
-  tiles.value.forEach(t => map.set(`${t.row},${t.col}`, t));
+  const [dr, dc] = DIRS[dir];
+  const key = (r, c) => `${r},${c}`;
+  const board = new Map();
+  const live = tiles.value.map(t => ({ ...t }));
+  live.forEach(t => board.set(key(t.row, t.col), t));
   const placements = [];
   const mergeOps = [];
   let moved = false;
-  linesOf(dir).forEach(line => {
-    const existing = line.map(([r, c]) => map.get(`${r},${c}`)).filter(Boolean);
-    const groups = [];
-    for (let i = 0; i < existing.length; i++) {
-      if (i + 1 < existing.length && compat(existing[i].value, existing[i + 1].value)) {
-        groups.push([existing[i], existing[i + 1]]);
-        i++;
-      } else {
-        groups.push([existing[i]]);
-      }
-    }
-    groups.forEach((group, idx) => {
-      const [first, second] = group;
-      const [row, col] = line[idx];
-      if (first.row !== row || first.col !== col) moved = true;
-      placements.push({ id: first.id, value: first.value, row, col });
-      if (second) {
-        moved = true;
-        placements.push({ id: second.id, value: second.value, row, col });
-        mergeOps.push({ aId: first.id, bId: second.id, row, col, value: mergeValue(first.value) });
-      }
-    });
+  const order = [...live].sort((a, b) => {
+    const da = (b.row * dr + b.col * dc) - (a.row * dr + a.col * dc);
+    return da !== 0 ? da : a.id - b.id;
   });
+  for (const tile of order) {
+    const nr = tile.row + dr;
+    const nc = tile.col + dc;
+    if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) {
+      placements.push({ ...tile });
+      continue;
+    }
+    const ahead = board.get(key(nr, nc));
+    if (!ahead) {
+      board.delete(key(tile.row, tile.col));
+      board.set(key(nr, nc), tile);
+      tile.row = nr;
+      tile.col = nc;
+      moved = true;
+      placements.push({ ...tile });
+    } else if (compat(ahead.value, tile.value) && !ahead.mergedThisStep) {
+      board.delete(key(tile.row, tile.col));
+      tile.row = nr;
+      tile.col = nc;
+      ahead.mergedThisStep = true;
+      moved = true;
+      placements.push({ ...tile });
+      mergeOps.push({ aId: ahead.id, bId: tile.id, row: nr, col: nc, value: mergeValue(ahead.value) });
+    } else {
+      placements.push({ ...tile });
+    }
+  }
   return { placements, mergeOps, moved };
 }
 
