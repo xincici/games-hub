@@ -112,11 +112,13 @@ const stageStyle = computed(() => {
   return { '--stage-cell': `${cell}px` };
 });
 
-// 候选区格子边长：按可用宽度均分（含 8px gap 与 padding），不依赖 100vw
+// 候选区格子边长：按可用宽度均分（含 8px gap 与 padding），96px 封顶
+//（与侦探游戏一致，避免 3×3 时格子过大）
+const CAND_CELL_MAX = 96;
 const candCellPx = computed(() => {
   const [, cols] = LEVELS[level.value].grid;
   const avail = Math.min(window.innerWidth || 420, 440) - 32;
-  return Math.floor((avail - 16 - (cols - 1) * 8) / cols);
+  return Math.min(CAND_CELL_MAX, Math.floor((avail - 16 - (cols - 1) * 8) / cols));
 });
 const candidateStyle = computed(() => ({
   '--c-cols': LEVELS[level.value].grid[1],
