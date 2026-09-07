@@ -2,13 +2,14 @@
   <div class="wrapper">
     <TopHeader :show-help="false" />
     <div class="game-list">
-      <div class="honeycomb">
+      <div class="honeycomb" :class="{ entering }">
         <div v-for="row in rows" :key="row[0].id" class="hex-row">
           <router-link
             v-for="game in row"
             :key="game.id"
             :to="game.path"
             class="hex"
+            :style="entering ? enterStyle(game.id) : null"
             @click="setLaunchOrigin($event.currentTarget)"
           >
             <span class="hex-body">
@@ -23,7 +24,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from './TopHeader.vue';
 import { games } from '@/shared/games';
@@ -42,6 +43,57 @@ const rows = computed(() => {
   if (i < games.length) out.push(games.slice(i));
   return out.filter(r => r.length);
 });
+
+// 入场动画：每个六边形以各自的延迟/幅度跳动后稳定。
+// 延迟由 id 哈希派生（同一局内确定、不同格子互不相同），整体 ~700ms 内先后起跳
+const entering = ref(true);
+let enterTimer = null;
+const ENTER_SPREAD = 280; // 各格起跳延迟的最大散布（ms）
+
+function hash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function enterStyle(id) {
+  const h = hash(id);
+  const delay = h % ENTER_SPREAD;
+  const duration = 320 + (h % 140); // 320~460ms，各格时长略不同
+  return {
+    animationDelay: `${delay}ms`,
+    animationDuration: `${duration}ms`,
+  };
+}
+
+function playEnter() {
+  clearTimeout(enterTimer);
+  entering.value = false;
+  // 强制样式重排后重新置起，否则 class 不变不会重启动画
+  void document.querySelector('.honeycomb')?.offsetWidth;
+  entering.value = true;
+  // 总时长 = 最大延迟 + 最长动画 + 余量
+  enterTimer = setTimeout(() => {
+    entering.value = false;
+  }, ENTER_SPREAD + 460 + 60);
+}
+
+onMounted(() => {
+  playEnter();
+  document.addEventListener('visibilitychange', onVisibility);
+});
+
+onUnmounted(() => {
+  clearTimeout(enterTimer);
+  document.removeEventListener('visibilitychange', onVisibility);
+});
+
+// 页面失焦后重新可见时重播动画
+function onVisibility() {
+  if (!document.hidden) playEnter();
+}
 </script>
 
 <style scoped lang="scss">
@@ -74,6 +126,25 @@ const rows = computed(() => {
   flex-direction: column;
   align-items: center;
 }
+
+// 入场动画在 .hex.entering 上逐格播放：轻微缩放弹性跳动后稳定。
+// 延迟与时长由 JS 按 id 哈希注入（animationDelay / animationDuration）
+@keyframes hex-pop {
+  0% {
+    transform: scale(0.88);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  78% {
+    transform: scale(0.985);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
 .hex-row {
   display: flex;
   // 六边形之间水平留 3px 缝隙，避免相邻块描边叠成粗线
@@ -92,6 +163,12 @@ const rows = computed(() => {
   text-decoration: none;
   color: var(--text-color);
   display: block;
+  // 入场逐格跳动动画（entering 时由 JS 加 style 注入延迟/时长）
+  .honeycomb.entering & {
+    animation-name: hex-pop;
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation-fill-mode: backwards;
+  }
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   background: var(--tile-border-color);
   transition: background-color 0.15s ease;

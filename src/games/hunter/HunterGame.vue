@@ -29,33 +29,37 @@
       <div class="stage-frame" :style="stageStyle">
         <div class="stage">
           <div v-for="(cell, idx) in stage" :key="idx" class="stage-cell">
-            <div class="card-flip" :class="{ flipped: isFaceDown(idx) }">
+            <div class="card-flip" :class="{ flipped: isStageFaceDown(idx) }">
               <div class="face back-face"><i i-mdi-target /></div>
               <div class="face front-face">{{ cell }}</div>
             </div>
           </div>
         </div>
       </div>
-      <div v-if="phase === ANSWER" class="candidate-area" :style="candidateStyle">
+      <div class="candidate-area" :style="candidateStyle">
         <div
           v-for="(opt, idx) in candidates"
           :key="idx"
           class="candidate-tile"
-          :class="{ found: foundSet.has(opt), wrong: wrongPick === idx }"
           @click="pick(idx)"
-        >{{ opt }}</div>
+        >
+          <div class="cand-flip" :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(opt), wrong: wrongSet.has(opt) }">
+            <div class="face cand-back"><i i-mdi-target /></div>
+            <div class="face cand-front">{{ opt }}</div>
+          </div>
+        </div>
+        <div v-if="phase === WON || phase === LOST" class="result" :class="phase === WON ? 'win' : 'lose'">
+          <span v-if="phase === WON">🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
+          <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
+          <div class="result-actions">
+            <button class="game-icon" @click="retryLevel">{{ i18n('retry') }}</button>
+            <button v-if="phase === WON" class="game-icon primary" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+          </div>
+        </div>
       </div>
       <div v-if="phase === MEMORY" class="phase-tip">{{ i18n('phaseMemory') }}</div>
       <div v-else-if="phase === FLIP" class="phase-tip">{{ i18n('phaseFlip') }}</div>
       <div v-else-if="phase === ANSWER" class="phase-tip">{{ i18n('phaseAnswer') }}</div>
-      <div v-if="phase === WON || phase === LOST" class="result" :class="phase === WON ? 'win' : 'lose'">
-        <span v-if="phase === WON">🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
-        <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
-        <div class="result-actions">
-          <button class="game-icon" @click="retryLevel">{{ i18n('retry') }}</button>
-          <button v-if="phase === WON" class="game-icon primary" @click="nextLevel">{{ i18n('nextLevel') }}</button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -89,7 +93,7 @@ const phase = ref(MEMORY);
 const stage = ref([]);
 const candidates = ref([]);
 const foundSet = ref(new Set());
-const wrongPick = ref(-1);
+const wrongSet = ref(new Set());
 const hearts = ref(3);
 const bestLevel = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const timerRef = ref(null);
@@ -99,11 +103,12 @@ const grid = computed(() => LEVELS[level.value].grid);
 const gridLabel = computed(() => `${grid.value[0]}×${grid.value[1]}`);
 const timerRunning = computed(() => phase.value !== WON && phase.value !== LOST);
 
-// 展示区：单行 flex 布局，卡片 64px 上限随视口收缩
+// 展示区：单行 flex 布局。可用宽 = 视口(≤440) − 32；扣除 frame 上下 padding 16 与格间 gap，
+// 5 个以上目标时按剩余宽度均分（此前只减了单侧 padding，7~8 个时右侧溢出）
 const stageStyle = computed(() => {
   const avail = Math.min(window.innerWidth || 420, 440) - 32;
   const n = stage.value.length || 1;
-  const cell = Math.min(64, Math.floor((avail - 8 - (n - 1) * 8) / n));
+  const cell = Math.min(64, Math.floor((avail - 16 - (n - 1) * 8) / n));
   return { '--stage-cell': `${cell}px` };
 });
 
@@ -144,16 +149,23 @@ function pickEmojis(n) {
   return out;
 }
 
-// 某张展示牌是否背面：翻面后未被找回的
-function isFaceDown(idx) {
+// 展示牌是否背面：记忆结束后未被找回的
+function isStageFaceDown(idx) {
   if (phase.value === MEMORY) return false;
   return !foundSet.value.has(stage.value[idx]);
+}
+
+// 候选牌是否背面：记忆阶段候选区整体背面（盖住内容防偷看），
+// 进入答题后翻正；胜负结算后全部翻正（含漏选的）供玩家复盘
+function isCandFaceDown(opt) {
+  if (phase.value === MEMORY || phase.value === FLIP) return true;
+  return false;
 }
 
 function startLevel() {
   clearTimers();
   foundSet.value = new Set();
-  wrongPick.value = -1;
+  wrongSet.value = new Set();
   hearts.value = 3;
   const lv = LEVELS[level.value];
   // 展示牌 + 候选牌（含展示牌）互不重复
@@ -177,14 +189,13 @@ function startLevel() {
 }
 
 // 点候选：是展示过的 → 标记找回（对应展示牌翻回）；
-// 不是 → 抖动扣心
+// 不是 → 红色高亮标错且不可再选，扣心
 function pick(idx) {
-  if (phase.value !== ANSWER || wrongPick.value >= 0) return;
+  if (phase.value !== ANSWER) return;
   const emoji = candidates.value[idx];
-  if (stage.value.includes(emoji) && !foundSet.value.has(emoji)) {
-    foundSet.value.add(emoji);
-    // 展示牌 :key 按内容，Set 变化触发重渲染翻回
-    foundSet.value = new Set(foundSet.value);
+  if (foundSet.value.has(emoji) || wrongSet.value.has(emoji)) return;
+  if (stage.value.includes(emoji)) {
+    foundSet.value = new Set([...foundSet.value, emoji]);
     if (foundSet.value.size === stage.value.length) {
       phase.value = WON;
       timerRef.value?.stop();
@@ -196,7 +207,7 @@ function pick(idx) {
       save();
     }
   } else {
-    wrongPick.value = idx;
+    wrongSet.value = new Set([...wrongSet.value, emoji]);
     hearts.value = Math.max(0, hearts.value - 1);
     if (hearts.value <= 0) {
       setTimeout(() => {
@@ -204,10 +215,6 @@ function pick(idx) {
         timerRef.value?.stop();
         save();
       }, 600);
-    } else {
-      setTimeout(() => {
-        if (wrongPick.value === idx) wrongPick.value = -1;
-      }, 700);
     }
     save();
   }
@@ -381,6 +388,7 @@ function onScoreReset() {
       transform: rotateY(180deg);
     }
   }
+  // 通用翻牌面样式（两区共用基础部分）
   .face {
     position: absolute;
     inset: 0;
@@ -390,7 +398,6 @@ function onScoreReset() {
     justify-content: center;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    font-size: calc(var(--stage-cell) * 0.52);
   }
   .back-face {
     background: var(--primary-bg);
@@ -400,10 +407,12 @@ function onScoreReset() {
   }
   .front-face {
     background: var(--card-bg-color);
+    font-size: calc(var(--stage-cell) * 0.52);
   }
-  // 候选区：宽度收缩到内容并居中（与展示区一致），
-  // 格子边长与字号由 JS 按 --cand-cell 计算，不依赖 100vw
+  // 候选区：记忆阶段即显示（牌面朝下），答案区翻回后随之翻正。
+  // 宽度收缩到内容并居中，格子边长与字号由 JS 按 --cand-cell 计算
   .candidate-area {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(var(--c-cols), var(--cand-cell));
     grid-auto-rows: var(--cand-cell);
@@ -415,29 +424,47 @@ function onScoreReset() {
     border-radius: var(--card-radius);
   }
   .candidate-tile {
-    cursor: pointer;
     width: var(--cand-cell);
     height: var(--cand-cell);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--cand-font);
-    line-height: 1;
-    border-radius: 10px;
-    background: var(--card-bg-color);
-    border: 1px solid var(--tile-border-color);
+    perspective: 500px;
+    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: transform 0.12s ease;
-    &.found {
+    .cand-flip {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.45s ease-in-out;
+      &.flipped {
+        transform: rotateY(180deg);
+      }
+    }
+    .cand-back {
+      background: var(--primary-bg);
+      color: #fff;
+      font-size: calc(var(--cand-cell) * 0.4);
+      transform: rotateY(180deg);
+    }
+    .cand-front {
+      background: var(--card-bg-color);
+      border: 1px solid var(--tile-border-color);
+      font-size: var(--cand-font);
+      line-height: 1;
+    }
+    // 找回的目标：绿色标记并缩小
+    .cand-flip.found .cand-front {
       background: var(--enter-bg);
       border-color: var(--primary-bg);
-      transform: scale(0.88);
-      opacity: 0.65;
+      box-shadow: inset 0 0 0 1px var(--primary-bg);
     }
-    &.wrong {
-      animation: shake 0.4s ease;
-      border-color: var(--lose-color);
-      background: var(--del-bg);
+    // 选错：红色高亮且不可再选
+    .cand-flip.wrong {
+      .cand-front {
+        background: var(--del-bg);
+        border-color: var(--lose-color);
+        color: var(--lose-color);
+      }
+      cursor: not-allowed;
     }
   }
   .phase-tip {
@@ -455,12 +482,10 @@ function onScoreReset() {
     white-space: nowrap;
     z-index: 3;
   }
+  // 结算遮罩覆盖在候选区上（候选区 position:relative）
   .result {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
+    inset: 0;
     z-index: 2;
     border-radius: var(--card-radius);
     background: var(--mask-color);

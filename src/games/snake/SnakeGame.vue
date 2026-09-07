@@ -40,6 +40,10 @@
     </div>
     <div class="game-area">
       <canvas ref="canvasRef" :width="canvasSize" :height="canvasSize"></canvas>
+      <div v-if="paused && gameResult === GAMING && started" class="pause-mask" @click="togglePause">
+        <span>⏸️</span>
+        <span>{{ i18n('resumeTip') }}</span>
+      </div>
       <div v-if="gameResult === LOSE" class="lose">
         <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
         <span v-if="newBest">{{ i18n('newBest') }}</span>
@@ -60,6 +64,7 @@ const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 5;
 const DIFFICULTY_KEY = '__snake_game__difficulty';
 const BEST_KEY = '__snake_game__best';
+const STATE_KEY = '__snake_game__state';
 // 难度 → 移动间隔 ms（难度越高越快）与每食得分
 const SPEEDS = [400, 320, 250, 190, 140];
 const SCORE_PER_FOOD = [1, 2, 3, 4, 6];
@@ -100,14 +105,50 @@ watch(difficulty, val => {
 
 onMounted(() => {
   ctx = canvasRef.value.getContext('2d');
-  initGame();
+  if (!restore()) initGame();
   window.addEventListener('keyup', onKeyUp);
 });
 
+// 退出时保存进行中的局面（已结束或未开始的不存）
 onUnmounted(() => {
   stopTimer();
+  saveState();
   window.removeEventListener('keyup', onKeyUp);
 });
+
+function saveState() {
+  if (!started.value || gameResult.value !== GAMING || !food) return;
+  localStorage.setItem(STATE_KEY, JSON.stringify({
+    snake, dir, nextDir, food,
+    score: score.value,
+    difficulty: difficulty.value,
+  }));
+}
+
+// 恢复存档：盘面照旧渲染但保持暂停，等玩家点「继续」
+function restore() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STATE_KEY));
+    if (!saved || !Array.isArray(saved.snake) || !saved.snake.length
+      || !Array.isArray(saved.food) || saved.food.length !== 2) return false;
+    const d = +saved.difficulty;
+    if (d < MIN_DIFFICULTY || d > MAX_DIFFICULTY) return false;
+    difficulty.value = d;
+    snake = saved.snake;
+    dir = saved.dir || [0, 1];
+    nextDir = saved.nextDir || dir;
+    food = saved.food;
+    score.value = +saved.score || 0;
+    gameResult.value = GAMING;
+    newBest.value = false;
+    started.value = true;
+    paused.value = true;
+    draw();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function onKeyUp(e) {
   const keyMap = {
@@ -129,6 +170,7 @@ function turn(d) {
 }
 
 function initGame() {
+  localStorage.removeItem(STATE_KEY);
   snake = [[10, 10], [10, 9], [10, 8]];
   dir = nextDir = [0, 1];
   score.value = 0;
@@ -179,6 +221,7 @@ function tick() {
     || snake.some(([r, c]) => r === head[0] && c === head[1])) {
     gameResult.value = LOSE;
     stopTimer();
+    localStorage.removeItem(STATE_KEY);
     draw();
     return;
   }
@@ -366,6 +409,27 @@ function onTouchEnd(e) {
       border-radius: var(--card-radius);
       box-shadow: var(--card-shadow);
       display: block;
+    }
+  }
+  .pause-mask {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    border-radius: var(--card-radius);
+    background: var(--mask-color);
+    color: var(--text-color);
+    font-weight: bold;
+    font-size: 17px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    span:first-child {
+      font-size: 34px;
     }
   }
   .lose {
