@@ -26,11 +26,11 @@ export default defineConfig({
   safelist: [
     'i-carbon-touch-1',
     'i-mdi-counter',
-    'i-mdi-cards-outline',
+    'i-mdi-cards-playing-spade-multiple-outline',
     'i-mdi-puzzle',
     'i-mdi-numeric',
     'i-mdi-snake',
-    'i-mdi-emoticon-happy-outline',
+    'i-mdi-lightbulb-on-50',
     'i-mdi-link',
     'i-mdi-incognito',
     'i-mdi-target',

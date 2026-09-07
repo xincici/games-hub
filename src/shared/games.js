@@ -41,7 +41,7 @@ export const games = [
   {
     id: 'poker',
     path: '/poker',
-    icon: 'i-mdi-cards-outline',
+    icon: 'i-mdi-cards-playing-spade-multiple-outline',
     helpKey: '__poker_game_helped',
   },
   {
@@ -67,7 +67,7 @@ export const games = [
   {
     id: 'match',
     path: '/match',
-    icon: 'i-mdi-emoticon-happy-outline',
+    icon: 'i-mdi-lightbulb-on-50',
     helpKey: '__emoji_match__help_showed',
     recordsPrefix: '__emoji_match__',
     minDifficulty: 1,
