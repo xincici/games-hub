@@ -264,9 +264,25 @@ function draw() {
   }
   // 蛇身
   snake.forEach(([r, c], idx) => {
-    ctx.fillStyle = idx === 0 ? '#2ea464' : `rgba(46, 164, 100, ${Math.max(0.35, 1 - idx * 0.03)})`;
     const pad = cell * 0.08;
-    roundRect(ctx, c * cell + pad, r * cell + pad, cell - pad * 2, cell - pad * 2, cell * 0.2);
+    const x = c * cell + pad;
+    const y = r * cell + pad;
+    const size = cell - pad * 2;
+    if (idx === 0) {
+      // 蛇头：朝前进方向的一侧用大圆角，呈圆头；其余角小圆角与身体衔接
+      ctx.fillStyle = '#2ea464';
+      const big = size * 0.5;
+      const small = size * 0.18;
+      let radii;
+      if (dir[1] === 1) radii = [small, big, big, small];       // 右
+      else if (dir[1] === -1) radii = [big, small, small, big];  // 左
+      else if (dir[0] === 1) radii = [small, small, big, big];   // 下
+      else radii = [big, big, small, small];                     // 上
+      roundRect(ctx, x, y, size, size, radii);
+    } else {
+      ctx.fillStyle = `rgba(46, 164, 100, ${Math.max(0.35, 1 - idx * 0.03)})`;
+      roundRect(ctx, x, y, size, size, size * 0.2);
+    }
   });
 }
 
