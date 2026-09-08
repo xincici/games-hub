@@ -10,6 +10,7 @@ import linkDict from '@/games/link/i18n';
 import detectiveDict from '@/games/detective/i18n';
 import hunterDict from '@/games/hunter/i18n';
 import threeDict from '@/games/three/i18n';
+import crushDict from '@/games/crush/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -100,6 +101,15 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 6,
   },
+  {
+    id: 'crush',
+    path: '/crush',
+    icon: 'i-mdi-star-four-points',
+    helpKey: '__emoji_crush__help_showed',
+    recordsPrefix: '__emoji_crush__best_',
+    minDifficulty: 1,
+    maxDifficulty: 3,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -116,4 +126,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['detective', detectiveDict],
   ['hunter', hunterDict],
   ['three', threeDict],
+  ['crush', crushDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

@@ -35,5 +35,6 @@ export default defineConfig({
     'i-mdi-incognito',
     'i-mdi-target',
     'i-mdi-numeric-3',
+    'i-mdi-star-four-points',
   ],
 });

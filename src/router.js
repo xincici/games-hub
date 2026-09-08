@@ -13,6 +13,7 @@ import LinkGame from './games/link/LinkGame.vue';
 import DetectiveGame from './games/detective/DetectiveGame.vue';
 import HunterGame from './games/hunter/HunterGame.vue';
 import ThreeGame from './games/three/ThreeGame.vue';
+import CrushGame from './games/crush/CrushGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -21,6 +22,7 @@ const routes = [
   { path: '/poker', component: PokerGame, meta: { game: 'poker' } },
   { path: '/puzzle', component: PuzzleGame, meta: { game: 'puzzle' } },
   { path: '/three', component: ThreeGame, meta: { game: 'three' } },
+  { path: '/crush', component: CrushGame, meta: { game: 'crush' } },
   { path: '/2048', component: Game2048, meta: { game: 'g2048' } },
   { path: '/snake', component: SnakeGame, meta: { game: 'snake' } },
   { path: '/match', component: MatchGame, meta: { game: 'match' } },
