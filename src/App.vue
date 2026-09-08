@@ -101,7 +101,7 @@ html, body, #app {
 }
 // 统一的浅色 / 深色主题变量（各游戏变量的并集，取值保持一致）
 body {
-  --border-color: #eee;
+  --border-color: #e1e1e1;
   --card-border-color: #dcdfe6;
   --text-color: #2c3e50;
   --bg-color: #f0f2f5;
