@@ -57,9 +57,6 @@
           <div v-if="newBest" class="new-best">🎉 {{ i18n('tipWin') }} 🎉</div>
           <div class="final-score">{{ score }}</div>
         </div>
-        <div class="result-actions">
-          <button class="game-icon" @click="initGame">{{ i18n('start') }}</button>
-        </div>
       </div>
     </div>
   </div>
@@ -128,7 +125,9 @@ function syncGems(prevGems, fresh = false) {
       }
     }
     if (pick) {
-      out.push({ ...pick, idx: i, fresh: false });
+      // fall：位置发生变化（下落）——落地时配弹跳动画，
+      // 避免「同值补位」时 1 格位移过小而看起来没有动画
+      out.push({ ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
     } else {
       out.push({ id: ++gemId, value: v, idx: i, fresh });
     }
@@ -190,6 +189,7 @@ function gemClasses(gem) {
   if (swapPair.value.includes(gem.idx)) out.push('swapping');
   if (matchedSet.value.has(gem.idx)) out.push('matched');
   if (gem.fresh) out.push('fresh');
+  if (gem.fall != null) out.push('falling');
   if (gem.dealIdx != null) out.push('dealt');
   return out;
 }
@@ -368,7 +368,8 @@ function resolveCascades(level) {
   const matched = findMatches(cells.value, boardSize.value);
   if (!matched.size) {
     cascade.value = 0;
-    // 步数耗尽或无解检查
+    // 连锁结束：清掉 fresh/fall 瞬态标记，避免 class 残留
+    gems.value = gems.value.map(g => ({ ...g, fresh: false, fall: undefined }));
     finishTurn();
     return;
   }
@@ -387,8 +388,10 @@ function resolveCascades(level) {
     // 所有未消除且位置变化的格都重新渲染（绝对定位按新 cells 计算，配 transition 天然下落动画）
     matchedSet.value = new Set();
     cells.value = after;
-    // 保身份同步：未消除的 gem 位置过渡即掉落动画，新牌 fresh 从上空降入
-    syncGems(gems.value, true);
+    // 保身份同步：只传幸存 gem（被消除的若留在池中会被同值格复用「原地复活」，跳过下落动画），
+    // 幸存 gem 位置过渡即掉落动画，新牌 fresh 从上空降入
+    const survivors = gems.value.filter(g => !matched.has(g.idx));
+    syncGems(survivors, true);
     cascadeTimer = setTimeout(() => {
       resolveCascades(level + 1);
     }, 300);
@@ -480,6 +483,12 @@ function onScoreReset() {
 @keyframes drop-in {
   from { transform: translateY(-100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes land-bounce {
+  0% { transform: translateY(-12%) scaleY(1.06); }
+  60% { transform: translateY(0) scaleY(0.92); }
+  100% { transform: translateY(0) scaleY(1); }
 }
 
 @keyframes deal-in {
@@ -659,6 +668,10 @@ function onScoreReset() {
     &.fresh {
       animation: drop-in 0.3s ease-out;
     }
+    // 下落的牌落地时轻微压缩回弹（squash），即使位移只有一格也有明确的动态
+    &.falling {
+      animation: land-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
     // 开局发牌：从第一格开始逐个缩放弹入（间隔由 animationDelay 控制）
     &.dealt {
       animation: deal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
@@ -701,10 +714,6 @@ function onScoreReset() {
     .final-score {
       font-size: 28px;
       margin-top: 4px;
-    }
-    .result-actions {
-      display: flex;
-      gap: 12px;
     }
   }
 }
