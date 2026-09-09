@@ -54,7 +54,7 @@ src/
     ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ confetti/i18n.js（route /hunter，key 前缀 __emoji_hunter__）
     ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画）+ i18n.js（route /three，key 前缀 __threes_game__）
     ├── crush/            # CrushGame.vue（emoji 消消乐：交换三消、连锁计分、掉落动画）+ board.js（纯逻辑）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
-    └── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、行/列/宫冲突高亮、笔记候选、3 难度最佳用时）+ CountTimer/confetti/sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
+    └── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时）+ CountTimer/confetti/sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -78,7 +78,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - Emoji 猎手：`__emoji_hunter__*`（关卡进度 `__emoji_hunter__level`，最高关卡 `__emoji_hunter__best`）
   - Threes：`__threes_game__*`（局面存档 `__threes_game__state`，最高分 `__threes_game__best`）
   - Emoji 消消乐：`__emoji_crush__*`（难度 `__emoji_crush__difficulty`，局面存档 `__emoji_crush__state`，各难度最高分存为 `__emoji_crush__best_` + 难度数字）
-  - 数独：`__sudoku_game__*`（难度 `__sudoku_game__difficulty`，局面存档 `__sudoku_game__state`（含计时秒数，胜利后清除），各难度最佳用时存为前缀+难度数字，如 `__sudoku_game__1`）
+  - 数独：`__sudoku_game__*`（难度 `__sudoku_game__difficulty`，局面存档 `__sudoku_game__state`（含计时秒数、唯一解答案、剩余❤️，胜利或失败后清除），各难度最佳用时存为前缀+难度数字，如 `__sudoku_game__1`）
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关（click：背景音乐；guess：机器人；poker：骰子/猜大小；puzzle：摇杆）。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、猜数字判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
 

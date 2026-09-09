@@ -8,8 +8,12 @@
       </div>
       <div class="divider"></div>
       <div class="stat">
-        <span class="stat-label">{{ i18n('leftCells') }}</span>
-        <span class="stat-value">{{ left }}</span>
+        <span class="stat-label">{{ i18n('hearts') }}</span>
+        <span class="stat-value stat-hearts">
+          <template v-for="h in heartsMax" :key="h">
+            <span class="heart" :class="{ dead: h > hearts }">{{ h <= hearts ? '❤️' : '🤍' }}</span>
+          </template>
+        </span>
       </div>
     </div>
     <div class="card opt-area">
@@ -50,9 +54,12 @@
         </div>
       </div>
       <Transition name="win-pop">
-        <div v-if="phase === WON" class="result win">
-          <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
-          <span v-if="newBest" class="new-best">🏅 {{ i18n('newBest') }}</span>
+        <div v-if="phase === WON || phase === OVER" class="result" :class="phase === WON ? 'win' : 'lose'">
+          <template v-if="phase === WON">
+            <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
+            <span v-if="newBest" class="new-best">🏅 {{ i18n('newBest') }}</span>
+          </template>
+          <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
           <button @click="initGame" class="game-icon again">{{ i18n('playAgain') }}</button>
         </div>
       </Transition>
@@ -89,7 +96,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from './CountTimer.vue';
 import confetti from './confetti';
 import { i18n } from '@/shared/i18n';
-import { generatePuzzle, PEERS } from './sudoku';
+import { generatePuzzle } from './sudoku';
 
 const NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // 简单 / 一般 / 困难：预填数字越少越难（挖空数递增）
@@ -99,7 +106,7 @@ const DIFFICULTIES = [
   { empties: 55 },
 ];
 const DIFF_NAMES = ['diffEasy', 'diffMedium', 'diffHard'];
-const [PLAY, WON] = ['play', 'won'];
+const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 3;
 const KEY_PREFIX = '__sudoku_game__';
@@ -117,7 +124,13 @@ const gameId = ref(0);
 const timerRef = ref(null);
 let winTimer = null;
 
-const left = computed(() => cells.value.filter(c => !c.v).length);
+// 唯一解答案：与填数对比判定“填错”，也是爱心扣减与胜利判断的依据
+const solution = ref([]);
+// 剩余爱心：初始 = 难度档位（简单 1 / 一般 2 / 困难 3），填错扣 1 颗，
+// 爱心为 0 后再填错即游戏失败
+const hearts = ref(0);
+const heartsMax = computed(() => difficulty.value);
+
 const diffName = computed(() => i18n(DIFF_NAMES[difficulty.value - 1]));
 const padDigit = computed(() => {
   const s = selected.value;
@@ -176,9 +189,11 @@ function fmt(sec) {
 
 function initGame() {
   clearTimeout(winTimer);
-  const { puzzle } = generatePuzzle(DIFFICULTIES[difficulty.value - 1].empties);
+  const { puzzle, solution: sol } = generatePuzzle(DIFFICULTIES[difficulty.value - 1].empties);
   // 每个格子：v 数字（0 为空）、fixed 题面格、notes 候选数位掩码
   cells.value = puzzle.map(v => ({ v, fixed: v > 0, notes: 0 }));
+  solution.value = sol;
+  hearts.value = difficulty.value; // 简单 1 / 一般 2 / 困难 3
   selected.value = -1;
   notesMode.value = false;
   phase.value = PLAY;
@@ -206,13 +221,10 @@ function removeState() {
   try { localStorage.removeItem(STATE_KEY); } catch { /* 忽略 */ }
 }
 
-// 整盘填满且无冲突 = 已完成的盘，不再落盘（胜利时清除进行中状态）
+// 整盘填满且完全正确 = 已完成的盘，不再落盘（胜利时清除进行中状态）
 function isFinished() {
   for (let i = 0; i < 81; i++) {
-    if (!cells.value[i].v) return false;
-  }
-  for (let i = 0; i < 81; i++) {
-    if (!cells.value[i].fixed && conflictAt(i)) return false;
+    if (!cells.value[i].v || cells.value[i].v !== solution.value[i]) return false;
   }
   return true;
 }
@@ -229,6 +241,8 @@ function saveState() {
       time: timerRef.value?.seconds() || 0,
       // 每格存 [数字, 是否题面格, 笔记位掩码]
       cells: cells.value.map(c => [c.v, c.fixed ? 1 : 0, c.notes]),
+      solution: solution.value,
+      hearts: hearts.value,
     }));
   } catch { /* 忽略 */ }
 }
@@ -240,6 +254,8 @@ function restore() {
     if (!saved || !Array.isArray(saved.cells) || saved.cells.length !== 81) return false;
     const d = +saved.difficulty;
     if (!(d >= MIN_DIFFICULTY && d <= MAX_DIFFICULTY)) return false;
+    const sol = saved.solution;
+    if (!Array.isArray(sol) || sol.length !== 81 || sol.some(v => !(v >= 1 && v <= 9 && v === (v | 0)))) return false;
     const arr = saved.cells.map(t => {
       const v = Math.min(9, Math.max(0, +t[0] || 0));
       const fixed = Boolean(t[1]) && v > 0;
@@ -249,6 +265,9 @@ function restore() {
     difficulty.value = d;
     localStorage.setItem(DIFFICULTY_KEY, d);
     cells.value = arr;
+    solution.value = sol;
+    const hv = +saved.hearts;
+    hearts.value = hv >= 0 && hv <= d ? hv : d;
     selected.value = -1;
     notesMode.value = false;
     phase.value = PLAY;
@@ -273,13 +292,10 @@ function sameUnit(a, b) {
     || (((ra / 3) | 0) === ((rb / 3) | 0) && ((ca / 3) | 0) === ((cb / 3) | 0));
 }
 
-function conflictAt(i) {
+// 该格当前数字是否与唯一解不符（题面格与答案一致，不会判错）
+function isWrong(i) {
   const v = cells.value[i].v;
-  if (!v) return false;
-  for (const p of PEERS[i]) {
-    if (cells.value[p].v === v) return true;
-  }
-  return false;
+  return v > 0 && v !== solution.value[i];
 }
 
 function cellClass(i, cell) {
@@ -288,7 +304,7 @@ function cellClass(i, cell) {
   if (cell.fixed) out.push('fixed');
   if (s >= 0 && s !== i && sameUnit(s, i)) out.push('hl');
   if (s >= 0 && s !== i && cells.value[s].v && cells.value[s].v === cell.v) out.push('same');
-  if (!cell.fixed && cell.v && conflictAt(i)) out.push('err');
+  if (!cell.fixed && isWrong(i)) out.push('err');
   if (i === s) out.push('sel');
   return out;
 }
@@ -335,6 +351,7 @@ function onPad(d) {
   }
   cell.v = d;
   cell.notes = 0;
+  checkMistake(s);
   afterEdit();
 }
 
@@ -378,11 +395,27 @@ function onKeyUp(e) {
 // ---------- 判定 ----------
 
 function afterEdit() {
-  if (cells.value.some(c => !c.v)) return;
   for (let i = 0; i < cells.value.length; i++) {
-    if (!cells.value[i].fixed && conflictAt(i)) return;
+    if (cells.value[i].v !== solution.value[i]) return;
   }
   win();
+}
+
+// 刚填入的数字若与答案不符：还有爱心则扣一颗，爱心已为 0 则游戏失败
+function checkMistake(i) {
+  if (!isWrong(i)) return;
+  if (hearts.value > 0) {
+    hearts.value--;
+  } else {
+    lose();
+  }
+}
+
+function lose() {
+  if (phase.value !== PLAY) return;
+  timerRef.value?.stop();
+  removeState(); // 失败的对局不再恢复，下次进入开新局
+  phase.value = OVER;
 }
 
 function win() {
@@ -463,6 +496,19 @@ function win() {
         font-weight: bold;
         line-height: 1.2;
         font-variant-numeric: tabular-nums;
+      }
+      .stat-value.stat-hearts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 20px;
+        line-height: 1;
+        .heart {
+          font-size: 19px;
+          &.dead {
+            opacity: 0.3;
+          }
+        }
       }
     }
   }
@@ -604,18 +650,23 @@ function win() {
     &.same {
       background: var(--enter-bg);
     }
-    &.err .num {
-      color: var(--del-color);
-    }
-    &.err {
-      background: var(--del-bg);
-    }
     &.sel {
       background: var(--enter-bg);
       box-shadow: inset 0 0 0 2px var(--primary-bg);
       .num {
         color: var(--primary-bg);
         font-weight: 700;
+      }
+    }
+    // 填错的格子要红：置于 .sel/.same 之后，选中态也不能被绿色覆盖
+    &.err {
+      background: var(--del-bg);
+      .num {
+        color: var(--del-color);
+        font-weight: 700;
+      }
+      &.sel {
+        box-shadow: inset 0 0 0 2px var(--del-color);
       }
     }
   }
@@ -724,6 +775,9 @@ function win() {
     align-items: center;
     justify-content: center;
     gap: 12px;
+    &.lose {
+      color: var(--lose-color);
+    }
     .new-best {
       color: var(--primary-bg);
       font-size: 15px;
