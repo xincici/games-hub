@@ -36,6 +36,6 @@ export default defineConfig({
     'i-mdi-target',
     'i-mdi-numeric-3',
     'i-mdi-star-four-points',
-    'i-mdi-grid-large',
+    'i-mdi-grid',
   ],
 });

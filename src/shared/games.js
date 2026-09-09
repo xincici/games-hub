@@ -114,7 +114,7 @@ export const games = [
   {
     id: 'sudoku',
     path: '/sudoku',
-    icon: 'i-mdi-grid-large',
+    icon: 'i-mdi-grid',
     helpKey: '__sudoku_game__help_showed',
     recordsPrefix: '__sudoku_game__',
     minDifficulty: 1,
