@@ -63,9 +63,12 @@
           v-for="d in NUMS"
           :key="d"
           class="key"
-          :class="{ on: padDigit === d }"
+          :class="keyClass(d)"
           @click="onPad(d)"
-        >{{ d }}</button>
+        >
+          {{ d }}
+          <span v-if="digitLeft[d] > 0" class="badge">{{ digitLeft[d] }}</span>
+        </button>
       </div>
       <div class="tools">
         <button class="tool" :class="{ active: notesMode }" @click="notesMode = !notesMode">
@@ -120,6 +123,17 @@ const padDigit = computed(() => {
   const s = selected.value;
   return s >= 0 && !cells.value[s]?.fixed ? cells.value[s].v : 0;
 });
+// 每个数字（1~9）还剩几个可填 = 9 − 盘面上已出现的次数
+const digitLeft = computed(() => {
+  const leftArr = [0, 9, 9, 9, 9, 9, 9, 9, 9, 9];
+  for (const c of cells.value) {
+    if (c.v) leftArr[c.v]--;
+  }
+  return leftArr;
+});
+function keyClass(d) {
+  return { on: padDigit.value === d, used: digitLeft.value[d] <= 0 };
+}
 
 // 棋盘按视口收缩：外框与数字键盘同宽，9×9 单元格等分
 const frameStyle = computed(() => {
@@ -306,14 +320,17 @@ function onPad(d) {
   if (s < 0) return;
   const cell = cells.value[s];
   if (cell.fixed) return;
-  // 笔记模式下空格点数字 = 添加/移除候选；其余情况为填写/清除
-  if (notesMode.value && !cell.v) {
-    cell.notes ^= 1 << d;
-    return;
-  }
+  // 再点一次当前格已填的数字 = 清除该格（即使该数字已放满，也可借此纠错）
   if (cell.v === d) {
     cell.v = 0;
     cell.notes = 0;
+    return;
+  }
+  // 该数字 9 个已全部放完：置灰不可再选（含新增笔记候选）
+  if (digitLeft.value[d] <= 0) return;
+  // 笔记模式下空格点数字 = 添加/移除候选；其余情况为填写
+  if (notesMode.value && !cell.v) {
+    cell.notes ^= 1 << d;
     return;
   }
   cell.v = d;
@@ -455,15 +472,17 @@ function win() {
     margin: 16px 0;
     height: 72px;
     .difficulty-wrapper {
-      flex: 3.5;
+      flex: 4;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
       .difficulty-value {
-        min-width: 52px;
+        min-width: 40px;
+        padding: 0 2px;
+        box-sizing: border-box;
         text-align: center;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: bold;
         white-space: nowrap;
       }
@@ -475,7 +494,7 @@ function win() {
       justify-content: center;
     }
     .start-wrapper {
-      flex: 4;
+      flex: 3.5;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -610,6 +629,7 @@ function win() {
       display: flex;
       gap: 6px;
       .key {
+        position: relative;
         flex: 1;
         height: 42px;
         box-sizing: border-box;
@@ -623,12 +643,34 @@ function win() {
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
         font-variant-numeric: tabular-nums;
+        .badge {
+          position: absolute;
+          top: 1px;
+          right: 3px;
+          font-size: 9px;
+          font-weight: 700;
+          line-height: 1;
+          color: var(--text-color);
+          opacity: 0.5;
+        }
         &:active {
           background: var(--key-active-bg);
+        }
+        // 数字放满 9 个后置灰：仍允许“再点一次已填数字 = 清格”
+        &.used:not(.on) {
+          opacity: 0.35;
+          cursor: not-allowed;
+          &:active {
+            background: var(--key-bg);
+          }
         }
         &.on {
           background: var(--primary-bg);
           color: #fff;
+          .badge {
+            color: #fff;
+            opacity: 0.9;
+          }
         }
       }
     }
