@@ -11,6 +11,7 @@ import detectiveDict from '@/games/detective/i18n';
 import hunterDict from '@/games/hunter/i18n';
 import threeDict from '@/games/three/i18n';
 import crushDict from '@/games/crush/i18n';
+import sudokuDict from '@/games/sudoku/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -110,6 +111,15 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 3,
   },
+  {
+    id: 'sudoku',
+    path: '/sudoku',
+    icon: 'i-mdi-grid-large',
+    helpKey: '__sudoku_game__help_showed',
+    recordsPrefix: '__sudoku_game__',
+    minDifficulty: 1,
+    maxDifficulty: 3,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -127,4 +137,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['hunter', hunterDict],
   ['three', threeDict],
   ['crush', crushDict],
+  ['sudoku', sudokuDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

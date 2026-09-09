@@ -31,8 +31,8 @@ import { games } from '@/shared/games';
 import { language, dictOf } from '@/shared/i18n';
 import { setLaunchOrigin } from '@/shared/launch';
 
-// 蜂窝布局：按行分组，2/3/2/3 交替让每行都咬合
-const ROW_SIZES = [2, 3, 2, 3, 2];
+// 蜂窝布局：按行分组，3/2/3/2/3 交替让每行都咬合
+const ROW_SIZES = [3, 2, 3, 2, 3];
 const rows = computed(() => {
   const out = [];
   let i = 0;

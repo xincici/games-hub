@@ -122,6 +122,8 @@ body {
   --even-bg-color: #f2f4f7;
   --odd-bg-color: #d8f0e2;
   --tile-border-color: #c9d0da;
+  --sudoku-line: #d3d8df;
+  --sudoku-strong: #5f7086;
   --key-bg: #eef0f4;
   --key-active-bg: #dfe3ea;
   --enter-bg: #e5f6ec;
@@ -153,6 +155,8 @@ body {
     --even-bg-color: rgba(210, 210, 210, 0.90);
     --odd-bg-color: rgba(125, 125, 125, 0.90);
     --tile-border-color: #5a5a5a;
+    --sudoku-line: #545d6b;
+    --sudoku-strong: #92a3ba;
     --key-bg: #454545;
     --key-active-bg: #505050;
     --enter-bg: rgba(78, 201, 138, 0.16);
