@@ -37,5 +37,6 @@ export default defineConfig({
     'i-mdi-numeric-3',
     'i-mdi-star-four-points',
     'i-mdi-grid',
+    'i-mdi-layers-triple',
   ],
 });

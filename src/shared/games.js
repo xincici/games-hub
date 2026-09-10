@@ -12,6 +12,7 @@ import hunterDict from '@/games/hunter/i18n';
 import threeDict from '@/games/three/i18n';
 import crushDict from '@/games/crush/i18n';
 import sudokuDict from '@/games/sudoku/i18n';
+import masterDict from '@/games/master/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -120,6 +121,12 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 3,
   },
+  {
+    id: 'master',
+    path: '/master',
+    icon: 'i-mdi-layers-triple',
+    helpKey: '__emoji_master__help_showed',
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -138,4 +145,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['three', threeDict],
   ['crush', crushDict],
   ['sudoku', sudokuDict],
+  ['master', masterDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

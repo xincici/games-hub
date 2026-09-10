@@ -15,6 +15,7 @@ import HunterGame from './games/hunter/HunterGame.vue';
 import ThreeGame from './games/three/ThreeGame.vue';
 import CrushGame from './games/crush/CrushGame.vue';
 import SudokuGame from './games/sudoku/SudokuGame.vue';
+import MasterGame from './games/master/MasterGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -31,6 +32,7 @@ const routes = [
   { path: '/detective', component: DetectiveGame, meta: { game: 'detective' } },
   { path: '/hunter', component: HunterGame, meta: { game: 'hunter' } },
   { path: '/sudoku', component: SudokuGame, meta: { game: 'sudoku' } },
+  { path: '/master', component: MasterGame, meta: { game: 'master' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

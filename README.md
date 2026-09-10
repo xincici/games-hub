@@ -1,6 +1,6 @@
 # Games Hub · 游戏合集
 
-十三个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
+十四个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
 
 | 游戏 | 玩法简介 |
 | --- | --- |
@@ -17,6 +17,7 @@
 | 🎯 Emoji 猎手 | 记忆收集挑战：记住目标 emoji，翻面后从候选区把它们全部找回 |
 | ⭐ Emoji 消消乐 | 交换相邻 emoji 三消：连锁消除计分，支持局面存档与续玩 |
 | 🗾 数独 | 唯一解挖洞生成，填错即标红并扣 ❤️ 生命，支持笔记候选，记录各难度最佳用时 |
+| 🧱 Emoji 大师 | 羊了个羊玩法：点击未被遮挡的顶层卡片落入 7 格收集槽，凑齐 3 张相同 emoji 自动消除；带撤回 / 洗牌道具 |
 
 ## 功能特性
 
@@ -52,12 +53,12 @@ yarn preview   # 本地预览构建产物
 ```
 src/
 ├── App.vue          # 根组件 + 全局主题 CSS 变量（浅/深两套）
-├── router.js        # hash 路由：/ /click /puzzle /guess /poker /three /2048 /snake /match /link /detective /hunter /crush /sudoku
+├── router.js        # hash 路由：/ /click /puzzle /guess /poker /three /2048 /snake /match /link /detective /hunter /crush /sudoku /master
 ├── shared/          # 共享模块：i18n（多语言）、theme（主题）、games（游戏注册表）、emojis（emoji 池）
 ├── components/      # HomePage（首页）、TopHeader（标题栏）、HelpDialog（帮助弹窗）
-└── games/           # 十三个游戏源码，每游戏一个目录
+└── games/           # 十四个游戏源码，每游戏一个目录
     ├── click/  puzzle/  guess/  poker/  three/  g2048/  snake/
-    └── match/  link/  detective/  hunter/  crush/  sudoku/
+    └── match/  link/  detective/  hunter/  crush/  sudoku/  master/
 scripts/             # 图标源文件（SVG + 512px PNG）
 public/              # favicon 与 PWA 图标
 ```
