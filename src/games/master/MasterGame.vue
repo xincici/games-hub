@@ -1,28 +1,26 @@
 <template>
   <div class="wrapper" :style="layout.vars">
-    <TopHeader />
+    <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-area">
+      <div class="stat">
+        <span class="stat-label">{{ i18n('bestScore') }}</span>
+        <span class="stat-value">{{ bestTime ? fmt(bestTime) : '--:--' }}</span>
+      </div>
+      <div class="divider"></div>
       <div class="stat">
         <span class="stat-label">{{ i18n('remain') }}</span>
         <span class="stat-value">{{ tiles.length }}</span>
       </div>
-      <div class="divider"></div>
-      <div class="stat">
-        <span class="stat-label">{{ i18n('cleared') }}</span>
-        <span class="stat-value">{{ cleared }}</span>
-      </div>
     </div>
     <div class="card opt-area">
       <div class="opt-half">
-        <button class="game-icon tool" :disabled="!canUndo" @click="undoLast">
-          <i i-mdi-undo-variant />{{ i18n('undo') }}
+        <button class="game-icon tool" :disabled="!canShuffle" :title="shuffleUsed ? i18n('shuffleUsed') : ''" @click="shuffleBoard">
+          <i i-mdi-shuffle-variant />{{ i18n('shuffle') }}
         </button>
       </div>
       <div class="divider"></div>
       <div class="opt-half">
-        <button class="game-icon tool" :disabled="!canShuffle" @click="shuffleBoard">
-          <i i-mdi-shuffle-variant />{{ i18n('shuffle') }}
-        </button>
+        <CountTimer ref="timerRef" :enable="phase === PLAY" :on-tick="saveState" />
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
@@ -70,6 +68,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import CountTimer from './CountTimer.vue';
 import confetti from './confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
@@ -77,6 +76,8 @@ import { TRAY_SIZE, generateTiles, freeIds, insertIndex, shuffleEmojis } from '.
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_master__';
+// 单关卡游戏：最佳用时按「前缀 + 难度数字」约定存放，兼容标题连点 5 次清记录
+const BEST_KEY = `${KEY_PREFIX}1`;
 const STATE_KEY = `${KEY_PREFIX}state`;
 const FLY_MS = 260;      // 卡片从原位飞入暂存区
 const CLEAR_MS = 560;    // 三消卡片：先闪烁再消失
@@ -84,14 +85,15 @@ const WIN_DELAY = 620;   // 最后一组三消闪烁完再弹结算层
 
 const tiles = ref([]);
 const tray = ref([]);
-const history = ref([]);
-const total = ref(0);
 const phase = ref(PLAY);
 // 只有「飞行中」会挡住新的点击；消除中的卡片不挡，保证连点手感
 const flightBusy = ref(false);
 const shuffling = ref(false);
+const shuffleUsed = ref(false); // 洗牌每局限用一次
 const flying = ref(null);
 const flyRef = ref(null);
+const timerRef = ref(null);
+const bestTime = ref(0);
 const gameId = ref(0);
 let winTimer = null;
 let shakeTimer = null;
@@ -101,9 +103,8 @@ const freeSet = computed(() => freeIds(tiles.value));
 // 正在闪烁消失的卡片：不占「有效槽位」，也不影响胜负判定
 const clearingTray = computed(() => tray.value.some(c => c.clearing));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
-const cleared = computed(() => Math.max(0, total.value - tiles.value.length - tray.value.length));
-const canUndo = computed(() => phase.value === PLAY && !flightBusy.value && !clearingTray.value && history.value.length > 0);
-const canShuffle = computed(() => phase.value === PLAY && !flightBusy.value && !clearingTray.value && tiles.value.length > 1);
+const canShuffle = computed(() =>
+  phase.value === PLAY && !flightBusy.value && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
 
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
 const layout = computed(() => {
@@ -151,10 +152,14 @@ onUnmounted(() => {
   clearTimeout(shakeTimer);
 });
 
-// 任何盘面/收集槽变化都实时落盘，退出回主页后可恢复
-watch([tiles, tray, history], saveState, { deep: true });
+// 任何盘面/收集槽变化都实时落盘，退出回主页后可恢复（计时器每秒也会落盘）
+watch([tiles, tray, shuffleUsed], saveState, { deep: true });
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function fmt(sec) {
+  return ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
+}
 
 function tileStyle(tile) {
   const { unit, tile: size } = layout.value;
@@ -163,7 +168,7 @@ function tileStyle(tile) {
     top: `${(tile.y * unit + 1).toFixed(2)}px`,
     width: `${(size - 2).toFixed(2)}px`,
     height: `${(size - 2).toFixed(2)}px`,
-    zIndex: 10 + tile.layer * 2,
+    zIndex: tile.layer + 1,
   };
 }
 
@@ -184,30 +189,26 @@ function initGame() {
   clearTimeout(shakeTimer);
   const list = generateTiles(EMOJIS);
   tiles.value = list;
-  total.value = list.length;
   tray.value = [];
-  history.value = [];
   phase.value = PLAY;
   flightBusy.value = false;
   shuffling.value = false;
+  shuffleUsed.value = false;
   flying.value = null;
+  bestTime.value = +(localStorage.getItem(BEST_KEY) || 0);
   gameId.value++;
+  timerRef.value?.reset();
   saveState();
 }
 
-function undoLast() {
-  if (!canUndo.value) return;
-  const last = history.value.pop();
-  const idx = tray.value.findIndex(c => c.uid === last.id);
-  if (idx < 0) return;
-  tray.value.splice(idx, 1);
-  tiles.value.push({ id: last.id, emoji: last.emoji, layer: last.layer, x: last.x, y: last.y });
-  saveState();
+function onScoreReset() {
+  bestTime.value = 0;
 }
 
 function shuffleBoard() {
   if (!canShuffle.value) return;
   if (!shuffleEmojis(tiles.value)) return;
+  shuffleUsed.value = true;
   shuffling.value = true;
   clearTimeout(shakeTimer);
   shakeTimer = setTimeout(() => { shuffling.value = false; }, 420);
@@ -229,7 +230,6 @@ async function pick(tile, event) {
   const snap = { ...tiles.value[at] };
   // 立即从盘面移除：遮挡关系随之更新，其它卡片会被点亮（渐亮动画）
   tiles.value.splice(at, 1);
-  history.value.push({ id: snap.id, emoji: snap.emoji, layer: snap.layer, x: snap.x, y: snap.y });
 
   const to = slotEl ? slotEl.getBoundingClientRect() : from;
   flying.value = {
@@ -282,7 +282,6 @@ async function settle() {
     await sleep(CLEAR_MS);
     const uids = new Set(picked.map(c => c.uid));
     tray.value = tray.value.filter(c => !uids.has(c.uid));
-    history.value = history.value.filter(h => !uids.has(h.id));
   } else if (activeTray.value >= TRAY_SIZE) {
     lose();
     return;
@@ -292,6 +291,13 @@ async function settle() {
 
 function win() {
   if (phase.value !== PLAY) return;
+  const elapsed = timerRef.value?.seconds() || 0;
+  timerRef.value?.stop();
+  // 记录最快通关用时（0 秒视作无效，避免异常值）
+  if (elapsed > 0 && (!bestTime.value || elapsed < bestTime.value)) {
+    localStorage.setItem(BEST_KEY, elapsed);
+    bestTime.value = elapsed;
+  }
   removeState();
   confetti();
   // 等最后一组三消闪烁消失后再弹结算层
@@ -300,6 +306,7 @@ function win() {
 
 function lose() {
   if (phase.value !== PLAY) return;
+  timerRef.value?.stop();
   removeState();
   phase.value = OVER;
 }
@@ -319,11 +326,11 @@ function saveState() {
   }
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify({
-      total: total.value,
       // 卡片：[id, emoji, 层, x, y]
       tiles: tiles.value.map(t => [t.id, t.emoji, t.layer, t.x, t.y]),
       tray: tray.value.map(c => [c.uid, c.emoji]),
-      history: history.value.map(h => [h.id, h.emoji, h.layer, h.x, h.y]),
+      shuffled: shuffleUsed.value ? 1 : 0,
+      time: timerRef.value?.seconds() || 0,
     }));
   } catch { /* 忽略 */ }
 }
@@ -339,17 +346,16 @@ function restore() {
     if (!ok) return false;
     const cards = saved.tray.map(c => ({ uid: +c[0], emoji: String(c[1]), clearing: false }));
     if (cards.length > TRAY_SIZE) return false;
-    const his = (Array.isArray(saved.history) ? saved.history : [])
-      .map(h => ({ id: +h[0], emoji: String(h[1]), layer: +h[2], x: +h[3], y: +h[4] }))
-      .filter(h => cards.some(c => c.uid === h.id));
     tiles.value = list;
-    total.value = Math.max(+saved.total || 0, list.length + cards.length);
     tray.value = cards;
-    history.value = his;
+    shuffleUsed.value = Boolean(saved.shuffled);
     phase.value = PLAY;
     flightBusy.value = false;
     flying.value = null;
+    bestTime.value = +(localStorage.getItem(BEST_KEY) || 0);
     gameId.value++;
+    // 恢复退出前的计时秒数并继续计时
+    timerRef.value?.restore(Math.max(0, +saved.time || 0));
     return true;
   } catch {
     return false;
@@ -548,6 +554,10 @@ function restore() {
     max-width: 440px;
     height: var(--board-h);
     box-sizing: border-box;
+    // 卡片带 z-index（层数），用 isolation 把它们的层叠限制在本区域内，
+    // 否则会盖住 Teleport 到 body 的帮助弹窗（z-index 10）
+    isolation: isolate;
+    z-index: 0;
   }
   .board {
     position: relative;
@@ -631,7 +641,8 @@ function restore() {
   .result {
     position: absolute;
     inset: 0;
-    z-index: 3;
+    // 必须高于棋盘卡片（层数 1~6）
+    z-index: 30;
     border-radius: var(--card-radius);
     background: var(--mask-color);
     color: var(--win-color);
