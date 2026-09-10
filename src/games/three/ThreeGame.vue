@@ -49,7 +49,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import CountTimer from '@/games/link/CountTimer.vue';
+import CountTimer from '@/shared/CountTimer.vue';
 import { i18n } from '@/shared/i18n';
 
 // 经典 Threes：4×4；1+2=3，3 起相同数字翻倍合成；

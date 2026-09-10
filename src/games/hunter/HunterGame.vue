@@ -68,8 +68,8 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import CountTimer from '@/games/link/CountTimer.vue';
-import confetti from './confetti';
+import CountTimer from '@/shared/CountTimer.vue';
+import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 

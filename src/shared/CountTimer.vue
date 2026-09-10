@@ -6,6 +6,10 @@
 </template>
 
 <script setup>
+// 各游戏共用的计时器：
+// - 挂载即开始计时，页面隐藏时暂停、恢复可见时按 enable 决定是否继续
+// - onTick 每秒回调（用于把当前秒数写入各游戏存档）
+// - 对外暴露 reset / stop / start / restore / seconds
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 defineExpose({
@@ -32,7 +36,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  // 卸载时不清 interval 会让计时器在离开页面后继续走，onTick 回调里组件已失效
   stop();
   onListener('remove');
 });

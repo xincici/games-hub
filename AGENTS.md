@@ -36,26 +36,28 @@ src/
 │   ├── i18n.js           # 共享 i18n：language ref（key __games_hub__language）、按游戏注册字典、i18n()/helpItems()
 │   ├── theme.js          # 共享主题（key __games_hub__theme），toggle body.dark
 │   ├── emojis.js         # 对对碰 / 连连看共用的 emoji 池
+│   ├── confetti.js       # 各游戏共用的撒花动画（canvas-confetti 封装）
+│   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
 ├── components/
 │   ├── HomePage.vue      # 首页：游戏卡片网格，垂直居中
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
-    ├── click/            # ClickGame.vue + confetti/difficulty/i18n.js + assets/yzcw.mp3
-    ├── guess/            # GuessNumber.vue + CountTimer.vue + confetti/robot/i18n.js
+    ├── click/            # ClickGame.vue + difficulty/i18n.js + assets/yzcw.mp3
+    ├── guess/            # GuessNumber.vue + robot/i18n.js
     ├── poker/            # MainGame.vue + CardItem/RuleArea + bet/constants/dice/rules/i18n.js
-    ├── puzzle/           # MainGame.vue + confetti/difficulty/rocker/i18n.js
-    ├── g2048/            # Game2048.vue + confetti/i18n.js（route /2048，key 前缀 __game_2048__）
+    ├── puzzle/           # MainGame.vue + difficulty/rocker/i18n.js
+    ├── g2048/            # Game2048.vue + i18n.js（route /2048，key 前缀 __game_2048__）
     ├── snake/            # SnakeGame.vue（canvas 渲染）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
-    ├── match/            # MatchGame.vue（emoji 对对碰）+ CountTimer/confetti/i18n.js（route /match，key 前缀 __emoji_match__）
-    ├── link/             # LinkGame.vue（emoji 连连看）+ board.js（≤2 转弯路径查找 + 随机生成 + 死局重排）+ CountTimer/confetti/i18n.js（route /link，key 前缀 __emoji_link__）
-    ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ confetti/i18n.js（route /detective，key 前缀 __emoji_detective__）
-    ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ confetti/i18n.js（route /hunter，key 前缀 __emoji_hunter__）
+    ├── match/            # MatchGame.vue（emoji 对对碰）+ i18n.js（route /match，key 前缀 __emoji_match__）
+    ├── link/             # LinkGame.vue（emoji 连连看）+ board.js（≤2 转弯路径查找 + 随机生成 + 死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
+    ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ i18n.js（route /detective，key 前缀 __emoji_detective__）
+    ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ i18n.js（route /hunter，key 前缀 __emoji_hunter__）
     ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画）+ i18n.js（route /three，key 前缀 __threes_game__）
     ├── crush/            # CrushGame.vue（emoji 消消乐：交换三消、连锁计分、掉落动画）+ board.js（纯逻辑）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
-    ├── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时）+ CountTimer/confetti/sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
-    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、洗牌每局限一次、计时与最佳用时、飞卡/闪烁动画）+ board.js（纯逻辑：保证可解的分层发牌）+ CountTimer/confetti/i18n.js（route /master，key 前缀 __emoji_master__）
+    ├── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时）+ sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
+    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、洗牌每局限一次、计时与最佳用时、飞卡/闪烁动画）+ board.js（纯逻辑：保证可解的分层发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -89,5 +91,6 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标来自 `shared/games.js` 的运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
 - 布局 mobile-first，内容最大宽度 480px（`--max-width`）。
+- 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - 变更时同步检查 README.md：凡改动影响到 README 中描述的内容（游戏列表、路由、目录结构、localStorage key、功能特性等），必须同步修改 README.md，不许 README 落后于实际。

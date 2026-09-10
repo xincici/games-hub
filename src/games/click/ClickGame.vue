@@ -67,7 +67,7 @@
 import { ref, reactive, computed, watch, watchEffect } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import confetti from './confetti';
+import confetti from '@/shared/confetti';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
 
 const BIG_VAL = 3;

@@ -76,9 +76,9 @@ import { ref, watch, onMounted, onUnmounted } from 'vue';
 import sampleSize from 'lodash.samplesize';
 
 import TopHeader from '@/components/TopHeader.vue';
-import CountTimer from './CountTimer.vue';
+import CountTimer from '@/shared/CountTimer.vue';
 import { robot, toggle as toggleRobot } from './robot.js';
-import confetti from './confetti.js';
+import confetti from '@/shared/confetti';
 
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const [GAMING, LOSE, WIN] = [0, 1, 2];

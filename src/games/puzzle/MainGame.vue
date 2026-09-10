@@ -95,7 +95,7 @@
 import { ref, reactive, computed, watch, watchEffect } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import confetti from './confetti';
+import confetti from '@/shared/confetti';
 import { rocker, toggle as toggleRocker } from './rocker';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
 

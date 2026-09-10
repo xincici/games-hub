@@ -1,39 +1,36 @@
-/*
- * @Author      : linye
- * @Created At  : 2023-05-06 17:58:13
- * @Description : 
- */
-
+// 各游戏共用的撒花动画：左右两侧持续喷洒 1.2 秒（canvas-confetti 封装）
 import confetti from 'canvas-confetti';
 
-const colors = [
+const COLORS = [
   '#5D8C7B',
   '#F2D091',
   '#F2A679',
   '#D9695F',
   '#8C4646',
 ];
+const DURATION = 1200;
+const FRAME_MS = 40;
 
-export default function() {
-  const end = Date.now() + 1200;
+export default function celebrate() {
+  const end = Date.now() + DURATION;
   (function frame() {
     confetti({
-      colors,
+      colors: COLORS,
       particleCount: 5,
       angle: 60,
       spread: 55,
       origin: { x: 0 },
     });
     confetti({
-      colors,
+      colors: COLORS,
       particleCount: 5,
       angle: 120,
       spread: 55,
       origin: { x: 1 },
     });
-  
+
     if (Date.now() < end) {
-      setTimeout(frame, 40);
+      setTimeout(frame, FRAME_MS);
     }
   }());
 }
