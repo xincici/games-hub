@@ -3,9 +3,9 @@
     <TopHeader :show-help="false" />
     <div class="game-list">
       <div class="honeycomb" :class="{ entering }">
-        <div v-for="row in rows" :key="row[0].id" class="hex-row">
+        <div v-for="row in rows" :key="row.list[0].id" class="hex-row" :class="{ offset: row.offset }">
           <router-link
-            v-for="game in row"
+            v-for="game in row.list"
             :key="game.id"
             :to="game.path"
             class="hex"
@@ -31,17 +31,24 @@ import { games } from '@/shared/games';
 import { language, dictOf } from '@/shared/i18n';
 import { setLaunchOrigin } from '@/shared/launch';
 
-// 蜂窝布局：按行分组，3/2/3/2/3 交替让每行都咬合
-const ROW_SIZES = [3, 2, 3, 2, 3];
+// 蜂窝布局：按行分组，1/2/3/2/3/2/1 的菱形排布，相邻行奇偶相反自然咬合。
+// 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
+// 此时给该行加半格横向错位，保持蜂窝咬合
+const ROW_SIZES = [1, 2, 3, 2, 3, 2, 1];
 const rows = computed(() => {
-  const out = [];
+  const groups = [];
   let i = 0;
   for (const size of ROW_SIZES) {
-    out.push(games.slice(i, i + size));
+    groups.push(games.slice(i, i + size));
     i += size;
   }
-  if (i < games.length) out.push(games.slice(i));
-  return out.filter(r => r.length);
+  if (i < games.length) groups.push(games.slice(i));
+  return groups
+    .filter(list => list.length)
+    .map((list, idx, arr) => ({
+      list,
+      offset: idx > 0 && list.length % 2 === arr[idx - 1].length % 2,
+    }));
 });
 
 // 入场动画：每个六边形以各自的延迟/幅度跳动后稳定。
@@ -155,6 +162,10 @@ function onVisibility() {
   // 追加 +2.65px（数值求解：dy 从 0.75h 增加 2.65 时斜边法向间隙 = 3px，与水平缝隙一致）
   &:not(:first-child) {
     margin-top: calc(var(--hex-h) / -4 + 2.65px);
+  }
+  // 与上一行同奇偶的收尾行：横移半格（一格宽 + 缝隙）形成错位咬合
+  &.offset {
+    transform: translateX(calc((var(--hex-w) + 3px) / 2));
   }
 }
 // 双层六边形实现描边：外层渲染边框色，内层缩进 --hex-border 渲染底色
