@@ -1,10 +1,10 @@
 <template>
   <div class="wrapper" :style="layout.vars">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <TopHeader />
     <div class="card score-area">
       <div class="stat">
-        <span class="stat-label">{{ i18n('bestScore') }}</span>
-        <span class="stat-value">{{ bestTime ? fmt(bestTime) : '--:--' }}</span>
+        <span class="stat-label">{{ i18n('level') }}</span>
+        <span class="stat-value">{{ level }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
@@ -24,7 +24,7 @@
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
-        <button class="game-icon" @click="initGame">{{ i18n('start') }}</button>
+        <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
       </div>
     </div>
     <div class="board-wrap">
@@ -40,9 +40,16 @@
       </div>
       <Transition name="win-pop">
         <div v-if="phase === WON || phase === OVER" class="result" :class="phase === WON ? 'win' : 'lose'">
-          <span v-if="phase === WON">🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
-          <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
-          <button @click="initGame" class="game-icon again">{{ i18n('playAgain') }}</button>
+          <template v-if="phase === WON">
+            <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
+            <span class="level-note">{{ i18n('levelDone').replace('{n}', level) }}</span>
+            <button @click="nextLevel" class="game-icon again">{{ i18n('nextLevel') }}</button>
+          </template>
+          <template v-else>
+            <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
+            <span class="level-note">{{ i18n('level') }} {{ level }}</span>
+            <button @click="replayLevel" class="game-icon again">{{ i18n('replayLevel') }}</button>
+          </template>
         </div>
       </Transition>
     </div>
@@ -61,6 +68,18 @@
     <Teleport to="body">
       <div v-if="flying" ref="flyRef" class="fly-card" :style="flyStyle">{{ flying.emoji }}</div>
     </Teleport>
+    <Teleport to="body">
+      <div v-if="confirming" class="confirm-mask" @click.self="confirming = false">
+        <div class="confirm-box">
+          <p class="confirm-title">🔄 {{ i18n('confirmTitle') }}</p>
+          <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
+          <div class="confirm-actions">
+            <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
+            <button class="confirm-ok" @click="startNewGame">{{ i18n('confirmOk') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -76,24 +95,24 @@ import { TRAY_SIZE, generateTiles, freeIds, insertIndex, shuffleEmojis } from '.
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_master__';
-// 单关卡游戏：最佳用时按「前缀 + 难度数字」约定存放，兼容标题连点 5 次清记录
-const BEST_KEY = `${KEY_PREFIX}1`;
+const LEVEL_KEY = `${KEY_PREFIX}level`;   // 闯关记录：当前第几关
 const STATE_KEY = `${KEY_PREFIX}state`;
 const FLY_MS = 260;      // 卡片从原位飞入暂存区
 const CLEAR_MS = 560;    // 三消卡片：先闪烁再消失
 const WIN_DELAY = 620;   // 最后一组三消闪烁完再弹结算层
 
+const level = ref(loadLevel());
 const tiles = ref([]);
 const tray = ref([]);
 const phase = ref(PLAY);
 // 只有「飞行中」会挡住新的点击；消除中的卡片不挡，保证连点手感
 const flightBusy = ref(false);
 const shuffling = ref(false);
-const shuffleUsed = ref(false); // 洗牌每局限用一次
+const shuffleUsed = ref(false); // 洗牌每关限用一次
 const flying = ref(null);
 const flyRef = ref(null);
 const timerRef = ref(null);
-const bestTime = ref(0);
+const confirming = ref(false); // 「新游戏」二次确认弹窗
 const gameId = ref(0);
 let winTimer = null;
 let shakeTimer = null;
@@ -144,7 +163,7 @@ const flyStyle = computed(() => {
 });
 
 onMounted(() => {
-  if (!restore()) initGame();
+  if (!restore()) initLevel(level.value);
 });
 
 onUnmounted(() => {
@@ -156,10 +175,6 @@ onUnmounted(() => {
 watch([tiles, tray, shuffleUsed], saveState, { deep: true });
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-function fmt(sec) {
-  return ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
-}
 
 function tileStyle(tile) {
   const { unit, tile: size } = layout.value;
@@ -182,12 +197,24 @@ function trayCardStyle(idx) {
   };
 }
 
-// ---------- 新游戏 / 道具 ----------
+// ---------- 关卡 / 新游戏 / 道具 ----------
 
-function initGame() {
+function loadLevel() {
+  const saved = +(localStorage.getItem(LEVEL_KEY) || 1);
+  return saved >= 1 ? saved : 1;
+}
+
+function persistLevel(lv) {
+  try { localStorage.setItem(LEVEL_KEY, lv); } catch { /* 忽略 */ }
+}
+
+// 开始第 lv 关：重新生成盘面、清空收集槽、计时与洗牌额度重置
+function initLevel(lv) {
   clearTimeout(winTimer);
   clearTimeout(shakeTimer);
-  const list = generateTiles(EMOJIS);
+  level.value = Math.max(1, lv);
+  persistLevel(level.value);
+  const { tiles: list } = generateTiles(EMOJIS, level.value);
   tiles.value = list;
   tray.value = [];
   phase.value = PLAY;
@@ -195,14 +222,25 @@ function initGame() {
   shuffling.value = false;
   shuffleUsed.value = false;
   flying.value = null;
-  bestTime.value = +(localStorage.getItem(BEST_KEY) || 0);
+  confirming.value = false;
   gameId.value++;
   timerRef.value?.reset();
   saveState();
 }
 
-function onScoreReset() {
-  bestTime.value = 0;
+// 「新游戏」= 清除闯关记录，回到第 1 关（需二次确认）
+function startNewGame() {
+  confirming.value = false;
+  try { localStorage.removeItem(LEVEL_KEY); } catch { /* 忽略 */ }
+  initLevel(1);
+}
+
+function nextLevel() {
+  initLevel(level.value + 1);
+}
+
+function replayLevel() {
+  initLevel(level.value);
 }
 
 function shuffleBoard() {
@@ -291,13 +329,9 @@ async function settle() {
 
 function win() {
   if (phase.value !== PLAY) return;
-  const elapsed = timerRef.value?.seconds() || 0;
   timerRef.value?.stop();
-  // 记录最快通关用时（0 秒视作无效，避免异常值）
-  if (elapsed > 0 && (!bestTime.value || elapsed < bestTime.value)) {
-    localStorage.setItem(BEST_KEY, elapsed);
-    bestTime.value = elapsed;
-  }
+  // 过关：闯关进度推进到下一关（本次的盘面存档作废，下次进入直接开新关）
+  persistLevel(level.value + 1);
   removeState();
   confetti();
   // 等最后一组三消闪烁消失后再弹结算层
@@ -326,6 +360,7 @@ function saveState() {
   }
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify({
+      level: level.value,
       // 卡片：[id, emoji, 层, x, y]
       tiles: tiles.value.map(t => [t.id, t.emoji, t.layer, t.x, t.y]),
       tray: tray.value.map(c => [c.uid, c.emoji]),
@@ -352,7 +387,9 @@ function restore() {
     phase.value = PLAY;
     flightBusy.value = false;
     flying.value = null;
-    bestTime.value = +(localStorage.getItem(BEST_KEY) || 0);
+    // 关卡进度以存档为准（与闯关记录同步）
+    level.value = Math.max(1, Math.floor(+saved.level) || loadLevel());
+    persistLevel(level.value);
     gameId.value++;
     // 恢复退出前的计时秒数并继续计时
     timerRef.value?.restore(Math.max(0, +saved.time || 0));
@@ -364,6 +401,64 @@ function restore() {
 </script>
 
 <style scoped lang="scss">
+// 「新游戏」二次确认弹窗（Teleport 到 body，层级要盖住帮助弹窗与飞行卡片）
+.confirm-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+}
+.confirm-box {
+  width: 100%;
+  max-width: 320px;
+  box-sizing: border-box;
+  padding: 20px 20px 16px;
+  border-radius: var(--card-radius);
+  background: var(--card-bg-color);
+  color: var(--text-color);
+  box-shadow: var(--card-shadow);
+  text-align: center;
+  animation: card-pop 0.2s ease backwards;
+  .confirm-title {
+    margin: 0 0 10px;
+    font-size: 17px;
+    font-weight: bold;
+  }
+  .confirm-msg {
+    margin: 0 0 18px;
+    font-size: 14px;
+    line-height: 1.6;
+    opacity: 0.8;
+  }
+  .confirm-actions {
+    display: flex;
+    gap: 10px;
+    button {
+      flex: 1;
+      padding: 10px 0;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .confirm-cancel {
+      border: 1px solid var(--border-color);
+      background: var(--card-bg-color);
+      color: var(--text-color);
+    }
+    .confirm-ok {
+      border: 0 none;
+      background: var(--primary-bg);
+      color: #fff;
+    }
+  }
+}
+
 @keyframes tile-in {
   from {
     opacity: 0;
@@ -655,6 +750,12 @@ function restore() {
     gap: 12px;
     &.lose {
       color: var(--lose-color);
+    }
+    .level-note {
+      color: var(--text-color);
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0.75;
     }
   }
   .win-pop-enter-active {

@@ -126,9 +126,6 @@ export const games = [
     path: '/master',
     icon: 'i-mdi-layers-triple',
     helpKey: '__emoji_master__help_showed',
-    recordsPrefix: '__emoji_master__',
-    minDifficulty: 1,
-    maxDifficulty: 1,
   },
 ];
 
