@@ -237,20 +237,30 @@ function initGame() {
 
 // 发牌：全部 gem 一次性渲染，靠 CSS animationDelay 从第一格逐个弹入
 function dealBoard() {
-  clearTimeout(dealTimer);
-  dealing = true;
   const all = [];
   for (let i = 0; i < cells.value.length; i++) {
     const v = cells.value[i];
     if (v === null || v === undefined) continue;
-    all.push({ id: ++gemId, value: v, idx: i, dealIdx: all.length });
+    all.push({ id: ++gemId, value: v, idx: i });
   }
   gems.value = all;
+  playDeal();
+}
+
+// 逐格入场动画：按落格顺序（先上后下、从左到右）给每张 gem 排一个延迟。
+// 新开局与「进入游戏恢复存档」都走这里，保证两种情况都是挨个渲染出来的
+function playDeal() {
+  if (!gems.value.length) return;
+  clearTimeout(dealTimer);
+  dealing = true;
+  const rank = new Map();
+  [...gems.value].sort((a, b) => a.idx - b.idx).forEach((g, i) => rank.set(g.id, i));
+  gems.value = gems.value.map(g => ({ ...g, dealIdx: rank.get(g.id) }));
   dealTimer = setTimeout(() => {
     dealing = false;
     // 清掉 dealIdx，后续交互不再触发 deal 动画
     gems.value = gems.value.map(({ dealIdx, ...g }) => g);
-  }, all.length * 18 + 400);
+  }, gems.value.length * 18 + 400);
 }
 
 function bestKey() {
@@ -445,6 +455,7 @@ function restore() {
     difficulty.value = d;
     cells.value = saved.cells;
     syncGems([]);
+    playDeal();   // 恢复的盘面同样逐个入场
     score.value = +saved.score || 0;
     moves.value = Math.min(LEVELS[d - 1].moves, Math.max(0, +saved.moves ?? LEVELS[d - 1].moves));
     phase.value = PLAY;

@@ -114,6 +114,10 @@ const flyRef = ref(null);
 const timerRef = ref(null);
 const confirming = ref(false); // 「新游戏」二次确认弹窗
 const gameId = ref(0);
+// 开局/恢复时的逐张入场动画窗口（窗口结束后重挂载的卡片不再延迟）
+const revealing = ref(false);
+const revealRank = new Map();   // 卡片 id -> 同层内的出场顺序
+let revealTimer = null;
 let winTimer = null;
 let shakeTimer = null;
 
@@ -167,9 +171,32 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  clearTimeout(revealTimer);
   clearTimeout(winTimer);
   clearTimeout(shakeTimer);
 });
+
+// 逐张入场：自下层向上层堆叠，同层内按生成顺序依次出现。
+// 窗口结束后清掉标记，之后重挂载（如撤回卡片）不再走延迟
+const REVEAL_STEP = 10;      // 同层内每张间隔
+const REVEAL_LAYER = 70;     // 每高一层整体延后
+const REVEAL_MS = 1400;
+function revealBoard() {
+  clearTimeout(revealTimer);
+  revealRank.clear();
+  const perLayer = new Map();
+  tiles.value.forEach(tile => {
+    const n = perLayer.get(tile.layer) || 0;
+    perLayer.set(tile.layer, n + 1);
+    revealRank.set(tile.id, n);
+  });
+  revealing.value = true;
+  revealTimer = setTimeout(() => { revealing.value = false; }, REVEAL_MS);
+}
+
+function revealDelay(tile) {
+  return tile.layer * REVEAL_LAYER + (revealRank.get(tile.id) || 0) * REVEAL_STEP;
+}
 
 // 任何盘面/收集槽变化都实时落盘，退出回主页后可恢复（计时器每秒也会落盘）
 watch([tiles, tray, shuffleUsed], saveState, { deep: true });
@@ -184,6 +211,7 @@ function tileStyle(tile) {
     width: `${(size - 2).toFixed(2)}px`,
     height: `${(size - 2).toFixed(2)}px`,
     zIndex: tile.layer + 1,
+    ...(revealing.value ? { animationDelay: `${revealDelay(tile)}ms` } : null),
   };
 }
 
@@ -224,6 +252,7 @@ function initLevel(lv) {
   flying.value = null;
   confirming.value = false;
   gameId.value++;
+  revealBoard();
   timerRef.value?.reset();
   saveState();
 }
@@ -391,6 +420,7 @@ function restore() {
     level.value = Math.max(1, Math.floor(+saved.level) || loadLevel());
     persistLevel(level.value);
     gameId.value++;
+    revealBoard();   // 恢复存档也逐张堆叠出来
     // 恢复退出前的计时秒数并继续计时
     timerRef.value?.restore(Math.max(0, +saved.time || 0));
     return true;

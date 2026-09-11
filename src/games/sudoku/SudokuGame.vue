@@ -37,7 +37,7 @@
     </div>
     <div class="game-area">
       <div class="board-frame" :style="frameStyle">
-        <div class="board">
+        <div class="board" :class="{ revealing }">
           <div
             v-for="(cell, i) in cells"
             :key="`${gameId}-${i}`"
@@ -122,6 +122,9 @@ const newBest = ref(false);
 const bestTime = ref(0);
 const gameId = ref(0);
 const timerRef = ref(null);
+// 开局/恢复时的逐格入场动画窗口（窗口结束后再落数字不再延迟）
+const revealing = ref(false);
+let revealTimer = null;
 let winTimer = null;
 
 // 唯一解答案：与填数对比判定“填错”，也是爱心扣减与胜利判断的依据
@@ -168,9 +171,25 @@ onMounted(() => {
 watch(cells, saveState, { deep: true });
 
 onUnmounted(() => {
+  clearTimeout(revealTimer);
   clearTimeout(winTimer);
   window.removeEventListener('keyup', onKeyUp);
 });
+
+// 逐格入场：按「行优先 + 列错开」的节奏给出延迟（最多约 0.3s），
+// 窗口结束后清掉标记，之后手动填数不再走这套延迟
+const REVEAL_MS = 1000;
+function revealBoard() {
+  clearTimeout(revealTimer);
+  revealing.value = true;
+  revealTimer = setTimeout(() => { revealing.value = false; }, REVEAL_MS);
+}
+
+function revealDelay(i) {
+  const r = (i / 9) | 0;
+  const c = i % 9;
+  return r * 26 + c * 14;
+}
 
 function initDifficulty() {
   const saved = +(localStorage.getItem(DIFFICULTY_KEY) || 1);
@@ -200,6 +219,7 @@ function initGame() {
   newBest.value = false;
   bestTime.value = +(localStorage.getItem(bestKey()) || 0);
   gameId.value++;
+  revealBoard();
   timerRef.value?.reset();
 }
 
@@ -274,6 +294,7 @@ function restore() {
     newBest.value = false;
     bestTime.value = +(localStorage.getItem(bestKey()) || 0);
     gameId.value++;
+    revealBoard();   // 恢复存档也逐格渲染
     timerRef.value?.restore(Math.max(0, +saved.time || 0));
     return true;
   } catch {
@@ -320,6 +341,7 @@ function cellStyle(i) {
     borderLeftWidth: c > 0 ? (c % 3 === 0 ? '2px' : '1px') : '0',
     borderTopColor: r > 0 ? (r % 3 === 0 ? SUDOKU_STRONG : SUDOKU_LINE) : 'transparent',
     borderLeftColor: c > 0 ? (c % 3 === 0 ? SUDOKU_STRONG : SUDOKU_LINE) : 'transparent',
+    ...(revealing.value ? { '--reveal-delay': `${revealDelay(i)}ms` } : null),
   };
 }
 
@@ -440,6 +462,22 @@ function win() {
   from {
     opacity: 0;
     transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// 数字（题面格与已填格）随格子逐一弹出，而不是整盘同时出现
+@keyframes num-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
   }
   to {
     opacity: 1;
@@ -669,6 +707,14 @@ function win() {
         box-shadow: inset 0 0 0 2px var(--del-color);
       }
     }
+  }
+  // 开局/恢复的逐格入场：格子与数字都按 --reveal-delay（由 cellStyle 内联给出）依次出现
+  .board.revealing .cell {
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+  .board.revealing .cell .num {
+    animation: num-pop 0.26s ease backwards;
+    animation-delay: var(--reveal-delay, 0ms);
   }
   .pad {
     display: flex;
