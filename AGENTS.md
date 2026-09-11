@@ -38,6 +38,7 @@ src/
 │   ├── emojis.js         # 对对碰 / 连连看共用的 emoji 池
 │   ├── confetti.js       # 各游戏共用的撒花动画（canvas-confetti 封装）
 │   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore）
+│   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
 ├── components/
 │   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（2/3/2/3/2/3 行），支持拖动排序（顺序存本地），末尾一张不可点击、不可拖动的「建设中」占位卡片（i-mdi-cogs）
@@ -92,5 +93,6 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
 - 布局 mobile-first，内容最大宽度 480px（`--max-width`）。
 - 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。
+- **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - 变更时同步检查 README.md：凡改动影响到 README 中描述的内容（游戏列表、路由、目录结构、localStorage key、功能特性等），必须同步修改 README.md，不许 README 落后于实际。

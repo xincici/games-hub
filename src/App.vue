@@ -1,9 +1,13 @@
 <template>
-  <router-view v-slot="{ Component, route }">
-    <Transition :name="route.meta.game === 'home' ? 'app-close' : 'app-open'">
-      <component :is="Component" :key="route.meta.game" />
-    </Transition>
-  </router-view>
+  <!-- 全站粒子连线背景：固定全屏、z-index 0、不拦截交互；内容层 z-index 1 盖在其上 -->
+  <ParticleBackground />
+  <div class="app-content">
+    <router-view v-slot="{ Component, route }">
+      <Transition :name="route.meta.game === 'home' ? 'app-close' : 'app-open'">
+        <component :is="Component" :key="route.meta.game" />
+      </Transition>
+    </router-view>
+  </div>
   <div class="landscape-tip">
     <span>📱</span>
     <span>{{ i18n('rotateTip') }}</span>
@@ -11,6 +15,7 @@
 </template>
 
 <script setup>
+import ParticleBackground from '@/shared/ParticleBackground.vue';
 import { i18n } from '@/shared/i18n';
 </script>
 
@@ -35,6 +40,16 @@ html, body, #app {
 }
 .landscape-tip {
   display: none;
+}
+// 内容层抬到画布之上（粒子 canvas 为 fixed + z-index 0）
+.app-content {
+  position: relative;
+  z-index: 1;
+}
+// 各页面根容器原本用 --bg-color 打底，这里改为透明，
+// 让 body 底色 + 粒子画布透上来（#app 前缀提高优先级压过各游戏的 scoped 样式）
+#app .wrapper {
+  background: transparent;
 }
 // iOS 风格的 App 打开 / 关闭过渡：游戏页从点击的图标位置缩放展开 / 缩回
 // 过渡期间进入的页面绝对定位覆盖在上层，避免与离开页面叠加撑高文档流
@@ -127,6 +142,8 @@ body {
   --tile-border-color: #c9d0da;
   --sudoku-line: #d3d8df;
   --sudoku-strong: #5f7086;
+  --particle-dot: 90, 112, 140;
+  --particle-line: 118, 140, 172;
   --key-bg: #eef0f4;
   --key-active-bg: #dfe3ea;
   --enter-bg: #e5f6ec;
@@ -160,6 +177,8 @@ body {
     --tile-border-color: #5a5a5a;
     --sudoku-line: #545d6b;
     --sudoku-strong: #92a3ba;
+    --particle-dot: 178, 204, 238;
+    --particle-line: 150, 188, 232;
     --key-bg: #454545;
     --key-active-bg: #505050;
     --enter-bg: rgba(78, 201, 138, 0.16);
