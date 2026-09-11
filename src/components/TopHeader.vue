@@ -144,6 +144,13 @@ onUnmounted(() => {
     text-decoration: none;
     // 关闭 iOS 系统 tap 高亮，让 :active 反馈成为唯一视觉反馈
     -webkit-tap-highlight-color: transparent;
+    // 图标本身只有 27px 高，用伪元素把热区撑到 40×45（不占布局、不改外观）
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -9px 0;
+    }
     &:active {
       opacity: 0.5;
     }
@@ -155,6 +162,12 @@ onUnmounted(() => {
     font-size: 20px;
     color: var(--text-color);
     -webkit-tap-highlight-color: transparent;
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -9px 0;
+    }
     &:active {
       opacity: 0.5;
     }

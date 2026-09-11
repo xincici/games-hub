@@ -24,6 +24,8 @@ import { i18n } from '@/shared/i18n';
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  // 关掉 iOS 系统 tap 高亮，让下面统一的 :active 反馈成为唯一视觉反馈
+  -webkit-tap-highlight-color: transparent;
 }
 html, body, #app {
   height: 100vh;
@@ -33,10 +35,43 @@ html, body, #app {
   overscroll-behavior-y: none;
 }
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+  // 之前只有 Avenir（仅 macOS 有）→ Windows 落 Arial、Android 落 Roboto，数字字形差异很大；
+  // 中文也完全靠系统回退，这里显式补上各平台的中文字体与 emoji 字体
+  font-family: Avenir, "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", "Source Han Sans SC", "Helvetica Neue", Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
+}
+// ---- 全站统一的按压 / 悬停反馈 ----
+// 之前只有 guess（opacity）和 poker（位移）两个游戏的主按钮有按压反馈，
+// 其余 12 个游戏点了没有任何回应；这里用一条 #app 前缀的全局规则补齐，
+// 优先级高于各游戏 scoped 样式（#app 前缀 = 1,0,0）
+// 桌面端（真有指针、能悬停的设备才启用，避免触屏上出现"粘住"的高亮）
+@media (hover: hover) and (pointer: fine) {
+  #app button:not(:disabled):not(.disable),
+  #app .item-wrapper,
+  #app a.hex:not(.placeholder) {
+    transition: filter 0.15s ease, opacity 0.15s ease;
+  }
+  #app button:not(:disabled):not(.disable):hover {
+    filter: brightness(1.06);
+  }
+  #app .item-wrapper:hover {
+    opacity: 0.7;
+  }
+  #app a.hex:not(.placeholder):hover {
+    filter: brightness(1.04);
+  }
+}
+// 按压规则必须写在 hover 之后：同优先级时后写的生效，
+// 否则「悬停 + 按下」会取到 hover 的变亮，按下反而没有下沉反馈
+#app button:not(:disabled):not(.disable):active,
+#app .item-wrapper:active,
+#app a.hex:not(.placeholder):active {
+  filter: brightness(0.9);
+  transform: translateY(1px);
 }
 .landscape-tip {
   display: none;
@@ -129,11 +164,34 @@ body {
   --card-color: #fff;
   --card-radius: 14px;
   --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  // 统一的卡片宽度 / 行高 / 牌格圆角 / 阴影档位：14 个游戏一律走这几个值
+  --card-max-width: 440px;
+  --row-height: 72px;
+  --row-gap: 16px;
+  --radius-tile: 8px;
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-sheet: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-float: 0 6px 18px rgba(0, 0, 0, 0.26);
   --mask-color: rgba(255, 255, 255, 0.8);
   --max-width: 480px;
-  --primary-bg: #2ea464;
-  --win-color: #1b1;
+  // 首页卡片的分类强调色（只用于首页图标与六边形描边，游戏内部一律用品牌绿）
+  --accent-logic: #23804e;
+  --accent-number: #2c6aad;
+  --accent-memory: #7550ad;
+  --accent-action: #bd5420;
+  --accent-card: #8f6419;
+  // 主色：白字压在上面需 ≥4.5:1，#2ea464 只有 3.18:1，故压深一档（4.92:1）
+  --primary-bg: #23804e;
+  // 结果色：浅色下压在近白遮罩上，胜利色同样要压深（#1b1 只有 2.58:1）
+  --win-color: #12833f;
   --lose-color: #b11;
+  // 次要文字（统计标签等）：不再靠 opacity: .6 变淡（那样只有 3.46:1）
+  --muted-color: #5f6b7a;
+  // 棋盘格：格子数字与「遮住」蒙层的颜色，深色主题下换成浅字深底
+  --cell-text-color: #222;
+  --cell-mask: #c9ced6;
+  // 连连看墙块斜纹（深色下需要浅纹才看得见）
+  --wall-stripe: rgba(0, 0, 0, 0.14);
   --zero-bg-color: #d8f0e2;
   --one-bg-color: #f2f4f7;
   --two-bg-color: #e4e8ee;
@@ -147,9 +205,9 @@ body {
   --key-bg: #eef0f4;
   --key-active-bg: #dfe3ea;
   --enter-bg: #e5f6ec;
-  --enter-color: #1e9e5a;
+  --enter-color: #157a45;
   --del-bg: #fdeeee;
-  --del-color: #d2504a;
+  --del-color: #b8433d;
   --board-bg: #bbada0;
   --cell-bg: rgba(238, 228, 218, 0.35);
   background: var(--bg-color);
@@ -164,16 +222,29 @@ body {
     --card-color: #333;
     --card-radius: 14px;
     --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-sheet: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    --shadow-float: 0 6px 18px rgba(0, 0, 0, 0.5);
     --mask-color: rgba(51, 51, 51, 0.8);
     --max-width: 480px;
-    --primary-bg: #2f9e63;
+    --accent-logic: #4eb87f;
+    --accent-number: #6aa5e6;
+    --accent-memory: #b295e6;
+    --accent-action: #e59356;
+    --accent-card: #e0b158;
+    --primary-bg: #23804e;
     --win-color: #4ec98a;
     --lose-color: #e57f79;
-    --zero-bg-color: rgba(210, 210, 210, 0.90);
-    --one-bg-color: rgba(160, 160, 160, 0.90);
-    --two-bg-color: rgba(125, 125, 125, 0.90);
-    --even-bg-color: rgba(210, 210, 210, 0.90);
-    --odd-bg-color: rgba(125, 125, 125, 0.90);
+    --muted-color: #a3adba;
+    --cell-text-color: #ececec;
+    --cell-mask: #454545;
+    --wall-stripe: rgba(255, 255, 255, 0.16);
+    // 深色下格子改用深色半透明底（原来是 90% 不透明的浅灰，在深色页面上是一块发白的板子）
+    --zero-bg-color: rgba(78, 201, 138, 0.22);
+    --one-bg-color: rgba(255, 255, 255, 0.06);
+    --two-bg-color: rgba(255, 255, 255, 0.14);
+    --even-bg-color: rgba(255, 255, 255, 0.06);
+    --odd-bg-color: rgba(78, 201, 138, 0.22);
     --tile-border-color: #5a5a5a;
     --sudoku-line: #545d6b;
     --sudoku-strong: #92a3ba;
@@ -182,9 +253,9 @@ body {
     --key-bg: #454545;
     --key-active-bg: #505050;
     --enter-bg: rgba(78, 201, 138, 0.16);
-    --enter-color: #4ec98a;
+    --enter-color: #5ad396;
     --del-bg: rgba(229, 127, 121, 0.16);
-    --del-color: #e57f79;
+    --del-color: #f5a49e;
     --board-bg: #4a443e;
     --cell-bg: rgba(255, 255, 255, 0.08);
   }

@@ -132,10 +132,13 @@ watch(helpShow, val => {
       button {
         cursor: pointer;
         padding: 10px 24px;
+        min-height: 44px;
         color: #fff;
         background: var(--primary-bg);
         border: 0 none;
-        border-radius: 8px;
+        border-radius: var(--radius-tile);
+        // 不写 font-size 的话按钮会落到 Chrome 默认的 13.3333px
+        font-size: 14px;
         font-weight: bold;
       }
     }

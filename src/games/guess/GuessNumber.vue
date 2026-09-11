@@ -182,8 +182,6 @@ function guessOnce() {
 </script>
 
 <style scoped lang="scss">
-$card-radius: 16px;
-
 .wrapper {
   display: flow-root;
   width: 100vw;
@@ -199,35 +197,33 @@ $card-radius: 16px;
   .card {
     box-sizing: border-box;
     width: calc(100% - 32px);
-    max-width: 448px;
+    max-width: var(--card-max-width);
     margin-left: auto;
     margin-right: auto;
     background: var(--card-bg);
-    border-radius: $card-radius;
+    border-radius: var(--card-radius);
     box-shadow: var(--card-shadow);
   }
   .game-icon {
     cursor: pointer;
     min-width: 125px;
-    height: 38px;
-    padding: 0 18px;
+    height: 40px;
+    padding: 0 16px;
     color: #fff;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     text-align: center;
     background: var(--primary-bg);
     border: 0 none;
-    border-radius: 10px;
-    &:active {
-      opacity: 0.85;
-    }
+    border-radius: var(--radius-tile);
+    // 按压反馈统一由 App.vue 的全局 :active 规则提供
   }
   .opt-area {
     display: flex;
     align-items: stretch;
     margin-top: 70px;
-    margin-bottom: 12px;
-    min-height: 64px;
+    margin-bottom: var(--row-gap);
+    height: var(--row-height);
     .opt-half {
       flex: 1;
       display: flex;
@@ -264,7 +260,7 @@ $card-radius: 16px;
         text-align: center;
         background: var(--key-bg);
         margin: 1px 3px;
-        border-radius: 10px;
+        border-radius: var(--radius-tile);
         &.current-input:after {
           content: " ";
           position: absolute;
@@ -289,7 +285,7 @@ $card-radius: 16px;
       height: 100%;
       left: 0;
       top: 0;
-      border-radius: $card-radius;
+      border-radius: var(--card-radius);
       font-weight: bold;
       color: var(--win-color);
       font-size: 18px;
@@ -316,8 +312,8 @@ $card-radius: 16px;
     flex-wrap: wrap;
     justify-content: space-between;
     background: var(--card-bg);
-    border-radius: $card-radius $card-radius 0 0;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    border-radius: var(--card-radius) var(--card-radius) 0 0;
+    box-shadow: var(--shadow-sheet);
     &.hide {
       bottom: -100%;
     }
@@ -330,7 +326,7 @@ $card-radius: 16px;
       background: var(--key-bg);
       color: var(--text-color);
       border: 0 none;
-      border-radius: 12px;
+      border-radius: var(--radius-tile);
       cursor: pointer;
       transition: background 0.15s ease;
       &:active:not(:disabled) {
@@ -366,7 +362,7 @@ $card-radius: 16px;
     .input-area {
       width: 100%;
       max-width: inherit;
-      border-radius: $card-radius $card-radius 0 0;
+      border-radius: var(--card-radius) var(--card-radius) 0 0;
     }
   }
 }

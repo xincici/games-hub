@@ -239,13 +239,12 @@ function userRedo() {
   background: var(--bg-color);
   color: var(--text-color);
   .card {
-    width: calc(100% - 24px);
-    max-width: 480px;
+    width: calc(100% - 32px);
+    max-width: var(--card-max-width);
     margin: 0 auto;
     box-sizing: border-box;
     background: var(--card-bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
+    border-radius: var(--card-radius);
     box-shadow: var(--card-shadow);
   }
   .divider {
@@ -262,6 +261,7 @@ function userRedo() {
     display: flex;
     align-items: center;
     margin-top: 70px;
+    height: var(--row-height);
     .score-item {
       flex: 1;
       display: flex;
@@ -269,13 +269,12 @@ function userRedo() {
       align-items: center;
       justify-content: center;
       gap: 2px;
-      padding: 14px 8px;
       .label {
-        font-size: 13px;
-        opacity: 0.6;
+        font-size: 12px;
+        color: var(--muted-color);
       }
       .value {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
         line-height: 1.2;
       }
@@ -284,7 +283,8 @@ function userRedo() {
   .opt-card {
     display: flex;
     align-items: center;
-    margin: 12px auto;
+    margin: var(--row-gap) auto;
+    height: var(--row-height);
     .opt-item {
       flex: 1;
       display: flex;
@@ -311,9 +311,16 @@ function userRedo() {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    position: relative;
     width: 28px;
     height: 28px;
     padding: 0;
+    // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -8px;
+    }
     border: 1px solid var(--border-color);
     border-radius: 8px;
     background: var(--card-bg-color);
@@ -327,13 +334,13 @@ function userRedo() {
   .game-icon {
     cursor: pointer;
     display: inline-block;
-    padding: 8px 10px;
+    padding: 8px 16px;
     font-size: 14px;
     font-weight: bold;
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
     &:disabled {
       background-color: #aaa;
       cursor: not-allowed;
@@ -374,7 +381,7 @@ function userRedo() {
         height: 100%;
         position: absolute;
         z-index: 1;
-        background: #ccc;
+        background: var(--cell-mask);
         border-radius: 8px;
       }
       .inner {
@@ -389,7 +396,7 @@ function userRedo() {
         font-size: 16px;
         font-weight: bold;
         background: var(--one-bg-color);
-        color: #222;
+        color: var(--cell-text-color);
         opacity: 1;
         &.zero {
           background: var(--zero-bg-color);
@@ -428,7 +435,7 @@ function userRedo() {
       color: var(--text-color);
       background: transparent;
       border: 1px solid var(--border-color);
-      border-radius: 12px;
+      border-radius: var(--radius-tile);
       transition: background-color 0.15s, border-color 0.15s, color 0.15s;
       &:not(:disabled) {
         color: var(--primary-bg);

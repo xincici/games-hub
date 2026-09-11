@@ -370,15 +370,18 @@ function onTouchEnd(e) {
   .score-area {
     margin-top: 70px;
     display: flex;
+    align-items: center;
+    height: var(--row-height);
     .stat {
       flex: 1;
-      padding: 14px 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
+      gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -390,8 +393,8 @@ function onTouchEnd(e) {
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    min-height: 64px;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .opt-half {
       flex: 1;
       display: flex;
@@ -414,13 +417,13 @@ function onTouchEnd(e) {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 20px;
+    padding: 8px 16px;
     font-size: 14px;
     font-weight: bold;
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
   }
   .game-area {
     position: relative;
@@ -454,8 +457,11 @@ function onTouchEnd(e) {
       justify-content: center;
       font-size: 28px;
       font-weight: bold;
-      color: #fff;
-      background: #eda437;
+      // 数值色阶：2/4 浅米色、8~32 暖橙、64+ 黄，文字色按底色的明度在「深棕 / 白」之间切换。
+      // 原来的色阶整体错位了一档（2 号牌是橙色的 #eda437），且 64~1024 的白字压在黄底上
+      // 只有 1.5~1.7:1，因此这里回到经典色阶并逐档保证 ≥3:1（大号粗体阈值）
+      color: #776e65;
+      background: #eee4da;
       transition: left 0.12s ease-in-out, top 0.12s ease-in-out;
       z-index: 1;
       &.merged {
@@ -466,16 +472,16 @@ function onTouchEnd(e) {
       &.dealt {
         animation: 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) backwards deal-in;
       }
-      &.v-4 { background: #f2b179; }
-      &.v-8 { background: #f59563; }
-      &.v-16 { background: #f67c5f; }
-      &.v-32 { background: #f65e3b; }
-      &.v-64 { background: #edcf72; }
-      &.v-128 { background: #edcc61; font-size: 24px; }
-      &.v-256 { background: #edc850; font-size: 24px; }
-      &.v-512 { background: #edc53f; font-size: 24px; }
-      &.v-1024 { background: #edc22e; font-size: 20px; }
-      &.v-2048 { background: var(--primary-bg); font-size: 20px; }
+      &.v-4 { background: #ede0c8; }
+      &.v-8 { background: #f2b179; color: #5c5347; }
+      &.v-16 { background: #f59563; color: #5c5347; }
+      &.v-32 { background: #f67c5f; color: #4a3f30; }
+      &.v-64 { background: #f65e3b; color: #fff; }
+      &.v-128 { background: #edcf72; color: #5c5347; font-size: 24px; }
+      &.v-256 { background: #edcc61; color: #5c5347; font-size: 24px; }
+      &.v-512 { background: #edc53f; color: #5c5347; font-size: 24px; }
+      &.v-1024 { background: #edc22e; color: #5c5347; font-size: 20px; }
+      &.v-2048 { background: var(--primary-bg); color: #fff; font-size: 20px; }
     }
   }
   .result {

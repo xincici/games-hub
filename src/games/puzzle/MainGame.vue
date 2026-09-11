@@ -349,7 +349,7 @@ function onTouchEnd(e) {
     border-radius: var(--card-radius);
     box-shadow: var(--card-shadow);
     width: calc(100% - 32px);
-    max-width: 480px;
+    max-width: var(--card-max-width);
     box-sizing: border-box;
   }
   &.rocker {
@@ -371,15 +371,18 @@ function onTouchEnd(e) {
     transition: margin-top 0.3s ease-in-out;
     margin: 70px 0 0;
     display: flex;
+    align-items: center;
+    height: var(--row-height);
     .stat {
       flex: 1;
-      padding: 14px 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
+      gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -412,8 +415,8 @@ function onTouchEnd(e) {
   }
   .game-icon {
     width: auto;
-    height: 32px;
-    padding: 6px 20px;
+    height: 40px;
+    padding: 8px 16px;
     font-size: 14px;
     background: var(--primary-bg);
     color: #fff;
@@ -424,8 +427,8 @@ function onTouchEnd(e) {
     }
   }
   .opt-area {
-    margin: 16px 0;
-    padding: 12px 0;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     display: flex;
     align-items: center;
     font-weight: bold;
@@ -500,7 +503,7 @@ function onTouchEnd(e) {
         height: 100%;
         position: absolute;
         z-index: 1;
-        background: #ccc;
+        background: var(--cell-mask);
         border-radius: 8px;
       }
       .inner {
@@ -515,13 +518,15 @@ function onTouchEnd(e) {
         border-radius: 8px;
         font-size: 16px;
         font-weight: bold;
-        color: #222;
+        color: var(--cell-text-color);
         opacity: 1;
         &.hide {
           visibility: hidden;
         }
         &.shake {
-          animation: 0.025s ease-in-out 0s infinite shake;
+          // 原来是 0.025s 一个循环（40Hz），在 60Hz 屏上每帧都换位置，看起来像抖动算法失真；
+          // 放到 0.09s（约 11Hz）才是能看清楚的"摇头"
+          animation: 0.09s ease-in-out 0s infinite shake;
         }
         &.zoom {
           animation: 0.08s ease-in-out 0s zoom;
@@ -541,7 +546,7 @@ function onTouchEnd(e) {
       height: 56px;
       width: 56px;
       border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border-radius: var(--radius-tile);
       margin: 1px 29px;
       padding: 0;
       font-size: 24px;

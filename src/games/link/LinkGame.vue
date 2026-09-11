@@ -635,7 +635,7 @@ function win() {
       gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -682,9 +682,16 @@ function win() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       width: 28px;
       height: 28px;
       padding: 0;
+      // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
+      &::after {
+        content: "";
+        position: absolute;
+        inset: -8px;
+      }
       border: 1px solid var(--border-color);
       border-radius: 8px;
       background: var(--card-bg-color);
@@ -803,7 +810,7 @@ function win() {
     justify-content: center;
     padding: 0;
     border: 0 none;
-    border-radius: 6px;
+    border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     color: var(--text-color);
     -webkit-tap-highlight-color: transparent;
@@ -841,11 +848,11 @@ function win() {
   .wall-block {
     position: absolute;
     inset: 3px;
-    border-radius: 6px;
+    border-radius: var(--radius-tile);
     background: var(--two-bg-color);
     background-image: repeating-linear-gradient(45deg,
       transparent 0 6px,
-      rgba(0, 0, 0, 0.14) 6px 9px);
+      var(--wall-stripe) 6px 9px);
     border: 1px solid var(--tile-border-color);
     box-sizing: border-box;
   }
@@ -856,7 +863,7 @@ function win() {
     transform: translate(-50%, -50%);
     z-index: 3;
     padding: 10px 18px;
-    border-radius: 10px;
+    border-radius: var(--radius-tile);
     background: var(--mask-color);
     color: var(--text-color);
     font-size: 15px;

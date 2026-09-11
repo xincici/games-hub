@@ -402,7 +402,7 @@ function onTouchEnd(e) {
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -412,7 +412,7 @@ function onTouchEnd(e) {
       gap: 4px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -424,8 +424,8 @@ function onTouchEnd(e) {
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    min-height: 64px;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .opt-half {
       flex: 1;
       display: flex;
@@ -435,7 +435,7 @@ function onTouchEnd(e) {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 20px;
+    padding: 8px 16px;
     font-size: 14px;
     font-weight: bold;
     background: var(--primary-bg);
@@ -497,19 +497,21 @@ function onTouchEnd(e) {
       position: absolute;
       top: 3px;
       right: 5px;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 600;
-      opacity: 0.55;
+      opacity: 0.78;
     }
   }
-  // 经典 Threes 配色：1 蓝、2 红、3 骨白起按色环推进，6144 黑色终极牌
+  // 经典 Threes 配色：1 蓝、2 红、3 骨白起按色环推进，6144 黑色终极牌。
+  // 文字色按底色明度在「白 / 深棕 #4A4238」之间切换——1/6/24 这几档原来用白字
+  // 只有 2.2~2.95:1，是这一屏里最糊的地方
   .tile, .next-tile {
-    &.v-1 { background: #5A9BD8; color: #fff; }
+    &.v-1 { background: #5694d1; color: #fff; }
     &.v-2 { background: #E0564E; color: #fff; }
     &.v-3 { background: #EFE9DC; color: #4A4238; }
-    &.v-6 { background: #8FBE4E; color: #fff; }
+    &.v-6 { background: #8FBE4E; color: #4A4238; }
     &.v-12 { background: #E7C24F; color: #4A4238; }
-    &.v-24 { background: #E1903D; color: #fff; }
+    &.v-24 { background: #E1903D; color: #4A4238; }
     &.v-48 { background: #D65C3B; color: #fff; }
     &.v-96 { background: #A65C9E; color: #fff; }
     &.v-192 { background: #5C68B5; color: #fff; }
@@ -522,11 +524,12 @@ function onTouchEnd(e) {
   .next-tile {
     width: 36px;
     height: 36px;
-    border-radius: 7px;
+    border-radius: var(--radius-tile);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 17px;
+    // 19px 粗体才算 WCAG 的「大号文字」（阈值 3:1），17px 时白字档位要求 4.5:1 会不达标
+    font-size: 19px;
     font-weight: bold;
   }
   .result {

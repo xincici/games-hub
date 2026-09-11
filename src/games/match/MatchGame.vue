@@ -276,7 +276,7 @@ function win() {
       gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -332,9 +332,16 @@ function win() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       width: 28px;
       height: 28px;
       padding: 0;
+      // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
+      &::after {
+        content: "";
+        position: absolute;
+        inset: -8px;
+      }
       border: 1px solid var(--border-color);
       border-radius: 8px;
       background: var(--card-bg-color);

@@ -527,7 +527,7 @@ function win() {
       gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -588,9 +588,16 @@ function win() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       width: 28px;
       height: 28px;
       padding: 0;
+      // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
+      &::after {
+        content: "";
+        position: absolute;
+        inset: -8px;
+      }
       border: 1px solid var(--border-color);
       border-radius: 8px;
       background: var(--card-bg-color);
@@ -625,7 +632,7 @@ function win() {
   .board-frame {
     box-sizing: border-box;
     border: 2px solid var(--sudoku-strong);
-    border-radius: 10px;
+    border-radius: var(--radius-tile);
     background: var(--sudoku-strong);
     overflow: hidden;
   }
@@ -744,11 +751,11 @@ function win() {
           position: absolute;
           top: 1px;
           right: 3px;
-          font-size: 9px;
+          font-size: 10px;
           font-weight: 700;
           line-height: 1;
           color: var(--text-color);
-          opacity: 0.5;
+          opacity: 0.75;
         }
         &:active {
           background: var(--key-active-bg);
@@ -766,7 +773,7 @@ function win() {
           color: #fff;
           .badge {
             color: #fff;
-            opacity: 0.9;
+            opacity: 1;
           }
         }
       }

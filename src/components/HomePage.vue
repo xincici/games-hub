@@ -12,7 +12,7 @@
               :class="{ dragging: dragId === card.id }"
               :data-id="card.id"
               draggable="false"
-              :style="entering ? enterStyle(card.id) : null"
+              :style="hexStyle(card)"
               @dragstart.prevent
               @pointerdown="onPointerDown(card, $event)"
               @click="onCardClick($event, card)"
@@ -23,7 +23,7 @@
               </span>
             </router-link>
             <!-- 占位卡片：不跳转，仅提示后续新游戏 -->
-            <div v-else class="hex placeholder" :style="entering ? enterStyle(card.id) : null">
+            <div v-else class="hex placeholder" :style="hexStyle(card)">
               <span class="hex-body">
                 <i :class="card.icon" />
                 <span class="game-name">{{ card.name }}</span>
@@ -38,7 +38,7 @@
       <div
         v-if="ghost"
         class="hex ghost"
-        :style="{ left: `${ghost.left}px`, top: `${ghost.top}px`, width: `${ghost.w}px`, height: `${ghost.h}px` }"
+        :style="{ left: `${ghost.left}px`, top: `${ghost.top}px`, width: `${ghost.w}px`, height: `${ghost.h}px`, ...(ghost.card.accent ? { '--accent': `var(--accent-${ghost.card.accent})` } : null) }"
       >
         <span class="hex-body">
           <i :class="ghost.card.icon" :style="ghost.card.iconScale ? { transform: `scale(${ghost.card.iconScale})` } : null" />
@@ -98,6 +98,7 @@ const cards = computed(() => [
       path: game.path,
       icon: game.icon,
       iconScale: game.iconScale,
+      accent: game.accent || 'logic',
       name: dictOf(game.id)[language.value].gameTitle,
     };
   }),
@@ -264,6 +265,12 @@ function enterStyle(id) {
   };
 }
 
+// 卡片样式：分类强调色（CSS 变量，供图标与六边形描边取用）+ 入场动画延迟
+function hexStyle(card) {
+  const accent = card.accent ? { '--accent': `var(--accent-${card.accent})` } : null;
+  return { ...accent, ...(entering.value ? enterStyle(card.id) : null) };
+}
+
 function playEnter() {
   clearTimeout(enterTimer);
   entering.value = false;
@@ -385,7 +392,8 @@ function onVisibility() {
     animation-fill-mode: backwards;
   }
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  background: var(--tile-border-color);
+  // 六边形描边取分类强调色的一点点（18% 与边框色混合），只有很淡的一层色相
+  background: color-mix(in srgb, var(--accent, var(--tile-border-color)) 18%, var(--tile-border-color));
   transition: background-color 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   // 触摸端允许页面纵向滚动；横向手势留给拖动排序
@@ -400,7 +408,7 @@ function onVisibility() {
     }
   }
   &:active {
-    background: var(--primary-bg);
+    background: var(--accent, var(--primary-bg));
     .hex-body {
       background: var(--enter-bg);
     }
@@ -418,7 +426,7 @@ function onVisibility() {
         opacity: 0.45;
       }
       .game-name {
-        opacity: 0.6;
+        color: var(--muted-color);
       }
     }
   }
@@ -443,7 +451,7 @@ function onVisibility() {
     transition: background-color 0.15s ease;
     i {
       font-size: 30px;
-      color: var(--primary-bg);
+      color: var(--accent, var(--primary-bg));
     }
     .game-name {
       font-size: 12px;

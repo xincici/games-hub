@@ -301,7 +301,7 @@ function onScoreReset() {
       gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -323,7 +323,7 @@ function onScoreReset() {
       .difficulty-value {
         min-width: 48px;
         text-align: center;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: bold;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
@@ -428,7 +428,7 @@ function onScoreReset() {
     left: 50%;
     transform: translateX(-50%);
     padding: 2px 14px;
-    border-radius: 10px;
+    border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     color: var(--text-color);
     border: 1px solid var(--border-color);

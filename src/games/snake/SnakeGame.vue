@@ -345,15 +345,18 @@ function onTouchEnd(e) {
   .score-area {
     margin-top: 70px;
     display: flex;
+    align-items: center;
+    height: var(--row-height);
     .stat {
       flex: 1;
-      padding: 14px 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
+      gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -363,8 +366,8 @@ function onTouchEnd(e) {
     }
   }
   .opt-area {
-    margin: 16px 0;
-    padding: 12px 0;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     display: flex;
     align-items: center;
     // 难度区:两个按钮区 = 3:3.5:3.5
@@ -391,8 +394,15 @@ function onTouchEnd(e) {
     justify-content: center;
     border: 1px solid var(--border-color);
     padding: 2px;
+    position: relative;
     width: 28px;
     height: 28px;
+    // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -8px;
+    }
     color: var(--text-color);
     font-size: 15px;
     border-radius: 8px;
@@ -404,7 +414,7 @@ function onTouchEnd(e) {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 10px;
+    padding: 8px 16px;
     font-size: 14px;
     font-weight: bold;
     background: var(--primary-bg);

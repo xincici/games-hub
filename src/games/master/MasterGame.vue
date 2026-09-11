@@ -569,10 +569,10 @@ function restore() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
+  border-radius: var(--radius-tile);
   background: var(--card-bg-color);
   border: 1px solid var(--tile-border-color);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.26);
+  box-shadow: var(--shadow-float);
   line-height: 1;
   pointer-events: none;
   will-change: transform;
@@ -620,7 +620,7 @@ function restore() {
       gap: 2px;
       .stat-label {
         font-size: 12px;
-        opacity: 0.6;
+        color: var(--muted-color);
       }
       .stat-value {
         font-size: 22px;
@@ -704,10 +704,10 @@ function restore() {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 9px;
+    border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     border: 1px solid var(--tile-border-color);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-soft);
     font-size: var(--tile-fs);
     line-height: 1;
     cursor: pointer;
@@ -744,7 +744,7 @@ function restore() {
       width: var(--slot);
       height: var(--slot);
       box-sizing: border-box;
-      border-radius: 9px;
+      border-radius: var(--radius-tile);
       background: var(--cell-bg);
       box-shadow: inset 0 0 0 1px var(--border-color);
     }
@@ -754,7 +754,7 @@ function restore() {
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 9px;
+      border-radius: var(--radius-tile);
       background: var(--card-bg-color);
       border: 1px solid var(--tile-border-color);
       box-shadow: var(--card-shadow);

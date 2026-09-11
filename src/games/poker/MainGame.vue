@@ -425,14 +425,14 @@ function getResult(cardsNum) {
   font-weight: bold;
   padding: 0;
   margin: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-tile);
   background: var(--primary-bg);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, .15);
+  box-shadow: var(--shadow-soft);
   cursor: pointer;
   transition: transform .1s ease, box-shadow .1s ease;
   &:active {
     transform: translateY(1px);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    box-shadow: var(--shadow-soft);
   }
   &:disabled {
     background: #aaa;
@@ -453,16 +453,15 @@ function getResult(cardsNum) {
     max-width: var(--max-width);
     margin: 0 auto 50px;
     box-sizing: border-box;
-    padding: 62px 12px 0;
+    padding: 62px 16px 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
     .card {
       background: var(--card-color);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
+      border-radius: var(--card-radius);
       box-sizing: border-box;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+      box-shadow: var(--card-shadow);
     }
     .money-area {
       display: flex;
@@ -492,9 +491,9 @@ function getResult(cardsNum) {
           flex: 1 0 34%;
         }
         .title {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: normal;
-          opacity: .6;
+          color: var(--muted-color);
         }
         .money {
           display: inline-block;
@@ -590,12 +589,12 @@ function getResult(cardsNum) {
       display: flex;
       align-items: center;
       gap: 10px;
-      min-height: 64px;
+      height: var(--row-height);
       padding: 10px;
       .btn {
         flex: 1 0 25%;
         height: 44px;
-        font-size: 16px;
+        font-size: 14px;
       }
     }
   }
