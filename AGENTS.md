@@ -40,7 +40,7 @@ src/
 │   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
 ├── components/
-│   ├── HomePage.vue      # 首页：游戏卡片网格，垂直居中
+│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（2/3/2/3/2/3 行），支持拖动排序（顺序存本地），末尾一张不可点击、不可拖动的「建设中」占位卡片（i-mdi-cogs）
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
@@ -68,7 +68,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **i18n 命名空间**：`shared/i18n.js` 按路由 meta（`activeGame`）解析当前游戏的字典；`gameTitle` 决定 `document.title`。新增 UI 文案要加到对应游戏 `games/<id>/i18n.js`（或首页的 `shared/i18n.js` 里的 `home` 字典），且中英双语都要加。
 - **共享状态**：主题（`body.dark` + `meta[name=theme-color]`）与语言是全局单例，任何页面切换对所有游戏生效；各游戏其余状态（难度、开关、记录）沿用各自原有的 localStorage key。
 - **localStorage 约定**（各游戏互不干扰，前缀与原独立项目一致）：
-  - 共享：`__games_hub__theme` / `__games_hub__language`
+  - 共享：`__games_hub__theme` / `__games_hub__language` / `__games_hub__home_order`（首页卡片排序，新游戏按注册顺序排在已排序结果之后）
   - 点击游戏：`__easy_click_game__*`（难度记录为前缀+难度数字，帮助为 `__easy_click_game__help_showed`）
   - 猜数字：`__guess_number__*`
   - 德州扑克：`__poker_game_*`（constants.js）
@@ -88,7 +88,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 
 ## 约定
 
-- 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标来自 `shared/games.js` 的运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
+- 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标（含 HomePage 里「建设中」占位卡片的 `i-mdi-cogs`）来自运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
 - 布局 mobile-first，内容最大宽度 480px（`--max-width`）。
 - 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。

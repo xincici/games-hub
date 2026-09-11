@@ -4,22 +4,48 @@
     <div class="game-list">
       <div class="honeycomb" :class="{ entering }">
         <div v-for="row in rows" :key="row.list[0].id" class="hex-row" :class="{ offset: row.offset }">
-          <router-link
-            v-for="game in row.list"
-            :key="game.id"
-            :to="game.path"
-            class="hex"
-            :style="entering ? enterStyle(game.id) : null"
-            @click="setLaunchOrigin($event.currentTarget)"
-          >
-            <span class="hex-body">
-              <i :class="game.icon" :style="game.iconScale ? { transform: `scale(${game.iconScale})` } : null" />
-              <span class="game-name">{{ dictOf(game.id)[language].gameTitle }}</span>
-            </span>
-          </router-link>
+          <template v-for="card in row.list" :key="card.id">
+            <router-link
+              v-if="!card.placeholder"
+              :to="card.path"
+              class="hex"
+              :class="{ dragging: dragId === card.id }"
+              :data-id="card.id"
+              draggable="false"
+              :style="entering ? enterStyle(card.id) : null"
+              @dragstart.prevent
+              @pointerdown="onPointerDown(card, $event)"
+              @click="onCardClick($event, card)"
+            >
+              <span class="hex-body">
+                <i :class="card.icon" :style="card.iconScale ? { transform: `scale(${card.iconScale})` } : null" />
+                <span class="game-name">{{ card.name }}</span>
+              </span>
+            </router-link>
+            <!-- 占位卡片：不跳转，仅提示后续新游戏 -->
+            <div v-else class="hex placeholder" :style="entering ? enterStyle(card.id) : null">
+              <span class="hex-body">
+                <i :class="card.icon" />
+                <span class="game-name">{{ card.name }}</span>
+              </span>
+            </div>
+          </template>
         </div>
       </div>
     </div>
+    <!-- 拖动时跟随指针的浮层：用 fixed 定位，避免任何布局换算带来的跳动 -->
+    <Teleport to="body">
+      <div
+        v-if="ghost"
+        class="hex ghost"
+        :style="{ left: `${ghost.left}px`, top: `${ghost.top}px`, width: `${ghost.w}px`, height: `${ghost.h}px` }"
+      >
+        <span class="hex-body">
+          <i :class="ghost.card.icon" :style="ghost.card.iconScale ? { transform: `scale(${ghost.card.iconScale})` } : null" />
+          <span class="game-name">{{ ghost.card.name }}</span>
+        </span>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -28,28 +54,189 @@ import { computed, ref, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from './TopHeader.vue';
 import { games } from '@/shared/games';
-import { language, dictOf } from '@/shared/i18n';
+import { i18n, language, dictOf } from '@/shared/i18n';
 import { setLaunchOrigin } from '@/shared/launch';
 
-// 蜂窝布局：按行分组，1/2/3/2/3/2/1 的菱形排布，相邻行奇偶相反自然咬合。
+// 首页排序：用户拖动后按 id 顺序存本地；存档里没有的游戏（后续新增）
+// 按注册顺序接在已排序结果之后，「建设中」占位卡片永远在最后且不可拖动
+const ORDER_KEY = '__games_hub__home_order';
+
+function readOrder() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ORDER_KEY));
+    return Array.isArray(saved) ? saved.filter(id => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+// 存档顺序（去重、丢弃已下线的游戏）+ 新游戏按注册顺序追加
+function mergeOrder() {
+  const ids = games.map(game => game.id);
+  const ordered = [];
+  readOrder().forEach(id => {
+    if (ids.includes(id) && !ordered.includes(id)) ordered.push(id);
+  });
+  ids.forEach(id => {
+    if (!ordered.includes(id)) ordered.push(id);
+  });
+  return ordered;
+}
+
+const order = ref(mergeOrder());
+
+function saveOrder() {
+  try { localStorage.setItem(ORDER_KEY, JSON.stringify(order.value)); } catch { /* 忽略 */ }
+}
+
+// 首页卡片：按排序结果排列的各游戏 + 末尾一个不跳转的「建设中」占位卡片
+const cards = computed(() => [
+  ...order.value.map(id => {
+    const game = games.find(g => g.id === id);
+    return {
+      id: game.id,
+      path: game.path,
+      icon: game.icon,
+      iconScale: game.iconScale,
+      name: dictOf(game.id)[language.value].gameTitle,
+    };
+  }),
+  {
+    id: 'constructing',
+    icon: 'i-mdi-cogs',
+    name: i18n('constructing'),
+    placeholder: true,
+  },
+]);
+
+// 蜂窝布局：按行分组，2/3/2/3/2/3 交替让每行都咬合。
 // 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
 // 此时给该行加半格横向错位，保持蜂窝咬合
-const ROW_SIZES = [1, 2, 3, 2, 3, 2, 1];
+const ROW_SIZES = [2, 3, 2, 3, 2, 3];
 const rows = computed(() => {
+  const list = cards.value;
   const groups = [];
   let i = 0;
   for (const size of ROW_SIZES) {
-    groups.push(games.slice(i, i + size));
+    groups.push(list.slice(i, i + size));
     i += size;
   }
-  if (i < games.length) groups.push(games.slice(i));
+  if (i < list.length) groups.push(list.slice(i));
   return groups
-    .filter(list => list.length)
-    .map((list, idx, arr) => ({
-      list,
-      offset: idx > 0 && list.length % 2 === arr[idx - 1].length % 2,
+    .filter(group => group.length)
+    .map((group, idx, arr) => ({
+      list: group,
+      offset: idx > 0 && group.length % 2 === arr[idx - 1].length % 2,
     }));
 });
+
+// ---------- 拖动排序 ----------
+// 交互约定：鼠标/触控笔拖动超过 8px 即进入拖拽；触摸端需长按 260ms（避免和页面滚动冲突）。
+// 拖到另一张卡片上就与它交换位置，松开即把顺序写入本地存储。
+const dragId = ref('');
+const ghost = ref(null);   // 跟随指针的卡片浮层 { card, w, h, left, top }
+let press = null;          // 按下但还没判定成拖拽
+let dragGrab = null;       // { grabX, grabY } 按下点相对卡片左上角的偏移
+let pressTimer = null;
+let suppressClick = false;
+
+function cardEl(id) {
+  return document.querySelector(`.hex[data-id="${id}"]`);
+}
+
+function onPointerDown(card, e) {
+  if (card.placeholder || e.button > 0) return;
+  suppressClick = false;
+  press = { id: card.id, card, x: e.clientX, y: e.clientY, type: e.pointerType };
+  clearTimeout(pressTimer);
+  if (e.pointerType === 'touch') pressTimer = setTimeout(startDrag, 260);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+}
+
+function startDrag() {
+  if (!press || dragId.value) return;
+  const el = cardEl(press.id);
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  // 记住按下点相对卡片左上角的偏移：浮层从卡片当前位置起步、并始终跟住手指/鼠标
+  dragGrab = { grabX: press.x - rect.left, grabY: press.y - rect.top };
+  ghost.value = { card: press.card, w: rect.width, h: rect.height, left: rect.left, top: rect.top };
+  dragId.value = press.id;
+  suppressClick = true;               // 拖拽结束后不要触发跳转
+  document.body.classList.add('card-dragging');
+}
+
+function onPointerMove(e) {
+  if (!press) return;
+  if (!dragId.value) {
+    const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+    if (moved < 8) return;
+    // 触摸端一旦先移动就当作滚动，取消长按
+    if (press.type === 'touch') { endPress(); return; }
+    startDrag();
+  }
+  if (!dragId.value || !ghost.value) return;
+  // 浮层用 fixed 坐标直接跟随指针（保持按下时的相对偏移），不受重排影响
+  ghost.value.left = e.clientX - dragGrab.grabX;
+  ghost.value.top = e.clientY - dragGrab.grabY;
+  // 拖到别的卡片上：交换两者位置（占位卡片不可交换）
+  const overEl = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.hex');
+  const overId = overEl?.dataset?.id;
+  if (overId && overId !== dragId.value) swapCards(dragId.value, overId);
+  else if (overEl?.classList.contains('placeholder')) moveToEnd(dragId.value);
+}
+
+// 拖到「建设中」占位卡片上：排到最后一张游戏卡片的位置
+function moveToEnd(id) {
+  const arr = order.value.filter(x => x !== id);
+  if (arr.length === order.value.length - 1 && order.value[order.value.length - 1] === id) return;
+  order.value = [...arr, id];
+}
+
+function swapCards(a, b) {
+  const arr = order.value.slice();
+  const ia = arr.indexOf(a);
+  const ib = arr.indexOf(b);
+  if (ia < 0 || ib < 0) return;
+  [arr[ia], arr[ib]] = [arr[ib], arr[ia]];
+  order.value = arr;
+}
+
+function onPointerUp() {
+  if (dragId.value) {
+    ghost.value = null;
+    dragId.value = '';
+    saveOrder();
+  }
+  endPress();
+}
+
+function endPress() {
+  clearTimeout(pressTimer);
+  press = null;
+  dragGrab = null;
+  document.body.classList.remove('card-dragging');
+  window.removeEventListener('pointermove', onPointerMove);
+  window.removeEventListener('pointerup', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerUp);
+}
+
+// 拖拽时禁止页面滚动/选中（触摸端）
+function onTouchMove(e) {
+  if (dragId.value) e.preventDefault();
+}
+
+function onCardClick(e, card) {
+  if (suppressClick) {          // 刚拖拽过：吞掉这次 click，避免误跳转
+    suppressClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  setLaunchOrigin(e.currentTarget);
+}
 
 // 入场动画：每个六边形以各自的延迟/幅度跳动后稳定。
 // 延迟由 id 哈希派生（同一局内确定、不同格子互不相同），
@@ -91,10 +278,13 @@ function playEnter() {
 
 onMounted(() => {
   playEnter();
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
   document.addEventListener('visibilitychange', onVisibility);
 });
 
 onUnmounted(() => {
+  endPress();
+  document.removeEventListener('touchmove', onTouchMove);
   clearTimeout(enterTimer);
   document.removeEventListener('visibilitychange', onVisibility);
 });
@@ -168,6 +358,18 @@ function onVisibility() {
     transform: translateX(calc((var(--hex-w) + 3px) / 2));
   }
 }
+// 拖动时跟随指针的浮层（Teleport 到 body）：fixed 定位、不吃事件、不参与入场动画
+.hex.ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  animation: none !important;
+  cursor: grabbing;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.32));
+  .hex-body {
+    background: var(--enter-bg);
+  }
+}
 // 双层六边形实现描边：外层渲染边框色，内层缩进 --hex-border 渲染底色
 .hex {
   position: relative;
@@ -186,10 +388,38 @@ function onVisibility() {
   background: var(--tile-border-color);
   transition: background-color 0.15s ease;
   -webkit-tap-highlight-color: transparent;
+  // 触摸端允许页面纵向滚动；横向手势留给拖动排序
+  touch-action: pan-y;
+  // 正在被拖动的卡片：原位压暗（跟随指针的是下面 .hex.ghost 浮层）
+  &.dragging {
+    animation: none !important;
+    pointer-events: none;
+    opacity: 0.3;
+    .hex-body {
+      background: var(--enter-bg);
+    }
+  }
   &:active {
     background: var(--primary-bg);
     .hex-body {
       background: var(--enter-bg);
+    }
+  }
+  // 占位卡片：不可点击、整体压暗，和可玩的游戏卡片区分开
+  &.placeholder {
+    cursor: default;
+    pointer-events: none;
+    background: var(--border-color);
+    opacity: 0.85;
+    .hex-body {
+      background: var(--bg-color);
+      i {
+        color: var(--text-color);
+        opacity: 0.45;
+      }
+      .game-name {
+        opacity: 0.6;
+      }
     }
   }
   .hex-body {
