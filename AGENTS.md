@@ -42,7 +42,7 @@ src/
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
 ├── components/
 │   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（2/3/2/3/2/3 行），支持拖动排序（顺序存本地），末尾一张不可点击、不可拖动的「建设中」占位卡片（i-mdi-cogs）
-│   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋）+ 主题/语言切换
+│   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
     ├── click/            # ClickGame.vue + difficulty/i18n.js + assets/yzcw.mp3

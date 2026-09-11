@@ -6,7 +6,9 @@
         <span class="home-text">{{ i18n('backHome') }}</span>
       </router-link>
     </div>
-    <span class="title" @click.stop="onTitleClick">{{ i18n('gameTitle') }}</span>
+    <!-- 首页只显示游戏图标（favicon 同款图案），不再显示「游戏合集」文案 -->
+    <img v-if="isHome" class="logo" :src="logoUrl" :alt="i18n('gameTitle')" draggable="false" />
+    <span v-else class="title" @click.stop="onTitleClick">{{ i18n('gameTitle') }}</span>
     <div class="side right">
       <template v-if="isHome">
         <span class="item-wrapper" @click="toggleTheme">
@@ -28,6 +30,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import HelpDialog from './HelpDialog.vue';
+// 首页标题位置显示游戏图标：直接引用图标源文件 scripts/make-icon.svg
+// （public/ 下的 favicon 与 PWA 图标都由它缩放而来）。
+// 用矢量源文件是因为任意 DPR 都清晰，且它四角是透明的——位图 PNG 四角是白底，
+// 深色模式下即使裁圆角也会在标题栏中间残留白边
+import logoUrl from '../../scripts/make-icon.svg';
 
 import { toggle as toggleLanguage } from '@/shared/i18n';
 import { isDark, toggle as toggleTheme } from '@/shared/theme';
@@ -105,10 +112,19 @@ onUnmounted(() => {
     }
   }
   .title {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: bold;
     text-align: center;
     white-space: nowrap;
+    // 字形基线本身偏上，下移一点视觉上才居中（grid 居中会吃掉一半 margin，净下移 2.5px）
+    margin-top: 5px;
+  }
+  .logo {
+    display: block;
+    width: 28px;
+    height: 28px;
+    user-select: none;
+    -webkit-user-drag: none;
   }
   .home-btn {
     gap: 2px;
