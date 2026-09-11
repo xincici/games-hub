@@ -239,6 +239,7 @@ function persistLevel(lv) {
 // 开始第 lv 关：重新生成盘面、清空收集槽、计时与洗牌额度重置
 function initLevel(lv) {
   clearTimeout(winTimer);
+  winTimer = null;
   clearTimeout(shakeTimer);
   level.value = Math.max(1, lv);
   persistLevel(level.value);
@@ -339,17 +340,23 @@ async function pick(tile, event) {
 
 // 结算：三消自动消除；槽满且无消除则失败；盘面与收集槽都空则获胜
 async function settle() {
+  // 只在「还没进入消除动画」的卡片里找三消：
+  // 上一组正在闪烁消失时，新落下的一组同样要能结算（否则最后一组永远消不掉、本局无法结束）
   const counts = new Map();
-  tray.value.forEach(c => counts.set(c.emoji, (counts.get(c.emoji) || 0) + 1));
+  tray.value.filter(c => !c.clearing).forEach(c => counts.set(c.emoji, (counts.get(c.emoji) || 0) + 1));
   const hit = [...counts.entries()].find(([, n]) => n >= 3);
   if (hit) {
     const emoji = hit[0];
-    const picked = tray.value.filter(c => c.emoji === emoji).slice(0, 3);
+    const picked = tray.value.filter(c => c.emoji === emoji && !c.clearing).slice(0, 3);
     picked.forEach(c => { c.clearing = true; });
     await sleep(CLEAR_MS);
     const uids = new Set(picked.map(c => c.uid));
     tray.value = tray.value.filter(c => !uids.has(c.uid));
-  } else if (activeTray.value >= TRAY_SIZE) {
+    // 消除完继续结算：可能又凑出一组，或本局刚好结束
+    await settle();
+    return;
+  }
+  if (activeTray.value >= TRAY_SIZE) {
     lose();
     return;
   }
@@ -357,7 +364,7 @@ async function settle() {
 }
 
 function win() {
-  if (phase.value !== PLAY) return;
+  if (phase.value !== PLAY || winTimer) return;
   timerRef.value?.stop();
   // 过关：闯关进度推进到下一关（本次的盘面存档作废，下次进入直接开新关）
   persistLevel(level.value + 1);
@@ -414,6 +421,8 @@ function restore() {
     tray.value = cards;
     shuffleUsed.value = Boolean(saved.shuffled);
     phase.value = PLAY;
+    clearTimeout(winTimer);
+    winTimer = null;
     flightBusy.value = false;
     flying.value = null;
     // 关卡进度以存档为准（与闯关记录同步）
