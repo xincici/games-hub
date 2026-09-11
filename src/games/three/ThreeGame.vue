@@ -33,7 +33,7 @@
           class="tile"
           v-for="tile in tiles"
           :key="tile.id"
-          :class="[`v-${capValue(tile.value)}`, { merged: tile.merged, fresh: tile.fresh }]"
+          :class="[`v-${capValue(tile.value)}`, { merged: tile.merged, fresh: tile.fresh, dealt: tile.dealIdx != null }]"
           :style="tileStyle(tile)"
         >
           <span class="tile-value">{{ tile.value }}</span>
@@ -58,6 +58,11 @@ const SIZE = 4;
 const [GAMING, LOSE] = [0, 1];
 const BEST_KEY = '__threes_game__best';
 const STATE_KEY = '__threes_game__state';
+// 开局 / 恢复存档时的挨个入场动画：每张牌间隔 DEAL_STEP 毫秒依次弹出
+const DEAL_STEP = 45;
+const DEAL_STEP_FEW = 130;
+const DEAL_MS = 280;
+const DEAL_TAIL = 120;
 
 const tiles = ref([]);
 const phase = ref(GAMING);
@@ -71,6 +76,9 @@ const timerRunning = computed(() => phase.value === GAMING);
 let deck = [];
 let tileId = 0;
 let busy = false;
+let dealing = false;
+let dealTimer = null;
+let dealStep = DEAL_STEP;
 
 onMounted(() => {
   if (!restore()) initGame();
@@ -79,6 +87,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keyup', onKeyUp);
+  clearTimeout(dealTimer);
 });
 
 function onKeyUp(e) {
@@ -187,7 +196,7 @@ function canMove() {
 // 两阶段移动：先整体滑到目标位（合成对重叠），140ms 后替换为合成牌并补牌，
 // 保证滑动过程与合成弹跳都能被看见
 function move(dir) {
-  if (phase.value !== GAMING || busy) return;
+  if (phase.value !== GAMING || busy || dealing) return;
   const { placements, mergeOps, moved } = computeMove(dir);
   if (!moved) return;
   busy = true;
@@ -244,14 +253,39 @@ function initGame() {
   phase.value = GAMING;
   score.value = 0;
   timerRef.value?.reset();
+  playDeal();
   save();
+}
+
+// 挨个入场：按「先上后下、从左到右」的顺序给每张牌排一个延迟，
+// 靠 CSS animationDelay + backwards 填充实现逐张弹出（新开局与恢复存档都走这里）
+function playDeal() {
+  if (!tiles.value.length) return;
+  clearTimeout(dealTimer);
+  dealing = true;
+  // 牌很少时（例如恢复到只剩两三张的残局）放慢节奏，避免看起来是同时出现
+  dealStep = tiles.value.length <= 4 ? DEAL_STEP_FEW : DEAL_STEP;
+  const rank = new Map();
+  [...tiles.value]
+    .sort((a, b) => (a.row - b.row) || (a.col - b.col))
+    .forEach((t, i) => rank.set(t.id, i));
+  // fresh 也一并清掉：入场动画由 dealt 接管，否则动画结束后会再弹一次
+  tiles.value = tiles.value.map(t => ({ ...t, fresh: false, dealIdx: rank.get(t.id) }));
+  dealTimer = setTimeout(() => {
+    dealing = false;
+    tiles.value = tiles.value.map(({ dealIdx, ...t }) => t);
+  }, (tiles.value.length - 1) * dealStep + DEAL_MS + DEAL_TAIL);
 }
 
 function tileStyle(tile) {
   // 绝对定位 % 基于 padding box（比内容盒宽 16px），
   // 牌宽 = (内容宽 - 3×gap)/4 = (100% - 40px)/4
   const pos = n => `calc(${n} * ((100% - 40px) / 4 + 8px) + 8px)`;
-  return { left: pos(tile.col), top: pos(tile.row) };
+  return {
+    left: pos(tile.col),
+    top: pos(tile.row),
+    ...(tile.dealIdx != null ? { animationDelay: `${tile.dealIdx * dealStep}ms` } : null),
+  };
 }
 
 // ---------- 存档 ----------
@@ -280,6 +314,8 @@ function restore() {
     timerRef.value?.restore(saved.time || 0);
     // 恢复即是死局（例如存档于结算前一步）→ 直接判负
     if (!canMove()) phase.value = LOSE;
+    // 恢复出来的牌同样逐张入场（死局被结算浮层盖住，就不做了）
+    if (phase.value !== LOSE) playDeal();
     return true;
   } catch {
     return false;
@@ -445,6 +481,11 @@ function onTouchEnd(e) {
     }
     &.merged {
       animation: 0.2s ease-in-out bump;
+    }
+    // 开局 / 恢复存档：按行列顺序逐张弹出（间隔由 animationDelay 控制，
+    // backwards 填充保证轮到自己之前先隐身）
+    &.dealt {
+      animation: 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) backwards appear;
     }
     .tile-value {
       font-size: 24px;

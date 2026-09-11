@@ -27,7 +27,7 @@
           class="cell tile"
           v-for="tile in tiles"
           :key="tile.id"
-          :class="[`v-${tile.value > 2048 ? 2048 : tile.value}`, { merged: tile.merged }]"
+          :class="[`v-${tile.value > 2048 ? 2048 : tile.value}`, { merged: tile.merged, dealt: tile.dealIdx != null }]"
           :style="tileStyle(tile)"
         >
           {{ tile.value }}
@@ -55,6 +55,11 @@ const WIN_VAL = 2048;
 const [GAMING, WIN, LOSE] = [0, 1, 2];
 const BEST_KEY = '__game_2048__best';
 const STATE_KEY = '__game_2048__state';
+// 开局 / 恢复存档时的挨个入场动画：每张牌间隔 DEAL_STEP 毫秒依次弹出
+const DEAL_STEP = 45;
+const DEAL_STEP_FEW = 140;
+const DEAL_MS = 280;
+const DEAL_TAIL = 120;
 
 const score = ref(0);
 const bestScore = ref(+(localStorage.getItem(BEST_KEY) || 0));
@@ -63,6 +68,9 @@ const newBest = ref(false);
 const tiles = ref([]);
 let tileId = 0;
 let winShown = false;
+let dealing = false;
+let dealTimer = null;
+let dealStep = DEAL_STEP;
 
 const timerRef = ref(null);
 // 进行中才计时（含 2048 达成后的继续游戏）；失败/未开始时暂停
@@ -107,6 +115,8 @@ onMounted(() => {
     timerRef.value.restore(saved?.time);
     // 恢复到失败局面时计时器保持停止，展示最终用时
     if (gameResult.value === LOSE) timerRef.value.stop();
+    // 恢复出来的牌逐张入场（失败局面被结算浮层盖住，就不做了）
+    if (gameResult.value !== LOSE) playDeal();
   } else {
     initGame();
   }
@@ -115,6 +125,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keyup', onKeyUp);
+  clearTimeout(dealTimer);
 });
 
 function onKeyUp(e) {
@@ -140,7 +151,27 @@ function tileStyle(tile) {
   return {
     left: `calc(${tile.col} * ${step} + 10px)`,
     top: `calc(${tile.row} * ${step} + 10px)`,
+    ...(tile.dealIdx != null ? { animationDelay: `${tile.dealIdx * dealStep}ms` } : null),
   };
+}
+
+// 挨个入场：按「先上后下、从左到右」的顺序给每张牌排一个延迟，
+// 靠 CSS animationDelay + backwards 填充实现逐张弹出（新开局与恢复存档都走这里）
+function playDeal() {
+  if (!tiles.value.length) return;
+  clearTimeout(dealTimer);
+  dealing = true;
+  // 新开局只有 2 张牌，间隔太短会看起来是同时出现，这里放慢一点
+  dealStep = tiles.value.length <= 4 ? DEAL_STEP_FEW : DEAL_STEP;
+  const rank = new Map();
+  [...tiles.value]
+    .sort((a, b) => (a.row - b.row) || (a.col - b.col))
+    .forEach((t, i) => rank.set(t.id, i));
+  tiles.value = tiles.value.map(t => ({ ...t, dealIdx: rank.get(t.id) }));
+  dealTimer = setTimeout(() => {
+    dealing = false;
+    tiles.value = tiles.value.map(({ dealIdx, ...t }) => t);
+  }, (tiles.value.length - 1) * dealStep + DEAL_MS + DEAL_TAIL);
 }
 
 function initGame() {
@@ -152,6 +183,7 @@ function initGame() {
   spawnTile();
   score.value = Math.max(...tiles.value.map(t => t.value));
   timerRef.value?.reset();
+  playDeal();
   localStorage.setItem(STATE_KEY, JSON.stringify({
     tiles: tiles.value.map(({ row, col, value }) => ({ row, col, value })),
     score: 0,
@@ -203,7 +235,7 @@ function linesOf(dir) {
 }
 
 function move(dir) {
-  if (gameResult.value === WIN || gameResult.value === LOSE) return;
+  if (gameResult.value === WIN || gameResult.value === LOSE || dealing) return;
   const map = tiles.value.reduce((acc, t) => {
     acc[`${t.row},${t.col}`] = t;
     return acc;
@@ -293,6 +325,17 @@ function onTouchEnd(e) {
   }
   to {
     transform: scale(1);
+  }
+}
+
+@keyframes deal-in {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
@@ -417,6 +460,11 @@ function onTouchEnd(e) {
       z-index: 1;
       &.merged {
         animation: 0.16s ease-in-out pop;
+      }
+      // 开局 / 恢复存档：按行列顺序逐张弹出（间隔由 animationDelay 控制，
+      // backwards 填充保证轮到自己之前先隐身）
+      &.dealt {
+        animation: 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) backwards deal-in;
       }
       &.v-4 { background: #f2b179; }
       &.v-8 { background: #f59563; }
