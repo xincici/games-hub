@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Click Game',
+    gameTitle: 'Click',
     bestScore: '🏆 Best Score',
     availableClicks: '👆 Available Clicks',
     start: '🎮 New Game',

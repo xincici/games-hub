@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Guess Number',
+    gameTitle: '1A2B',
     availableClicks: 'Available Clicks',
     start: '🎮 New Game',
     helpTip: 'Click for help!',
@@ -17,7 +17,7 @@ export default {
     rotateTip: 'Please rotate your device to portrait',
   },
   cn: {
-    gameTitle: '猜数字',
+    gameTitle: '1A2B',
     availableClicks: '剩余点击',
     start: '🎮 新游戏',
     helpTip: '查看帮助',

@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Number Puzzle',
+    gameTitle: 'Puzzle',
     bestScore: '🏆 Best Score',
     availableClicks: '👆 Click Count',
     start: '🎮 New Game',
