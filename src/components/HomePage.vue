@@ -442,11 +442,11 @@ function onVisibility() {
     box-sizing: border-box;
     transition: background-color 0.15s ease;
     i {
-      font-size: 34px;
+      font-size: 30px;
       color: var(--primary-bg);
     }
     .game-name {
-      font-size: 13.5px;
+      font-size: 12px;
       font-weight: bold;
       white-space: nowrap;
       max-width: 94%;
