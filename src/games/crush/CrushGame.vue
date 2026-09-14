@@ -34,7 +34,7 @@
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
-        <button @click="replayLevel" class="game-icon">{{ i18n('replayLevel') }}</button>
+        <button @click="confirming = true" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
     <div class="game-area">
@@ -68,10 +68,7 @@
       <div v-else-if="phase === OVER" class="result lose">
         <div>👻👻 {{ i18n('gameover') }} 👻👻</div>
         <div class="final-score">{{ score }} / {{ conf.target }}</div>
-        <div class="result-btns">
-          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
-          <button class="game-icon ghost" @click="confirming = true">{{ i18n('restartRun') }}</button>
-        </div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <Teleport to="body">
@@ -81,7 +78,7 @@
           <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
           <div class="confirm-actions">
             <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
-            <button class="confirm-ok" @click="restartRun">{{ i18n('confirmOk') }}</button>
+            <button class="confirm-ok" @click="startNewGame">{{ i18n('confirmOk') }}</button>
           </div>
         </div>
       </div>
@@ -306,8 +303,11 @@ function replayLevel() {
   initLevel(level.value);
 }
 
-function restartRun() {
+// 新游戏：清除闯关记录（历史最高关卡）并从第 1 关重新开始，任何时候点都要二次确认
+function startNewGame() {
   confirming.value = false;
+  localStorage.removeItem(BEST_KEY);
+  bestLevel.value = 1;
   initLevel(1);
 }
 

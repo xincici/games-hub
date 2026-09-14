@@ -37,7 +37,7 @@ src/
 │   ├── theme.js          # 共享主题（key __games_hub__theme），toggle body.dark
 │   ├── emojis.js         # 对对碰 / 连连看共用的 emoji 池
 │   ├── confetti.js       # 各游戏共用的撒花动画（canvas-confetti 封装）
-│   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore）
+│   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore；show=false 时只计时不显示数字，连连看用它驱动顶部倒计时）
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
 ├── components/
@@ -52,13 +52,13 @@ src/
     ├── g2048/            # Game2048.vue + i18n.js（route /2048，key 前缀 __game_2048__；新开局与恢复存档都按行列顺序逐张入场）
     ├── snake/            # SnakeGame.vue（canvas 渲染）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
     ├── match/            # MatchGame.vue（emoji 对对碰）+ i18n.js（route /match，key 前缀 __emoji_match__）
-    ├── link/             # LinkGame.vue（emoji 连连看 · 闯关制：限定时间内清空全盘过关，难度 = 棋盘大小（6×6→10×11）+ emoji 种类 + 牌数 + 墙数 + 限时，第 11 关起全部封顶但关数无限；同一种 emoji 可出多对（偶数张即可）；过关/失败浮层 + 「回到第 1 关」二次确认）+ board.js（纯逻辑：≤2 转弯路径查找、关卡曲线 CURVE 与 levelConfig、buildPairPool 多对发牌、generateLevelBoard/generateWalls、死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
+    ├── link/             # LinkGame.vue（emoji 连连看 · 闯关制：限定时间内清空全盘过关，难度 = 列数 6→10 + 行数 6→12 + emoji 种类 6→12 + 对数 9→30 + 墙 0→18 + 限时，第 30 关全部封顶但关数无限；同一种 emoji 可出多对（偶数张即可）；操作区只有「新游戏」（点击弹二次确认、清记录回第 1 关），失败遮罩上给「重玩本关」；倒计时只显示在顶部统计条）+ board.js（纯逻辑：≤2 转弯路径查找、关卡曲线 CURVE 与 levelConfig、buildPairPool 多对发牌、generateLevelBoard/generateWalls、死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
     ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ i18n.js（route /detective，key 前缀 __emoji_detective__）
     ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ i18n.js（route /hunter，key 前缀 __emoji_hunter__）
     ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画；新牌一律从「滑动来源侧」边缘补进（该侧满则退到最近一条线）、盘面上 1 与 2 的个数差恒 ≤ 4（draw/balancedValue 两道校正，开局 9 张同样受约束）；失败局面同样存档恢复（计时停在最终用时，由玩家自己点「新游戏」开新局）；新开局与恢复存档都按行列顺序逐张入场）+ i18n.js（route /three，key 前缀 __threes_game__）
-    ├── crush/            # CrushGame.vue（emoji 消消乐 · 闯关制：限定步数内达到目标分过关，面板 7×7→9×10 后固定、目标分与墙随关卡增长；💣 炸弹（相邻格被消除即引爆，炸掉周围 3×3、每格 25 分并震动棋盘、可链式引爆）、💎 万能元素（连线判定时可充当任意种类）、🧱 墙（不可交换/消除，但 emoji 下落时穿过）；炸弹与万能元素持续 0.95~1.05 呼吸缩放；开局/恢复/过关都逐格入场）+ board.js（纯逻辑：关卡曲线 CURVE + 生成（无现成三连且有解）+ 通配符感知的连线判定 + explode 链式爆炸 + 穿墙重力 + 计分 + 离线校准用的 findBestSwap/resolveTurn）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
+    ├── crush/            # CrushGame.vue（emoji 消消乐 · 闯关制：限定步数内达到目标分过关，各因素（面板 7×7→9×10、种类 5→7、步数 20→17、目标分 700→2100、墙 0→12、炸弹/万能概率）随关卡线性爬升、第 30 关到顶且列/行/种类到顶时点刻意错开避免难度断崖；操作区只有「新游戏」（点击弹二次确认、清记录回第 1 关），失败遮罩上给「重玩本关」；💣 炸弹（相邻格被消除即引爆，炸掉周围 3×3、每格 25 分并震动棋盘、可链式引爆）、💎 万能元素（连线判定时可充当任意种类）、🧱 墙（不可交换/消除，但 emoji 下落时穿过）；炸弹与万能元素持续 0.95~1.05 呼吸缩放；开局/恢复/过关都逐格入场）+ board.js（纯逻辑：参数化关卡曲线 levelConfig（第 30 关到顶）+ 生成（无现成三连且有解）+ 通配符感知的连线判定 + explode 链式爆炸 + 穿墙重力 + 计分 + 离线校准用的 findBestSwap/resolveTurn）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
     ├── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时；开局/恢复时格子与数字逐格入场）+ sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
-    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（关数越高 emoji 种类与层数越多）、洗牌每关限一次、计时、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 标记做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
+    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（8 组/2 层 → 32 组/8 层，第 30 关到顶）、洗牌每关限一次、计时、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 标记做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）

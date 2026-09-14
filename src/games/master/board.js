@@ -22,13 +22,16 @@ const LAYER_SLOTS = [
   { cols: 2, rows: 2 },
 ];
 
-// 关卡难度曲线（两个维度同时线性增长，约 25 关后封顶，之后保持最高难度随机盘面）：
-// - emoji 种类：每关 +1 组，从 8 组（24 张）递增到 32 组（96 张）
-// - 层叠数：每 3 关 +1 层，从 2 层递增到 8 层
+// 关卡难度曲线（两个维度同时线性增长，第 30 关封顶，之后保持最高难度随机盘面）：
+// - emoji 种类：8 组（24 张）→ 32 组（96 张），第 30 关到顶
+// - 层叠数：2 层 → 8 层，同样第 30 关到顶
+export const MAX_LEVEL = 30;
+
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const groups = Math.min(MAX_GROUPS, MIN_GROUPS + (lv - 1));
-  const layers = Math.min(MAX_LAYERS, 2 + Math.floor((lv - 1) / 3));
+  const t = Math.min(1, (lv - 1) / (MAX_LEVEL - 1));
+  const groups = Math.min(MAX_GROUPS, Math.round(MIN_GROUPS + (MAX_GROUPS - MIN_GROUPS) * t));
+  const layers = Math.min(MAX_LAYERS, Math.round(2 + (MAX_LAYERS - 2) * t));
   const tiles = groups * 3;
   return { level: lv, groups, layers, tiles, counts: distributeCounts(tiles, layers) };
 }

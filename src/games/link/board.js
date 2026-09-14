@@ -7,29 +7,27 @@
 // 路径可借用棋盘外一圈虚拟空格，路径上不能有其他牌或墙壁。
 
 // ---------- 关卡配置 ----------
-// 难度由「棋盘大小 + emoji 种类 + 牌数 + 墙数 + 限时」共同决定：
-// 前 11 关逐关变难，第 11 关起全部因素封顶（关数仍然无限增长，难度不再上升）。
-// 限时 = 对数 × 每对秒数，每对秒数从 8s 收紧到 5.2s（留足观察时间，靠棋盘/种类/墙加难）
-const CURVE = [
-  // level, rows, cols, pairs, kinds, walls, secondsPerPair
-  [1, 6, 6, 9, 6, 0, 8],
-  [2, 6, 7, 11, 6, 0, 7.5],
-  [3, 7, 7, 13, 7, 0, 7],
-  [4, 7, 8, 15, 7, 3, 6.8],
-  [5, 8, 8, 17, 8, 4, 6.5],
-  [6, 8, 9, 19, 8, 5, 6.2],
-  [7, 9, 9, 21, 9, 6, 6],
-  [8, 9, 10, 23, 9, 7, 5.8],
-  [9, 10, 10, 25, 10, 8, 5.6],
-  [10, 10, 11, 27, 10, 9, 5.4],
-  [11, 10, 11, 28, 10, 10, 5.2],
-];
-const CAP = CURVE[CURVE.length - 1];
+// 难度由「棋盘大小 + emoji 种类 + 牌数 + 墙数 + 限时」共同决定，第 30 关全部到顶，
+// 之后关数继续增长但难度不再上升。各因素随关卡线性爬升：
+//   列数 6 → 10（上限 10 列）
+//   行数 6 → 12（上限 12 行）
+//   对数 9 → 30（牌 18 → 60 张）
+//   种类 6 → 12
+//   墙   0 → 18 面
+//   限时 = 对数 × 每对秒数，每对 8s → 5s（靠盘面加难，不靠硬卡时间）
+export const MAX_LEVEL = 30;
+
+const CAP = { cols: 10, rows: 12, pairs: 30, kinds: 12, walls: 18, perPair: 5 };
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const row = lv <= CURVE.length ? CURVE[lv - 1] : CAP;
-  const [, rows, cols, pairs, kinds, walls, perPair] = row;
+  const t = Math.min(1, (lv - 1) / (MAX_LEVEL - 1));
+  const rows = Math.round(6 + (CAP.rows - 6) * t);
+  const cols = Math.round(6 + (CAP.cols - 6) * t);
+  const pairs = Math.round(9 + (CAP.pairs - 9) * t);
+  const kinds = Math.round(6 + (CAP.kinds - 6) * t);
+  const walls = Math.round(CAP.walls * t);
+  const perPair = 8 - (8 - CAP.perPair) * t;
   return {
     level: lv,
     rows,

@@ -1,5 +1,5 @@
 <template>
-  <span class="timer">
+  <span class="timer" v-show="show !== false">
     <i i-carbon-timer />
     {{ timeStr }}
   </span>
@@ -9,6 +9,7 @@
 // 各游戏共用的计时器：
 // - 挂载即开始计时，页面隐藏时暂停、恢复可见时按 enable 决定是否继续
 // - onTick 每秒回调（用于把当前秒数写入各游戏存档）
+// - show=false 时只保留计时与回调、不显示数字（如连连看只在顶部显示倒计时）
 // - 对外暴露 reset / stop / start / restore / seconds
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
@@ -20,7 +21,7 @@ defineExpose({
   seconds: () => time.value,
 });
 
-const props = defineProps(['enable', 'onTick']);
+const props = defineProps(['enable', 'onTick', 'show']);
 
 const time = ref(0);
 let intervalTimer = null;

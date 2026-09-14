@@ -18,38 +18,35 @@ export const isSpecial = v => v === BOMB || v === WILD;
 export const isTile = v => v !== null && v !== WALL && v !== undefined;
 
 // ---------- 关卡配置 ----------
-// 面板随关卡从小到大，第 6 关起固定在 9×10；墙与特殊元素随关卡增多，步数逐步收紧。
-// target 是过关分数线（与步数限制共同构成难度），数值由离线模拟校准。
-const CURVE = [
-  // level, cols, rows, kinds, moves, target, walls, bomb%, wild%
-  [1, 7, 7, 5, 20, 700, 0, 2, 3],
-  [2, 7, 8, 5, 20, 900, 0, 2, 3],
-  [3, 7, 9, 6, 20, 1100, 2, 3, 3],
-  [4, 8, 9, 6, 19, 1250, 3, 3, 3],
-  [5, 8, 10, 6, 19, 1400, 4, 4, 4],
-  [6, 9, 10, 7, 18, 1400, 5, 4, 4],
-  [7, 9, 10, 7, 18, 1450, 6, 4, 4],
-  [8, 9, 10, 7, 18, 1550, 7, 5, 4],
-  [9, 9, 10, 7, 17, 1650, 8, 5, 4],
-  [10, 9, 10, 7, 17, 1750, 9, 5, 5],
-];
-const LAST = CURVE[CURVE.length - 1];
+// 难度由「面板大小 + emoji 种类 + 步数 + 目标分 + 墙数 + 特殊元素概率」共同决定，
+// 第 30 关全部到顶，之后关数继续增长但难度不再上升。各因素随关卡线性爬升：
+//   列数 7 → 9、行数 7 → 10（面板 7×7 → 9×10）
+//   种类 5 → 7
+//   步数 20 → 17
+//   目标分 700 → 2100（由离线模拟校准：见下）
+//   墙   0 → 12
+//   炸弹概率 2% → 5%、万能元素 3% → 5%
+export const MAX_LEVEL = 30;
+
+// 目标分的上限：模拟显示 9×10、7 种、17 步的一局得分中位数约 2000，取 2100 作为最高门槛
+const CAP = { cols: 9, rows: 10, kinds: 7, moves: 17, target: 2100, walls: 12, bomb: 0.05, wild: 0.05 };
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const row = lv <= CURVE.length ? CURVE[lv - 1] : null;
-  // 10 关之后：盘面与元素数固定，目标分每关 +70 但封顶 2100（难度靠「目标/步数」稳定下来）
-  const extra = lv > CURVE.length ? Math.min(350, (lv - CURVE.length) * 70) : 0;
+  const t = Math.min(1, (lv - 1) / (MAX_LEVEL - 1));
+  // 各因素到顶的时点刻意错开（列 21 关、种类 27 关、行 30 关），
+  // 否则两条曲线会在同一关同时跳档，难度出现明显的断崖
+  const ramp = span => Math.min(1, t / span);
   return {
     level: lv,
-    cols: row ? row[1] : LAST[1],
-    rows: row ? row[2] : LAST[2],
-    kinds: row ? row[3] : LAST[3],
-    moves: row ? row[4] : LAST[4],
-    target: row ? row[5] : LAST[5] + extra,
-    walls: row ? row[6] : Math.min(12, LAST[6] + Math.floor((lv - CURVE.length) / 2)),
-    bombChance: (row ? row[7] : LAST[7]) / 100,
-    wildChance: (row ? row[8] : LAST[8]) / 100,
+    cols: Math.round(7 + (CAP.cols - 7) * ramp(0.70)),
+    rows: Math.round(7 + (CAP.rows - 7) * ramp(1)),
+    kinds: Math.round(5 + (CAP.kinds - 5) * ramp(0.90)),
+    moves: Math.round(20 + (CAP.moves - 20) * t),
+    target: Math.round(700 + (CAP.target - 700) * t),
+    walls: Math.round(CAP.walls * t),
+    bombChance: 0.02 + (CAP.bomb - 0.02) * t,
+    wildChance: 0.03 + (CAP.wild - 0.03) * t,
   };
 }
 

@@ -22,13 +22,11 @@
         <span class="level-note">{{ boardLabel }}</span>
       </div>
       <div class="divider"></div>
-      <div class="opt-half">
-        <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" />
-      </div>
-      <div class="divider"></div>
       <div class="start-wrapper">
-        <button @click="replayLevel" class="game-icon">{{ i18n('replayLevel') }}</button>
+        <button @click="confirming = true" class="game-icon">{{ i18n('start') }}</button>
       </div>
+      <!-- 只负责计时与每秒回调（剩余时间已经显示在顶部统计条里，这里不显示数字） -->
+      <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" :show="false" />
     </div>
     <div class="game-area">
       <div class="board" :style="boardStyle">
@@ -67,10 +65,7 @@
       <div v-else-if="phase === OVER" class="result lose">
         <div>⏰ {{ i18n('timeUp') }} ⏰</div>
         <div class="final-time">{{ leftPairs }} {{ i18n('leftPairsShort') }}</div>
-        <div class="result-btns">
-          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
-          <button class="game-icon ghost" @click="confirming = true">{{ i18n('restartRun') }}</button>
-        </div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <Teleport to="body">
@@ -80,7 +75,7 @@
           <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
           <div class="confirm-actions">
             <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
-            <button class="confirm-ok" @click="restartRun">{{ i18n('confirmOk') }}</button>
+            <button class="confirm-ok" @click="startNewGame">{{ i18n('confirmOk') }}</button>
           </div>
         </div>
       </div>
@@ -441,8 +436,11 @@ function replayLevel() {
   initLevel(level.value);
 }
 
-function restartRun() {
+// 新游戏：清除闯关记录（最高关卡）并从第 1 关重新开始，任何时候点都要二次确认
+function startNewGame() {
   confirming.value = false;
+  localStorage.removeItem(BEST_KEY);
+  bestLevel.value = 1;
   initLevel(1);
 }
 
