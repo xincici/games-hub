@@ -105,8 +105,11 @@ const level = ref(loadLevel());
 const tiles = ref([]);
 const tray = ref([]);
 const phase = ref(PLAY);
-// 只有「飞行中」会挡住新的点击；消除中的卡片不挡，保证连点手感
-const flightBusy = ref(false);
+// 连点保护：点击立刻被「接受」并排队，飞行动画只决定什么时候落格，绝不丢点击。
+// reserved = 已接受但还没落进暂存区的卡片数（排队中 + 飞行中）
+const pickQueue = [];
+const reserved = ref(0);
+let pumping = false;
 const shuffling = ref(false);
 const shuffleUsed = ref(false); // 洗牌每关限用一次
 const flying = ref(null);
@@ -127,7 +130,7 @@ const freeSet = computed(() => freeIds(tiles.value));
 const clearingTray = computed(() => tray.value.some(c => c.clearing));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
 const canShuffle = computed(() =>
-  phase.value === PLAY && !flightBusy.value && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
+  phase.value === PLAY && !reserved.value && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
 
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
 const layout = computed(() => {
@@ -247,7 +250,8 @@ function initLevel(lv) {
   tiles.value = list;
   tray.value = [];
   phase.value = PLAY;
-  flightBusy.value = false;
+  pickQueue.length = 0;
+  reserved.value = 0;
   shuffling.value = false;
   shuffleUsed.value = false;
   flying.value = null;
@@ -285,21 +289,46 @@ function shuffleBoard() {
 
 // ---------- 点击卡片 ----------
 
-async function pick(tile, event) {
-  if (phase.value !== PLAY || flightBusy.value) return;
-  if (tray.value.length >= TRAY_SIZE || !freeSet.value.has(tile.id)) return;
-  flightBusy.value = true;
-
+// 点击盘面卡片：同步接受、排队执行。
+// 连点时后续点击不会被飞行动画吞掉，只是按 260ms 的节奏依次落格（throttle 而不是取消）
+function pick(tile, event) {
+  if (phase.value !== PLAY) return;
+  if (!freeSet.value.has(tile.id)) return;
+  // 排到最后仍会超出 7 格才拒绝
+  if (tray.value.length + reserved.value >= TRAY_SIZE) return;
+  // 同一张牌连点两次只算一次
+  if (pickQueue.some(job => job.tile.id === tile.id)) return;
+  // currentTarget 只在事件派发期间有效，必须先取出坐标再排队
   const from = event.currentTarget.getBoundingClientRect();
-  // 目标格：先按当前分组算出落点，落格时再按最新槽位重新计算插入位置
-  const idx0 = insertIndex(tray.value, tile.emoji);
-  const slotEl = document.querySelectorAll('.tray .slot')[idx0];
+  pickQueue.push({ tile, from });
+  reserved.value++;
+  pump();
+}
+
+// 依次执行队列里的落格动作（一次只飞一张，动画结束再处理下一张）
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  while (pickQueue.length) {
+    await runPick(pickQueue.shift());
+    reserved.value = Math.max(0, reserved.value - 1);
+  }
+  pumping = false;
+}
+
+async function runPick({ tile, from }) {
+  const gen = gameId.value;
+  if (phase.value !== PLAY) return;
   const at = tiles.value.findIndex(t => t.id === tile.id);
+  if (at < 0) return; // 期间已被移除（理论上不会发生）
   const snap = { ...tiles.value[at] };
+  // 目标格：按当前分组算出落点，落格时再按最新槽位重新计算插入位置
+  const idx0 = insertIndex(tray.value, snap.emoji);
+  const slotEl = document.querySelectorAll('.tray .slot')[idx0];
+  const to = slotEl ? slotEl.getBoundingClientRect() : from;
   // 立即从盘面移除：遮挡关系随之更新，其它卡片会被点亮（渐亮动画）
   tiles.value.splice(at, 1);
 
-  const to = slotEl ? slotEl.getBoundingClientRect() : from;
   flying.value = {
     emoji: snap.emoji,
     left: from.left,
@@ -332,8 +361,9 @@ async function pick(tile, event) {
   }
 
   flying.value = null;
+  // 期间开了新局 / 恢复存档（或已结算）→ 这次落格作废
+  if (gen !== gameId.value || phase.value !== PLAY) return;
   tray.value.splice(insertIndex(tray.value, snap.emoji), 0, { uid: snap.id, emoji: snap.emoji, clearing: false });
-  flightBusy.value = false;
   saveState();
   settle();
 }
@@ -423,7 +453,8 @@ function restore() {
     phase.value = PLAY;
     clearTimeout(winTimer);
     winTimer = null;
-    flightBusy.value = false;
+    pickQueue.length = 0;
+    reserved.value = 0;
     flying.value = null;
     // 关卡进度以存档为准（与闯关记录同步）
     level.value = Math.max(1, Math.floor(+saved.level) || loadLevel());
