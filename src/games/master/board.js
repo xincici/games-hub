@@ -1,14 +1,17 @@
 // Emoji Master（羊了个羊 / 3 Tiles 玩法）纯逻辑：
-// 关卡难度曲线、分层堆叠布局、遮挡判定、保证可解的发牌、收集槽插入位置与洗牌辅助
+// 关卡难度曲线、分层堆叠布局、遮挡判定、保证可解的发牌、收集槽插入位置
 
 export const UNITS = 14;       // 盘面 7×7 格，坐标以半格（1 单位）计
 export const TILE_UNITS = 2;   // 每张卡片占 2×2 单位
 export const TRAY_SIZE = 7;    // 收集槽格数
-export const BLOCK_TILES = 9;  // 每 9 张一组发牌（3 组三消轮转，保证按清盘顺序可解）
+export const BLOCK_TILES = 9;  // 每 9 张一组发牌（3 组三消，保证按清盘顺序可解）
 
-export const MIN_GROUPS = 8;   // 第 1 关 8 组 = 24 张
-export const MAX_GROUPS = 32;  // 组数（emoji 种类）上限 = 96 张
-export const MAX_LAYERS = 8;   // 层数上限
+export const MIN_TRIPLES = 8;   // 第 1 关 8 组三消 = 24 张
+export const MAX_TRIPLES = 32;  // 组数上限 = 96 张
+export const MIN_KINDS = 6;     // 第 1 关用 6 种 emoji
+export const MAX_KINDS = 16;    // emoji 种类上限
+export const MIN_LAYERS = 2;    // 第 1 关 2 层
+export const MAX_LAYERS = 8;    // 层数上限
 
 // 各层可放置卡片的格点范围（自下而上，上层更小、更居中）
 const LAYER_SLOTS = [
@@ -22,18 +25,22 @@ const LAYER_SLOTS = [
   { cols: 2, rows: 2 },
 ];
 
-// 关卡难度曲线（两个维度同时线性增长，第 30 关封顶，之后保持最高难度随机盘面）：
-// - emoji 种类：8 组（24 张）→ 32 组（96 张），第 30 关到顶
-// - 层叠数：2 层 → 8 层，同样第 30 关到顶
-export const MAX_LEVEL = 30;
+// 关卡难度曲线：三个维度一起线性爬升，第 50 关封顶，之后保持最高难度随机盘面。
+// - 组数（三消组数）：8 组（24 张）→ 32 组（96 张），每关只涨 0.5 组，过渡平缓
+// - emoji 种类：6 种 → 16 种，涨得比组数慢，因此越到后面同一种 emoji 越可能摊到多组
+//   （每种 emoji 的张数恒为 3 的倍数，也就是永远能整组消掉）
+// - 层叠数：2 层 → 8 层
+export const MAX_LEVEL = 50;
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
   const t = Math.min(1, (lv - 1) / (MAX_LEVEL - 1));
-  const groups = Math.min(MAX_GROUPS, Math.round(MIN_GROUPS + (MAX_GROUPS - MIN_GROUPS) * t));
-  const layers = Math.min(MAX_LAYERS, Math.round(2 + (MAX_LAYERS - 2) * t));
-  const tiles = groups * 3;
-  return { level: lv, groups, layers, tiles, counts: distributeCounts(tiles, layers) };
+  const triples = Math.min(MAX_TRIPLES, Math.round(MIN_TRIPLES + (MAX_TRIPLES - MIN_TRIPLES) * t));
+  const kinds = Math.min(triples, Math.round(MIN_KINDS + (MAX_KINDS - MIN_KINDS) * t));
+  const layers = Math.min(MAX_LAYERS, Math.round(MIN_LAYERS + (MAX_LAYERS - MIN_LAYERS) * t));
+  const tiles = triples * 3;
+  // groups 是历史字段名（早期的「一种 emoji 只出一组」），等价于 triples，保留给旧调用方
+  return { level: lv, triples, groups: triples, kinds, layers, tiles, counts: distributeCounts(tiles, layers) };
 }
 
 // 按「下层多、上层少」的权重把卡片分配到各层，并夹在各层格点容量内
@@ -115,20 +122,31 @@ export function removalOrder(tiles) {
   return order;
 }
 
-// 沿指定清盘顺序按 BLOCK_TILES 一组发牌，每组内若干 emoji 轮转：
-// 每组的 emoji 种类数 = 组内张数 / 3，因此按该顺序点击时槽内最多同时存在
-// 2×种类数 ≤ 6 张（第 7 张落下即完成三消），该顺序必定可解。
-// 每组按顺序从打乱后的 emoji 池里取，保证整局正好用掉 groups 种 emoji。
-export function dealAlongOrder(tiles, pool, order) {
-  const bag = shuffleArray(pool);
+// 按关卡配置发一袋「三消」：kinds 种 emoji 平分 triples 组，
+// 每组恰好 3 张，所以每种 emoji 的张数恒为 3 的倍数。
+export function buildTripleBag(pool, kinds, triples) {
+  const emojis = shuffleArray(pool).slice(0, Math.max(1, kinds));
+  const base = Math.floor(triples / emojis.length);
+  const rest = triples - base * emojis.length;
+  const bag = [];
+  emojis.forEach((emoji, i) => {
+    for (let k = 0; k < base + (i < rest ? 1 : 0); k++) bag.push(emoji);
+  });
+  return bag;
+}
+
+// 沿指定清盘顺序按 BLOCK_TILES 一组发牌：一组 9 张 = 3 个三消，每个三消用同一种 emoji。
+// 因此按该顺序点击时，槽内最多同时存在 2×3 = 6 张（第 7 张落下前一定已凑齐一组三消），
+// 而且每消完一组 9 张，槽里属于自己的牌全部清空，该顺序必定可解。
+export function dealAlongOrder(tiles, bag, order) {
+  const list = shuffleArray(bag);
   let cursor = 0;
   for (let start = 0; start < order.length; start += BLOCK_TILES) {
     const block = order.slice(start, start + BLOCK_TILES);
-    const kinds = Math.max(1, Math.round(block.length / 3));
     const picked = [];
-    for (let k = 0; k < kinds; k++) picked.push(bag[cursor++ % bag.length]);
+    for (let i = 0; i < block.length; i += 3) picked.push(list[cursor++ % list.length]);
     block.forEach((tile, i) => {
-      tile.emoji = picked[i % kinds];
+      tile.emoji = picked[~~(i / 3)];
     });
   }
 }
@@ -247,12 +265,14 @@ function buildLayout(cfg) {
   return tiles;
 }
 
-// 生成指定关卡：难度配置 + 分层堆叠 + 可解发牌
+// 生成指定关卡：难度配置 + 分层堆叠 + 可解发牌。
+// 同时返回这条「保证可解」的清盘顺序，便于离线校验发牌确实不会撑爆收集槽
 export function generateTiles(pool, level = 1) {
   const cfg = levelConfig(level);
   const tiles = layoutTiles(cfg);
-  dealAlongOrder(tiles, pool, removalOrder(tiles));
-  return { tiles, cfg };
+  const order = removalOrder(tiles);
+  dealAlongOrder(tiles, buildTripleBag(pool, cfg.kinds, cfg.triples), order);
+  return { tiles, cfg, order };
 }
 
 // 新卡片在收集槽中的插入位置：贴在同 emoji 组的末尾（同组相邻便于观察）
@@ -261,19 +281,6 @@ export function insertIndex(tray, emoji) {
     if (tray[i].emoji === emoji) return i + 1;
   }
   return tray.length;
-}
-
-// 洗牌：只重排剩余卡片上的 emoji（位置/层数不变），
-// 遮挡关系与盘面布局都保持有效
-export function shuffleEmojis(tiles) {
-  if (tiles.length < 2) return false;
-  let next = tiles.map(t => t.emoji);
-  for (let attempt = 0; attempt < 10; attempt++) {
-    next = shuffleArray(next);
-    if (next.some((e, i) => e !== tiles[i].emoji)) break;
-  }
-  tiles.forEach((tile, i) => { tile.emoji = next[i]; });
-  return true;
 }
 
 // 收集槽中某 emoji 的数量

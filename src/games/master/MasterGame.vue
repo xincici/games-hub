@@ -16,13 +16,7 @@
     </div>
     <div class="card opt-area">
       <div class="opt-half">
-        <button class="game-icon tool" :disabled="!canShuffle" :title="shuffleUsed ? i18n('shuffleUsed') : ''" @click="shuffleBoard">
-          <i i-mdi-shuffle-variant />{{ i18n('shuffle') }}
-        </button>
-      </div>
-      <div class="divider"></div>
-      <div class="opt-half">
-        <CountTimer ref="timerRef" :enable="phase === PLAY" :on-tick="saveState" />
+        <span class="level-note">{{ boardLabel }}</span>
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
@@ -30,7 +24,7 @@
       </div>
     </div>
     <div class="board-wrap">
-      <div class="board" :class="{ shuffling }">
+      <div class="board">
         <div
           v-for="tile in tiles"
           :key="`${gameId}-${tile.id}`"
@@ -95,11 +89,10 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
-import { TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig, shuffleEmojis } from './board';
+import { TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig } from './board';
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_master__';
@@ -117,9 +110,6 @@ const phase = ref(PLAY);
 // 同时也把槽位预留出来，避免连点冲过 7 格上限
 const flights = ref([]);
 const flyEls = new Map();
-const shuffling = ref(false);
-const shuffleUsed = ref(false); // 洗牌每关限用一次
-const timerRef = ref(null);
 const confirming = ref(false); // 「新游戏」二次确认弹窗
 const gameId = ref(0);
 // 开局/恢复时的逐张入场动画窗口（窗口结束后重挂载的卡片不再延迟）
@@ -127,20 +117,21 @@ const revealing = ref(false);
 const revealRank = new Map();   // 卡片 id -> 同层内的出场顺序
 let revealTimer = null;
 let winTimer = null;
-let shakeTimer = null;
 
 // 当前可点击（亮色）的卡片
 const freeSet = computed(() => freeIds(tiles.value));
-// 正在闪烁消失的卡片：不占「有效槽位」，也不影响胜负判定
-const clearingTray = computed(() => tray.value.some(c => c.clearing));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
-const canShuffle = computed(() =>
-  phase.value === PLAY && !flights.value.length && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
 
+// 本关的层级与 emoji 种类（写在操作区，和连连看 / 消消乐的盘面信息一致）
+const conf = computed(() => levelConfig(level.value));
+const boardLabel = computed(() => {
+  const c = conf.value;
+  return `${i18n('layersLabel').replace('{n}', c.layers)} · ${i18n('kindsLabel').replace('{n}', c.kinds)}`;
+});
 
 // 本关进度：已消除的卡片占本关总卡片的比例（入场动画期间按满盘算 0%）
 const progress = computed(() => {
-  const total = levelConfig(level.value).tiles;
+  const total = conf.value.tiles;
   if (!total) return 0;
   const left = tiles.value.length + tray.value.filter(c => !c.clearing).length;
   return Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
@@ -188,7 +179,6 @@ onMounted(() => {
 onUnmounted(() => {
   clearTimeout(revealTimer);
   clearTimeout(winTimer);
-  clearTimeout(shakeTimer);
 });
 
 // 逐张入场：自下层向上层堆叠，同层内按生成顺序依次出现。
@@ -213,8 +203,8 @@ function revealDelay(tile) {
   return tile.layer * REVEAL_LAYER + (revealRank.get(tile.id) || 0) * REVEAL_STEP;
 }
 
-// 任何盘面/收集槽变化都实时落盘，退出回主页后可恢复（计时器每秒也会落盘）
-watch([tiles, tray, shuffleUsed], saveState, { deep: true });
+// 任何盘面/收集槽变化都实时落盘，退出回主页后可恢复
+watch([tiles, tray], saveState, { deep: true });
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -240,7 +230,7 @@ function trayCardStyle(idx) {
   };
 }
 
-// ---------- 关卡 / 新游戏 / 道具 ----------
+// ---------- 关卡 / 新游戏 ----------
 
 function loadLevel() {
   const saved = +(localStorage.getItem(LEVEL_KEY) || 1);
@@ -251,11 +241,10 @@ function persistLevel(lv) {
   try { localStorage.setItem(LEVEL_KEY, lv); } catch { /* 忽略 */ }
 }
 
-// 开始第 lv 关：重新生成盘面、清空收集槽、计时与洗牌额度重置
+// 开始第 lv 关：重新生成盘面并清空收集槽
 function initLevel(lv) {
   clearTimeout(winTimer);
   winTimer = null;
-  clearTimeout(shakeTimer);
   level.value = Math.max(1, lv);
   persistLevel(level.value);
   const { tiles: list } = generateTiles(EMOJIS, level.value);
@@ -264,12 +253,9 @@ function initLevel(lv) {
   phase.value = PLAY;
   flights.value = [];
   flyEls.clear();
-  shuffling.value = false;
-  shuffleUsed.value = false;
   confirming.value = false;
   gameId.value++;
   revealBoard();
-  timerRef.value?.reset();
   saveState();
 }
 
@@ -286,16 +272,6 @@ function nextLevel() {
 
 function replayLevel() {
   initLevel(level.value);
-}
-
-function shuffleBoard() {
-  if (!canShuffle.value) return;
-  if (!shuffleEmojis(tiles.value)) return;
-  shuffleUsed.value = true;
-  shuffling.value = true;
-  clearTimeout(shakeTimer);
-  shakeTimer = setTimeout(() => { shuffling.value = false; }, 420);
-  saveState();
 }
 
 // ---------- 点击卡片 ----------
@@ -427,7 +403,6 @@ async function settlePass() {
 
 function win() {
   if (phase.value !== PLAY || winTimer) return;
-  timerRef.value?.stop();
   // 过关：闯关进度推进到下一关（本次的盘面存档作废，下次进入直接开新关）
   persistLevel(level.value + 1);
   removeState();
@@ -438,7 +413,6 @@ function win() {
 
 function lose() {
   if (phase.value !== PLAY) return;
-  timerRef.value?.stop();
   removeState();
   phase.value = OVER;
 }
@@ -462,8 +436,6 @@ function saveState() {
       // 卡片：[id, emoji, 层, x, y]
       tiles: tiles.value.map(t => [t.id, t.emoji, t.layer, t.x, t.y]),
       tray: tray.value.map(c => [c.uid, c.emoji]),
-      shuffled: shuffleUsed.value ? 1 : 0,
-      time: timerRef.value?.seconds() || 0,
     }));
   } catch { /* 忽略 */ }
 }
@@ -481,7 +453,6 @@ function restore() {
     if (cards.length > TRAY_SIZE) return false;
     tiles.value = list;
     tray.value = cards;
-    shuffleUsed.value = Boolean(saved.shuffled);
     phase.value = PLAY;
     clearTimeout(winTimer);
     winTimer = null;
@@ -492,8 +463,6 @@ function restore() {
     persistLevel(level.value);
     gameId.value++;
     revealBoard();   // 恢复存档也逐张堆叠出来
-    // 恢复退出前的计时秒数并继续计时
-    timerRef.value?.restore(Math.max(0, +saved.time || 0));
     return true;
   } catch {
     return false;
@@ -568,18 +537,6 @@ function restore() {
   to {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes shake {
-  0%, 100% {
-    transform: translateX(0) rotate(0);
-  }
-  25% {
-    transform: translateX(-3px) rotate(-4deg);
-  }
-  75% {
-    transform: translateX(3px) rotate(4deg);
   }
 }
 
@@ -714,13 +671,18 @@ function restore() {
     margin: var(--row-gap) 0;
     height: var(--row-height);
     .opt-half {
-      flex: 2.8;
+      flex: 1.6;
       display: flex;
       align-items: center;
       justify-content: center;
     }
+    .level-note {
+      font-size: 13px;
+      color: var(--muted-color);
+      white-space: nowrap;
+    }
     .start-wrapper {
-      flex: 4.4;
+      flex: 1.2;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -738,26 +700,6 @@ function restore() {
     border-radius: 8px;
     &.again {
       margin-top: 6px;
-    }
-    // 道具按钮：描边样式，禁用时变淡
-    &.tool {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 8px 12px;
-      background: var(--card-bg-color);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-      i {
-        font-size: 17px;
-      }
-      &:active:not(:disabled) {
-        background: var(--key-active-bg);
-      }
-      &:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-      }
     }
   }
   .board-wrap {
@@ -805,9 +747,6 @@ function restore() {
       cursor: default;
       pointer-events: none;
     }
-  }
-  .board.shuffling .tile {
-    animation: shake 0.4s ease;
   }
   .tray {
     position: relative;

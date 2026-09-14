@@ -26,7 +26,7 @@
     </div>
     <div class="card opt-area">
       <div class="opt-half">
-        <span class="level-note">{{ boardLabel }} · {{ i18n('kindsLabel').replace('{n}', conf.kinds) }}</span>
+        <span class="level-note">{{ boardLabel }}</span>
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
@@ -126,7 +126,13 @@ const shaking = ref(false);
 const confirming = ref(false);
 
 const conf = computed(() => levelConfig(level.value));
-const boardLabel = computed(() => `${conf.value.cols}×${conf.value.rows}`);
+// 盘面上的真实墙数（生成时按关卡配置随机撒，极少数情况下会少一两面，所以直接数盘面）
+const wallCount = computed(() => cells.value.filter(isWall).length);
+const boardLabel = computed(() => {
+  const c = conf.value;
+  return `${c.cols}×${c.rows} · ${i18n('kindsLabel').replace('{n}', c.kinds)}`
+    + (wallCount.value ? ` · ${i18n('wallsLabel').replace('{n}', wallCount.value)}` : '');
+});
 const target = computed(() => conf.value.target);
 const progress = computed(() => Math.min(100, Math.round((score.value / target.value) * 100)));
 
@@ -208,7 +214,10 @@ function gemStyle(idx, dealIdx) {
   };
 }
 
-// cells → gems 同步：下落只沿列发生——复用仅限「同列更上方」的同值 gem
+// cells → gems 同步：下落只沿列发生——复用仅限「同列更上方」的同值 gem。
+// 关键：输出的顺序必须是「老 gem 保持原相对顺序 + 新 gem 追加在末尾」，
+// 不能按格子顺序重排——Vue 的 keyed diff 会为了满足新顺序去搬动 DOM 节点，
+// 而同一个父节点里被搬动的元素会丢掉正在跑的 left/top 过渡，下落就变成瞬移了。
 function syncGems(prevGems, fresh = false) {
   const cols = conf.value.cols;
   const available = new Map();
@@ -218,7 +227,8 @@ function syncGems(prevGems, fresh = false) {
     available.get(col).push(g);
   });
   for (const list of available.values()) list.sort((a, b) => b.idx - a.idx);
-  const out = [];
+  const next = new Map();
+  const created = [];
   for (let i = 0; i < cells.value.length; i++) {
     const v = cells.value[i];
     if (v === null || v === undefined || v === WALL) continue;
@@ -236,13 +246,13 @@ function syncGems(prevGems, fresh = false) {
         list.splice(upper, 1);
       }
     }
-    if (pick) {
-      out.push({ ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
-    } else {
-      out.push({ id: ++gemId, value: v, idx: i, fresh });
-    }
+    if (pick) next.set(pick.id, { ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
+    else created.push({ id: ++gemId, value: v, idx: i, fresh });
   }
-  gems.value = out;
+  gems.value = [
+    ...(prevGems || []).map(g => next.get(g.id)).filter(Boolean),
+    ...created,
+  ];
 }
 
 // ---------- 关卡流程 ----------
@@ -444,6 +454,12 @@ function resolveCascades(chain) {
   score.value += scoreForMatches(matched.size, chain) + scoreForBlast(blast.size, chain);
   matchedSet.value = matched;
   blastSet.value = blast;
+  // 这一轮要消除的牌先摘掉「掉落中 / 刚落格」标记：
+  // 连锁时它们往往是上一轮刚落地（甚至刚生成）的牌，带着 fresh/falling 时
+  // 浏览器只会沿用 drop-in / land-bounce，pop-out 与 blast-out 根本播不出来
+  gems.value = gems.value.map(g => (matched.has(g.idx) || blast.has(g.idx))
+    ? { ...g, fresh: false, fall: undefined }
+    : g);
   if (blast.size) shakeBoard();
   stepTimer = setTimeout(() => {
     const cleared = cells.value.map((v, i) => (matched.has(i) || blast.has(i) ? null : v));
@@ -660,8 +676,9 @@ function onScoreReset() {
     align-items: center;
     margin: var(--row-gap) 0;
     height: var(--row-height);
+    // 操作区只剩「盘面信息 + 新游戏」，比例与连连看 / 大师一致
     .opt-half {
-      flex: 1;
+      flex: 1.6;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -672,7 +689,7 @@ function onScoreReset() {
       white-space: nowrap;
     }
     .start-wrapper {
-      flex: 1.4;
+      flex: 1.2;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -757,15 +774,6 @@ function onScoreReset() {
       box-shadow: 0 0 0 2px var(--primary-bg);
       transform: scale(1.06);
     }
-    &.matched {
-      animation: pop-out 0.35s ease forwards;
-      pointer-events: none;
-    }
-    // 被炸弹波及：放大 + 闪白后消失
-    &.blasting {
-      animation: blast-out 0.34s ease forwards;
-      pointer-events: none;
-    }
     // 炸弹 / 万能元素：持续呼吸（挂在内部 face 上，避免与其它 transform 动画冲突）
     &.bomb .face,
     &.wild .face {
@@ -788,6 +796,17 @@ function onScoreReset() {
     }
     &.dealt {
       animation: deal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+    }
+    // 消除类动画写在最后：同一元素同时带 fresh/falling 与 matched/blasting 时，
+    // 靠后的规则胜出（选择器权重相同），否则消除动画会被掉落/落格动画顶掉
+    &.matched {
+      animation: pop-out 0.35s ease forwards;
+      pointer-events: none;
+    }
+    // 被炸弹波及：放大 + 闪白后消失
+    &.blasting {
+      animation: blast-out 0.34s ease forwards;
+      pointer-events: none;
     }
   }
   .cascade-tip {
