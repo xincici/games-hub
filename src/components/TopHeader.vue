@@ -144,13 +144,13 @@ onUnmounted(() => {
     text-decoration: none;
     // 关闭 iOS 系统 tap 高亮，让 :active 反馈成为唯一视觉反馈
     -webkit-tap-highlight-color: transparent;
-    // 图标本身只有 27px 高，用伪元素把热区撑到 40×45（不占布局、不改外观）
-    position: relative;
-    &::after {
-      content: "";
-      position: absolute;
-      inset: -9px 0;
-    }
+    // 图标本身只有 27px 高，把真实盒子撑到 44px 再居中（不要用伪元素盖一层——
+    // 帮助弹窗的 @click 挂在子元素上，浮层会把它的点击吞掉）
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    box-sizing: border-box;
     &:active {
       opacity: 0.5;
     }
@@ -162,12 +162,11 @@ onUnmounted(() => {
     font-size: 20px;
     color: var(--text-color);
     -webkit-tap-highlight-color: transparent;
-    position: relative;
-    &::after {
-      content: "";
-      position: absolute;
-      inset: -9px 0;
-    }
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    box-sizing: border-box;
     &:active {
       opacity: 0.5;
     }

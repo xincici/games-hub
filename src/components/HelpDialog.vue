@@ -54,6 +54,17 @@ watch(helpShow, val => {
 <style scoped lang="scss">
 .help {
   font-size: 20px;
+  // 触发元素的点击热区扩到 44×44：伪元素必须挂在「带 @click 的这个元素」上，
+  // 挂在祖先上会把点击吞掉（之前帮助图标点不开就是这个原因）
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -12px;
+  }
 }
 .inner-enter-from {
   transform: scale(0.1);
