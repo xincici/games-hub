@@ -56,9 +56,9 @@ src/
     ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ i18n.js（route /detective，key 前缀 __emoji_detective__）
     ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ i18n.js（route /hunter，key 前缀 __emoji_hunter__）
     ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画；新牌一律从「滑动来源侧」边缘补进（该侧满则退到最近一条线）、盘面上 1 与 2 的个数差恒 ≤ 4（draw/balancedValue 两道校正，开局 9 张同样受约束）；新开局与恢复存档都按行列顺序逐张入场）+ i18n.js（route /three，key 前缀 __threes_game__）
-    ├── crush/            # CrushGame.vue（emoji 消消乐：交换三消、连锁计分、掉落动画；新开局与恢复存档都逐格入场）+ board.js（纯逻辑）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
+    ├── crush/            # CrushGame.vue（emoji 消消乐 · 闯关制：限定步数内达到目标分过关，面板 7×7→9×10 后固定、目标分与墙随关卡增长；💣 炸弹（相邻格被消除即引爆，炸掉周围 3×3、每格 25 分并震动棋盘、可链式引爆）、💎 万能元素（连线判定时可充当任意种类）、🧱 墙（不可交换/消除，但 emoji 下落时穿过）；炸弹与万能元素持续 0.95~1.05 呼吸缩放；开局/恢复/过关都逐格入场）+ board.js（纯逻辑：关卡曲线 CURVE + 生成（无现成三连且有解）+ 通配符感知的连线判定 + explode 链式爆炸 + 穿墙重力 + 计分 + 离线校准用的 findBestSwap/resolveTurn）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
     ├── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时；开局/恢复时格子与数字逐格入场）+ sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
-    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（关数越高 emoji 种类与层数越多）、洗牌每关限一次、计时、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；点击先入队再按 FLY_MS 节奏依次落格，飞行动画不吞连点）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
+    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（关数越高 emoji 种类与层数越多）、洗牌每关限一次、计时、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 标记做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -81,7 +81,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - Emoji 侦探：`__emoji_detective__*`（关卡进度 `__emoji_detective__level`，最高关卡 `__emoji_detective__best`）
   - Emoji 猎手：`__emoji_hunter__*`（关卡进度 `__emoji_hunter__level`，最高关卡 `__emoji_hunter__best`）
   - Threes：`__threes_game__*`（局面存档 `__threes_game__state`，最高分 `__threes_game__best`）
-  - Emoji 消消乐：`__emoji_crush__*`（难度 `__emoji_crush__difficulty`，局面存档 `__emoji_crush__state`，各难度最高分存为 `__emoji_crush__best_` + 难度数字）
+  - Emoji 消消乐：`__emoji_crush__*`（闯关进度 `__emoji_crush__level`=当前关卡，历史最高关卡 `__emoji_crush__best_1`（沿用「前缀+数字」以便连点标题清记录），局面存档 `__emoji_crush__state`（关卡、盘面（含墙/炸弹/万能元素的负值标记）、得分、剩余步数、计时秒数，过关或失败后清除）；旧的 `__emoji_crush__difficulty`、`__emoji_crush__best_2/3` 已废弃）
   - 数独：`__sudoku_game__*`（难度 `__sudoku_game__difficulty`，局面存档 `__sudoku_game__state`（含计时秒数、唯一解答案、剩余❤️，胜利或失败后清除），各难度最佳用时存为前缀+难度数字，如 `__sudoku_game__1`）
   - Emoji 大师：`__emoji_master__*`（`__emoji_master__help_showed`，闯关进度 `__emoji_master__level`（当前第几关，「新游戏」二次确认后清除），局面存档 `__emoji_master__state`（关卡、盘面分层卡片、收集槽、计时秒数、洗牌是否已用，过关或失败后清除））
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关（click：背景音乐；guess：机器人；poker：骰子/猜大小；puzzle：摇杆）。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供。

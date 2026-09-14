@@ -122,9 +122,10 @@ export const games = [
     icon: 'i-mdi-star-four-points',
     accent: 'logic',
     helpKey: '__emoji_crush__help_showed',
+    // 闯关制后只记录「历史最高关卡」，存成前缀+1，沿用连点标题清记录的机制
     recordsPrefix: '__emoji_crush__best_',
     minDifficulty: 1,
-    maxDifficulty: 3,
+    maxDifficulty: 1,
   },
   {
     id: 'sudoku',

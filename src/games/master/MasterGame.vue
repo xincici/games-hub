@@ -66,7 +66,13 @@
       >{{ card.emoji }}</div>
     </div>
     <Teleport to="body">
-      <div v-if="flying" ref="flyRef" class="fly-card" :style="flyStyle">{{ flying.emoji }}</div>
+      <div
+        v-for="f in flights"
+        :key="f.uid"
+        :ref="el => setFlyEl(f.uid, el)"
+        class="fly-card"
+        :style="flyStyleOf(f)"
+      >{{ f.emoji }}</div>
     </Teleport>
     <Teleport to="body">
       <div v-if="confirming" class="confirm-mask" @click.self="confirming = false">
@@ -105,15 +111,12 @@ const level = ref(loadLevel());
 const tiles = ref([]);
 const tray = ref([]);
 const phase = ref(PLAY);
-// 连点保护：点击立刻被「接受」并排队，飞行动画只决定什么时候落格，绝不丢点击。
-// reserved = 已接受但还没落进暂存区的卡片数（排队中 + 飞行中）
-const pickQueue = [];
-const reserved = ref(0);
-let pumping = false;
+// 连点保护：每次点击立刻"接受"并独立播自己的飞行（互不等待），
+// 同时也把槽位预留出来，避免连点冲过 7 格上限
+const flights = ref([]);
+const flyEls = new Map();
 const shuffling = ref(false);
 const shuffleUsed = ref(false); // 洗牌每关限用一次
-const flying = ref(null);
-const flyRef = ref(null);
 const timerRef = ref(null);
 const confirming = ref(false); // 「新游戏」二次确认弹窗
 const gameId = ref(0);
@@ -130,7 +133,7 @@ const freeSet = computed(() => freeIds(tiles.value));
 const clearingTray = computed(() => tray.value.some(c => c.clearing));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
 const canShuffle = computed(() =>
-  phase.value === PLAY && !reserved.value && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
+  phase.value === PLAY && !flights.value.length && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
 
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
 const layout = computed(() => {
@@ -157,8 +160,7 @@ const layout = computed(() => {
 });
 
 // 飞行卡片只负责定位/尺寸，位移与缩放交给 Web Animations API（更可靠，不会被样式批处理吞掉）
-const flyStyle = computed(() => {
-  const f = flying.value;
+function flyStyleOf(f) {
   if (!f) return null;
   return {
     left: `${f.left}px`,
@@ -167,7 +169,7 @@ const flyStyle = computed(() => {
     height: `${f.h}px`,
     fontSize: `${Math.round(f.h * 0.5)}px`,
   };
-});
+}
 
 onMounted(() => {
   if (!restore()) initLevel(level.value);
@@ -250,11 +252,10 @@ function initLevel(lv) {
   tiles.value = list;
   tray.value = [];
   phase.value = PLAY;
-  pickQueue.length = 0;
-  reserved.value = 0;
+  flights.value = [];
+  flyEls.clear();
   shuffling.value = false;
   shuffleUsed.value = false;
-  flying.value = null;
   confirming.value = false;
   gameId.value++;
   revealBoard();
@@ -289,57 +290,49 @@ function shuffleBoard() {
 
 // ---------- 点击卡片 ----------
 
-// 点击盘面卡片：同步接受、排队执行。
-// 连点时后续点击不会被飞行动画吞掉，只是按 260ms 的节奏依次落格（throttle 而不是取消）
+// 点击盘面卡片：当场接受并立刻开一条独立的飞行动画。
+// 连点不再排队等待——每张牌各飞各的（互不阻塞），动画结束各自落格
 function pick(tile, event) {
   if (phase.value !== PLAY) return;
   if (!freeSet.value.has(tile.id)) return;
-  // 排到最后仍会超出 7 格才拒绝
-  if (tray.value.length + reserved.value >= TRAY_SIZE) return;
+  // 把飞行中的牌也算进占用，连点仍然不会冲过 7 格
+  if (tray.value.length + flights.value.length >= TRAY_SIZE) return;
   // 同一张牌连点两次只算一次
-  if (pickQueue.some(job => job.tile.id === tile.id)) return;
-  // currentTarget 只在事件派发期间有效，必须先取出坐标再排队
-  const from = event.currentTarget.getBoundingClientRect();
-  pickQueue.push({ tile, from });
-  reserved.value++;
-  pump();
-}
-
-// 依次执行队列里的落格动作（一次只飞一张，动画结束再处理下一张）
-async function pump() {
-  if (pumping) return;
-  pumping = true;
-  while (pickQueue.length) {
-    await runPick(pickQueue.shift());
-    reserved.value = Math.max(0, reserved.value - 1);
-  }
-  pumping = false;
-}
-
-async function runPick({ tile, from }) {
-  const gen = gameId.value;
-  if (phase.value !== PLAY) return;
+  if (flights.value.some(f => f.uid === tile.id)) return;
   const at = tiles.value.findIndex(t => t.id === tile.id);
-  if (at < 0) return; // 期间已被移除（理论上不会发生）
+  if (at < 0) return;
+  // currentTarget 只在事件派发期间有效，必须先取出坐标
+  const from = event.currentTarget.getBoundingClientRect();
   const snap = { ...tiles.value[at] };
-  // 目标格：按当前分组算出落点，落格时再按最新槽位重新计算插入位置
-  const idx0 = insertIndex(tray.value, snap.emoji);
-  const slotEl = document.querySelectorAll('.tray .slot')[idx0];
-  const to = slotEl ? slotEl.getBoundingClientRect() : from;
   // 立即从盘面移除：遮挡关系随之更新，其它卡片会被点亮（渐亮动画）
   tiles.value.splice(at, 1);
 
-  flying.value = {
+  const flight = {
+    uid: snap.id,
     emoji: snap.emoji,
+    from,
     left: from.left,
     top: from.top,
     w: from.width,
     h: from.height,
+    gen: gameId.value,
   };
-  await nextTick();
+  flights.value.push(flight);
+  fly(flight);
+}
 
-  // 从卡片原位飞向暂存区槽位（边飞边缩到槽位大小）
-  const el = flyRef.value;
+// 单条飞行：等飞行卡挂到 DOM 后播放 WAAPI 动画，结束即落格。
+// 整个过程不 await 给别人，所以多张牌可以同时在飞
+async function fly(flight) {
+  await nextTick();
+  const el = flyEls.get(flight.uid);
+  // 目标槽位：按「当前暂存区 + 已在飞的牌」算，避免两条飞行盯同一个空槽
+  const virtualTray = [...tray.value, ...flights.value.map(f => ({ emoji: f.emoji, clearing: false }))];
+  const idx0 = insertIndex(virtualTray, flight.emoji);
+  const slotEl = document.querySelectorAll('.tray .slot')[idx0];
+  const to = slotEl ? slotEl.getBoundingClientRect() : flight.from;
+  const from = flight.from;
+
   if (el) {
     const dx = to.left + to.width / 2 - (from.left + from.width / 2);
     const dy = to.top + to.height / 2 - (from.top + from.height / 2);
@@ -360,16 +353,42 @@ async function runPick({ tile, from }) {
     await sleep(FLY_MS);
   }
 
-  flying.value = null;
+  flights.value = flights.value.filter(f => f.uid !== flight.uid);
   // 期间开了新局 / 恢复存档（或已结算）→ 这次落格作废
-  if (gen !== gameId.value || phase.value !== PLAY) return;
-  tray.value.splice(insertIndex(tray.value, snap.emoji), 0, { uid: snap.id, emoji: snap.emoji, clearing: false });
+  if (flight.gen !== gameId.value || phase.value !== PLAY) return;
+  tray.value.splice(insertIndex(tray.value, flight.emoji), 0, { uid: flight.uid, emoji: flight.emoji, clearing: false });
   saveState();
   settle();
 }
 
-// 结算：三消自动消除；槽满且无消除则失败；盘面与收集槽都空则获胜
+function setFlyEl(uid, el) {
+  if (el) flyEls.set(uid, el);
+  else flyEls.delete(uid);
+}
+
+// 结算：三消自动消除；槽满且无消除则失败；盘面与收集槽都空则获胜。
+// 多张牌现在可以同时飞行、各自落格，所以这里加一道重入保护：
+// 结算进行中又有牌落下时，只置一个标记，等这一轮跑完再补一轮
+let settling = false;
+let settleAgain = false;
+
 async function settle() {
+  if (settling) {
+    settleAgain = true;
+    return;
+  }
+  settling = true;
+  try {
+    do {
+      settleAgain = false;
+      await settlePass();
+    } while (settleAgain && phase.value === PLAY);
+  } finally {
+    settling = false;
+  }
+}
+
+async function settlePass() {
   // 只在「还没进入消除动画」的卡片里找三消：
   // 上一组正在闪烁消失时，新落下的一组同样要能结算（否则最后一组永远消不掉、本局无法结束）
   const counts = new Map();
@@ -383,14 +402,15 @@ async function settle() {
     const uids = new Set(picked.map(c => c.uid));
     tray.value = tray.value.filter(c => !uids.has(c.uid));
     // 消除完继续结算：可能又凑出一组，或本局刚好结束
-    await settle();
+    settleAgain = true;
     return;
   }
   if (activeTray.value >= TRAY_SIZE) {
     lose();
     return;
   }
-  if (!tiles.value.length && !activeTray.value) win();
+  // 还有牌在飞的时候不能判定通关（盘面已空但牌还没落完）
+  if (!tiles.value.length && !activeTray.value && !flights.value.length) win();
 }
 
 function win() {
@@ -453,9 +473,8 @@ function restore() {
     phase.value = PLAY;
     clearTimeout(winTimer);
     winTimer = null;
-    pickQueue.length = 0;
-    reserved.value = 0;
-    flying.value = null;
+    flights.value = [];
+    flyEls.clear();
     // 关卡进度以存档为准（与闯关记录同步）
     level.value = Math.max(1, Math.floor(+saved.level) || loadLevel());
     persistLevel(level.value);

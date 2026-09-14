@@ -3,8 +3,8 @@
     <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-area">
       <div class="stat">
-        <span class="stat-label">{{ i18n('bestScore') }}</span>
-        <span class="stat-value">{{ bestScore || '--' }}</span>
+        <span class="stat-label">{{ i18n('levelLabel') }}</span>
+        <span class="stat-value">{{ level }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
@@ -16,30 +16,37 @@
         <span class="stat-label">{{ i18n('score') }}</span>
         <span class="stat-value">{{ score }}</span>
       </div>
+      <div class="divider"></div>
+      <div class="stat">
+        <span class="stat-label">{{ i18n('targetLabel') }}</span>
+        <span class="stat-value">{{ conf.target }}</span>
+      </div>
+      <!-- 过关进度条 -->
+      <div class="progress"><div class="progress-bar" :style="{ width: `${progress}%` }"></div></div>
     </div>
     <div class="card opt-area">
-      <div class="difficulty-wrapper">
-        <button @click="changeDifficulty(-1)" class="opt-icon" :class="{ disable: difficulty === MIN_DIFFICULTY }">
-          <i i-carbon-subtract-alt />
-        </button>
-        <span class="difficulty-value">{{ boardSize }}×{{ boardSize }}</span>
-        <button @click="changeDifficulty(1)" class="opt-icon" :class="{ disable: difficulty === MAX_DIFFICULTY }">
-          <i i-carbon-add-alt />
-        </button>
-      </div>
-      <div class="divider"></div>
       <div class="opt-half">
         <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" />
       </div>
       <div class="divider"></div>
+      <div class="opt-half">
+        <span class="level-note">{{ boardLabel }} · {{ i18n('kindsLabel').replace('{n}', conf.kinds) }}</span>
+      </div>
+      <div class="divider"></div>
       <div class="start-wrapper">
-        <button @click="initGame" class="game-icon">{{ i18n('start') }}</button>
+        <button @click="replayLevel" class="game-icon">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <div class="game-area">
-      <div class="board-frame" :style="boardStyle">
+      <div class="board-frame" :class="{ shaking }" :style="boardStyle">
         <div class="board" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend.passive="onTouchEnd">
-          <div v-for="(cell, idx) in cells" :key="`bg-${idx}`" class="cell" @click="onCellClick(idx)"></div>
+          <div
+            v-for="(cell, idx) in cells"
+            :key="`bg-${idx}`"
+            class="cell"
+            :class="{ wall: isWall(cell) }"
+            @click="onCellClick(idx)"
+          ></div>
           <div
             v-for="gem in gems"
             :key="gem.id"
@@ -47,18 +54,38 @@
             :class="gemClasses(gem)"
             :style="gemStyle(gem.idx, gem.dealIdx)"
             @click="onCellClick(gem.idx)"
-          >{{ EMOJIS[gem.value] }}</div>
+          >
+            <span class="face">{{ faceOf(gem.value) }}</span>
+          </div>
         </div>
       </div>
       <div v-if="cascade > 1" class="cascade-tip">×{{ cascade }} {{ i18n('cascade') }}</div>
-      <div v-if="phase === OVER" class="result lose">
-        <div>
-          <div>👻👻 {{ i18n('gameover') }} 👻👻</div>
-          <div v-if="newBest" class="new-best">🎉 {{ i18n('tipWin') }} 🎉</div>
-          <div class="final-score">{{ score }}</div>
+      <div v-if="phase === WON" class="result win">
+        <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
+        <div class="final-score">{{ score }}</div>
+        <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+      </div>
+      <div v-else-if="phase === OVER" class="result lose">
+        <div>👻👻 {{ i18n('gameover') }} 👻👻</div>
+        <div class="final-score">{{ score }} / {{ conf.target }}</div>
+        <div class="result-btns">
+          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon ghost" @click="confirming = true">{{ i18n('restartRun') }}</button>
         </div>
       </div>
     </div>
+    <Teleport to="body">
+      <div v-if="confirming" class="confirm-mask" @click.self="confirming = false">
+        <div class="confirm-box">
+          <p class="confirm-title">{{ i18n('confirmTitle') }}</p>
+          <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
+          <div class="confirm-actions">
+            <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
+            <button class="confirm-ok" @click="restartRun">{{ i18n('confirmOk') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -68,95 +95,63 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import { i18n } from '@/shared/i18n';
+import confetti from '@/shared/confetti';
 import { EMOJIS } from '@/shared/emojis';
-import { generateBoard, findMatches, hasMatchAfterSwap, adjacent, hasAnyMove, applyGravity, scoreForMatches, reshuffle } from './board';
+import {
+  WALL, BOMB, WILD, isWall, levelConfig, generateBoard, findMatches, explode,
+  hasMatchAfterSwap, adjacent, hasAnyMove, applyGravity,
+  scoreForMatches, scoreForBlast, reshuffle,
+} from './board';
 
-// 三档：7×7/5 种、8×8/6 种、9×9/7 种；步数制
-const LEVELS = [
-  { n: 7, kinds: 5, moves: 25 },
-  { n: 8, kinds: 6, moves: 30 },
-  { n: 9, kinds: 7, moves: 35 },
-];
-const [PLAY, OVER] = ['play', 'over'];
-const MIN_DIFFICULTY = 1;
-const MAX_DIFFICULTY = 3;
+// 闯关制：每关在限定步数内达到目标分即可过关，面板从 7×7 长到 9×10 后固定
+const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_crush__';
-const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
+const LEVEL_KEY = `${KEY_PREFIX}level`;          // 当前关卡
+const BEST_KEY = `${KEY_PREFIX}best_1`;          // 历史最高关卡（沿用「前缀+难度数字」以便连点标题清记录）
 const STATE_KEY = `${KEY_PREFIX}state`;
-const BEST_KEY = `${KEY_PREFIX}best`;
-// 各难度最高分：前缀 + 难度数字
-const BEST_KEY_PREFIX = `${KEY_PREFIX}best_`;
+const BOMB_FACE = '💣';
+const WILD_FACE = '💎';
 
-const difficulty = ref(Math.min(MAX_DIFFICULTY, Math.max(MIN_DIFFICULTY, +(localStorage.getItem(DIFFICULTY_KEY) || 1))));
-// 逻辑层：cells[idx] = emoji 种类或 null；渲染层：gems（稳定 id 的牌，位置过渡即交换/掉落动画）
+function loadLevel() {
+  return Math.max(1, Math.floor(+(localStorage.getItem(LEVEL_KEY) || 1)) || 1);
+}
+
+const level = ref(loadLevel());
+const bestLevel = ref(Math.max(level.value, Math.floor(+(localStorage.getItem(BEST_KEY) || 1)) || 1));
 const cells = ref([]);
 const gems = ref([]);
 let gemId = 0;
-// cells → gems 同步：下落只沿列发生——复用仅限「同列更上方」的同值 gem，
-// 无关列的 gem 保持原位（避免被拉来补位产生横跨盘面的滑动）。
-// 找不到同列来源的格生成新 gem（标记 fresh 从上空降入）
-function syncGems(prevGems, fresh = false) {
-  const n = boardSize.value;
-  const available = new Map(); // 列 → [gem]，按行降序（下方的先用）
-  (prevGems || []).forEach(g => {
-    const col = g.idx % n;
-    if (!available.has(col)) available.set(col, []);
-    available.get(col).push(g);
-  });
-  for (const list of available.values()) list.sort((a, b) => b.idx - a.idx);
-  const out = [];
-  for (let i = 0; i < cells.value.length; i++) {
-    const v = cells.value[i];
-    if (v === null || v === undefined) continue;
-    const col = i % n;
-    const list = available.get(col) || [];
-    // 该格上方（含本格）的同值 gem 才能落到这里；本格原 gem 优先
-    const at = list.findIndex(g => g.idx === i && g.value === v);
-    let pick;
-    if (at >= 0) {
-      pick = list[at];
-      list.splice(at, 1);
-    } else {
-      // 从该列上方找同值（列表按行降序，findIndex 命中最近的上方来源）
-      const upper = list.findIndex(g => g.idx < i && g.value === v);
-      if (upper >= 0) {
-        pick = list[upper];
-        list.splice(upper, 1);
-      }
-    }
-    if (pick) {
-      // fall：位置发生变化（下落）——落地时配弹跳动画，
-      // 避免「同值补位」时 1 格位移过小而看起来没有动画
-      out.push({ ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
-    } else {
-      out.push({ id: ++gemId, value: v, idx: i, fresh });
-    }
-  }
-  gems.value = out;
-}
+
 const phase = ref(PLAY);
 const score = ref(0);
 const moves = ref(0);
-const newBest = ref(false);
-const bestScore = ref(+(localStorage.getItem(BEST_KEY_PREFIX + difficulty.value) || 0));
 const selected = ref(-1);
 const swapPair = ref([]);
 const matchedSet = ref(new Set());
+const blastSet = ref(new Set());
 const cascade = ref(0);
+const shaking = ref(false);
+const confirming = ref(false);
 const timerRef = ref(null);
 
-const conf = computed(() => LEVELS[difficulty.value - 1]);
-const boardSize = computed(() => conf.value.n);
-const kinds = computed(() => conf.value.kinds);
+const conf = computed(() => levelConfig(level.value));
+const boardLabel = computed(() => `${conf.value.cols}×${conf.value.rows}`);
+const target = computed(() => conf.value.target);
+const progress = computed(() => Math.min(100, Math.round((score.value / target.value) * 100)));
 const timerRunning = computed(() => phase.value === PLAY);
 
-// 格子尺寸：96px 封顶按视口收缩（与其它游戏一致）
+// 格子尺寸：宽度与高度都要放得下（9×10 时以宽度为准）
 const boardStyle = computed(() => {
-  const n = boardSize.value;
-  const avail = Math.min(window.innerWidth || 420, 440) - 32;
-  const cell = Math.min(96, Math.floor((avail - 16 - (n - 1) * 4) / n));
+  const { cols, rows } = conf.value;
+  const availW = Math.min(window.innerWidth || 420, 440) - 32;
+  const availH = Math.max(300, (window.innerHeight || 700) - 346);
+  const cell = Math.min(
+    96,
+    Math.floor((availW - 16 - (cols - 1) * 4) / cols),
+    Math.floor((availH - 16 - (rows - 1) * 4) / rows),
+  );
   return {
-    '--n': n,
+    '--n': cols,
     '--cell': `${cell}px`,
     '--font': `${Math.floor(cell * 0.55)}px`,
   };
@@ -165,29 +160,46 @@ const boardStyle = computed(() => {
 let busy = false;
 let dealing = false;
 let dealTimer = null;
-let cascadeTimer = null;
+let stepTimer = null;
 let resetTimer = null;
-// 滑动操作状态
+let shakeTimer = null;
 let touchFrom = -1;
 let touchHandled = false;
 
 onMounted(() => {
-  if (!restore()) initGame();
+  if (!restore()) initLevel(level.value);
+  window.addEventListener('resize', onResize);
 });
 
 onUnmounted(() => {
-  clearTimeout(cascadeTimer);
+  clearTimeout(stepTimer);
   clearTimeout(resetTimer);
   clearTimeout(dealTimer);
+  clearTimeout(shakeTimer);
+  window.removeEventListener('resize', onResize);
 });
+
+function onResize() {
+  // 旋转/改窗口后重算格子尺寸（boardStyle 依赖 window，触发一次重算）
+  cells.value = [...cells.value];
+}
 
 // ---------- 布局 ----------
 
+function faceOf(value) {
+  if (value === BOMB) return BOMB_FACE;
+  if (value === WILD) return WILD_FACE;
+  return EMOJIS[value];
+}
+
 function gemClasses(gem) {
   const out = [`k-${gem.value}`];
+  if (gem.value === BOMB) out.push('bomb');
+  if (gem.value === WILD) out.push('wild');
   if (selected.value === gem.idx) out.push('selected');
   if (swapPair.value.includes(gem.idx)) out.push('swapping');
   if (matchedSet.value.has(gem.idx)) out.push('matched');
+  if (blastSet.value.has(gem.idx)) out.push('blasting');
   if (gem.fresh) out.push('fresh');
   if (gem.fall != null) out.push('falling');
   if (gem.dealIdx != null) out.push('dealt');
@@ -195,44 +207,108 @@ function gemClasses(gem) {
 }
 
 function gemStyle(idx, dealIdx) {
-  const n = boardSize.value;
-  const r = ~~(idx / n);
-  const c = idx % n;
+  const cols = conf.value.cols;
+  const r = ~~(idx / cols);
+  const c = idx % cols;
   const pos = k => `calc(${k} * (var(--cell) + 4px))`;
   return {
     left: pos(c),
     top: pos(r),
-    ...(dealIdx !== undefined ? { animationDelay: `${dealIdx * 18}ms` } : null),
+    ...(dealIdx !== undefined ? { animationDelay: `${dealIdx * 16}ms` } : null),
   };
 }
 
-// ---------- 游戏流程 ----------
+// cells → gems 同步：下落只沿列发生——复用仅限「同列更上方」的同值 gem
+function syncGems(prevGems, fresh = false) {
+  const cols = conf.value.cols;
+  const available = new Map();
+  (prevGems || []).forEach(g => {
+    const col = g.idx % cols;
+    if (!available.has(col)) available.set(col, []);
+    available.get(col).push(g);
+  });
+  for (const list of available.values()) list.sort((a, b) => b.idx - a.idx);
+  const out = [];
+  for (let i = 0; i < cells.value.length; i++) {
+    const v = cells.value[i];
+    if (v === null || v === undefined || v === WALL) continue;
+    const col = i % cols;
+    const list = available.get(col) || [];
+    const at = list.findIndex(g => g.idx === i && g.value === v);
+    let pick;
+    if (at >= 0) {
+      pick = list[at];
+      list.splice(at, 1);
+    } else {
+      const upper = list.findIndex(g => g.idx < i && g.value === v);
+      if (upper >= 0) {
+        pick = list[upper];
+        list.splice(upper, 1);
+      }
+    }
+    if (pick) {
+      out.push({ ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
+    } else {
+      out.push({ id: ++gemId, value: v, idx: i, fresh });
+    }
+  }
+  gems.value = out;
+}
 
-function initGame() {
-  clearTimeout(cascadeTimer);
+// ---------- 关卡流程 ----------
+
+function spawnOpts() {
+  const c = conf.value;
+  return {
+    walls: c.walls,
+    bombChance: c.bombChance,
+    wildChance: c.wildChance,
+  };
+}
+
+function initLevel(lv) {
+  clearTimeout(stepTimer);
   clearTimeout(resetTimer);
   busy = false;
   selected.value = -1;
   swapPair.value = [];
   matchedSet.value = new Set();
+  blastSet.value = new Set();
   cascade.value = 0;
-  newBest.value = false;
-  let b;
-  do {
-    b = generateBoard(boardSize.value, kinds.value);
-  } while (!hasAnyMove(b, boardSize.value, kinds.value));
-  cells.value = b;
+  confirming.value = false;
+  level.value = Math.max(1, lv);
+  localStorage.setItem(LEVEL_KEY, level.value);
+  if (level.value > bestLevel.value) {
+    bestLevel.value = level.value;
+    localStorage.setItem(BEST_KEY, bestLevel.value);
+  }
+  const c = conf.value;
+  // 初始盘面：无现成三连 + 至少一个有效交换；关数高了会带墙和少量特殊元素
+  cells.value = generateBoard(c.cols, c.rows, c.kinds, {
+    ...spawnOpts(),
+    initials: Math.min(3, Math.floor(c.level / 3)),
+  });
   gemId = 0;
-  // 清空后逐个入场：先渲染空盘，再依次放入（配 deal 延迟动画）
   gems.value = [];
   score.value = 0;
-  moves.value = conf.value.moves;
+  moves.value = c.moves;
   phase.value = PLAY;
-  bestScore.value = +(localStorage.getItem(bestKey()) || 0);
   timerRef.value?.reset();
-  // 从第一格开始逐个入场（每格 18ms 间隔的缩放弹入动画）
   dealBoard();
   save();
+}
+
+function nextLevel() {
+  initLevel(level.value + 1);
+}
+
+function replayLevel() {
+  initLevel(level.value);
+}
+
+function restartRun() {
+  confirming.value = false;
+  initLevel(1);
 }
 
 // 发牌：全部 gem 一次性渲染，靠 CSS animationDelay 从第一格逐个弹入
@@ -240,15 +316,13 @@ function dealBoard() {
   const all = [];
   for (let i = 0; i < cells.value.length; i++) {
     const v = cells.value[i];
-    if (v === null || v === undefined) continue;
+    if (v === null || v === undefined || v === WALL) continue;
     all.push({ id: ++gemId, value: v, idx: i });
   }
   gems.value = all;
   playDeal();
 }
 
-// 逐格入场动画：按落格顺序（先上后下、从左到右）给每张 gem 排一个延迟。
-// 新开局与「进入游戏恢复存档」都走这里，保证两种情况都是挨个渲染出来的
 function playDeal() {
   if (!gems.value.length) return;
   clearTimeout(dealTimer);
@@ -258,28 +332,15 @@ function playDeal() {
   gems.value = gems.value.map(g => ({ ...g, dealIdx: rank.get(g.id) }));
   dealTimer = setTimeout(() => {
     dealing = false;
-    // 清掉 dealIdx，后续交互不再触发 deal 动画
     gems.value = gems.value.map(({ dealIdx, ...g }) => g);
-  }, gems.value.length * 18 + 400);
-}
-
-function bestKey() {
-  return BEST_KEY_PREFIX + difficulty.value;
-}
-
-function changeDifficulty(dir) {
-  const next = difficulty.value + dir;
-  if (next < MIN_DIFFICULTY || next > MAX_DIFFICULTY) return;
-  difficulty.value = next;
-  localStorage.setItem(DIFFICULTY_KEY, next);
-  initGame();
+  }, gems.value.length * 16 + 400);
 }
 
 // ---------- 交互 ----------
 
 function onCellClick(idx) {
   if (phase.value !== PLAY || busy || dealing) return;
-  // 滑动操作已处理则忽略紧随的 click（touch 后合成 click）
+  if (!isTileAt(idx)) return;                 // 墙 / 空格不可选
   if (touchHandled) { touchHandled = false; return; }
   if (selected.value < 0) {
     selected.value = idx;
@@ -289,23 +350,28 @@ function onCellClick(idx) {
     selected.value = -1;
     return;
   }
-  if (adjacent(selected.value, idx, boardSize.value)) {
+  if (adjacent(selected.value, idx, conf.value.cols)) {
     trySwap(selected.value, idx);
   } else {
     selected.value = idx;
   }
 }
 
+function isTileAt(idx) {
+  const v = cells.value[idx];
+  return v !== null && v !== undefined && v !== WALL;
+}
+
 function onTouchStart(e) {
-  const touch = e.touches[0];
-  const cell = touchTargetCell(touch);
+  const cell = touchTargetCell(e.touches[0]);
   touchFrom = cell;
 }
 
 function onTouchMove(e) {
   if (touchFrom < 0 || phase.value !== PLAY || busy) return;
   const cell = touchTargetCell(e.touches[0]);
-  if (cell >= 0 && cell !== touchFrom && adjacent(touchFrom, cell, boardSize.value)) {
+  if (cell >= 0 && cell !== touchFrom && adjacent(touchFrom, cell, conf.value.cols)) {
+    if (!isTileAt(touchFrom) || !isTileAt(cell)) { touchFrom = -1; return; }
     touchHandled = true;
     trySwap(touchFrom, cell);
     touchFrom = -1;
@@ -320,20 +386,20 @@ function touchTargetCell(touch) {
   const board = document.querySelector('.board');
   if (!board) return -1;
   const rect = board.getBoundingClientRect();
-  const x = touch.clientX - rect.left;
-  const y = touch.clientY - rect.top;
-  const n = boardSize.value;
-  const step = rect.width / n;
-  const c = ~~(x / step);
-  const r = ~~(y / step);
-  if (r < 0 || r >= n || c < 0 || c >= n) return -1;
-  return r * n + c;
+  const { cols, rows } = conf.value;
+  const stepX = rect.width / cols;
+  const stepY = rect.height / rows;
+  const c = ~~((touch.clientX - rect.left) / stepX);
+  const r = ~~((touch.clientY - rect.top) / stepY);
+  if (r < 0 || r >= rows || c < 0 || c >= cols) return -1;
+  return r * cols + c;
 }
 
 // ---------- 交换与结算链 ----------
 
 function trySwap(a, b) {
-  if (!hasMatchAfterSwap(cells.value, boardSize.value, a, b)) {
+  const { cols, rows } = conf.value;
+  if (!hasMatchAfterSwap(cells.value, cols, rows, a, b)) {
     // 无效交换：两 gem 换位再换回（走完整过渡），不消耗步数
     selected.value = -1;
     const ga = gems.value.find(g => g.idx === a);
@@ -349,14 +415,11 @@ function trySwap(a, b) {
       }, 220);
     }
     swapPair.value = [a, b];
-    resetTimer = setTimeout(() => {
-      swapPair.value = [];
-    }, 460);
+    resetTimer = setTimeout(() => { swapPair.value = []; }, 460);
     return;
   }
   selected.value = -1;
   busy = true;
-  // 交换：gems 保身份换位置（left/top 过渡 = 丝滑交换动画），cells 同步换值
   const ga = gems.value.find(g => g.idx === a);
   const gb = gems.value.find(g => g.idx === b);
   if (ga && gb) {
@@ -367,76 +430,90 @@ function trySwap(a, b) {
   const next = [...cells.value];
   [next[a], next[b]] = [next[b], next[a]];
   cells.value = next;
-  cascadeTimer = setTimeout(() => {
+  stepTimer = setTimeout(() => {
     moves.value--;
     resolveCascades(1);
   }, 240);
 }
 
-// 级联结算：消除 → 重力下落 → 再检测，直到无命中
-function resolveCascades(level) {
-  const matched = findMatches(cells.value, boardSize.value);
+// 级联结算：连线消除 + 炸弹爆炸 → 重力下落 → 再检测，直到无命中
+function resolveCascades(chain) {
+  const { cols, rows, kinds } = conf.value;
+  const matched = findMatches(cells.value, cols, rows);
   if (!matched.size) {
     cascade.value = 0;
-    // 连锁结束：清掉 fresh/fall 瞬态标记，避免 class 残留
     gems.value = gems.value.map(g => ({ ...g, fresh: false, fall: undefined }));
     finishTurn();
     return;
   }
-  cascade.value = level;
-  const gained = scoreForMatches(matched.size, level);
-  score.value += gained;
-  // 消除动画
+  cascade.value = chain;
+  // 炸弹：四邻有格子被消除就引爆，炸掉自己周围 3×3（可链式引爆其它炸弹）
+  const { blast } = explode(cells.value, cols, rows, matched);
+  score.value += scoreForMatches(matched.size, chain) + scoreForBlast(blast.size, chain);
   matchedSet.value = matched;
-  cascadeTimer = setTimeout(() => {
-    // 清除命中格
-    const cleared = cells.value.map((v, i) => matched.has(i) ? null : v);
-    // 重力下落 + 补新（一次完成，动画分两批：下落的 fall、新牌从顶 spawn）
-    const { board: after, drops } = applyGravity(cleared, boardSize.value, kinds.value);
-    // 本轮在盘面内的下落格（原索引在 drops 中能对上的）标记 falling；
-    // applyGravity 的 drops 只记录 spawn，下落映射需要在清除前计算——简化：
-    // 所有未消除且位置变化的格都重新渲染（绝对定位按新 cells 计算，配 transition 天然下落动画）
+  blastSet.value = blast;
+  if (blast.size) shakeBoard();
+  stepTimer = setTimeout(() => {
+    const cleared = cells.value.map((v, i) => (matched.has(i) || blast.has(i) ? null : v));
     matchedSet.value = new Set();
-    cells.value = after;
-    // 保身份同步：只传幸存 gem（被消除的若留在池中会被同值格复用「原地复活」，跳过下落动画），
-    // 幸存 gem 位置过渡即掉落动画，新牌 fresh 从上空降入
-    const survivors = gems.value.filter(g => !matched.has(g.idx));
+    blastSet.value = new Set();
+    const survivors = gems.value.filter(g => !matched.has(g.idx) && !blast.has(g.idx));
+    cells.value = applyGravity(cleared, cols, rows, kinds, spawnOpts());
     syncGems(survivors, true);
-    cascadeTimer = setTimeout(() => {
-      resolveCascades(level + 1);
-    }, 300);
-  }, 350);
+    stepTimer = setTimeout(() => resolveCascades(chain + 1), 300);
+  }, 360);
+}
+
+function shakeBoard() {
+  clearTimeout(shakeTimer);
+  shaking.value = false;
+  void document.querySelector('.board-frame')?.offsetWidth;
+  shaking.value = true;
+  shakeTimer = setTimeout(() => { shaking.value = false; }, 340);
 }
 
 function finishTurn() {
   busy = false;
   if (phase.value !== PLAY) return;
-  if (moves.value <= 0) {
-    phase.value = OVER;
-    timerRef.value?.stop();
-    if (score.value > bestScore.value) {
-      bestScore.value = score.value;
-      localStorage.setItem(bestKey(), score.value);
-      newBest.value = true;
-    }
-    save();
-    return;
-  }
-  // 无解自动重洗
-  if (!hasAnyMove(cells.value, boardSize.value, kinds.value)) {
-    cells.value = reshuffle(cells.value, boardSize.value, kinds.value);
+  if (score.value >= target.value) { winLevel(); return; }
+  if (moves.value <= 0) { loseLevel(); return; }
+  if (!hasAnyMove(cells.value, conf.value.cols, conf.value.rows, conf.value.kinds)) {
+    cells.value = reshuffle(cells.value, conf.value.cols, conf.value.rows, conf.value.kinds);
     syncGems(gems.value);
     selected.value = -1;
   }
   save();
 }
 
+function winLevel() {
+  if (phase.value !== PLAY) return;
+  timerRef.value?.stop();
+  removeState();
+  confetti();
+  if (level.value + 1 > bestLevel.value) {
+    bestLevel.value = level.value + 1;
+    localStorage.setItem(BEST_KEY, bestLevel.value);
+  }
+  phase.value = WON;
+}
+
+function loseLevel() {
+  if (phase.value !== PLAY) return;
+  timerRef.value?.stop();
+  removeState();
+  phase.value = OVER;
+}
+
 // ---------- 存档 ----------
+
+function removeState() {
+  try { localStorage.removeItem(STATE_KEY); } catch { /* 忽略 */ }
+}
 
 function save() {
   localStorage.setItem(STATE_KEY, JSON.stringify({
     cells: cells.value,
-    difficulty: difficulty.value,
+    level: level.value,
     score: score.value,
     moves: moves.value,
     time: timerRef.value?.seconds() || 0,
@@ -448,18 +525,17 @@ function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!saved || !Array.isArray(saved.cells) || !saved.cells.length) return false;
-    if (saved.phase === OVER) return false;
-    const d = Math.min(MAX_DIFFICULTY, Math.max(MIN_DIFFICULTY, +(saved.difficulty || 1)));
-    const n = LEVELS[d - 1].n;
-    if (saved.cells.length !== n * n) return false;
-    difficulty.value = d;
+    if (saved.phase !== PLAY) return false;
+    const c = levelConfig(+saved.level || 1);
+    if (saved.cells.length !== c.cols * c.rows) return false;
+    level.value = c.level;
+    if (level.value > bestLevel.value) bestLevel.value = level.value;
     cells.value = saved.cells;
     syncGems([]);
-    playDeal();   // 恢复的盘面同样逐个入场
+    playDeal();
     score.value = +saved.score || 0;
-    moves.value = Math.min(LEVELS[d - 1].moves, Math.max(0, +saved.moves ?? LEVELS[d - 1].moves));
+    moves.value = Math.min(c.moves, Math.max(0, +saved.moves));
     phase.value = PLAY;
-    bestScore.value = +(localStorage.getItem(bestKey()) || 0);
     timerRef.value?.restore(saved.time || 0);
     return true;
   } catch {
@@ -477,10 +553,8 @@ function onTimerTick() {
 }
 
 function onScoreReset() {
-  for (let d = MIN_DIFFICULTY; d <= MAX_DIFFICULTY; d++) {
-    localStorage.removeItem(BEST_KEY_PREFIX + d);
-  }
-  bestScore.value = 0;
+  localStorage.removeItem(BEST_KEY);
+  bestLevel.value = level.value;
 }
 </script>
 
@@ -489,6 +563,12 @@ function onScoreReset() {
   0% { transform: scale(1); }
   40% { transform: scale(1.2); }
   100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes blast-out {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(1.35); filter: brightness(1.9); }
+  100% { transform: scale(1.7); opacity: 0; }
 }
 
 @keyframes drop-in {
@@ -511,6 +591,22 @@ function onScoreReset() {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-8%); }
   75% { transform: translateX(8%); }
+}
+
+// 炸弹 / 万能元素：持续的呼吸缩放
+@keyframes breath {
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1.05); }
+}
+
+// 炸弹引爆时的棋盘震动
+@keyframes board-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-5px, 2px); }
+  30% { transform: translate(4px, -3px); }
+  45% { transform: translate(-3px, -2px); }
+  60% { transform: translate(3px, 2px); }
+  80% { transform: translate(-2px, 1px); }
 }
 
 .wrapper {
@@ -542,10 +638,12 @@ function onScoreReset() {
     opacity: 0.6;
   }
   .score-area {
+    position: relative;
+    overflow: hidden;
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -561,65 +659,44 @@ function onScoreReset() {
         font-size: 22px;
         font-weight: bold;
         line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--border-color);
+      .progress-bar {
+        height: 100%;
+        background: var(--primary-bg);
+        transition: width 0.3s ease;
       }
     }
   }
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    height: 72px;
-    .difficulty-wrapper {
-      flex: 3.5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      .difficulty-value {
-        min-width: 48px;
-        text-align: center;
-        font-size: 16px;
-        font-weight: bold;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-    }
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .opt-half {
-      flex: 2.5;
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    .level-note {
+      font-size: 13px;
+      color: var(--muted-color);
+      white-space: nowrap;
     }
     .start-wrapper {
-      flex: 4;
+      flex: 1.4;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-    .opt-icon {
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
-      &::after {
-        content: "";
-        position: absolute;
-        inset: -8px;
-      }
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      background: var(--card-bg-color);
-      color: var(--text-color);
-      font-size: 15px;
-      &.disable {
-        color: var(--border-color);
-        cursor: not-allowed;
-      }
     }
   }
   .game-icon {
@@ -631,7 +708,12 @@ function onScoreReset() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
+    &.ghost {
+      background: var(--card-bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
   }
   .game-area {
     position: relative;
@@ -646,6 +728,10 @@ function onScoreReset() {
     background: var(--board-bg);
     border-radius: var(--card-radius);
     touch-action: none;
+    // 炸弹引爆时整块棋盘震动一下
+    &.shaking {
+      animation: board-shake 0.34s ease;
+    }
   }
   .board {
     position: relative;
@@ -653,6 +739,19 @@ function onScoreReset() {
     grid-template-columns: repeat(var(--n), var(--cell));
     grid-auto-rows: var(--cell);
     gap: 4px;
+    .cell {
+      border-radius: var(--radius-tile);
+      background: var(--cell-bg);
+      // 不可消除的墙：emoji 下落时可以穿过，但不能交换/消除
+      &.wall {
+        background: var(--wall-bg);
+        background-image: repeating-linear-gradient(45deg,
+          transparent 0 6px,
+          var(--wall-stripe) 6px 9px);
+        border: 1px solid var(--tile-border-color);
+        box-sizing: border-box;
+      }
+    }
   }
   .gem {
     position: absolute;
@@ -670,6 +769,10 @@ function onScoreReset() {
     -webkit-tap-highlight-color: transparent;
     // 位置过渡 = 掉落/交换动画的载体（ease 平滑启停，交换/下落都丝滑）
     transition: left 0.24s ease, top 0.24s ease;
+    .face {
+      display: inline-block;
+      line-height: 1;
+    }
     &.selected {
       border-color: var(--primary-bg);
       box-shadow: 0 0 0 2px var(--primary-bg);
@@ -679,18 +782,31 @@ function onScoreReset() {
       animation: pop-out 0.35s ease forwards;
       pointer-events: none;
     }
+    // 被炸弹波及：放大 + 闪白后消失
+    &.blasting {
+      animation: blast-out 0.34s ease forwards;
+      pointer-events: none;
+    }
+    // 炸弹 / 万能元素：持续呼吸（挂在内部 face 上，避免与其它 transform 动画冲突）
+    &.bomb .face,
+    &.wild .face {
+      animation: breath 1.6s ease-in-out infinite;
+    }
+    &.bomb {
+      background: var(--del-bg);
+    }
+    &.wild {
+      background: var(--enter-bg);
+    }
     &.swapping {
       animation: swap-shake 0.4s ease;
     }
-    // 新补充的牌从棋盘上方降入
     &.fresh {
       animation: drop-in 0.3s ease-out;
     }
-    // 下落的牌落地时轻微压缩回弹（squash），即使位移只有一格也有明确的动态
     &.falling {
       animation: land-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    // 开局发牌：从第一格开始逐个缩放弹入（间隔由 animationDelay 控制）
     &.dealt {
       animation: deal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
     }
@@ -713,7 +829,7 @@ function onScoreReset() {
     height: 100%;
     left: 0;
     top: 0;
-    z-index: 2;
+    z-index: 4;
     border-radius: var(--card-radius);
     background: var(--mask-color);
     color: var(--lose-color);
@@ -723,15 +839,76 @@ function onScoreReset() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 10px;
     text-align: center;
-    .new-best {
+    padding: 12px;
+    box-sizing: border-box;
+    &.win {
       color: var(--win-color);
-      margin-top: 6px;
     }
     .final-score {
       font-size: 28px;
       margin-top: 4px;
+    }
+    .result-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 6px;
+    }
+  }
+}
+
+.confirm-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.confirm-box {
+  width: calc(100% - 64px);
+  max-width: 320px;
+  padding: 20px 20px 16px;
+  box-sizing: border-box;
+  border-radius: var(--card-radius);
+  background: var(--card-bg-color);
+  color: var(--text-color);
+  box-shadow: var(--card-shadow);
+  .confirm-title {
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: bold;
+  }
+  .confirm-msg {
+    margin: 0 0 16px;
+    font-size: 14px;
+    opacity: 0.8;
+    line-height: 1.5;
+  }
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    button {
+      cursor: pointer;
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: var(--radius-tile);
+      border: 0 none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .confirm-cancel {
+      background: var(--key-bg);
+      color: var(--text-color);
+    }
+    .confirm-ok {
+      background: var(--primary-bg);
+      color: #fff;
+      font-weight: bold;
     }
   }
 }
