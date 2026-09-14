@@ -849,7 +849,7 @@ function win() {
     position: absolute;
     inset: 3px;
     border-radius: var(--radius-tile);
-    background: var(--two-bg-color);
+    background: var(--wall-bg);
     background-image: repeating-linear-gradient(45deg,
       transparent 0 6px,
       var(--wall-stripe) 6px 9px);

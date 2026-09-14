@@ -192,9 +192,16 @@ body {
   --cell-mask: #c9ced6;
   // 连连看墙块斜纹（深色下需要浅纹才看得见）
   --wall-stripe: rgba(0, 0, 0, 0.14);
-  --zero-bg-color: #d8f0e2;
-  --one-bg-color: #f2f4f7;
-  --two-bg-color: #e4e8ee;
+  // 点击游戏的三态：0 = 已完成（贴近主题绿、不用再点）、1 = 最需要处理（最深）、
+  // 2 = 再点一次就归零（中间档）；三者的色相/明度都拉开了，一眼能分
+  --zero-bg-color: #dcf0e4;
+  --zero-color: #2c6b4a;
+  --one-bg-color: #f6c489;
+  --one-color: #6f3603;
+  --two-bg-color: #fbe4c4;
+  --two-color: #8a5312;
+  // 连连看墙块底色（原来借用 --two-bg-color，现已拆开）
+  --wall-bg: #e4e8ee;
   --even-bg-color: #f2f4f7;
   --odd-bg-color: #d8f0e2;
   --tile-border-color: #c9d0da;
@@ -239,10 +246,14 @@ body {
     --cell-text-color: #ececec;
     --cell-mask: #454545;
     --wall-stripe: rgba(255, 255, 255, 0.16);
-    // 深色下格子改用深色半透明底（原来是 90% 不透明的浅灰，在深色页面上是一块发白的板子）
+    // 点击游戏三态（深色版）：绿=已完成、琥珀越深=越需要处理
     --zero-bg-color: rgba(78, 201, 138, 0.22);
-    --one-bg-color: rgba(255, 255, 255, 0.06);
-    --two-bg-color: rgba(255, 255, 255, 0.14);
+    --zero-color: #8adfb2;
+    --one-bg-color: rgba(235, 150, 60, 0.38);
+    --one-color: #f8d0a0;
+    --two-bg-color: rgba(235, 170, 80, 0.22);
+    --two-color: #efc489;
+    --wall-bg: rgba(255, 255, 255, 0.14);
     --even-bg-color: rgba(255, 255, 255, 0.06);
     --odd-bg-color: rgba(78, 201, 138, 0.22);
     --tile-border-color: #5a5a5a;

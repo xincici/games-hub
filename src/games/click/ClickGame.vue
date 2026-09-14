@@ -396,13 +396,18 @@ function userRedo() {
         font-size: 16px;
         font-weight: bold;
         background: var(--one-bg-color);
-        color: var(--cell-text-color);
+        color: var(--one-color);
         opacity: 1;
+        // 0 = 已完成（贴近主题绿、去掉描边，看起来就不需要再点）
         &.zero {
           background: var(--zero-bg-color);
+          color: var(--zero-color);
+          border-color: transparent;
         }
+        // 2 = 再点一次就归零，比 1 浅一档
         &.two {
           background: var(--two-bg-color);
+          color: var(--two-color);
         }
         &.clicked {
           opacity: 0.1;
