@@ -85,7 +85,8 @@ onUnmounted(() => {
 .header-wrapper {
   background: var(--bg-color);
   max-width: var(--max-width);
-  padding: 10px 8px;
+  // 上下不留内边距：内容盒就是整条 50px，图标（min-height 44px）与标题才能在这条里真正居中
+  padding: 0 8px;
   box-sizing: border-box;
   // 两侧操作区等宽（1fr auto 1fr），标题列不受两侧内容影响，始终水平居中
   display: grid;
