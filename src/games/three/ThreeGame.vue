@@ -361,15 +361,18 @@ function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!saved || !Array.isArray(saved.tiles) || !saved.tiles.length) return false;
-    if (saved.phase === LOSE) return false;
+    // 失败局面同样恢复：退出再进来还是这盘死局，由玩家自己点「新游戏」开新的一局
+    const wasLost = saved.phase === LOSE;
     tiles.value = saved.tiles.map(t => ({ ...t, id: ++tileId }));
     deck = Array.isArray(saved.deck) ? saved.deck : [];
     nextTile.value = saved.next || draw();
     score.value = +saved.score || 0;
-    phase.value = GAMING;
+    phase.value = wasLost ? LOSE : GAMING;
     timerRef.value?.restore(saved.time || 0);
+    // 恢复的若是失败局面，计时器停在最终用时（CountTimer.restore 会重新启动计时）
+    if (phase.value === LOSE) timerRef.value?.stop();
     // 恢复即是死局（例如存档于结算前一步）→ 直接判负
-    if (!canMove()) phase.value = LOSE;
+    if (!wasLost && !canMove()) phase.value = LOSE;
     // 恢复出来的牌同样逐张入场（死局被结算浮层盖住，就不做了）
     if (phase.value !== LOSE) playDeal();
     return true;

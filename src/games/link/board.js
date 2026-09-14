@@ -6,6 +6,53 @@
 // 连线规则：两张同 emoji 牌之间最多 2 个转折（3 段直线），
 // 路径可借用棋盘外一圈虚拟空格，路径上不能有其他牌或墙壁。
 
+// ---------- 关卡配置 ----------
+// 难度由「棋盘大小 + emoji 种类 + 牌数 + 墙数 + 限时」共同决定：
+// 前 11 关逐关变难，第 11 关起全部因素封顶（关数仍然无限增长，难度不再上升）。
+// 限时 = 对数 × 每对秒数，每对秒数从 8s 收紧到 5.2s（留足观察时间，靠棋盘/种类/墙加难）
+const CURVE = [
+  // level, rows, cols, pairs, kinds, walls, secondsPerPair
+  [1, 6, 6, 9, 6, 0, 8],
+  [2, 6, 7, 11, 6, 0, 7.5],
+  [3, 7, 7, 13, 7, 0, 7],
+  [4, 7, 8, 15, 7, 3, 6.8],
+  [5, 8, 8, 17, 8, 4, 6.5],
+  [6, 8, 9, 19, 8, 5, 6.2],
+  [7, 9, 9, 21, 9, 6, 6],
+  [8, 9, 10, 23, 9, 7, 5.8],
+  [9, 10, 10, 25, 10, 8, 5.6],
+  [10, 10, 11, 27, 10, 9, 5.4],
+  [11, 10, 11, 28, 10, 10, 5.2],
+];
+const CAP = CURVE[CURVE.length - 1];
+
+export function levelConfig(level) {
+  const lv = Math.max(1, Math.floor(level) || 1);
+  const row = lv <= CURVE.length ? CURVE[lv - 1] : CAP;
+  const [, rows, cols, pairs, kinds, walls, perPair] = row;
+  return {
+    level: lv,
+    rows,
+    cols,
+    pairs,
+    kinds,
+    walls,
+    time: Math.round(pairs * perPair),
+  };
+}
+
+// 每种 emoji 都可以出现多对（偶数张即可）：先给每种至少一对，剩下的按对随机加到各种类上
+export function buildPairPool(emojiPool, pairs, kinds, rand = Math.random) {
+  const use = Math.max(2, Math.min(kinds || emojiPool.length, emojiPool.length, pairs));
+  const picked = shuffled(emojiPool, rand).slice(0, use);
+  const counts = new Array(use).fill(2);
+  const extra = (pairs * 2 - use * 2) / 2;   // 还能再分出去的对数
+  for (let i = 0; i < extra; i++) counts[~~(rand() * use)] += 2;
+  const pool = [];
+  counts.forEach((n, i) => { for (let k = 0; k < n / 2; k++) pool.push(picked[i]); });
+  return shuffled(pool, rand);
+}
+
 // 严格位于 a、b 之间的格子是否全部为空（a、b 自身不参与判断）
 function lineClear(board, H, W, r1, c1, r2, c2, walls) {
   if (r1 === r2) {
@@ -87,8 +134,10 @@ function shuffled(list, rand) {
 // 逐对可解（难度更高，死局交给游戏内自动重排），只要求初盘有解。
 // 放置时优先让牌与已放的牌互不相邻（上下左右），相邻对尽量少。
 // walls（可选）先于牌放置：墙格既不放牌也阻挡连线。
+// pool 为「每张牌占一个元素、同 emoji 出现偶数次」的牌池（长度即对数 ×2）。
 // 返回 { board, solution }，solution 为按生成顺序加入的坐标对（调试用）。
-export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * W) / 2, walls) {
+export function generateWithPool(H, W, pool, walls, rand = Math.random) {
+  const pairs = pool.length;
   for (let attempt = 0; attempt < 40; attempt++) {
     const board = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
     const freeCells = [];
@@ -98,7 +147,6 @@ export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * 
     if (freeCells.length < pairs * 2) break;
     // 干净格池：当前与任何已放牌都不相邻的空位
     const cleanCells = freeCells.map(p => p);
-    const pool = shuffled(emojis, rand).slice(0, pairs);
     const solution = [];
     let placed = 0;
     let stuck = false;
@@ -121,7 +169,6 @@ export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * 
   }
   // 兜底：按阅读顺序把每对牌左右相邻摆放——0 转折互达必有解
   const board = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
-  const pool = shuffled(emojis, rand).slice(0, pairs);
   const solution = [];
   const cells = [];
   for (let r = 0; r < H; r++) for (let c = 0; c + 1 < W; c++) {
@@ -136,6 +183,29 @@ export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * 
     placed++;
   }
   return { board, solution };
+}
+
+// 兼容旧签名：从一个 emoji 池里取 pairs 对（每种至多一对）
+export function generateSolvable(H, W, emojis, rand = Math.random, pairs = (H * W) / 2, walls) {
+  const pool = shuffled(emojis, rand).slice(0, pairs);
+  return generateWithPool(H, W, pool, walls, rand);
+}
+
+// 随机布墙：count 面墙随机撒在盘面上（墙格不放牌、阻挡连线）
+export function generateWalls(H, W, count, rand = Math.random) {
+  const grid = Array.from({ length: H }, () => new Array(W).fill(0));
+  if (!count) return grid;
+  const cells = [];
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) cells.push([r, c]);
+  shuffled(cells, rand).slice(0, Math.min(count, cells.length)).forEach(([r, c]) => { grid[r][c] = 1; });
+  return grid;
+}
+
+// 关卡发牌：按关卡配置生成牌池（同 emoji 可出现多对）与墙，再摆盘
+export function generateLevelBoard(H, W, emojiPool, cfg, rand = Math.random) {
+  const pool = buildPairPool(emojiPool, cfg.pairs, cfg.kinds, rand);
+  const walls = generateWalls(H, W, cfg.walls, rand);
+  return { ...generateWithPool(H, W, pool, walls, rand), walls };
 }
 
 function keyOf(p) {

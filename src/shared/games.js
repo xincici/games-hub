@@ -92,9 +92,10 @@ export const games = [
     icon: 'i-mdi-link',
     accent: 'logic',
     helpKey: '__emoji_link__help_showed',
-    recordsPrefix: '__emoji_link__',
+    // 闯关制后只记录「历史最高关卡」，存成前缀+1，沿用连点标题清记录的机制
+    recordsPrefix: '__emoji_link__best_',
     minDifficulty: 1,
-    maxDifficulty: 5,
+    maxDifficulty: 1,
   },
   {
     id: 'detective',

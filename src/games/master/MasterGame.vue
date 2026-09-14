@@ -326,8 +326,10 @@ function pick(tile, event) {
 async function fly(flight) {
   await nextTick();
   const el = flyEls.get(flight.uid);
-  // 目标槽位：按「当前暂存区 + 已在飞的牌」算，避免两条飞行盯同一个空槽
-  const virtualTray = [...tray.value, ...flights.value.map(f => ({ emoji: f.emoji, clearing: false }))];
+  // 目标槽位：按「当前暂存区 + 其它在飞的牌」算（要排掉自己，否则会多算一格，
+  // 看起来就像新牌和前一间隔了一个槽），避免两条飞行盯同一个空槽
+  const others = flights.value.filter(f => f.uid !== flight.uid);
+  const virtualTray = [...tray.value, ...others.map(f => ({ emoji: f.emoji, clearing: false }))];
   const idx0 = insertIndex(virtualTray, flight.emoji);
   const slotEl = document.querySelectorAll('.tray .slot')[idx0];
   const to = slotEl ? slotEl.getBoundingClientRect() : flight.from;

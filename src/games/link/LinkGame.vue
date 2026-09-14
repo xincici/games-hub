@@ -1,20 +1,15 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset">
-      <span
-        class="item-wrapper wall-toggle"
-        :class="{ 'wall-toggle-disable': !wallToggleable }"
-        :title="i18n('wallModeTip')"
-        @click="toggleWallMode"
-      >
-        <i i-mdi-wall v-if="wallsActive" />
-        <i i-mdi-wall v-else style="opacity: 0.35" />
-      </span>
-    </TopHeader>
+    <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-area">
       <div class="stat">
-        <span class="stat-label">{{ i18n('bestScore') }}</span>
-        <span class="stat-value">{{ bestTime ? fmt(bestTime) : '--:--' }}</span>
+        <span class="stat-label">{{ i18n('levelLabel') }}</span>
+        <span class="stat-value">{{ level }}</span>
+      </div>
+      <div class="divider"></div>
+      <div class="stat">
+        <span class="stat-label">{{ i18n('timeLeft') }}</span>
+        <span class="stat-value" :class="{ urgent: timeLeft <= 15 }">{{ fmt(timeLeft) }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
@@ -23,14 +18,8 @@
       </div>
     </div>
     <div class="card opt-area">
-      <div class="difficulty-wrapper">
-        <button @click="changeDifficulty(-1)" class="opt-icon" :class="{ disable: difficulty === MIN_DIFFICULTY }">
-          <i i-carbon-subtract-alt />
-        </button>
-        <span class="difficulty-value">{{ size[0] }}×{{ size[1] }}</span>
-        <button @click="changeDifficulty(1)" class="opt-icon" :class="{ disable: difficulty === MAX_DIFFICULTY }">
-          <i i-carbon-add-alt />
-        </button>
+      <div class="opt-half">
+        <span class="level-note">{{ boardLabel }}</span>
       </div>
       <div class="divider"></div>
       <div class="opt-half">
@@ -38,11 +27,11 @@
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
-        <button @click="initGame" class="game-icon">{{ i18n('start') }}</button>
+        <button @click="replayLevel" class="game-icon">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <div class="game-area">
-      <div class="board" :class="`size-${difficulty}`">
+      <div class="board" :style="boardStyle">
         <template v-for="(row, r) in board" :key="r">
           <div v-for="(cell, c) in row" :key="`${r}-${c}`" class="cell">
             <button
@@ -70,11 +59,32 @@
         </svg>
       </div>
       <div v-if="shuffleTip" class="shuffle-tip">{{ i18n('shuffleTip') }}</div>
-      <div v-if="showResult" class="result win">
-        <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
-        <span v-if="newBest">{{ i18n('newBest') }}</span>
+      <div v-if="phase === WON" class="result win">
+        <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
+        <div class="final-time">{{ fmt(elapsed) }}</div>
+        <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+      </div>
+      <div v-else-if="phase === OVER" class="result lose">
+        <div>⏰ {{ i18n('timeUp') }} ⏰</div>
+        <div class="final-time">{{ leftPairs }} {{ i18n('leftPairsShort') }}</div>
+        <div class="result-btns">
+          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon ghost" @click="confirming = true">{{ i18n('restartRun') }}</button>
+        </div>
       </div>
     </div>
+    <Teleport to="body">
+      <div v-if="confirming" class="confirm-mask" @click.self="confirming = false">
+        <div class="confirm-box">
+          <p class="confirm-title">{{ i18n('confirmTitle') }}</p>
+          <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
+          <div class="confirm-actions">
+            <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
+            <button class="confirm-ok" @click="restartRun">{{ i18n('confirmOk') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -86,30 +96,26 @@ import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
-import { findPath, generateBoard, hasMove, shuffleBoard } from './board';
+import { findPath, generateBoard, generateLevelBoard, hasMove, shuffleBoard, levelConfig } from './board';
 
-// 方形棋盘 6×6 ~ 10×10 五档，emoji 随机散布、留白约一半格子；
-// 生成时优先避开相邻摆放，密度 ~50% 让牌面不挤
-const SIZES = [[6, 6], [7, 7], [8, 8], [9, 9], [10, 10]];
-const PAIRS = [9, 12, 16, 20, 25];
-const [PLAY, WON] = ['play', 'won'];
-const MIN_DIFFICULTY = 1;
-const MAX_DIFFICULTY = 5;
+// 闯关制：难度由「棋盘大小 + emoji 种类 + 牌数 + 墙数 + 限时」共同决定，
+// 前 11 关逐关变难，第 11 关起全部封顶（关数无限，难度不再上升）
+const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_link__';
-const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
+const LEVEL_KEY = `${KEY_PREFIX}level`;          // 当前关卡
+const BEST_KEY = `${KEY_PREFIX}best_1`;          // 历史最高关卡（沿用「前缀+数字」以便连点标题清记录）
 const STATE_KEY = `${KEY_PREFIX}state`;
-const WALL_MODE_KEY = `${KEY_PREFIX}walls`;
-// 墙壁密度：约 15% 的格子随机成为墙
-const WALL_DENSITY = 0.15;
 
-const difficulty = ref(+(localStorage.getItem(DIFFICULTY_KEY) || 1));
+function loadLevel() {
+  return Math.max(1, Math.floor(+(localStorage.getItem(LEVEL_KEY) || 1)) || 1);
+}
+
+const level = ref(loadLevel());
+const bestLevel = ref(Math.max(level.value, Math.floor(+(localStorage.getItem(BEST_KEY) || 1)) || 1));
 const board = ref([]);
-// 当前局的墙壁网格（H×W 0/1），无墙时为 []
+// 当前局的墙壁网格（H×W 0/1），由关卡配置决定
 const walls = ref([]);
-// 墙壁模式偏好（影响新开的一局）
-const wallMode = ref(localStorage.getItem(WALL_MODE_KEY) === '1');
 const phase = ref(PLAY);
-const showResult = ref(false);
 const selected = ref(null);
 const mismatch = ref(null);
 const vanishing = ref([]);
@@ -126,25 +132,34 @@ const hintPair = ref(null);
 let lastHintPair = null;
 let idleTimer = null;
 let hintTimer = null;
-const newBest = ref(false);
-const bestTime = ref(0);
+const confirming = ref(false);
+const elapsed = ref(0);
 const timerRef = ref(null);
 
-const size = computed(() => SIZES[difficulty.value - 1]);
+const conf = computed(() => levelConfig(level.value));
+const size = computed(() => [conf.value.rows, conf.value.cols]);
 const leftPairs = computed(() => board.value.flat().filter(Boolean).length / 2);
 const timerRunning = computed(() => phase.value === PLAY);
-const wallsActive = computed(() => walls.value.length > 0 && walls.value.some(row => row.some(Boolean)));
-// 已连过至少一对（或已通关）后不可再切换墙壁模式——中途换墙会破坏进行中的局面
-const wallToggleable = computed(() => phase.value === WON
-  || leftPairs.value === PAIRS[difficulty.value - 1]);
+const timeLeft = computed(() => Math.max(0, conf.value.time - elapsed.value));
+const boardLabel = computed(() => {
+  const c = conf.value;
+  return `${c.rows}×${c.cols} · ${i18n('kindsLabel').replace('{n}', c.kinds)}`
+    + (c.walls ? ` · ${i18n('wallsLabel').replace('{n}', c.walls)}` : '');
+});
 
-function toggleWallMode() {
-  if (!wallToggleable.value) return;
-  wallMode.value = !wallMode.value;
-  if (wallMode.value) localStorage.setItem(WALL_MODE_KEY, '1');
-  else localStorage.removeItem(WALL_MODE_KEY);
-  initGame();
-}
+// 棋盘尺寸：宽高都要放得下（大关卡的 10×11 以高度为准）
+const boardStyle = computed(() => {
+  const { rows, cols } = conf.value;
+  const availW = Math.min(window.innerWidth || 420, 440) - 32;
+  const availH = Math.max(280, (window.innerHeight || 700) - 340);
+  const width = Math.min(availW, (availH * cols) / rows);
+  const cell = width / cols;
+  return {
+    '--rows': rows,
+    '--cols': cols,
+    '--font': `${Math.max(13, Math.round(cell * 0.46))}px`,
+  };
+});
 
 // 发牌序号：按阅读顺序只数有牌的格子，空白格不占号，让入场节奏均匀
 const tileOrder = computed(() => {
@@ -276,32 +291,30 @@ let winTimer = null;
 onMounted(() => {
   const savedTime = restore();
   if (savedTime == null) {
-    initGame();
+    initLevel(level.value);
   } else {
+    elapsed.value = savedTime;
     timerRef.value.restore(savedTime);
-    if (phase.value === WON) timerRef.value.stop();
+    // 恢复的是结算局面：计时停住，等玩家自己点「重玩本关 / 下一关」
+    if (phase.value !== PLAY) timerRef.value.stop();
     else pokeIdle();
   }
 });
 
 onUnmounted(clearTransient);
 
-function bestKey() {
-  return KEY_PREFIX + difficulty.value;
-}
-
 function fmt(sec) {
   return ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
 }
 
-// 恢复退出前的局面：棋盘 + 难度 + 墙壁 + 用时 + 胜负状态
+// 恢复退出前的局面：棋盘 + 关卡 + 墙壁 + 用时 + 胜负状态
 let shuffledOnRestore = false;
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!saved || !Array.isArray(saved.board) || !saved.board.length) return null;
-    const d = Math.min(MAX_DIFFICULTY, Math.max(MIN_DIFFICULTY, +(saved.difficulty || 1)));
-    const [H, W] = SIZES[d - 1];
+    const c = levelConfig(+(saved.level || 1));
+    const [H, W] = [c.rows, c.cols];
     if (saved.board.length !== H || !Array.isArray(saved.board[0]) || saved.board[0].length !== W) return null;
     let restoredWalls = [];
     if (Array.isArray(saved.walls) && saved.walls.length === H
@@ -310,10 +323,12 @@ function restore() {
     }
     let restored = saved.board.map(row => row.slice());
     const remaining = restored.flat().filter(Boolean).length;
-    bestTime.value = +(localStorage.getItem(KEY_PREFIX + d) || 0);
+    level.value = c.level;
+    if (level.value > bestLevel.value) bestLevel.value = level.value;
     if (saved.phase === WON && !remaining) {
       phase.value = WON;
-      showResult.value = true;
+    } else if (saved.phase === OVER && remaining) {
+      phase.value = OVER;
     } else if (remaining) {
       phase.value = PLAY;
       // 存档时正处于死局重排的间隙：恢复后立即重排（同样带发牌动画）
@@ -328,7 +343,6 @@ function restore() {
     } else {
       return null;
     }
-    difficulty.value = d;
     board.value = restored;
     walls.value = restoredWalls;
     if (phase.value === PLAY) startDealing();
@@ -344,17 +358,23 @@ function save() {
   localStorage.setItem(STATE_KEY, JSON.stringify({
     board: board.value,
     walls: walls.value,
-    difficulty: difficulty.value,
-    time: timerRef.value?.seconds() || 0,
+    level: level.value,
+    time: elapsed.value,
     phase: phase.value,
   }));
 }
 
 function onTimerTick() {
+  elapsed.value = timerRef.value?.seconds() || 0;
   if (phase.value !== PLAY) return;
+  // 限时到：时间用尽即失败（剩余牌没消完）
+  if (timeLeft.value <= 0) {
+    loseLevel();
+    return;
+  }
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-    saved.time = timerRef.value?.seconds() || 0;
+    saved.time = elapsed.value;
     localStorage.setItem(STATE_KEY, JSON.stringify(saved));
   } catch { /* 存档损坏时静默跳过，下一次 save() 会整体重写 */ }
 }
@@ -384,44 +404,51 @@ function clearTransient() {
   shuffleTip.value = false;
 }
 
-// 随机生成墙壁网格（先于牌生成，保证可解性判断含墙）
-function generateWalls(H, W) {
-  return Array.from({ length: H }, () => Array.from({ length: W }, () => Math.random() < WALL_DENSITY ? 1 : 0));
-}
-
-async function initGame() {
+async function initLevel(lv) {
   clearTransient();
-  const [H, W] = size.value;
-  const newWalls = wallMode.value ? generateWalls(H, W) : [];
+  confirming.value = false;
+  level.value = Math.max(1, lv);
+  localStorage.setItem(LEVEL_KEY, level.value);
+  if (level.value > bestLevel.value) {
+    bestLevel.value = level.value;
+    localStorage.setItem(BEST_KEY, bestLevel.value);
+  }
+  const c = conf.value;
+  const [H, W] = [c.rows, c.cols];
   // 先渲染空矩阵销毁全部旧牌元素再填充：牌按坐标 :key 复用，
   // 若直接换盘，同坐标的旧元素不会重播发牌动画、旧 emoji 会瞬间可见
   board.value = Array.from({ length: H }, () => Array.from({ length: W }, () => null));
-  walls.value = newWalls;
+  walls.value = [];
   await nextTick();
-  board.value = generateBoard(H, W, EMOJIS, Math.random, PAIRS[difficulty.value - 1], newWalls);
+  const { board: next, walls: nextWalls } = generateLevelBoard(H, W, EMOJIS, c);
+  board.value = next;
+  walls.value = nextWalls;
   phase.value = PLAY;
-  showResult.value = false;
   selected.value = null;
   mismatch.value = null;
-  newBest.value = false;
-  bestTime.value = +(localStorage.getItem(bestKey()) || 0);
+  elapsed.value = 0;
   timerRef.value?.reset();
   startDealing();
   pokeIdle();
   save();
 }
 
-function changeDifficulty(dir) {
-  const next = Math.min(MAX_DIFFICULTY, Math.max(MIN_DIFFICULTY, difficulty.value + dir));
-  if (next === difficulty.value) return;
-  difficulty.value = next;
-  localStorage.setItem(DIFFICULTY_KEY, next);
-  initGame();
+function nextLevel() {
+  initLevel(level.value + 1);
+}
+
+function replayLevel() {
+  initLevel(level.value);
+}
+
+function restartRun() {
+  confirming.value = false;
+  initLevel(1);
 }
 
 function onScoreReset() {
-  localStorage.removeItem(bestKey());
-  bestTime.value = 0;
+  localStorage.removeItem(BEST_KEY);
+  bestLevel.value = level.value;
 }
 
 function isSelected(r, c) {
@@ -530,20 +557,28 @@ function removePair(path, a, b) {
 }
 
 function win() {
-  const elapsed = timerRef.value?.seconds() || 0;
+  elapsed.value = timerRef.value?.seconds() || 0;
   timerRef.value?.stop();
   phase.value = WON;
-  if (!bestTime.value || elapsed < bestTime.value) {
-    localStorage.setItem(bestKey(), elapsed);
-    bestTime.value = elapsed;
-    newBest.value = true;
+  // 过关：闯关进度推进到下一关（本次局面作废，下次进入直接开新关）
+  localStorage.setItem(LEVEL_KEY, level.value + 1);
+  if (level.value + 1 > bestLevel.value) {
+    bestLevel.value = level.value + 1;
+    localStorage.setItem(BEST_KEY, bestLevel.value);
   }
-  save();
+  localStorage.removeItem(STATE_KEY);   // 结算局面不留在存档里
   // 结算遮罩等最后一对的消除动画播完再出现
-  winTimer = setTimeout(() => {
-    showResult.value = true;
-    confetti();
-  }, 600);
+  winTimer = setTimeout(confetti, 600);
+}
+
+function loseLevel() {
+  elapsed.value = timerRef.value?.seconds() || 0;
+  timerRef.value?.stop();
+  phase.value = OVER;
+  clearTimeout(idleTimer);
+  clearTimeout(hintTimer);
+  hintPair.value = null;
+  save();                                // 失败局面也存档：退出重进还是这一关，等玩家自己重玩
 }
 </script>
 
@@ -642,65 +677,34 @@ function win() {
         font-weight: bold;
         line-height: 1.2;
         font-variant-numeric: tabular-nums;
+        // 剩余时间不足 15 秒时标红提醒
+        &.urgent {
+          color: var(--del-color);
+        }
       }
     }
   }
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    height: 72px;
-    .difficulty-wrapper {
-      flex: 3.5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      .difficulty-value {
-        min-width: 40px;
-        text-align: center;
-        font-size: 16px;
-        font-weight: bold;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-    }
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .opt-half {
-      flex: 2.5;
+      flex: 1.6;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    .level-note {
+      font-size: 13px;
+      color: var(--muted-color);
+      white-space: nowrap;
     }
     .start-wrapper {
-      flex: 4;
+      flex: 1.2;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-    .opt-icon {
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      // 视觉上仍是 28px 小方块，用伪元素把点击热区扩到 44×44（不占布局）
-      &::after {
-        content: "";
-        position: absolute;
-        inset: -8px;
-      }
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      background: var(--card-bg-color);
-      color: var(--text-color);
-      font-size: 15px;
-      &.disable {
-        color: var(--border-color);
-        cursor: not-allowed;
-      }
     }
   }
   .game-icon {
@@ -712,12 +716,12 @@ function win() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
-  }
-  // 已开局后墙壁开关禁用态
-  .wall-toggle-disable {
-    opacity: 0.4;
-    cursor: not-allowed;
+    border-radius: var(--radius-tile);
+    &.ghost {
+      background: var(--card-bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
   }
   .game-area {
     position: relative;
@@ -733,31 +737,7 @@ function win() {
     aspect-ratio: var(--cols) / var(--rows);
     background: var(--board-bg);
     border-radius: var(--card-radius);
-    &.size-1 {
-      --rows: 6;
-      --cols: 6;
-      .tile { font-size: 26px; }
-    }
-    &.size-2 {
-      --rows: 7;
-      --cols: 7;
-      .tile { font-size: 23px; }
-    }
-    &.size-3 {
-      --rows: 8;
-      --cols: 8;
-      .tile { font-size: 21px; }
-    }
-    &.size-4 {
-      --rows: 9;
-      --cols: 9;
-      .tile { font-size: 19px; }
-    }
-    &.size-5 {
-      --rows: 10;
-      --cols: 10;
-      .tile { font-size: 17px; }
-    }
+    .tile { font-size: var(--font); }
   }
   // 连线层比棋盘四周各大一格（虚拟外圈），viewBox 与格子等比例，
   // 格子中心严格落在 (col+1.5, row+1.5)，端点不会偏移
@@ -876,7 +856,7 @@ function win() {
     height: 100%;
     left: 0;
     top: 0;
-    z-index: 2;
+    z-index: 4;
     border-radius: var(--card-radius);
     background: var(--mask-color);
     color: var(--win-color);
@@ -887,6 +867,75 @@ function win() {
     align-items: center;
     justify-content: center;
     gap: 10px;
+    padding: 12px;
+    box-sizing: border-box;
+    text-align: center;
+    &.lose {
+      color: var(--lose-color);
+    }
+    .final-time {
+      font-size: 26px;
+    }
+    .result-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 6px;
+    }
+  }
+}
+
+.confirm-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.confirm-box {
+  width: calc(100% - 64px);
+  max-width: 320px;
+  padding: 20px 20px 16px;
+  box-sizing: border-box;
+  border-radius: var(--card-radius);
+  background: var(--card-bg-color);
+  color: var(--text-color);
+  box-shadow: var(--card-shadow);
+  .confirm-title {
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: bold;
+  }
+  .confirm-msg {
+    margin: 0 0 16px;
+    font-size: 14px;
+    opacity: 0.8;
+    line-height: 1.5;
+  }
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    button {
+      cursor: pointer;
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: var(--radius-tile);
+      border: 0 none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .confirm-cancel {
+      background: var(--key-bg);
+      color: var(--text-color);
+    }
+    .confirm-ok {
+      background: var(--primary-bg);
+      color: #fff;
+      font-weight: bold;
+    }
   }
 }
 </style>

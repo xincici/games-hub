@@ -52,10 +52,10 @@ src/
     ├── g2048/            # Game2048.vue + i18n.js（route /2048，key 前缀 __game_2048__；新开局与恢复存档都按行列顺序逐张入场）
     ├── snake/            # SnakeGame.vue（canvas 渲染）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
     ├── match/            # MatchGame.vue（emoji 对对碰）+ i18n.js（route /match，key 前缀 __emoji_match__）
-    ├── link/             # LinkGame.vue（emoji 连连看）+ board.js（≤2 转弯路径查找 + 随机生成 + 死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
+    ├── link/             # LinkGame.vue（emoji 连连看 · 闯关制：限定时间内清空全盘过关，难度 = 棋盘大小（6×6→10×11）+ emoji 种类 + 牌数 + 墙数 + 限时，第 11 关起全部封顶但关数无限；同一种 emoji 可出多对（偶数张即可）；过关/失败浮层 + 「回到第 1 关」二次确认）+ board.js（纯逻辑：≤2 转弯路径查找、关卡曲线 CURVE 与 levelConfig、buildPairPool 多对发牌、generateLevelBoard/generateWalls、死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
     ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ i18n.js（route /detective，key 前缀 __emoji_detective__）
     ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ i18n.js（route /hunter，key 前缀 __emoji_hunter__）
-    ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画；新牌一律从「滑动来源侧」边缘补进（该侧满则退到最近一条线）、盘面上 1 与 2 的个数差恒 ≤ 4（draw/balancedValue 两道校正，开局 9 张同样受约束）；新开局与恢复存档都按行列顺序逐张入场）+ i18n.js（route /three，key 前缀 __threes_game__）
+    ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画；新牌一律从「滑动来源侧」边缘补进（该侧满则退到最近一条线）、盘面上 1 与 2 的个数差恒 ≤ 4（draw/balancedValue 两道校正，开局 9 张同样受约束）；失败局面同样存档恢复（计时停在最终用时，由玩家自己点「新游戏」开新局）；新开局与恢复存档都按行列顺序逐张入场）+ i18n.js（route /three，key 前缀 __threes_game__）
     ├── crush/            # CrushGame.vue（emoji 消消乐 · 闯关制：限定步数内达到目标分过关，面板 7×7→9×10 后固定、目标分与墙随关卡增长；💣 炸弹（相邻格被消除即引爆，炸掉周围 3×3、每格 25 分并震动棋盘、可链式引爆）、💎 万能元素（连线判定时可充当任意种类）、🧱 墙（不可交换/消除，但 emoji 下落时穿过）；炸弹与万能元素持续 0.95~1.05 呼吸缩放；开局/恢复/过关都逐格入场）+ board.js（纯逻辑：关卡曲线 CURVE + 生成（无现成三连且有解）+ 通配符感知的连线判定 + explode 链式爆炸 + 穿墙重力 + 计分 + 离线校准用的 findBestSwap/resolveTurn）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
     ├── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时；开局/恢复时格子与数字逐格入场）+ sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
     └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（关数越高 emoji 种类与层数越多）、洗牌每关限一次、计时、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 标记做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
@@ -77,7 +77,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - 2048：`__game_2048__*`
   - 贪吃蛇：`__snake_game__*`（难度 `__snake_game__difficulty`，跨难度共享最佳分 `__snake_game__best`，穿墙开关 `__snake_game__through_wall`）
   - Emoji 对对碰：`__emoji_match__*`（难度 `__emoji_match__difficulty`，各难度最佳用时存为前缀+难度数字，如 `__emoji_match__1`）
-  - Emoji 连连看：`__emoji_link__*`（难度 `__emoji_link__difficulty`，局面存档 `__emoji_link__state`，墙壁模式偏好 `__emoji_link__walls`，各难度最佳用时存为前缀+难度数字，如 `__emoji_link__1`）
+  - Emoji 连连看：`__emoji_link__*`（闯关进度 `__emoji_link__level`=当前关卡，历史最高关卡 `__emoji_link__best_1`（沿用「前缀+数字」以便连点标题清记录），局面存档 `__emoji_link__state`（盘面、墙、关卡、已用秒数、胜负状态，过关后清除、失败后保留）；旧的 `__emoji_link__difficulty`、`__emoji_link__walls` 与 `__emoji_link__1..5` 已废弃）
   - Emoji 侦探：`__emoji_detective__*`（关卡进度 `__emoji_detective__level`，最高关卡 `__emoji_detective__best`）
   - Emoji 猎手：`__emoji_hunter__*`（关卡进度 `__emoji_hunter__level`，最高关卡 `__emoji_hunter__best`）
   - Threes：`__threes_game__*`（局面存档 `__threes_game__state`，最高分 `__threes_game__best`）
