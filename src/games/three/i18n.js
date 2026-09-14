@@ -12,6 +12,8 @@ export default {
     help2: 'Score is the sum of all tiles on the board: 1s and 2s are worth nothing, 3→3, 6→9, 12→27, 24→81 …',
     help3: 'The small number in a tile\'s corner is that tile\'s score.',
     help4: 'New tiles come from a shuffled deck of 1s, 2s and 3s; the next tile is previewed in the top bar.',
+    help5: 'A new tile always enters from the edge you swiped away from: swipe right and it appears in the leftmost column, and so on for the other directions.',
+    help6: 'The board never holds four more of one of 1 and 2 than of the other, so one of them can never take over the board.',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -28,6 +30,8 @@ export default {
     help2: '得分是盘面上所有牌的分值之和：1 和 2 不计分，3→3 分、6→9 分、12→27 分、24→81 分……',
     help3: '每张牌右上角的小数字就是这张牌的分值。',
     help4: '新牌来自一叠洗好的 1、2、3 牌堆，顶部「下一张」随时预告下一张牌。',
+    help5: '新牌总是从你「滑走的反方向」那一侧边缘进来：向右滑就从最左边一列进，其它方向同理。',
+    help6: '盘面上 1 与 2 的个数差不会超过 4 个，所以不会出现整盘全是 1 或全是 2。',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }

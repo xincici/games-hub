@@ -105,6 +105,13 @@ function onKeyUp(e) {
 
 // ---------- 牌堆（经典配比 12×1、12×2、4×3，抽空重洗） ----------
 
+// 盘面上 1 与 2 的个数差上限：超过就强制抽另一个，避免整盘全是 1 / 全是 2
+const BALANCE = 4;
+
+function countOn(board, value) {
+  return board.reduce((n, t) => n + (t.value === value ? 1 : 0), 0);
+}
+
 function newDeck() {
   const d = [...Array(12).fill(1), ...Array(12).fill(2), ...Array(12 * 0 + 4).fill(3)];
   for (let i = d.length - 1; i > 0; i--) {
@@ -114,9 +121,61 @@ function newDeck() {
   return d;
 }
 
-function draw() {
+// 抽牌。board 传「这张牌将要落上去的盘面」：
+// 新开局时传正在拼装的板子，移动时传补牌后的盘面，这样平衡约束在两种情况都成立
+function draw(board = tiles.value) {
   if (!deck.length) deck = newDeck();
-  return deck.pop();
+  let want = 0;
+  const ones = countOn(board, 1);
+  const twos = countOn(board, 2);
+  if (ones - twos >= BALANCE) want = 2;
+  else if (twos - ones >= BALANCE) want = 1;
+  if (!want) return deck.pop();
+  // 牌堆里恰好没有想要的数字时补一张进去，保证一定拿得到
+  let idx = deck.lastIndexOf(want);
+  if (idx < 0) {
+    deck.push(want);
+    idx = deck.length - 1;
+  }
+  return deck.splice(idx, 1)[0];
+}
+
+// 落牌前的兜底校正：预告的数值若会打破平衡，就换成另一个（原值塞回牌堆）
+function balancedValue(value, board) {
+  if (value !== 1 && value !== 2) return value;
+  const ones = countOn(board, 1);
+  const twos = countOn(board, 2);
+  if (value === 1 && ones - twos >= BALANCE) {
+    deck.push(1);
+    return 2;
+  }
+  if (value === 2 && twos - ones >= BALANCE) {
+    deck.push(2);
+    return 1;
+  }
+  return value;
+}
+
+// 新牌落点：永远从「滑动的来源侧」那一行/列加入（向右滑 = 牌往右走 = 从最左一列进），
+// 该边已满时退到离该侧最近的一条线，仍然贴着来源方向
+function spawnCell(dir, board) {
+  const empty = [];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (!board.some(t => t.row === r && t.col === c)) empty.push([r, c]);
+    }
+  }
+  if (!empty.length) return null;
+  // 到「来源侧」的距离：向右滑时最左列（c=0）距离 0，其余方向同理
+  const depth = ([r, c]) => {
+    if (dir === 'right') return c;
+    if (dir === 'left') return SIZE - 1 - c;
+    if (dir === 'down') return r;
+    return SIZE - 1 - r;
+  };
+  const min = Math.min(...empty.map(depth));
+  const pool = empty.filter(p => depth(p) === min);
+  return pool[~~(Math.random() * pool.length)];
 }
 
 // ---------- 合成规则与得分 ----------
@@ -209,17 +268,12 @@ function move(dir) {
     mergeOps.forEach(m => {
       next.push({ id: ++tileId, value: m.value, row: m.row, col: m.col, merged: true });
     });
-    // 补进一张新牌
-    const empty = [];
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
-        if (!next.some(t => t.row === r && t.col === c)) empty.push([r, c]);
-      }
-    }
-    if (empty.length) {
-      const [r, c] = empty[~~(Math.random() * empty.length)];
-      next.push({ id: ++tileId, value: nextTile.value, row: r, col: c, fresh: true });
-      nextTile.value = draw();
+    // 补进一张新牌：位置永远是「滑动的来源侧」边缘（向右滑就从最左一列进）
+    const [r, c] = spawnCell(dir, next) || [];
+    if (r !== undefined) {
+      const value = balancedValue(nextTile.value, next);
+      next.push({ id: ++tileId, value, row: r, col: c, fresh: true });
+      nextTile.value = draw(next);
     }
     tiles.value = next;
     score.value = next.reduce((s, t) => s + tileScore(t.value), 0);
@@ -246,10 +300,12 @@ function initGame() {
   for (let i = 0; i < 9; i++) {
     const j = ~~(Math.random() * cells.length);
     const [r, c] = cells.splice(j, 1)[0];
-    board.push({ id: ++tileId, value: draw(), row: r, col: c, fresh: true });
+    // 逐张抽出、逐张计入 board，开局的 9 张牌同样满足 1/2 平衡
+    const value = draw(board);
+    board.push({ id: ++tileId, value, row: r, col: c, fresh: true });
   }
   tiles.value = board;
-  nextTile.value = draw();
+  nextTile.value = draw(board);
   phase.value = GAMING;
   score.value = 0;
   timerRef.value?.reset();
