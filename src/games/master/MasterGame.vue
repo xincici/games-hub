@@ -11,6 +11,8 @@
         <span class="stat-label">{{ i18n('remain') }}</span>
         <span class="stat-value">{{ tiles.length }}</span>
       </div>
+      <!-- 本关进度条（已消除卡片 / 本关总卡片） -->
+      <div class="progress"><div class="progress-bar" :style="{ width: `${progress}%` }"></div></div>
     </div>
     <div class="card opt-area">
       <div class="opt-half">
@@ -77,7 +79,7 @@
     <Teleport to="body">
       <div v-if="confirming" class="confirm-mask" @click.self="confirming = false">
         <div class="confirm-box">
-          <p class="confirm-title">🔄 {{ i18n('confirmTitle') }}</p>
+          <p class="confirm-title">{{ i18n('confirmTitle') }}</p>
           <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
           <div class="confirm-actions">
             <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
@@ -97,7 +99,7 @@ import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
-import { TRAY_SIZE, generateTiles, freeIds, insertIndex, shuffleEmojis } from './board';
+import { TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig, shuffleEmojis } from './board';
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_master__';
@@ -135,6 +137,14 @@ const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
 const canShuffle = computed(() =>
   phase.value === PLAY && !flights.value.length && !clearingTray.value && !shuffleUsed.value && tiles.value.length > 1);
 
+
+// 本关进度：已消除的卡片占本关总卡片的比例（入场动画期间按满盘算 0%）
+const progress = computed(() => {
+  const total = levelConfig(level.value).tiles;
+  if (!total) return 0;
+  const left = tiles.value.length + tray.value.filter(c => !c.clearing).length;
+  return Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
+});
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
 const layout = computed(() => {
   const avail = Math.min(window.innerWidth || 420, 440) - 32;
@@ -659,6 +669,8 @@ function restore() {
     opacity: 0.6;
   }
   .score-area {
+    position: relative;
+    overflow: hidden;
     margin-top: 70px;
     display: flex;
     align-items: center;
@@ -682,11 +694,25 @@ function restore() {
       }
     }
   }
+  // 顶部卡片底部的本关进度条
+  .score-area .progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--border-color);
+    .progress-bar {
+      height: 100%;
+      background: var(--primary-bg);
+      transition: width 0.3s ease;
+    }
+  }
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    height: 72px;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .opt-half {
       flex: 2.8;
       display: flex;

@@ -16,6 +16,8 @@
         <span class="stat-label">{{ i18n('leftPairs') }}</span>
         <span class="stat-value">{{ leftPairs }}</span>
       </div>
+      <!-- 本关进度条（已消除对数 / 总对数） -->
+      <div class="progress"><div class="progress-bar" :style="{ width: `${progress}%` }"></div></div>
     </div>
     <div class="card opt-area">
       <div class="opt-half">
@@ -136,6 +138,11 @@ const size = computed(() => [conf.value.rows, conf.value.cols]);
 const leftPairs = computed(() => board.value.flat().filter(Boolean).length / 2);
 const timerRunning = computed(() => phase.value === PLAY);
 const timeLeft = computed(() => Math.max(0, conf.value.time - elapsed.value));
+// 本关进度：已消除的对数占本关总对数的比例
+const progress = computed(() => {
+  const total = conf.value.pairs;
+  return total ? Math.min(100, Math.round(((total - leftPairs.value) / total) * 100)) : 0;
+});
 const boardLabel = computed(() => {
   const c = conf.value;
   return `${c.rows}×${c.cols} · ${i18n('kindsLabel').replace('{n}', c.kinds)}`
@@ -655,6 +662,8 @@ function loseLevel() {
     opacity: 0.6;
   }
   .score-area {
+    position: relative;
+    overflow: hidden;
     margin-top: 70px;
     display: flex;
     align-items: center;
@@ -679,6 +688,19 @@ function loseLevel() {
         &.urgent {
           color: var(--del-color);
         }
+      }
+    }
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--border-color);
+      .progress-bar {
+        height: 100%;
+        background: var(--primary-bg);
+        transition: width 0.3s ease;
       }
     }
   }

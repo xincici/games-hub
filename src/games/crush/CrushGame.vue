@@ -26,10 +26,6 @@
     </div>
     <div class="card opt-area">
       <div class="opt-half">
-        <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" />
-      </div>
-      <div class="divider"></div>
-      <div class="opt-half">
         <span class="level-note">{{ boardLabel }} · {{ i18n('kindsLabel').replace('{n}', conf.kinds) }}</span>
       </div>
       <div class="divider"></div>
@@ -90,7 +86,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import CountTimer from '@/shared/CountTimer.vue';
 import { i18n } from '@/shared/i18n';
 import confetti from '@/shared/confetti';
 import { EMOJIS } from '@/shared/emojis';
@@ -129,13 +124,11 @@ const blastSet = ref(new Set());
 const cascade = ref(0);
 const shaking = ref(false);
 const confirming = ref(false);
-const timerRef = ref(null);
 
 const conf = computed(() => levelConfig(level.value));
 const boardLabel = computed(() => `${conf.value.cols}×${conf.value.rows}`);
 const target = computed(() => conf.value.target);
 const progress = computed(() => Math.min(100, Math.round((score.value / target.value) * 100)));
-const timerRunning = computed(() => phase.value === PLAY);
 
 // 格子尺寸：宽度与高度都要放得下（9×10 时以宽度为准）
 const boardStyle = computed(() => {
@@ -290,7 +283,6 @@ function initLevel(lv) {
   score.value = 0;
   moves.value = c.moves;
   phase.value = PLAY;
-  timerRef.value?.reset();
   dealBoard();
   save();
 }
@@ -487,7 +479,6 @@ function finishTurn() {
 
 function winLevel() {
   if (phase.value !== PLAY) return;
-  timerRef.value?.stop();
   removeState();
   confetti();
   if (level.value + 1 > bestLevel.value) {
@@ -499,7 +490,6 @@ function winLevel() {
 
 function loseLevel() {
   if (phase.value !== PLAY) return;
-  timerRef.value?.stop();
   removeState();
   phase.value = OVER;
 }
@@ -516,7 +506,6 @@ function save() {
     level: level.value,
     score: score.value,
     moves: moves.value,
-    time: timerRef.value?.seconds() || 0,
     phase: phase.value,
   }));
 }
@@ -536,20 +525,10 @@ function restore() {
     score.value = +saved.score || 0;
     moves.value = Math.min(c.moves, Math.max(0, +saved.moves));
     phase.value = PLAY;
-    timerRef.value?.restore(saved.time || 0);
     return true;
   } catch {
     return false;
   }
-}
-
-function onTimerTick() {
-  if (phase.value !== PLAY) return;
-  try {
-    const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-    saved.time = timerRef.value?.seconds() || 0;
-    localStorage.setItem(STATE_KEY, JSON.stringify(saved));
-  } catch { /* 存档损坏时静默跳过 */ }
 }
 
 function onScoreReset() {
