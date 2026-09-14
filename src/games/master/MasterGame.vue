@@ -472,59 +472,56 @@ function restore() {
 
 <style scoped lang="scss">
 // 「新游戏」二次确认弹窗（Teleport 到 body，层级要盖住帮助弹窗与飞行卡片）
+// 与连连看 / 消消乐逐字一致的「新游戏」二次确认弹窗样式，三处不要各改各的
 .confirm-mask {
   position: fixed;
   inset: 0;
   z-index: 120;
-  background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 24px;
+  background: rgba(0, 0, 0, 0.55);
 }
 .confirm-box {
-  width: 100%;
+  width: calc(100% - 64px);
   max-width: 320px;
-  box-sizing: border-box;
   padding: 20px 20px 16px;
+  box-sizing: border-box;
   border-radius: var(--card-radius);
   background: var(--card-bg-color);
   color: var(--text-color);
   box-shadow: var(--card-shadow);
-  text-align: center;
-  animation: card-pop 0.2s ease backwards;
   .confirm-title {
-    margin: 0 0 10px;
+    margin: 0 0 8px;
     font-size: 17px;
     font-weight: bold;
   }
   .confirm-msg {
-    margin: 0 0 18px;
+    margin: 0 0 16px;
     font-size: 14px;
-    line-height: 1.6;
     opacity: 0.8;
+    line-height: 1.5;
   }
   .confirm-actions {
     display: flex;
+    justify-content: flex-end;
     gap: 10px;
     button {
-      flex: 1;
-      padding: 10px 0;
-      font-size: 14px;
-      font-weight: bold;
-      border-radius: 8px;
       cursor: pointer;
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: var(--radius-tile);
+      border: 0 none;
       -webkit-tap-highlight-color: transparent;
     }
     .confirm-cancel {
-      border: 1px solid var(--border-color);
-      background: var(--card-bg-color);
+      background: var(--key-bg);
       color: var(--text-color);
     }
     .confirm-ok {
-      border: 0 none;
       background: var(--primary-bg);
       color: #fff;
+      font-weight: bold;
     }
   }
 }
