@@ -26,6 +26,7 @@ export default {
     help5: '💎 Wildcard: counts as any emoji when checking for a match, so it can complete a line by itself, and it joins whichever line it touches — either side counts. A line made of nothing but wildcards never clears, though. Both bomb and wildcard keep pulsing as a hint.',
     help6: '🧱 Wall: cannot be swapped or cleared, but emojis fall straight through it. Higher levels pack in more walls.',
     help7: 'When no swap can make a match, the board reshuffles automatically.',
+    help8: 'Stuck? After 6 seconds without any input a hint appears: the two emojis worth swapping pulse a couple of times.',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -56,6 +57,7 @@ export default {
     help5: '💎 万能元素：判定连线时可以当作任意一种 emoji，能独自把一段连线补齐；紧挨着哪一段连线就跟着哪一段一起消（左右两边都算），但一整段全是钻石时不会自己消除。炸弹和万能元素都会持续呼吸缩放作为提示。',
     help6: '🧱 墙：不能交换也不能消除，但 emoji 下落时会直接穿过它。关卡越高墙越多。',
     help7: '盘面无解时会自动重新洗牌。',
+    help8: '卡住了？6 秒没有操作时会给出提示：该交换的那两个 emoji 会呼吸两下。',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }

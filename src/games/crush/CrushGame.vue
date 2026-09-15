@@ -91,7 +91,7 @@ import confetti from '@/shared/confetti';
 import { EMOJIS } from '@/shared/emojis';
 import {
   WALL, BOMB, WILD, isWall, levelConfig, generateBoard, findMatches, explode,
-  hasMatchAfterSwap, adjacent, hasAnyMove, applyGravity,
+  hasMatchAfterSwap, adjacent, hasAnyMove, applyGravity, isTile,
   scoreForMatches, scoreForBlast, reshuffle,
 } from './board';
 
@@ -137,21 +137,98 @@ const target = computed(() => conf.value.target);
 const progress = computed(() => Math.min(100, Math.round((score.value / target.value) * 100)));
 
 // 格子尺寸：宽度与高度都要放得下（9×10 时以宽度为准）
-const boardStyle = computed(() => {
+const GAP = 4;
+const metrics = computed(() => {
   const { cols, rows } = conf.value;
   const availW = Math.min(window.innerWidth || 420, 440) - 32;
   const availH = Math.max(300, (window.innerHeight || 700) - 346);
   const cell = Math.min(
     96,
-    Math.floor((availW - 16 - (cols - 1) * 4) / cols),
-    Math.floor((availH - 16 - (rows - 1) * 4) / rows),
+    Math.floor((availW - 16 - (cols - 1) * GAP) / cols),
+    Math.floor((availH - 16 - (rows - 1) * GAP) / rows),
   );
+  return { cols, rows, cell };
+});
+const boardStyle = computed(() => {
+  const { cols, cell } = metrics.value;
   return {
     '--n': cols,
     '--cell': `${cell}px`,
     '--font': `${Math.floor(cell * 0.55)}px`,
   };
 });
+
+// ---------- 空闲提示 ----------
+// 6s 没有任何操作 → 找一对能消的 emoji，让这两张牌的 emoji 呼吸两下
+// （只呼吸，不加边框 / 箭头 / 发光）；呼吸完就收起，
+// 之后又静置 6s 还没动作，就换另一对提示
+const IDLE_HINT_MS = 6000;
+const HINT_MS = 1700;            // 两次呼吸（0.8s × 2，CSS 里同值）+ 一点余量
+const hintSwap = ref(null);      // { a, b } 两个格子的下标
+let lastHints = [];              // 最近提示过的几对（避免连着几次都是同一对）
+let idleTimer = null;
+let hintTimer = null;
+
+// 任何玩家交互后调用：收起提示并重新起 6s 计时。
+// keepLast=true 用在提示自然播完那一次——保留上一对，下一次好换一对
+function pokeIdle(keepLast = false) {
+  hintSwap.value = null;
+  if (!keepLast) lastHints = [];
+  clearTimeout(idleTimer);
+  clearTimeout(hintTimer);
+  if (phase.value !== PLAY) return;
+  idleTimer = setTimeout(showHint, IDLE_HINT_MS);
+}
+
+const isHinted = idx => !!hintSwap.value && (hintSwap.value.a === idx || hintSwap.value.b === idx);
+
+const samePair = (p, q) => !!q
+  && ((p.a === q.a && p.b === q.b) || (p.a === q.b && p.b === q.a));
+
+// 扫出所有能消的交换，取「消得最多」的那一档；同档里随机挑一个，
+// 并排除最近提示过的那几对（都排除完了才退回到只排除上一次）
+function pickHint() {
+  const { cols, rows } = conf.value;
+  const board = cells.value;
+  const found = [];
+  for (let i = 0; i < board.length; i++) {
+    if (!isTile(board[i])) continue;
+    const r = ~~(i / cols);
+    const c = i % cols;
+    const pairs = [];
+    if (c + 1 < cols) pairs.push([i, i + 1]);
+    if (r + 1 < rows) pairs.push([i, i + cols]);
+    for (const [a, b] of pairs) {
+      if (!hasMatchAfterSwap(board, cols, rows, a, b)) continue;
+      const trial = [...board];
+      [trial[a], trial[b]] = [trial[b], trial[a]];
+      found.push({ a, b, size: findMatches(trial, cols, rows).size });
+    }
+  }
+  if (!found.length) return null;
+  found.sort((x, y) => y.size - x.size);
+  const fresh = found.filter(p => !lastHints.some(h => samePair(p, h)));
+  const list = fresh.length ? fresh : found.filter(p => !samePair(p, lastHints[0]));
+  const pool = list.length ? list : found;
+  const top = pool.filter(p => p.size === pool[0].size);
+  return top[~~(Math.random() * top.length)];
+}
+
+function showHint() {
+  // 发牌 / 连锁结算中不打扰，等盘面稳定后再来
+  if (phase.value !== PLAY || busy || dealing) {
+    idleTimer = setTimeout(showHint, IDLE_HINT_MS);
+    return;
+  }
+  const pick = pickHint();
+  if (!pick) {
+    idleTimer = setTimeout(showHint, IDLE_HINT_MS);
+    return;
+  }
+  hintSwap.value = { a: pick.a, b: pick.b };
+  lastHints = [hintSwap.value, ...lastHints].slice(0, 3);
+  hintTimer = setTimeout(() => pokeIdle(true), HINT_MS);
+}
 
 let busy = false;
 let dealing = false;
@@ -163,7 +240,10 @@ let touchFrom = -1;
 let touchHandled = false;
 
 onMounted(() => {
+  // restore() 成功时不会走 initLevel，那条路上的空闲计时要自己补上，
+  // 否则「接着上次的局面玩」时永远不会有提示
   if (!restore()) initLevel(level.value);
+  else pokeIdle();
   window.addEventListener('resize', onResize);
 });
 
@@ -172,6 +252,8 @@ onUnmounted(() => {
   clearTimeout(resetTimer);
   clearTimeout(dealTimer);
   clearTimeout(shakeTimer);
+  clearTimeout(idleTimer);
+  clearTimeout(hintTimer);
   window.removeEventListener('resize', onResize);
 });
 
@@ -196,6 +278,7 @@ function gemClasses(gem) {
   if (swapPair.value.includes(gem.idx)) out.push('swapping');
   if (matchedSet.value.has(gem.idx)) out.push('matched');
   if (blastSet.value.has(gem.idx)) out.push('blasting');
+  if (isHinted(gem.idx)) out.push('hinting');
   if (gem.fresh) out.push('fresh');
   if (gem.fall != null) out.push('falling');
   if (gem.dealIdx != null) out.push('dealt');
@@ -295,6 +378,7 @@ function initLevel(lv) {
   phase.value = PLAY;
   dealBoard();
   save();
+  pokeIdle();       // 新的一局重新起 6s 空闲计时
 }
 
 function nextLevel() {
@@ -341,6 +425,7 @@ function playDeal() {
 // ---------- 交互 ----------
 
 function onCellClick(idx) {
+  pokeIdle();                       // 玩家有动作 → 收起提示并重新计时
   if (phase.value !== PLAY || busy || dealing) return;
   if (!isTileAt(idx)) return;                 // 墙 / 空格不可选
   if (touchHandled) { touchHandled = false; return; }
@@ -365,11 +450,13 @@ function isTileAt(idx) {
 }
 
 function onTouchStart(e) {
+  pokeIdle();
   const cell = touchTargetCell(e.touches[0]);
   touchFrom = cell;
 }
 
 function onTouchMove(e) {
+  pokeIdle();
   if (touchFrom < 0 || phase.value !== PLAY || busy) return;
   const cell = touchTargetCell(e.touches[0]);
   if (cell >= 0 && cell !== touchFrom && adjacent(touchFrom, cell, conf.value.cols)) {
@@ -482,7 +569,7 @@ function shakeBoard() {
 
 function finishTurn() {
   busy = false;
-  if (phase.value !== PLAY) return;
+  if (phase.value !== PLAY) { pokeIdle(); return; }
   if (score.value >= target.value) { winLevel(); return; }
   if (moves.value <= 0) { loseLevel(); return; }
   if (!hasAnyMove(cells.value, conf.value.cols, conf.value.rows, conf.value.kinds)) {
@@ -491,6 +578,7 @@ function finishTurn() {
     selected.value = -1;
   }
   save();
+  pokeIdle();       // 盘面稳定了，重新起 6s 空闲计时
 }
 
 function winLevel() {
@@ -580,6 +668,13 @@ function onScoreReset() {
 @keyframes deal-in {
   from { transform: scale(0.2); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+// 提示时牌面呼吸（与连连看同款节奏：放大再缩一下）
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.2); }
+  75% { transform: scale(0.8); }
 }
 
 @keyframes swap-shake {
@@ -791,6 +886,11 @@ function onScoreReset() {
     }
     &.swapping {
       animation: swap-shake 0.4s ease;
+    }
+    // 提示到的那两张牌：只让 emoji 呼吸两下（不加边框 / 外发光 / 箭头）
+    &.hinting .face {
+      display: inline-block;
+      animation: breathe 0.8s ease-in-out 2;
     }
     &.fresh {
       animation: drop-in 0.3s ease-out;
