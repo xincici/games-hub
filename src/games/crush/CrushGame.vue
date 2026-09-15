@@ -756,6 +756,10 @@ function onScoreReset() {
     justify-content: center;
     width: var(--cell);
     height: var(--cell);
+    // 必须 border-box：否则 1px 边框会画在 --cell 之外，整块牌变成 34+2px，
+    // 底色（炸弹/万能元素是有色的）就会比下面的格子大一圈、往右下溢出 1px，
+    // 看起来像「背景色和边框错位、没有重合」
+    box-sizing: border-box;
     border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     border: 1px solid var(--tile-border-color);

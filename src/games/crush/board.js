@@ -136,37 +136,39 @@ export function generateBoard(cols, rows, kinds, opts = {}, rand = Math.random) 
 }
 
 // ---------- 连线判定（万能元素可充当任意种类） ----------
-
+// 规则：一条线（行 / 列）上，某个种类的连续块 = 连续的「该种 emoji 或钻石」，
+// 块长度 ≥ 3 且块里真的有该种 emoji，整块（含钻石）一起消。
+// 按种类分别扩展，钻石就能跟着它旁边真正成组的那一边走——
+// 老的「从左到右一次扫描」写法会把钻石判给左边那一组，
+// 于是 🍎💎🍌🍌🍌 里紧挨着三连香蕉的钻石反而不会被消掉。
+// 整块全是钻石时不消（钻石不能自己凑一组把自己消掉）
 function scanLine(board, line, matched) {
-  let run = [];
-  let kind = null;
-  const flush = () => {
-    if (run.length >= 3) run.forEach(i => matched.add(i));
-    run = [];
-    kind = null;
-  };
+  const kinds = new Set();
   for (const idx of line) {
     const v = board[idx];
-    if (v === WILD) {
-      run.push(idx);          // 通配：可以接在任何一段里
-      continue;
-    }
-    if (!isEmoji(v)) {
-      flush();
-      continue;
-    }
-    if (kind === null) {
-      kind = v;
-      run.push(idx);
-    } else if (v === kind) {
-      run.push(idx);
-    } else {
-      flush();
-      kind = v;
-      run = [idx];
-    }
+    if (isEmoji(v)) kinds.add(v);
   }
-  flush();
+  for (const kind of kinds) {
+    let run = [];
+    let real = 0;
+    const flush = () => {
+      if (run.length >= 3 && real) run.forEach(i => matched.add(i));
+      run = [];
+      real = 0;
+    };
+    for (const idx of line) {
+      const v = board[idx];
+      if (v === kind) {
+        run.push(idx);
+        real++;
+      } else if (v === WILD) {
+        run.push(idx);
+      } else {
+        flush();
+      }
+    }
+    flush();
+  }
 }
 
 export function findMatches(board, cols, rows) {
