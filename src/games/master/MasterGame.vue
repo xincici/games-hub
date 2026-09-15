@@ -29,7 +29,7 @@
           v-for="tile in tiles"
           :key="`${gameId}-${tile.id}`"
           class="tile"
-          :class="{ covered: !freeSet.has(tile.id) }"
+          :class="[`depth-${coverDepth.get(tile.id) || 0}`, { covered: !freeSet.has(tile.id) }]"
           :style="tileStyle(tile)"
           @click="pick(tile, $event)"
         >{{ tile.emoji }}</div>
@@ -92,7 +92,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
-import { TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig } from './board';
+import { TILE_UNITS, TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig } from './board';
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_master__';
@@ -122,6 +122,23 @@ let winTimer = null;
 const freeSet = computed(() => freeIds(tiles.value));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
 
+// 覆盖层级：压在这张牌上面的卡片数（0 张 = 亮色可点）。只用于视觉——
+// 压得越深越透明，堆叠的层次感就出来了；判定可点击与否仍走 freeIds
+const MAX_COVER_DEPTH = 4;   // 更深的一律按最深一档算（层级只影响视觉）
+const coverDepth = computed(() => {
+  const list = tiles.value;
+  const map = new Map();
+  for (const tile of list) {
+    let n = 0;
+    for (const other of list) {
+      if (other.layer <= tile.layer) continue;
+      if (Math.abs(other.x - tile.x) < TILE_UNITS && Math.abs(other.y - tile.y) < TILE_UNITS) n++;
+    }
+    map.set(tile.id, Math.min(n, MAX_COVER_DEPTH));
+  }
+  return map;
+});
+
 // 本关的层级与 emoji 种类（写在操作区，和连连看 / 消消乐的盘面信息一致）
 const conf = computed(() => levelConfig(level.value));
 const boardLabel = computed(() => {
@@ -137,9 +154,11 @@ const progress = computed(() => {
   return Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
 });
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
+// 游戏区做成一张带底色的卡片（和连连看 / 消消乐的棋盘一样），内缩 BOARD_PAD 留出边框
+const BOARD_PAD = 8;
 const layout = computed(() => {
   const avail = Math.min(window.innerWidth || 420, 440) - 32;
-  const unit = +(avail / 14).toFixed(2);
+  const unit = +(((avail - BOARD_PAD * 2) / 14)).toFixed(2);
   const tile = +(unit * 2).toFixed(2);
   const gap = 6;
   const slot = +(((avail - 16) - gap * (TRAY_SIZE - 1)) / TRAY_SIZE).toFixed(2);
@@ -155,7 +174,8 @@ const layout = computed(() => {
       '--slot': `${slot}px`,
       '--slot-gap': `${gap}px`,
       '--tray-fs': `${Math.round(slot * 0.52)}px`,
-      '--board-h': `${(unit * 14).toFixed(2)}px`,
+      '--board-h': `${(unit * 14 + BOARD_PAD * 2).toFixed(2)}px`,
+      '--board-pad': `${BOARD_PAD}px`,
     },
   };
 });
@@ -705,6 +725,11 @@ function restore() {
     max-width: 440px;
     height: var(--board-h);
     box-sizing: border-box;
+    // 游戏区本身是一张带底色的卡片（和连连看 / 消消乐的棋盘同色），
+    // 浅色主题下卡片才有依托，不然白底白牌糊成一片
+    padding: var(--board-pad);
+    background: var(--board-bg);
+    border-radius: var(--card-radius);
     // 卡片带 z-index（层数），用 isolation 把它们的层叠限制在本区域内，
     // 否则会盖住 Teleport 到 body 的帮助弹窗（z-index 10）
     isolation: isolate;
@@ -739,11 +764,16 @@ function restore() {
     // 被上层卡片遮挡：变暗且不可点击
     &.covered {
       filter: brightness(0.5) saturate(0.45);
-      opacity: 0.75;
       box-shadow: none;
       cursor: default;
       pointer-events: none;
     }
+    // 压在上面的卡片越多越透明，堆叠的层次感靠这一步拉开
+    // （层数分布：第 50 关约 14% 不被压、22% 压 1 层、17% 压 2 层、14% 压 3 层、33% 压 4 层以上）
+    &.depth-1 { opacity: 0.82; }
+    &.depth-2 { opacity: 0.66; }
+    &.depth-3 { opacity: 0.52; }
+    &.depth-4 { opacity: 0.4; }
   }
   .tray {
     position: relative;
