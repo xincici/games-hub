@@ -38,6 +38,7 @@ src/
 │   ├── emojis.js         # 对对碰 / 连连看共用的 emoji 池
 │   ├── confetti.js       # 各游戏共用的撒花动画（canvas-confetti 封装）
 │   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore；show=false 时只计时不显示数字，连连看用它驱动顶部倒计时）
+│   ├── ConfirmDialog.vue # 各游戏共用的二次确认弹窗（Teleport 到 body；props: show/title/message/confirmText/cancelText，后四个留空就用组件自带的中英文案；emit: confirm/cancel；点遮罩 = cancel；开场动画与帮助弹窗（`HelpDialog.vue`）完全同款——外层 `v-show` 的遮罩 + 内层 `<Transition name="inner">`，三条规则逐字一致：`.inner-enter-from { transform: scale(0.1) }`、`.inner-enter-active { transition: transform 0.16s ease-in-out }`、`.inner-enter-to { transform: scale(1) }`；遮罩不淡入、关闭也没有离场动画，两个弹窗的观感因此完全一致）
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
 ├── components/
@@ -66,7 +67,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 
 ## 架构要点
 
-- **i18n 命名空间**：`shared/i18n.js` 按路由 meta（`activeGame`）解析当前游戏的字典；`gameTitle` 决定 `document.title`。新增 UI 文案要加到对应游戏 `games/<id>/i18n.js`（或首页的 `shared/i18n.js` 里的 `home` 字典），且中英双语都要加。
+- **i18n 命名空间**：`shared/i18n.js` 按路由 meta（`activeGame`）解析当前游戏的字典；`gameTitle` 决定 `document.title`。新增 UI 文案要加到对应游戏 `games/<id>/i18n.js`（或首页的 `shared/i18n.js` 里的 `home` 字典），且中英双语都要加；跨游戏共用的组件（如 `ConfirmDialog.vue`）自带字典、不再占各游戏的 key。
 - **共享状态**：主题（`body.dark` + `meta[name=theme-color]`）与语言是全局单例，任何页面切换对所有游戏生效；各游戏其余状态（难度、开关、记录）沿用各自原有的 localStorage key。
 - **localStorage 约定**（各游戏互不干扰，前缀与原独立项目一致）：
   - 共享：`__games_hub__theme` / `__games_hub__language` / `__games_hub__home_order`（首页卡片排序，新游戏按注册顺序排在已排序结果之后）
@@ -84,7 +85,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - Emoji 消消乐：`__emoji_crush__*`（闯关进度 `__emoji_crush__level`=当前关卡，历史最高关卡 `__emoji_crush__best_1`（沿用「前缀+数字」以便连点标题清记录），局面存档 `__emoji_crush__state`（关卡、盘面（含墙/炸弹/万能元素的负值标记）、得分、剩余步数、胜负状态，过关或失败后清除）；旧的 `__emoji_crush__difficulty`、`__emoji_crush__best_2/3` 已废弃）
   - 数独：`__sudoku_game__*`（难度 `__sudoku_game__difficulty`，局面存档 `__sudoku_game__state`（含计时秒数、唯一解答案、剩余❤️，胜利或失败后清除），各难度最佳用时存为前缀+难度数字，如 `__sudoku_game__1`）
   - Emoji 大师：`__emoji_master__*`（`__emoji_master__help_showed`，闯关进度 `__emoji_master__level`（当前第几关，「新游戏」二次确认后清除），局面存档 `__emoji_master__state`（关卡、盘面分层卡片、收集槽，过关或失败后清除））
-- **闯关三件套的统一约定**（连连看 / 消消乐 / Emoji 大师）：顶部统计卡底部用 `.progress` + `.progress-bar` 显示本关进度；操作区分两半——左边是本关盘面信息（连连看 `行列 · 种类 · 墙数`、消消乐 `列×行 · 种类 · 实际墙数`（0 面墙不显示）、大师 `层数 · 种类`），右边只放「🎮 新游戏」按钮（三者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗（文案由各游戏 i18n 的 `confirmTitle/confirmMsg/confirmOk/cancel` 提供，三处完全一致：清记录 + 回第 1 关，并提示重玩本关请用结算浮层；`.confirm-mask` / `.confirm-box` / `.confirm-title` / `.confirm-msg` / `.confirm-actions` / `.confirm-cancel` / `.confirm-ok` 这七段样式也逐字一致——遮罩无内边距、盒子 `calc(100% - 64px)`（≤320px）+ 左对齐、按钮 `justify-content: flex-end` 的描边胶囊，改一处就要三处一起改）；失败结算浮层只放「🔄 重玩本关」；除连连看（限定时间内清盘）外都不带计时器，连连看与消消乐 / 大师的关卡曲线分别在第 30 / 50 关封顶。
+- **闯关三件套的统一约定**（连连看 / 消消乐 / Emoji 大师）：顶部统计卡底部用 `.progress` + `.progress-bar` 显示本关进度；操作区分两半——左边是本关盘面信息（连连看 `行列 · 种类 · 墙数`、消消乐 `列×行 · 种类 · 实际墙数`（0 面墙不显示）、大师 `层数 · 种类`），右边只放「🎮 新游戏」按钮（三者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——三处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，调用方只要 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />`；需要换文案时用 props 覆盖，所以「清记录 + 回第 1 关、重玩本关请用结算浮层」这套说法不会再各自漂移）；失败结算浮层只放「🔄 重玩本关」；除连连看（限定时间内清盘）外都不带计时器，连连看与消消乐 / 大师的关卡曲线分别在第 30 / 50 关封顶。
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关（click：背景音乐；guess：机器人；poker：骰子/猜大小；puzzle：摇杆）。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、1A2B 判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
 

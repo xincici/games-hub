@@ -70,18 +70,8 @@
         <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
-    <Teleport to="body">
-      <div v-if="confirming" class="confirm-mask" @click.self="confirming = false">
-        <div class="confirm-box">
-          <p class="confirm-title">{{ i18n('confirmTitle') }}</p>
-          <p class="confirm-msg">{{ i18n('confirmMsg') }}</p>
-          <div class="confirm-actions">
-            <button class="confirm-cancel" @click="confirming = false">{{ i18n('cancel') }}</button>
-            <button class="confirm-ok" @click="startNewGame">{{ i18n('confirmOk') }}</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->
+    <ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />
   </div>
 </template>
 
@@ -90,6 +80,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
@@ -906,56 +897,4 @@ function loseLevel() {
   }
 }
 
-.confirm-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.confirm-box {
-  width: calc(100% - 64px);
-  max-width: 320px;
-  padding: 20px 20px 16px;
-  box-sizing: border-box;
-  border-radius: var(--card-radius);
-  background: var(--card-bg-color);
-  color: var(--text-color);
-  box-shadow: var(--card-shadow);
-  .confirm-title {
-    margin: 0 0 8px;
-    font-size: 17px;
-    font-weight: bold;
-  }
-  .confirm-msg {
-    margin: 0 0 16px;
-    font-size: 14px;
-    opacity: 0.8;
-    line-height: 1.5;
-  }
-  .confirm-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    button {
-      cursor: pointer;
-      padding: 8px 16px;
-      font-size: 14px;
-      border-radius: var(--radius-tile);
-      border: 0 none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .confirm-cancel {
-      background: var(--key-bg);
-      color: var(--text-color);
-    }
-    .confirm-ok {
-      background: var(--primary-bg);
-      color: #fff;
-      font-weight: bold;
-    }
-  }
-}
 </style>
