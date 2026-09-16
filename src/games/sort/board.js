@@ -200,36 +200,52 @@ export function canReveal(slots, capacity) {
   return false;
 }
 
-// 玩家视角的「还能不能赢」：状态是「每槽的种类序列 + 底部扣着几张」，走法就是
-// 玩家点两下真能做的搬运（槽口可见的那一串，目标装不下就只搬放得下的），
-// 搬走后源槽新露出的那张翻面，胜负判定用同一套 isWon。
-// 返回 false = 一定赢不了（可以判负），true = 还有路，null = 预算内没算完（不判负）
-export function canStillWin(slots, cfg, budget = 20000) {
-  const { capacity, copies, kinds } = cfg;
-  const start = slots.map(slot => ({
+// ---------- 玩家视角的搜索（失败判定用）----------
+// 状态 = 「每槽的种类序列 + 底部扣着几张」，走法就是玩家点两下真能做的搬运
+// （槽口可见的那一串，目标装不下就只搬放得下的），搬走后源槽新露出的那张翻面。
+// 一套通用的深度优先搜索，命中 goal 就返回 'found'，走遍可达状态都没有返回
+// 'exhausted'，预算用尽返回 'unknown'（调用方一律按「没死局」处理，宁可不判）
+function stateKeyOf(slots) {
+  return slots.map(s => s.items.join(',') + '#' + s.hidden).join('|');
+}
+
+function toPlayerState(slots) {
+  return slots.map(slot => ({
     items: (Array.isArray(slot) ? slot : slot.items).map(kindOf),
     hidden: Array.isArray(slot) ? 0 : Math.max(0, slot.hidden || 0),
   }));
-  if (isWon(start, copies, kinds)) return true;
+}
+
+function visibleCount(slots) {
+  return slots.reduce((n, s) => n + s.items.length - s.hidden, 0);
+}
+
+function applyPlayerMove(slots, mv) {
+  const next = slots.map(s => ({ items: s.items.slice(), hidden: s.hidden }));
+  next[mv.to].items.push(...next[mv.from].items.splice(next[mv.from].items.length - mv.count, mv.count));
+  const len = next[mv.from].items.length;
+  next[mv.from].hidden = len ? Math.min(next[mv.from].hidden, len - 1) : 0;
+  return next;
+}
+
+function searchPlayerStates(start, cfg, budget, goal) {
+  if (goal(start)) return 'found';
   const seen = new Set();
   const stack = [start];
   let nodes = 0;
   while (stack.length) {
-    if (nodes++ > budget) return null;
+    if (nodes++ > budget) return 'unknown';
     const st = stack.pop();
-    const key = st.map(s => s.items.join(',') + '#' + s.hidden).join('|');
+    const key = stateKeyOf(st);
     if (seen.has(key)) continue;
     seen.add(key);
-    for (const mv of playerMoves(st, capacity, copies)) {
-      const next = st.map(s => ({ items: s.items.slice(), hidden: s.hidden }));
-      next[mv.to].items.push(...next[mv.from].items.splice(next[mv.from].items.length - mv.count, mv.count));
-      const len = next[mv.from].items.length;
-      next[mv.from].hidden = len ? Math.min(next[mv.from].hidden, len - 1) : 0;
-      if (isWon(next, copies, kinds)) return true;
+    for (const mv of playerMoves(st, cfg.capacity, cfg.copies)) {
+      const next = applyPlayerMove(st, mv);
+      if (goal(next)) return 'found';
       stack.push(next);
     }
   }
-  return false;
+  return 'exhausted';
 }
 
 // 玩家能做的走法：每个合法目标一条，张数由规则定死（min(可见连排, 目标空位)）。
@@ -263,10 +279,31 @@ function playerMoves(slots, capacity, copies) {
   return out;
 }
 
-// 死局判定：只要玩家从这个局面开始一定赢不了（canStillWin 说 false），就判负。
-// 之前那种「一步都翻不开新牌」的快速判据并不严谨——先搬走半排、让槽口那一串
-// 变短，下一步就可能翻开了，所以这里老老实实跑一遍玩家视角的搜索
+// 还能不能「再翻开新的牌」：从当前局面出发，有没有任何一条走法序列能让翻开的
+// 牌变多。翻开是单调的（只会变多不会变少），所以一旦再也翻不开新的，
+// 「全部翻面」就永远凑不齐 —— 这才是可以判负的充分条件
+export function canRevealMore(slots, cfg, budget = 20000) {
+  const start = toPlayerState(slots);
+  const base = visibleCount(start);
+  const r = searchPlayerStates(start, cfg, budget, st => visibleCount(st) > base);
+  return r === 'found' ? true : r === 'exhausted' ? false : null;
+}
+
+// 牌全翻开之后还能不能赢（这时玩家能做的走法和状态都完全可见，搜索是准的）
+export function canStillWin(slots, cfg, budget = 20000) {
+  const start = toPlayerState(slots);
+  const r = searchPlayerStates(start, cfg, budget, st => isWon(st, cfg.copies, cfg.kinds));
+  return r === 'found' ? true : r === 'exhausted' ? false : null;
+}
+
+// 失败判定（两个分支都是「一定赢不了」的充分条件，不会误判）：
+// ① 还有牌扣着，却再也翻不开新的 —— 「全部翻面」凑不齐，必输。
+//    注意判据是「以后也翻不开」而不是「这一步翻不开」：先搬走半排让槽口那一串
+//    变短，下一步就可能翻开，所以这里跑的是可达状态搜索
+// ② 牌全翻开之后已经排不出来 —— 同样必输（这时玩家能做的走法和状态完全一致，
+//    搜索的结论是准的）
 export function isDeadEnd(slots, cfg, budget = 20000) {
+  if (hasHiddenCards(slots)) return canRevealMore(slots, cfg, budget) === false;
   return canStillWin(slots, cfg, budget) === false;
 }
 
