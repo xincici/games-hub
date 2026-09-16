@@ -176,13 +176,98 @@ export function isWon(slots, copies, kinds) {
   return filled === kinds;
 }
 
-// 死局：所有槽都满了，且槽口的水果两两不同 —— 没有任何合规的搬运可做。
-// （每种水果的总数 = copies < 槽数能容纳的量，空槽又固定预留，所以
-//  「所有槽都满」在这两种玩法的发牌下都不可能发生，实际玩不会真的走进死局）
-export function isStuck(slots, capacity) {
-  if (slots.some(slot => (Array.isArray(slot) ? slot : slot.items).length < capacity)) return false;
-  const tops = slots.map(topKind);
-  return new Set(tops).size === tops.length;
+export function hasHiddenCards(slots) {
+  return slots.some(slot => !Array.isArray(slot) && (slot.hidden || 0) > 0);
+}
+
+// 有没有一步能翻开新的暗牌：得把某个槽口「可见的那一整排」一次搬空，
+// 搬空后紧挨着下面的那张扣着的牌才会翻过来。搬不完全排（目标装不下）
+// 时下面那张不会翻，所以那种搬运不算
+export function canReveal(slots, capacity) {
+  for (let from = 0; from < slots.length; from++) {
+    const slot = slots[from];
+    const items = Array.isArray(slot) ? slot : slot.items;
+    const hidden = Array.isArray(slot) ? 0 : slot.hidden || 0;
+    if (!hidden) continue;                       // 这个槽没有扣着的牌，翻了也没新牌
+    const run = topRun(slot);
+    if (!run || items.length <= run) continue;   // 空槽 / 整摞都可见
+    if (hidden <= items.length - run - 1) continue;  // 排下面那张本来就是正面
+    for (let to = 0; to < slots.length; to++) {
+      if (to === from) continue;
+      if (moveCount(slots, from, to, capacity) === run) return true;
+    }
+  }
+  return false;
+}
+
+// 玩家视角的「还能不能赢」：状态是「每槽的种类序列 + 底部扣着几张」，走法就是
+// 玩家点两下真能做的搬运（槽口可见的那一串，目标装不下就只搬放得下的），
+// 搬走后源槽新露出的那张翻面，胜负判定用同一套 isWon。
+// 返回 false = 一定赢不了（可以判负），true = 还有路，null = 预算内没算完（不判负）
+export function canStillWin(slots, cfg, budget = 20000) {
+  const { capacity, copies, kinds } = cfg;
+  const start = slots.map(slot => ({
+    items: (Array.isArray(slot) ? slot : slot.items).map(kindOf),
+    hidden: Array.isArray(slot) ? 0 : Math.max(0, slot.hidden || 0),
+  }));
+  if (isWon(start, copies, kinds)) return true;
+  const seen = new Set();
+  const stack = [start];
+  let nodes = 0;
+  while (stack.length) {
+    if (nodes++ > budget) return null;
+    const st = stack.pop();
+    const key = st.map(s => s.items.join(',') + '#' + s.hidden).join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    for (const mv of playerMoves(st, capacity, copies)) {
+      const next = st.map(s => ({ items: s.items.slice(), hidden: s.hidden }));
+      next[mv.to].items.push(...next[mv.from].items.splice(next[mv.from].items.length - mv.count, mv.count));
+      const len = next[mv.from].items.length;
+      next[mv.from].hidden = len ? Math.min(next[mv.from].hidden, len - 1) : 0;
+      if (isWon(next, copies, kinds)) return true;
+      stack.push(next);
+    }
+  }
+  return false;
+}
+
+// 玩家能做的走法：每个合法目标一条，张数由规则定死（min(可见连排, 目标空位)）。
+// 启发式排序只影响搜索快慢，不影响结论
+function playerMoves(slots, capacity, copies) {
+  const out = [];
+  for (let from = 0; from < slots.length; from++) {
+    const a = slots[from];
+    if (!a.items.length) continue;
+    const run = topRun(a);
+    const kind = a.items[a.items.length - 1];
+    const uniform = run === a.items.length;
+    if (uniform && a.items.length === copies) continue;   // 已归位的槽不用动
+    for (let to = 0; to < slots.length; to++) {
+      if (to === from) continue;
+      const b = slots[to];
+      const space = capacity - b.items.length;
+      if (space <= 0) continue;
+      if (b.items.length && b.items[b.items.length - 1] !== kind) continue;
+      const count = Math.min(run, space);
+      if (!count) continue;
+      let score = 0;
+      if (b.items.length && b.items.length + count === copies) score += 4;     // 目标正好凑齐一种
+      if (a.items.length - count === 0) score += 3;                            // 把源槽清空
+      if (count === run && a.hidden > 0 && a.items.length > run) score += 2;    // 能翻开新牌
+      if (!b.items.length) score += 1;                                         // 用上空槽
+      out.push({ from, to, count, score });
+    }
+  }
+  out.sort((x, y) => y.score - x.score);
+  return out;
+}
+
+// 死局判定：只要玩家从这个局面开始一定赢不了（canStillWin 说 false），就判负。
+// 之前那种「一步都翻不开新牌」的快速判据并不严谨——先搬走半排、让槽口那一串
+// 变短，下一步就可能翻开了，所以这里老老实实跑一遍玩家视角的搜索
+export function isDeadEnd(slots, cfg, budget = 20000) {
+  return canStillWin(slots, cfg, budget) === false;
 }
 
 // 本关进度：已归位的槽里翻成正面的水果数 / 全部水果数。

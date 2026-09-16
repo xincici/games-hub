@@ -91,7 +91,7 @@ import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { gameConfig } from '@/shared/games';
 import {
-  levelConfig, generateSolvable, topRun, moveCount, isWon, isStuck,
+  levelConfig, generateSolvable, topRun, moveCount, isWon, isDeadEnd,
   countDone, progressPct,
 } from './board';
 
@@ -456,8 +456,10 @@ function bootMode() {
     initLevel(level.value);
     return;
   }
-  if (phase.value === PLAY) startDealing();
-  else save();
+  if (phase.value === PLAY) {
+    startDealing();
+    evaluate();     // 存档可能是动画没播完就退出时的局面，补判一次死局
+  } else save();
 }
 
 // ---------- 操作 ----------
@@ -578,12 +580,15 @@ async function performMove(from, to, n) {
   if (disposed || gen !== generation) return;
 
   // 第二段：横向平移到目标槽正上方。lift 不动，所以 top 一个像素都不变
+  const liftedRun = fruits.value.filter(f => f.slot === from && f.lift >= 0).length;
   moved.forEach((f, i) => {
     f.slot = to;
     f.depth = dstLen + i;
     f.moveMs = TRAVEL_MS;
     f.delay = (n - 1 - i) * STAGGER_MS;
   });
+  // 目标装不下整摞时只搬得下 n 张，剩下那几张落回原来的槽里
+  if (n < liftedRun) dropRun(from);
   // 状态（暗牌张数 / 步数 / 存档）在这一刻就落定；界面上新露出来的那张
   // 先继续按牌背画（pending），等落定之后再翻
   hidden.value[from] = newLen ? Math.min(oldHidden, newLen - 1) : 0;
@@ -631,13 +636,17 @@ async function performMove(from, to, n) {
   else if (piles.value[next.to].items.length) liftRun(next.to);
 }
 
+// 每手落定后判一次胜负：先看过关，再看是不是「从这个局面出发已经怎么走都赢
+// 不了」的死局（canStillWin 用玩家视角的精确搜索，见 board.js）
 function evaluate() {
   if (phase.value !== PLAY) return;
   if (isWon(piles.value, cfg.value.copies, cfg.value.kinds)) {
     phase.value = WON;
     save();
     confetti();
-  } else if (isStuck(piles.value, capacity.value)) {
+    return;
+  }
+  if (isDeadEnd(piles.value, cfg.value)) {
     phase.value = OVER;
     save();
   }
