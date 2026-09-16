@@ -31,7 +31,7 @@
       <CountTimer ref="timerRef" :enable="timerRunning" :on-tick="onTimerTick" :show="false" />
     </div>
     <div class="game-area">
-      <div class="board" :style="boardStyle">
+      <div class="board dot-board" :style="boardStyle">
         <template v-for="(row, r) in board" :key="r">
           <div v-for="(cell, c) in row" :key="`${r}-${c}`" class="cell">
             <button
@@ -746,7 +746,6 @@ function loseLevel() {
     grid-template-columns: repeat(var(--cols), 1fr);
     grid-auto-rows: 1fr;
     aspect-ratio: var(--cols) / var(--rows);
-    background: var(--board-bg);
     border-radius: var(--card-radius);
     .tile { font-size: var(--font); }
   }

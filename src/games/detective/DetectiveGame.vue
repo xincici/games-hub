@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="game-area">
-      <div class="board-frame" :style="boardStyle">
+      <div class="board-frame dot-board" :style="boardStyle">
         <div class="board">
           <div v-for="(cell, idx) in board" :key="idx" class="cell">
             <div class="card-flip" :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: phase === WON && idx === swappedIdx }" @click="onCellClick(idx)">
@@ -365,7 +365,6 @@ function onScoreReset() {
     width: fit-content;
     margin: 0 auto;
     padding: var(--gap);
-    background: var(--board-bg);
     border-radius: var(--card-radius);
   }
   .board {

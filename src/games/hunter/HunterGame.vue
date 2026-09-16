@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="game-area">
-      <div class="stage-frame" :style="stageStyle">
+      <div class="stage-frame dot-board" :style="stageStyle">
         <div class="stage">
           <div v-for="(cell, idx) in stage" :key="idx" class="stage-cell">
             <div class="card-flip" :class="{ flipped: isStageFaceDown(idx) }">
@@ -36,7 +36,7 @@
           </div>
         </div>
       </div>
-      <div class="candidate-area" :style="candidateStyle">
+      <div class="candidate-area dot-board" :style="candidateStyle">
         <div
           v-for="(opt, idx) in candidates"
           :key="idx"
@@ -374,7 +374,6 @@ function onScoreReset() {
     width: fit-content;
     margin: 0 auto 16px;
     padding: 8px;
-    background: var(--board-bg);
     border-radius: var(--card-radius);
   }
   .stage {
@@ -428,7 +427,6 @@ function onScoreReset() {
     width: fit-content;
     margin: 0 auto;
     padding: 8px;
-    background: var(--board-bg);
     border-radius: var(--card-radius);
   }
   .candidate-tile {

@@ -23,7 +23,7 @@
         <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
       </div>
     </div>
-    <div class="board-wrap">
+    <div class="board-wrap dot-board">
       <div class="board">
         <div
           v-for="tile in tiles"
@@ -666,7 +666,6 @@ function restore() {
     // 游戏区本身是一张带底色的卡片（和连连看 / 消消乐的棋盘同色），
     // 浅色主题下卡片才有依托，不然白底白牌糊成一片
     padding: var(--board-pad);
-    background: var(--board-bg);
     border-radius: var(--card-radius);
     // 卡片带 z-index（层数），用 isolation 把它们的层叠限制在本区域内，
     // 否则会盖住 Teleport 到 body 的帮助弹窗（z-index 10）

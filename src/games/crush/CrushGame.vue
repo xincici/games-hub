@@ -34,7 +34,7 @@
       </div>
     </div>
     <div class="game-area">
-      <div class="board-frame" :class="{ shaking }" :style="boardStyle">
+      <div class="board-frame dot-board" :class="{ shaking }" :style="boardStyle">
         <div class="board" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend.passive="onTouchEnd">
           <div
             v-for="(cell, idx) in cells"
@@ -807,7 +807,6 @@ function onScoreReset() {
     width: fit-content;
     margin: 0 auto;
     padding: 8px;
-    background: var(--board-bg);
     border-radius: var(--card-radius);
     touch-action: none;
     // 炸弹引爆时整块棋盘震动一下

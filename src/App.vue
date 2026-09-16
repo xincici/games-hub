@@ -20,6 +20,15 @@ import { i18n } from '@/shared/i18n';
 </script>
 
 <style lang="scss">
+// 棋盘点阵底纹：六个 emoji 游戏（对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 大师）的游戏区共用这一份定义。
+// 用了这个类就不要再写 `background: var(--board-bg)`——简写会把 background-image 清掉。
+.dot-board {
+  background-color: var(--board-bg);
+  background-image: radial-gradient(circle, var(--board-dot) 1.1px, transparent 1.1px);
+  background-size: 10px 10px;
+  background-position: 5px 5px;
+}
+
 * {
   -webkit-user-select: none;
   user-select: none;
@@ -216,6 +225,8 @@ body {
   --del-bg: #fdeeee;
   --del-color: #b8433d;
   --board-bg: #bbada0;
+  // 棋盘点阵底纹的点色（各 emoji 游戏的游戏区共用，很淡，空盘时不至于一片空白）
+  --board-dot: rgba(255, 255, 255, 0.18);
   --cell-bg: rgba(238, 228, 218, 0.35);
   background: var(--bg-color);
   &.dark {
@@ -268,6 +279,7 @@ body {
     --del-bg: rgba(229, 127, 121, 0.16);
     --del-color: #f5a49e;
     --board-bg: #4a443e;
+    --board-dot: rgba(255, 255, 255, 0.08);
     --cell-bg: rgba(255, 255, 255, 0.08);
   }
 }

@@ -52,7 +52,7 @@ src/
     ├── puzzle/           # MainGame.vue + difficulty/rocker/i18n.js
     ├── g2048/            # Game2048.vue + i18n.js（route /2048，key 前缀 __game_2048__；新开局与恢复存档都按行列顺序逐张入场）
     ├── snake/            # SnakeGame.vue（canvas 渲染）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
-    ├── match/            # MatchGame.vue（emoji 对对碰）+ i18n.js（route /match，key 前缀 __emoji_match__）
+    ├── match/            # MatchGame.vue（emoji 对对碰；牌背图标直接取本游戏在首页的图标——`gameConfig('match').icon`，改首页图标牌背跟着变；棋盘点阵底纹见「约定」）+ i18n.js（route /match，key 前缀 __emoji_match__）
     ├── link/             # LinkGame.vue（emoji 连连看 · 闯关制：限定时间内清空全盘过关，难度 = 列数 6→10 + 行数 6→12 + emoji 种类 6→12 + 对数 9→30 + 墙 0→18 + 限时，第 30 关全部封顶但关数无限；同一种 emoji 可出多对（偶数张即可）；顶部统计条底部有本关进度条（已消对数/总对数），操作区只有「新游戏」（点击弹二次确认、清记录回第 1 关），失败遮罩上给「重玩本关」；倒计时只显示在顶部统计条）+ board.js（纯逻辑：≤2 转弯路径查找、关卡曲线 CURVE 与 levelConfig、buildPairPool 多对发牌、generateLevelBoard/generateWalls、死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
     ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ i18n.js（route /detective，key 前缀 __emoji_detective__）
     ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ i18n.js（route /hunter，key 前缀 __emoji_hunter__）
@@ -95,6 +95,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
 - 布局 mobile-first，内容最大宽度 480px（`--max-width`）。
 - 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。
+- **棋盘点阵底纹**：`App.vue` 里的全局类 `.dot-board`（`background-color: var(--board-bg)` + 10px 间距的 `radial-gradient` 点阵，点色 `--board-dot` 浅色 0.18 / 深色 0.08 透明度，对比约 1.17:1，很淡不抢牌）。**各 emoji 游戏的游戏区都套它**——对对碰 `.board`、连连看 `.board`、侦探 `.board-frame`、猎手 `.stage-frame` 与 `.candidate-area`、大师 `.board-wrap`、消消乐 `.board-frame`；数字类游戏（2048 / Threes）不用。用了这个类**不要再写 `background: var(--board-bg)`**：简写会把 `background-image` 清掉。
 - **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - 变更时同步检查 README.md：凡改动影响到 README 中描述的内容（游戏列表、路由、目录结构、localStorage key、功能特性等），必须同步修改 README.md，不许 README 落后于实际。

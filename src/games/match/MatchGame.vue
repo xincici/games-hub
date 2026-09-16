@@ -33,7 +33,7 @@
       </div>
     </div>
     <div class="game-area">
-      <div class="board" :class="`size-${size}`">
+      <div class="board dot-board" :class="`size-${size}`">
         <div
           v-for="(card, idx) in cards"
           :key="card.id"
@@ -44,7 +44,7 @@
         >
           <div class="card-inner">
             <div class="face back-face">
-              <i i-mdi-star-four-points />
+              <i :class="BACK_ICON" />
             </div>
             <div class="face front-face">{{ card.emoji }}</div>
           </div>
@@ -65,7 +65,11 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { gameConfig } from '@/shared/games';
 import { EMOJIS } from '@/shared/emojis';
+
+// 牌背用的是本游戏在首页的图标（同一个 id 在 games.js 里注册，改图标两处一起变）
+const BACK_ICON = gameConfig('match').icon;
 
 const SIZES = [4, 6, 8];
 const PREVIEWS = [4000, 6000, 8000];
@@ -377,7 +381,6 @@ function win() {
     gap: var(--gap);
     padding: 6px;
     box-sizing: border-box;
-    background: var(--board-bg);
     border-radius: var(--card-radius);
     aspect-ratio: 1;
     &.size-4 {
