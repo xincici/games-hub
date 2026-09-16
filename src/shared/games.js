@@ -13,6 +13,7 @@ import threeDict from '@/games/three/i18n';
 import crushDict from '@/games/crush/i18n';
 import sudokuDict from '@/games/sudoku/i18n';
 import masterDict from '@/games/master/i18n';
+import sortDict from '@/games/sort/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -145,6 +146,17 @@ export const games = [
     accent: 'memory',
     helpKey: '__emoji_master__help_showed',
   },
+  {
+    id: 'sort',
+    path: '/sort',
+    icon: 'i-mdi-test-tube',
+    accent: 'logic',
+    helpKey: '__emoji_sort__help_showed',
+    // 闯关制后只记录「历史最高关卡」，存成前缀+1，沿用连点标题清记录的机制
+    recordsPrefix: '__emoji_sort__best_',
+    minDifficulty: 1,
+    maxDifficulty: 1,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -164,4 +176,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['crush', crushDict],
   ['sudoku', sudokuDict],
   ['master', masterDict],
+  ['sort', sortDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

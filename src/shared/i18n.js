@@ -7,13 +7,11 @@ const home = {
     gameTitle: 'Games Hub',
     rotateTip: 'Please rotate your device to portrait',
     backHome: 'Home',
-    constructing: 'Constructing...',
   },
   cn: {
     gameTitle: '游戏合集',
     rotateTip: '请旋转设备至竖屏',
     backHome: '首页',
-    constructing: '建设中...',
   },
 };
 

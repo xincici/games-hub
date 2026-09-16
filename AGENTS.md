@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku) 和 Emoji 大师 (Emoji Master)，现共十四个游戏。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master) 和 Emoji 排序 (Emoji Sort)，现共十五个游戏。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -23,7 +23,7 @@ yarn build     # 构建到 dist/
 yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`）做冒烟检查。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`）做冒烟检查。
 
 ## 目录结构
 
@@ -35,14 +35,14 @@ src/
 ├── shared/
 │   ├── i18n.js           # 共享 i18n：language ref（key __games_hub__language）、按游戏注册字典、i18n()/helpItems()
 │   ├── theme.js          # 共享主题（key __games_hub__theme），toggle body.dark
-│   ├── emojis.js         # 对对碰 / 连连看共用的 emoji 池
+│   ├── emojis.js         # emoji 池（对对碰 / 连连看 / 排序共用；排序只取最前面的 8 个水果）
 │   ├── confetti.js       # 各游戏共用的撒花动画（canvas-confetti 封装）
 │   ├── CountTimer.vue    # 各游戏共用的计时器（挂载即计时、隐藏暂停、onTick 回调、reset/stop/restore；show=false 时只计时不显示数字，连连看用它驱动顶部倒计时）
 │   ├── ConfirmDialog.vue # 各游戏共用的二次确认弹窗（Teleport 到 body；props: show/title/message/confirmText/cancelText，后四个留空就用组件自带的中英文案；emit: confirm/cancel；点遮罩 = cancel；开场动画与帮助弹窗（`HelpDialog.vue`）完全同款——外层 `v-show` 的遮罩 + 内层 `<Transition name="inner">`，三条规则逐字一致：`.inner-enter-from { transform: scale(0.1) }`、`.inner-enter-active { transition: transform 0.16s ease-in-out }`、`.inner-enter-to { transform: scale(1) }`；遮罩不淡入、关闭也没有离场动画，两个弹窗的观感因此完全一致）
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
-│   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典
+│   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典（新增游戏要在表尾追加，首页末位正好接上）
 ├── components/
-│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（2/3/2/3/2/3 行），支持拖动排序（顺序存本地），末尾一张不可点击、不可拖动的「建设中」占位卡片（i-mdi-cogs）
+│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（2/3/2/3/2/3 行，15 张正好铺满），支持拖动排序（顺序存本地）
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
@@ -59,7 +59,8 @@ src/
     ├── three/            # ThreeGame.vue（Threes：1+2=3 合成、牌堆预告、两阶段滑动合成动画；新牌一律从「滑动来源侧」边缘补进（该侧满则退到最近一条线）、盘面上 1 与 2 的个数差恒 ≤ 4（draw/balancedValue 两道校正，开局 9 张同样受约束）；失败局面同样存档恢复（计时停在最终用时，由玩家自己点「新游戏」开新局）；新开局与恢复存档都按行列顺序逐张入场）+ i18n.js（route /three，key 前缀 __threes_game__）
     ├── crush/            # CrushGame.vue（emoji 消消乐 · 闯关制：限定步数内达到目标分过关，各因素（面板 7×7→9×10、种类 5→7、步数 20→17、目标分 700→2100、墙 0→12、炸弹/万能概率）随关卡线性爬升、第 30 关到顶且列/行/种类到顶时点刻意错开避免难度断崖；顶部统计条底部有本关进度条（得分/目标分），操作区左侧显示本关盘面信息（列×行 · 种类 · 实际墙数，墙数为 0 时不显示），右侧只有「新游戏」（点击弹二次确认、清记录回第 1 关，无计时器），失败遮罩上给「重玩本关」；💣 炸弹（相邻格被消除即引爆，炸掉周围 3×3、每格 25 分并震动棋盘、可链式引爆）、💎 万能元素（连线判定时可充当任意种类）、🧱 墙（不可交换/消除，但 emoji 下落时穿过）；炸弹与万能元素持续 0.95~1.05 呼吸缩放；开局/恢复/过关都逐格入场；空闲提示：6s 没有任何操作就扫出所有能消的交换，取「消得最多」那一档随机挑一对（排除最近提示过的 3 对，保证连着几次都不一样），只让这两张牌的 emoji 呼吸两下——`.gem.hinting .face` → `breathe 0.8s ease-in-out 2`（关键帧 1 → 1.2 → 0.8 → 1，与连连看同款），牌面不加任何高亮（无边框 / 发光 / 箭头），`HINT_MS` = 1700ms 后收起；任何点击 / 触摸立刻收起并重新起 6s 计时（`IDLE_HINT_MS` 6000，发牌与连锁结算期间不提示，结算后不再提示）；**恢复存档这条路径不会走 `initLevel`，必须在 `onMounted` 里补一次 `pokeIdle()`**，否则「接着上次的局面玩」时永远不提示；**两条易踩的动画约束**：①`syncGems` 的输出顺序必须是「老 gem 保持原相对顺序 + 新 gem 追加末尾」，按格子顺序重排会让 Vue 的 keyed diff 去搬动 DOM 节点，而同父节点内被搬动的元素会丢掉正在跑的 left/top 过渡（下落就变瞬移）；②`matched` / `blasting` 这两条消除动画的 CSS 规则必须写在 `fresh` / `falling` / `dealt` 之后（选择器权重相同、靠后者胜出），并且 `resolveCascades` 在标记消除时先摘掉这些牌身上的 `fresh`/`fall`，否则连锁中刚落地（甚至刚生成）的牌只会沿用 drop-in / land-bounce，消除动画根本播不出来）+ board.js（纯逻辑：参数化关卡曲线 levelConfig（第 30 关到顶）+ 生成（无现成三连且有解）+ 按种类扩展的连线判定（某个种类的连续块 = 连续的同种 emoji 或钻石，块长 ≥3 且块内真有该种 emoji 时整块消除——钻石因此能跟着它左右任一侧真正成组的那一段走，两侧都不成组时它就不消；整块全是钻石不消） + explode 链式爆炸 + 穿墙重力 + 计分 + 离线校准用的 findBestSwap/resolveTurn）+ i18n.js（route /crush，key 前缀 __emoji_crush__）
     ├── sudoku/           # SudokuGame.vue（数独：唯一解挖洞生成、填错即标红、爱心生命（难度 1~3 = 初始 ❤️ 1~3，扣完再错即失败）、笔记候选、3 难度最佳用时；开局/恢复时格子与数字逐格入场）+ sudoku.js（纯逻辑）+ i18n.js（route /sudoku，key 前缀 __sudoku_game__）
-    └── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（组数 8→32（24→96 张）、emoji 种类 6→16、层数 2→8，第 50 关到顶，之后关数无限；同一种 emoji 可出多组，张数恒为 3 的倍数）、无计时器、无洗牌道具、顶部统计条底部有本关进度条（已消卡片/本关总卡片）、操作区左侧显示「层数 · 种类」、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；游戏区本身是一张带底色的卡片（`--board-bg` + `--card-radius` + 8px 内边距，与连连看 / 消消乐的棋盘同款——卡片坐标按 `layout` 里的 `BOARD_PAD` 一起算，改内边距要同步改 `unit` 与 `--board-h`）；被压住的卡片按「压在上面的卡片数」分档变淡（depth-1/2/3/4+ → 透明度 0.82/0.66/0.52/0.4，第 50 关约有 33% 的卡片落在最深一档），层数只影响视觉，能不能点仍由 `freeIds` 判定；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 标记做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ buildTripleBag/dealAlongOrder 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
+    ├── master/           # MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（组数 8→32（24→96 张）、emoji 种类 6→16、层数 2→8，第 50 关到顶，之后关数无限；同一种 emoji 可出多组，张数恒为 3 的倍数）、无计时器、无洗牌道具、顶部统计条底部有本关进度条（已消卡片/本关总卡片）、操作区左侧显示「层数 · 种类」、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；游戏区本身是一张带底色的卡片（`--board-bg` + `--card-radius` + 8px 内边距，与连连看 / 消消乐的棋盘同款——卡片坐标按 `layout` 里的 `BOARD_PAD` 一起算，改内边距要同步改 `unit` 与 `--board-h`）；被压住的卡片按「压在上面的卡片数」分档变淡（depth-1/2/3/4+ → 透明度 0.82/0.66/0.52/0.4，第 50 关约有 33% 的卡片落在最深一档），层数只影响视觉，能不能点仍由 `freeIds` 判定；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 标记做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ buildTripleBag/dealAlongOrder 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
+    └── sort/             # SortGame.vue（Emoji 排序 · 闯关制：槽里自下而上堆着水果，开局只有槽口那张正面朝上，其余全扣着；点一下槽位把它槽口那一摞同种水果（只算正面朝上的，`topRun` 只数到可见段为止）整摞抬到槽口上方，再点同一个槽位就放回去，点另一个槽位则搬运——目标槽要么槽口同种、要么完全空着，装不下就只搬放得下的张数。过关 = 每种水果都装满一槽且全部翻面（不能只判「每槽同种」——同种被拆成 [🍎🍎] 和 [🍎] 时两槽各自同种却没归位，`isWon` 要求满槽同种 + 无暗牌）。难度只由槽容量 M（= 每种水果个数）与水果种类 K 决定，两者交错爬升、每 2~4 关抬一档（3 种×3 张 9 张 → 第 30 关 6 种×8 张 48 张、8 个槽，求解器给出的严格解步数实测约 8→53 步），空槽恒为 2 个（实测只有一个空槽时随机局面可解率只有 5%~10%，生成器会不停重洗甚至退化送分）；第 30 关封顶、关数无限。水果取 `shared/emojis.js` 里最前面的 8 个（🍎🍌🍇…），牌背用本游戏首页图标。**棋盘几何**：`metrics` 在槽口上方留出 `HEAD_ROWS`（5）行空白带，格子边长同时受「宽度 / （空白带 + 槽）总行数 / MAX_CELL」约束；抬起的一摞水果就停在这条带子里，一摞超过空白带高度时 `hoverStep()` 会把它们压紧一点（同种水果叠一点仍看得清）。**搬运编排（四段，靠 `left`/`top` 两条 CSS 过渡 + 内联 `--move-dur`/`--move-delay` 错峰，不是 WAAPI）**：①点击槽位 → 整摞纯竖向抬到槽口之上（`lift` 记录它在这一摞里的序号）；②点击目标槽 → 只改 `slot`/`depth`，`lift` 不动所以 `top` 一个像素都不变 → 纯横向平移，且只在槽口上方发生；③等 `TRAVEL_MS` 后清 `lift` → 纯竖向落进目标槽（x 已经是目标列，从槽口正上方落下，不蹭槽边）；④落定之后才把源槽新露出来的那张翻面（状态里的 `hidden` 在第②段就落定，界面上用 `pending` 继续画牌背，落定后 `pending=false` + `flipping=true` 播 0.34s 横向压扁）。**搬运动画期间不锁输入**：随时能点别的槽位把那一摞抬起来（`lift` 立刻生效，两摞可以同时在动），只有「一手搬运」是串行的——动画期间点下的目标槽记进 `deferred`，等这一手落定再补做；点到的槽口那一摞里若有正飞着的牌（`transit`，含正飞向该槽的牌）也会挂进 `deferred` 等落定再抬；点到的槽若是空的且当前没选中任何东西，则什么也不做。手快在抬起没走完就点目标槽时，`performMove` 会先等 `liftUntil`；落定后判胜负。玩家若在搬运途中直接抓起源槽槽口那张（`pending`，界面上还画着牌背），`reveal()` 会当场把它翻正；顶部统计条底部有本关进度条（已归位槽里翻正面的水果 / 全部水果），操作区左侧显示「槽位 · 每槽层数 · 种类」、右侧只有「新游戏」（共用 ConfirmDialog，确认后清记录回第 1 关）。**死局判定 `isStuck` 按规则实现了（满槽且槽口两两不同），但每种水果张数 = 容量 < 槽数容量，且固定预留 2 个空槽，所以「所有槽都满」不可能出现（非空槽槽口种类必有重复，其中至少一个还有空间），实际玩不出真正的死局**）+ board.js（纯逻辑：分档关卡曲线 levelConfig（STEPS 表）、可见连段 topRun/moveCount/applyMove、判定 isComplete/isWon/countDone/isStuck/progressPct、带访问集与剪枝的求解器 hasSolution、随机洗牌 + 求解器验证的 generateSolvable）+ i18n.js（route /sort，key 前缀 __emoji_sort__）
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -84,25 +85,26 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - Threes：`__threes_game__*`（局面存档 `__threes_game__state`，最高分 `__threes_game__best`）
   - Emoji 消消乐：`__emoji_crush__*`（闯关进度 `__emoji_crush__level`=当前关卡，历史最高关卡 `__emoji_crush__best_1`（沿用「前缀+数字」以便连点标题清记录），局面存档 `__emoji_crush__state`（关卡、盘面（含墙/炸弹/万能元素的负值标记）、得分、剩余步数、胜负状态，过关或失败后清除）；旧的 `__emoji_crush__difficulty`、`__emoji_crush__best_2/3` 已废弃）
   - 数独：`__sudoku_game__*`（难度 `__sudoku_game__difficulty`，局面存档 `__sudoku_game__state`（含计时秒数、唯一解答案、剩余❤️，胜利或失败后清除），各难度最佳用时存为前缀+难度数字，如 `__sudoku_game__1`）
+  - Emoji 排序：`__emoji_sort__*`（闯关进度 `__emoji_sort__level`=当前关卡，历史最高关卡 `__emoji_sort__best_1`（沿用「前缀+数字」以便连点标题清记录），局面存档 `__emoji_sort__state`（关卡、步数、每槽暗牌张数、水果的 [种类, 槽位, 层数]、胜负状态；每走一步落一次档，过关/失败后保留结算局面，新游戏或重玩本关整体重写））
   - Emoji 大师：`__emoji_master__*`（`__emoji_master__help_showed`，闯关进度 `__emoji_master__level`（当前第几关，「新游戏」二次确认后清除），局面存档 `__emoji_master__state`（关卡、盘面分层卡片、收集槽，过关或失败后清除））
-- **闯关三件套的统一约定**（连连看 / 消消乐 / Emoji 大师）：顶部统计卡底部用 `.progress` + `.progress-bar` 显示本关进度；操作区分两半——左边是本关盘面信息（连连看 `行列 · 种类 · 墙数`、消消乐 `列×行 · 种类 · 实际墙数`（0 面墙不显示）、大师 `层数 · 种类`），右边只放「🎮 新游戏」按钮（三者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——三处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，调用方只要 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />`；需要换文案时用 props 覆盖，所以「清记录 + 回第 1 关、重玩本关请用结算浮层」这套说法不会再各自漂移）；失败结算浮层只放「🔄 重玩本关」；除连连看（限定时间内清盘）外都不带计时器，连连看与消消乐 / 大师的关卡曲线分别在第 30 / 50 关封顶。
+- **闯关四件套的统一约定**（连连看 / 消消乐 / Emoji 大师 / Emoji 排序）：顶部统计卡底部用 `.progress` + `.progress-bar` 显示本关进度；操作区分两半——左边是本关盘面信息（连连看 `行列 · 种类 · 墙数`、消消乐 `列×行 · 种类 · 实际墙数`（0 面墙不显示）、大师 `层数 · 种类`、排序 `槽位 · 每槽层数 · 种类`），右边只放「🎮 新游戏」按钮（四者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——四处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，调用方只要 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />`；需要换文案时用 props 覆盖，所以「清记录 + 回第 1 关、重玩本关请用结算浮层」这套说法不会再各自漂移）；失败结算浮层只放「🔄 重玩本关」；除连连看（限定时间内清盘）外都不带计时器，连连看 / 消消乐 / 排序与大师的关卡曲线分别在第 30 / 30 / 30 / 50 关封顶。
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关（click：背景音乐；guess：机器人；poker：骰子/猜大小；puzzle：摇杆）。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、1A2B 判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
 
 ## 约定
 
-- 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标（含 HomePage 里「建设中」占位卡片的 `i-mdi-cogs`）来自运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
+- 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标来自运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
 - 布局 mobile-first，内容最大宽度 480px（`--max-width`）。
 - 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。
-- **棋盘点阵底纹**：`App.vue` 里的全局类 `.dot-board`（`background-color: var(--board-bg)` + 10px 间距的 `radial-gradient` 点阵，点色 `--board-dot` 浅色 0.18 / 深色 0.08 透明度，对比约 1.17:1，很淡不抢牌）。**各 emoji 游戏的游戏区都套它**——对对碰 `.board`、连连看 `.board`、侦探 `.board-frame`、猎手 `.stage-frame` 与 `.candidate-area`、大师 `.board-wrap`、消消乐 `.board-frame`；数字类游戏（2048 / Threes）不用。用了这个类**不要再写 `background: var(--board-bg)`**：简写会把 `background-image` 清掉。
-- **emoji 游戏的统一视觉语言**（对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 大师，新增 emoji 游戏请照抄）：
+- **棋盘点阵底纹**：`App.vue` 里的全局类 `.dot-board`（`background-color: var(--board-bg)` + 10px 间距的 `radial-gradient` 点阵，点色 `--board-dot` 浅色 0.18 / 深色 0.08 透明度，对比约 1.17:1，很淡不抢牌）。**各 emoji 游戏的游戏区都套它**——对对碰 `.board`、连连看 `.board`、侦探 `.board-frame`、猎手 `.stage-frame` 与 `.candidate-area`、大师 `.board-wrap`、消消乐 `.board-frame`、排序 `.board`；数字类游戏（2048 / Threes）不用。用了这个类**不要再写 `background: var(--board-bg)`**：简写会把 `background-image` 清掉。
+- **emoji 游戏的统一视觉语言**（对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 大师 / 排序，新增 emoji 游戏请照抄）：
   - 棋子 / 牌面：圆角 `var(--radius-tile)` + `1px solid var(--tile-border-color)` 描边 + `var(--shadow-soft)` 软阴影 + `box-sizing: border-box`；翻牌类另加 `transform-style: preserve-3d` + `backface-visibility: hidden`，翻面 `transition: transform 0.45s ease-in-out`
   - 牌背：底色 `var(--primary-bg)` + `#fff` 图标，图标统一取本游戏在首页的图标（`gameConfig(id).icon`，对对碰 / 侦探 / 猎手都是这么做的），图标字号随格子走
   - 面板 `.card`：`--card-bg-color` + `--card-radius` + `--card-shadow`；统计条高 `var(--row-height)`、操作区 `margin: var(--row-gap) 0` + `height: var(--row-height)`；`.stat-label` 12px、`.stat-value` 22px 粗体
   - 主按钮 `.game-icon`：`padding: 8px 16px`、14px 粗体、`--primary-bg` 底 + 白字、圆角 `var(--radius-tile)`
   - 结算浮层 `.result`：`--mask-color` 底 + `--win-color` 字（失败态 `--lose-color`）、18px 粗体、`gap: 12px` + `padding: 12px`，大数字（`.final-time` / `.final-score`）28px
-  - 这几项**别再写裸值**（72px / 16px / 8px 之类），改一处要六处一起改
+  - 这几项**别再写裸值**（72px / 16px / 8px 之类），改一处要七处一起改
 - **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - 变更时同步检查 README.md：凡改动影响到 README 中描述的内容（游戏列表、路由、目录结构、localStorage key、功能特性等），必须同步修改 README.md，不许 README 落后于实际。

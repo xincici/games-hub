@@ -4,32 +4,24 @@
     <div class="game-list">
       <div class="honeycomb" :class="{ entering }">
         <div v-for="row in rows" :key="row.list[0].id" class="hex-row" :class="{ offset: row.offset }">
-          <template v-for="card in row.list" :key="card.id">
-            <router-link
-              v-if="!card.placeholder"
-              :to="card.path"
-              class="hex"
-              :class="{ dragging: dragId === card.id }"
-              :data-id="card.id"
-              draggable="false"
-              :style="hexStyle(card)"
-              @dragstart.prevent
-              @pointerdown="onPointerDown(card, $event)"
-              @click="onCardClick($event, card)"
-            >
-              <span class="hex-body">
-                <i :class="card.icon" :style="card.iconScale ? { transform: `scale(${card.iconScale})` } : null" />
-                <span class="game-name">{{ card.name }}</span>
-              </span>
-            </router-link>
-            <!-- 占位卡片：不跳转，仅提示后续新游戏 -->
-            <div v-else class="hex placeholder" :style="hexStyle(card)">
-              <span class="hex-body">
-                <i :class="card.icon" />
-                <span class="game-name">{{ card.name }}</span>
-              </span>
-            </div>
-          </template>
+          <router-link
+            v-for="card in row.list"
+            :key="card.id"
+            :to="card.path"
+            class="hex"
+            :class="{ dragging: dragId === card.id }"
+            :data-id="card.id"
+            draggable="false"
+            :style="hexStyle(card)"
+            @dragstart.prevent
+            @pointerdown="onPointerDown(card, $event)"
+            @click="onCardClick($event, card)"
+          >
+            <span class="hex-body">
+              <i :class="card.icon" :style="card.iconScale ? { transform: `scale(${card.iconScale})` } : null" />
+              <span class="game-name">{{ card.name }}</span>
+            </span>
+          </router-link>
         </div>
       </div>
     </div>
@@ -58,7 +50,7 @@ import { i18n, language, dictOf } from '@/shared/i18n';
 import { setLaunchOrigin } from '@/shared/launch';
 
 // 首页排序：用户拖动后按 id 顺序存本地；存档里没有的游戏（后续新增）
-// 按注册顺序接在已排序结果之后，「建设中」占位卡片永远在最后且不可拖动
+// 按注册顺序接在已排序结果之后
 const ORDER_KEY = '__games_hub__home_order';
 
 function readOrder() {
@@ -89,26 +81,18 @@ function saveOrder() {
   try { localStorage.setItem(ORDER_KEY, JSON.stringify(order.value)); } catch { /* 忽略 */ }
 }
 
-// 首页卡片：按排序结果排列的各游戏 + 末尾一个不跳转的「建设中」占位卡片
-const cards = computed(() => [
-  ...order.value.map(id => {
-    const game = games.find(g => g.id === id);
-    return {
-      id: game.id,
-      path: game.path,
-      icon: game.icon,
-      iconScale: game.iconScale,
-      accent: game.accent || 'logic',
-      name: dictOf(game.id)[language.value].gameTitle,
-    };
-  }),
-  {
-    id: 'constructing',
-    icon: 'i-mdi-cogs',
-    name: i18n('constructing'),
-    placeholder: true,
-  },
-]);
+// 首页卡片：按排序结果排列的各游戏
+const cards = computed(() => order.value.map(id => {
+  const game = games.find(g => g.id === id);
+  return {
+    id: game.id,
+    path: game.path,
+    icon: game.icon,
+    iconScale: game.iconScale,
+    accent: game.accent || 'logic',
+    name: dictOf(game.id)[language.value].gameTitle,
+  };
+}));
 
 // 蜂窝布局：按行分组，2/3/2/3/2/3 交替让每行都咬合。
 // 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
@@ -146,7 +130,7 @@ function cardEl(id) {
 }
 
 function onPointerDown(card, e) {
-  if (card.placeholder || e.button > 0) return;
+  if (e.button > 0) return;
   suppressClick = false;
   press = { id: card.id, card, x: e.clientX, y: e.clientY, type: e.pointerType };
   clearTimeout(pressTimer);
@@ -182,18 +166,10 @@ function onPointerMove(e) {
   // 浮层用 fixed 坐标直接跟随指针（保持按下时的相对偏移），不受重排影响
   ghost.value.left = e.clientX - dragGrab.grabX;
   ghost.value.top = e.clientY - dragGrab.grabY;
-  // 拖到别的卡片上：交换两者位置（占位卡片不可交换）
+  // 拖到别的卡片上：交换两者位置
   const overEl = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.hex');
   const overId = overEl?.dataset?.id;
   if (overId && overId !== dragId.value) swapCards(dragId.value, overId);
-  else if (overEl?.classList.contains('placeholder')) moveToEnd(dragId.value);
-}
-
-// 拖到「建设中」占位卡片上：排到最后一张游戏卡片的位置
-function moveToEnd(id) {
-  const arr = order.value.filter(x => x !== id);
-  if (arr.length === order.value.length - 1 && order.value[order.value.length - 1] === id) return;
-  order.value = [...arr, id];
 }
 
 function swapCards(a, b) {
@@ -411,23 +387,6 @@ function onVisibility() {
     background: var(--accent, var(--primary-bg));
     .hex-body {
       background: var(--enter-bg);
-    }
-  }
-  // 占位卡片：不可点击、整体压暗，和可玩的游戏卡片区分开
-  &.placeholder {
-    cursor: default;
-    pointer-events: none;
-    background: var(--border-color);
-    opacity: 0.85;
-    .hex-body {
-      background: var(--bg-color);
-      i {
-        color: var(--text-color);
-        opacity: 0.45;
-      }
-      .game-name {
-        color: var(--muted-color);
-      }
     }
   }
   .hex-body {

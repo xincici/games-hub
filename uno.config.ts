@@ -38,6 +38,6 @@ export default defineConfig({
     'i-mdi-star-four-points',
     'i-mdi-grid',
     'i-mdi-layers-triple',
-    'i-mdi-cogs',
+    'i-mdi-test-tube',
   ],
 });
