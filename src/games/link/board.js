@@ -9,7 +9,7 @@
 // ---------- 关卡配置 ----------
 // 难度由「棋盘大小 + emoji 种类 + 牌数 + 墙数 + 限时」共同决定，第 30 关全部到顶，
 // 之后关数继续增长但难度不再上升。各因素随关卡线性爬升：
-//   列数 6 → 10（上限 10 列）
+//   列数 6 → 9（上限 9 列：10 列时手机上一格只有 30 多 px，emoji 太小）
 //   行数 6 → 12（上限 12 行）
 //   对数 9 → 30（牌 18 → 60 张）
 //   种类 6 → 12
@@ -17,7 +17,7 @@
 //   限时 = 对数 × 每对秒数，每对 8s → 5s（靠盘面加难，不靠硬卡时间）
 export const MAX_LEVEL = 30;
 
-const CAP = { cols: 10, rows: 12, pairs: 30, kinds: 12, walls: 18, perPair: 5 };
+const CAP = { cols: 9, rows: 12, pairs: 30, kinds: 12, walls: 18, perPair: 5 };
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);

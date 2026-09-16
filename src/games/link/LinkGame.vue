@@ -140,7 +140,7 @@ const boardLabel = computed(() => {
     + (c.walls ? ` · ${i18n('wallsLabel').replace('{n}', c.walls)}` : '');
 });
 
-// 棋盘尺寸：宽高都要放得下（大关卡的 10×11 以高度为准）
+// 棋盘尺寸：宽高都要放得下（大关卡的 9×12 由宽度定，行多时按高度缩）
 const boardStyle = computed(() => {
   const { rows, cols } = conf.value;
   const availW = Math.min(window.innerWidth || 420, 440) - 32;
@@ -151,6 +151,9 @@ const boardStyle = computed(() => {
     '--rows': rows,
     '--cols': cols,
     '--font': `${Math.max(13, Math.round(cell * 0.46))}px`,
+    // 棋盘宽度同时受可用高度约束（CSS 那侧原本只按宽度撑满 + aspect-ratio，
+    // 行一多就会顶出屏幕，而字号却已经按高度缩小了，两边不一致）
+    '--board-w': `${Math.round(width)}px`,
   };
 });
 
@@ -746,6 +749,9 @@ function loseLevel() {
     grid-template-columns: repeat(var(--cols), 1fr);
     grid-auto-rows: 1fr;
     aspect-ratio: var(--cols) / var(--rows);
+    // 宽度取「撑满可用宽度」和「放得下可用高度」的较小值，整盘始终完整可见
+    width: min(100%, var(--board-w));
+    margin: 0 auto;
     background: var(--board-bg);
     border-radius: var(--card-radius);
     .tile { font-size: var(--font); }
