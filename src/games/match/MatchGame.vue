@@ -96,6 +96,7 @@ let lock = false;
 let previewTimer = null;
 let countdownTimer = null;
 let mismatchTimer = null;
+let winTimer = null;
 
 onMounted(initGame);
 onUnmounted(clearTimers);
@@ -270,7 +271,7 @@ function win() {
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -293,8 +294,8 @@ function win() {
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    height: 72px;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .difficulty-wrapper {
       flex: 3.5;
       display: flex;
@@ -347,7 +348,7 @@ function win() {
         inset: -8px;
       }
       border: 1px solid var(--border-color);
-      border-radius: 8px;
+      border-radius: var(--radius-tile);
       background: var(--card-bg-color);
       color: var(--text-color);
       font-size: 15px;
@@ -366,7 +367,7 @@ function win() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
   }
   .game-area {
     position: relative;
@@ -414,7 +415,7 @@ function win() {
     -webkit-tap-highlight-color: transparent;
     &.matched {
       pointer-events: none;
-      // 翻面 transition 0.4s → 先闪烁再消除，动画串行衔接
+      // 翻面 transition 0.45s → 先闪烁再消除，动画串行衔接
       .card-inner {
         animation: flash 0.6s ease 0.45s, clear 0.35s ease 1.05s forwards;
         .front-face {
@@ -427,7 +428,7 @@ function win() {
       width: 100%;
       height: 100%;
       transform-style: preserve-3d;
-      transition: transform 0.4s ease-in-out;
+      transition: transform 0.45s ease-in-out;
     }
     &.flipped .card-inner {
       transform: rotateY(180deg);
@@ -435,7 +436,10 @@ function win() {
     .face {
       position: absolute;
       inset: 0;
-      border-radius: 8px;
+      box-sizing: border-box;
+      border-radius: var(--radius-tile);
+      border: 1px solid var(--tile-border-color);
+      box-shadow: var(--shadow-soft);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -467,7 +471,8 @@ function win() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
+    padding: 12px;
   }
 }
 </style>

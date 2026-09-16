@@ -30,7 +30,7 @@
         <div class="stage">
           <div v-for="(cell, idx) in stage" :key="idx" class="stage-cell">
             <div class="card-flip" :class="{ flipped: isStageFaceDown(idx) }">
-              <div class="face back-face"><i i-mdi-target /></div>
+              <div class="face back-face"><i :class="BACK_ICON" /></div>
               <div class="face front-face">{{ cell }}</div>
             </div>
           </div>
@@ -44,7 +44,7 @@
           @click="pick(idx)"
         >
           <div class="cand-flip" :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(opt), wrong: wrongSet.has(opt) }">
-            <div class="face cand-back"><i i-mdi-target /></div>
+            <div class="face cand-back"><i :class="BACK_ICON" /></div>
             <div class="face cand-front">{{ opt }}</div>
           </div>
         </div>
@@ -71,9 +71,13 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { gameConfig } from '@/shared/games';
 import { EMOJIS } from '@/shared/emojis';
 
 // 6 关：展示 3~8 个 emoji；候选区依次 3×3 / 3×4 / 3×4 / 4×4 / 4×4 / 4×5
+// 牌背用的是本游戏在首页的图标（与 games.js 里注册的是同一个，改图标两处一起变）
+const BACK_ICON = gameConfig('hunter').icon;
+
 const LEVELS = [
   { show: 3, grid: [3, 3] },
   { show: 4, grid: [3, 4] },
@@ -303,7 +307,7 @@ function onScoreReset() {
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -325,8 +329,8 @@ function onScoreReset() {
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    height: 72px;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .difficulty-wrapper {
       flex: 3.5;
       display: flex;
@@ -361,7 +365,7 @@ function onScoreReset() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
   }
   .game-area {
     position: relative;
@@ -399,7 +403,10 @@ function onScoreReset() {
   .face {
     position: absolute;
     inset: 0;
-    border-radius: 8px;
+    box-sizing: border-box;
+    border-radius: var(--radius-tile);
+    border: 1px solid var(--tile-border-color);
+    box-shadow: var(--shadow-soft);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -453,7 +460,6 @@ function onScoreReset() {
     }
     .cand-front {
       background: var(--card-bg-color);
-      border: 1px solid var(--tile-border-color);
       font-size: var(--cand-font);
       line-height: 1;
     }
@@ -502,7 +508,8 @@ function onScoreReset() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 12px;
+    padding: 12px;
     &.lose {
       color: var(--lose-color);
     }

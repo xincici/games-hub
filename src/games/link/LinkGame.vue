@@ -658,7 +658,7 @@ function loseLevel() {
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -799,7 +799,10 @@ function loseLevel() {
     align-items: center;
     justify-content: center;
     padding: 0;
-    border: 0 none;
+    box-sizing: border-box;
+    // 与消消乐 / 大师的棋子同款：圆角令牌 + 描边 + 软阴影
+    border: 1px solid var(--tile-border-color);
+    box-shadow: var(--shadow-soft);
     border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     color: var(--text-color);
@@ -876,7 +879,7 @@ function loseLevel() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     padding: 12px;
     box-sizing: border-box;
     text-align: center;
@@ -884,7 +887,7 @@ function loseLevel() {
       color: var(--lose-color);
     }
     .final-time {
-      font-size: 26px;
+      font-size: 28px;
     }
     .result-btns {
       display: flex;

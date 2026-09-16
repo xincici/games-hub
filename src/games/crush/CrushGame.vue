@@ -847,7 +847,9 @@ function onScoreReset() {
     box-sizing: border-box;
     border-radius: var(--radius-tile);
     background: var(--card-bg-color);
+    // 与其它 emoji 游戏的棋子同款：描边 + 软阴影
     border: 1px solid var(--tile-border-color);
+    box-shadow: var(--shadow-soft);
     font-size: var(--font);
     line-height: 1;
     cursor: pointer;
@@ -931,7 +933,7 @@ function onScoreReset() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     text-align: center;
     padding: 12px;
     box-sizing: border-box;

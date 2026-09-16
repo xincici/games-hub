@@ -586,7 +586,7 @@ function restore() {
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -652,7 +652,7 @@ function restore() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
     &.again {
       margin-top: 6px;
     }
@@ -768,6 +768,7 @@ function restore() {
     align-items: center;
     justify-content: center;
     gap: 12px;
+    padding: 12px;
     &.lose {
       color: var(--lose-color);
     }

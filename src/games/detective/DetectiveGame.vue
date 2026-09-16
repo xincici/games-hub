@@ -30,7 +30,7 @@
         <div class="board">
           <div v-for="(cell, idx) in board" :key="idx" class="cell">
             <div class="card-flip" :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: phase === WON && idx === swappedIdx }" @click="onCellClick(idx)">
-              <div class="face back-face"><i i-mdi-incognito /></div>
+              <div class="face back-face"><i :class="BACK_ICON" /></div>
               <div class="face front-face">{{ cell }}</div>
             </div>
           </div>
@@ -63,9 +63,13 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { gameConfig } from '@/shared/games';
 import { EMOJIS } from '@/shared/emojis';
 
 // 1×3 / 2×2 / 2×3 / 2×4 / 3×3 / 3×4 / 3×5 / 4×4 / 4×5 共 9 关；观察时长随棋盘增大递增
+// 牌背用的是本游戏在首页的图标（与 games.js 里注册的是同一个，改图标两处一起变）
+const BACK_ICON = gameConfig('detective').icon;
+
 const SIZES = [[1, 3], [2, 2], [2, 3], [2, 4], [3, 3], [3, 4], [3, 5], [4, 4], [4, 5]];
 const MEMORIES = [2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000];
 const FLIP_MS = 1000;
@@ -291,7 +295,7 @@ function onScoreReset() {
     margin-top: 70px;
     display: flex;
     align-items: center;
-    height: 72px;
+    height: var(--row-height);
     .stat {
       flex: 1;
       display: flex;
@@ -313,8 +317,8 @@ function onScoreReset() {
   .opt-area {
     display: flex;
     align-items: center;
-    margin: 16px 0;
-    height: 72px;
+    margin: var(--row-gap) 0;
+    height: var(--row-height);
     .difficulty-wrapper {
       flex: 3.5;
       display: flex;
@@ -351,7 +355,7 @@ function onScoreReset() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
   }
   .game-area {
     position: relative;
@@ -402,7 +406,10 @@ function onScoreReset() {
   .face {
     position: absolute;
     inset: 0;
-    border-radius: 8px;
+    box-sizing: border-box;
+    border-radius: var(--radius-tile);
+    border: 1px solid var(--tile-border-color);
+    box-shadow: var(--shadow-soft);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -414,7 +421,7 @@ function onScoreReset() {
   .back-face {
     background: var(--primary-bg);
     color: #fff;
-    font-size: 20px;
+    font-size: inherit;
     transform: rotateY(180deg);
   }
   .front-face {
@@ -452,7 +459,8 @@ function onScoreReset() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 12px;
+    padding: 12px;
     .result-actions {
       display: flex;
       gap: 12px;
