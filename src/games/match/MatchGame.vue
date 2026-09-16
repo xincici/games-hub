@@ -25,7 +25,7 @@
       <div class="divider"></div>
       <div class="opt-half">
         <span v-if="phase === PREVIEW" class="preview-tip">👀 {{ previewLeft }}s</span>
-        <CountTimer v-else ref="timerRef" :enable="phase === PLAY" />
+        <CountTimer v-else ref="timerRef" :enable="phase === PLAY && !finished" />
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
@@ -97,6 +97,10 @@ let previewTimer = null;
 let countdownTimer = null;
 let mismatchTimer = null;
 let winTimer = null;
+// 最后一对消掉那一刻的用时：结算浮层要等闪烁动画播完才弹，但成绩不能用延后的读数
+let finishTime = 0;
+// 已清空（等演出结束）：期间切后台再回来，计时器也不能被 visibilitychange 重新拉起
+const finished = ref(false);
 
 onMounted(initGame);
 onUnmounted(clearTimers);
@@ -126,6 +130,7 @@ function shuffle(list) {
 function clearTimers() {
   clearTimeout(previewTimer);
   clearTimeout(mismatchTimer);
+  clearTimeout(winTimer);
   clearInterval(countdownTimer);
 }
 
@@ -134,6 +139,8 @@ function initGame() {
   firstCard = null;
   lock = false;
   newBest.value = false;
+  finishTime = 0;
+  finished.value = false;
   const pairs = (size.value * size.value) / 2;
   bestTime.value = +(localStorage.getItem(bestKey()) || 0);
   const pool = shuffle(EMOJIS).slice(0, pairs);
@@ -175,7 +182,13 @@ function onCardClick(card) {
   if (firstCard.emoji === card.emoji) {
     firstCard.matched = card.matched = true;
     firstCard = null;
-    if (cards.value.every(c => c.matched)) setTimeout(win, 1500);
+    if (cards.value.every(c => c.matched)) {
+      // 清空最后一对的瞬间就停表取成绩，闪烁 + 撒花只是演出，不能算进用时
+      finishTime = timerRef.value?.seconds() || 0;
+      timerRef.value?.stop();
+      finished.value = true;
+      winTimer = setTimeout(win, 1500);
+    }
   } else {
     lock = true;
     const prev = firstCard;
@@ -188,9 +201,10 @@ function onCardClick(card) {
 }
 
 function win() {
+  if (phase.value !== PLAY) return;   // 期间开了新局 → 这次结算作废
   phase.value = WON;
   timerRef.value?.stop();
-  const elapsed = timerRef.value?.seconds() || 0;
+  const elapsed = finishTime;
   const best = bestTime.value;
   if (!best || elapsed < best) {
     localStorage.setItem(bestKey(), elapsed);

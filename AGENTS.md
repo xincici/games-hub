@@ -52,7 +52,7 @@ src/
     ├── puzzle/           # MainGame.vue + difficulty/rocker/i18n.js
     ├── g2048/            # Game2048.vue + i18n.js（route /2048，key 前缀 __game_2048__；新开局与恢复存档都按行列顺序逐张入场）
     ├── snake/            # SnakeGame.vue（canvas 渲染）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
-    ├── match/            # MatchGame.vue（emoji 对对碰；牌背图标直接取本游戏在首页的图标——`gameConfig('match').icon`，改首页图标牌背跟着变；棋盘点阵底纹见「约定」）+ i18n.js（route /match，key 前缀 __emoji_match__）
+    ├── match/            # MatchGame.vue（emoji 对对碰；牌背图标直接取本游戏在首页的图标——`gameConfig('match').icon`，改首页图标牌背跟着变；**计时在清空最后一对的瞬间就停表取成绩**（闪烁 + 撒花是 1.5s 的演出，不计入用时；演出期间 `finished` 置位，免得切后台再回来计时器被 visibilitychange 重新拉起，`win()` 还带 phase 守卫防止旧结算把新局判成过关）；棋盘点阵底纹见「约定」）+ i18n.js（route /match，key 前缀 __emoji_match__）
     ├── link/             # LinkGame.vue（emoji 连连看 · 闯关制：限定时间内清空全盘过关，难度 = 列数 6→10 + 行数 6→12 + emoji 种类 6→12 + 对数 9→30 + 墙 0→18 + 限时，第 30 关全部封顶但关数无限；同一种 emoji 可出多对（偶数张即可）；顶部统计条底部有本关进度条（已消对数/总对数），操作区只有「新游戏」（点击弹二次确认、清记录回第 1 关），失败遮罩上给「重玩本关」；倒计时只显示在顶部统计条）+ board.js（纯逻辑：≤2 转弯路径查找、关卡曲线 CURVE 与 levelConfig、buildPairPool 多对发牌、generateLevelBoard/generateWalls、死局重排）+ i18n.js（route /link，key 前缀 __emoji_link__）
     ├── detective/        # DetectiveGame.vue（emoji 找茬侦探：记忆→翻面→偷换→答题）+ i18n.js（route /detective，key 前缀 __emoji_detective__）
     ├── hunter/           # HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标）+ i18n.js（route /hunter，key 前缀 __emoji_hunter__）
