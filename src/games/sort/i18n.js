@@ -22,6 +22,8 @@ export default {
     help6: 'Clear a level by flipping every fruit face up and getting each slot down to a single kind (empty slots are fine).',
     help7: 'On paper, every slot full with no two top fruits of the same kind would mean no legal move and a failed level. In practice each fruit has fewer copies than the slots can hold and two empty slots are always reserved, so a real dead end cannot happen — the worst case is taking a long way round. To start over, tap New Game: it clears your record and returns to level 1 after a confirmation.',
     help8: 'Every board is verified solvable by a solver before it is dealt, so a level can always be finished.',
+    help9: 'Next to the help icon there is a mode switch. Classic: every kind exactly fills one slot and two completely empty slots are reserved. Compact: only one empty slot is reserved, but every slot leaves its top cell free as elbow room. The two modes keep their own level progress and saved board, and New Game only clears the mode you are in.',
+    modeTip: 'Switch mode: Classic (2 empty slots) / Compact (1 empty slot + a free top cell in every slot)',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -48,6 +50,8 @@ export default {
     help6: '过关条件：所有水果都翻成正面，并且每个槽里只装同一种水果（空槽也算）。',
     help7: '理论上「所有槽都装满、槽口的水果两两不同」就是再也搬不动的死局、本关失败；但每种水果的张数都少于槽位能装的总量，又固定预留了 2 个空槽，所以实际玩不出真正的死局，最多是自己绕远路。想重开就点「新游戏」：二次确认后清除记录、从第 1 关重新开始。',
     help8: '每一局的牌都是先用求解器验证过有解才发出来的，所以每一关都一定通得过。',
+    help9: '帮助图标旁边还有一个玩法开关。经典：每种水果刚好装满一槽，另外预留 2 个完全空的槽。紧凑：只预留 1 个空槽，但每个槽开局都空出最上面一格当腾挪空间。两种玩法的关卡进度与局面存档各自独立，互不影响；「新游戏」只清当前玩法的记录。',
+    modeTip: '切换玩法：经典（2 个空槽）/ 紧凑（1 个空槽 + 每槽顶部留一格）',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }

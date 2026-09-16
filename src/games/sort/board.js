@@ -14,16 +14,21 @@
 //   · 过关 = 所有水果都翻成正面 且 每个槽只装同一种水果（或空槽）
 
 // ---------- 关卡配置 ----------
-// 难度由槽容量 M（同时也是每种水果的个数）与水果种类 K 共同决定，两者交错
-// 爬升，每 2~4 关就有一步提升，第 30 关到顶（M=8、K=6：8 个槽、每种水果 8 个，
-// 共 48 张）之后关数继续增长但难度不再上升。水果总数 9 → 48，
-// 求解器给出的严格解步数实测约 8 → 53 步，爬升比较线性。
-// 空槽恒为 2 个：实测只有一个空槽时随机局面可解率只有 5%~10%，生成器会不停
-// 重洗甚至退化送分，所以难度只从 M 和 K 上要，不拿空槽数卡人。
+// 难度由每种水果的张数 C 与水果种类 K 共同决定，两者交错爬升，每 2~4 关就有
+// 一步提升，第 30 关到顶（C=8、K=6：每种 8 张、共 48 张）之后关数继续增长但
+// 难度不再上升。求解器给出的严格解步数实测约 8 → 53 步，爬升比较线性。
+//
+// 两套玩法（mode）共用同一条曲线，区别只在空槽与槽容量：
+//   mode = 1「经典」：K 个槽每种刚好装满 C 张，另外预留 2 个完全空的槽，
+//                     槽容量 = C
+//   mode = 2「紧凑」：只预留 1 个完全空的槽，但每个槽都空出最上面一格当
+//                     腾挪空间（开局装 C 张、还能再放 1 张），槽容量 = C + 1
+// 两种玩法的可腾挪格数接近（经典 2C；紧凑 K + C + 1），但结构完全不同：
+// 经典是两根空管，紧凑是每根管子各留一格 + 一根空管。
 export const MAX_LEVEL = 30;
+export const MODES = [1, 2];
 
-const EMPTIES = 2;
-// [槽容量 M, 水果种类 K, 该档持续到第几关]
+// [每种水果张数 C, 水果种类 K, 该档持续到第几关]
 const STEPS = [
   [3, 3, 3],          // 第 1~3 关   9 张
   [4, 3, 5],          // 第 4~5 关   12 张
@@ -36,16 +41,22 @@ const STEPS = [
   [8, 6, MAX_LEVEL],  // 第 28 关起  48 张
 ];
 
-export function levelConfig(level) {
+export function levelConfig(level, mode = 1) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const [capacity, kinds] = STEPS.find(step => lv <= step[2]) || STEPS[STEPS.length - 1];
+  const m = mode === 2 ? 2 : 1;
+  const [copies, kinds] = STEPS.find(step => lv <= step[2]) || STEPS[STEPS.length - 1];
+  const compact = m === 2;                       // 紧凑：1 个空槽 + 每槽顶部留一格
+  const empties = compact ? 1 : 2;
+  const capacity = copies + (compact ? 1 : 0);   // 槽容量（单槽最多装几张）
   return {
     level: lv,
-    capacity,
+    mode: m,
+    copies,                                      // 每种水果的张数
     kinds,
-    empties: EMPTIES,
-    slots: kinds + EMPTIES,
-    total: kinds * capacity,
+    empties,
+    capacity,
+    slots: kinds + empties,
+    total: kinds * copies,
   };
 }
 
@@ -132,37 +143,42 @@ export function applyMove(slots, from, to, capacity) {
 }
 
 // ---------- 局面判定 ----------
-// 该槽已归位：装满且全是同一种水果（空槽不算「已归位」）
-export function isComplete(slot, capacity) {
+// 该槽已归位：正好装了这种水果的全部 copies 张，且都是同一种（空槽不算）
+export function isComplete(slot, copies) {
   const items = Array.isArray(slot) ? slot : slot.items;
-  if (items.length !== capacity) return false;
+  if (items.length !== copies) return false;
   return items.every(item => kindOf(item) === kindOf(items[0]));
 }
 
-// 统计条上的「已归位」：满槽同种 + 底下没有扣着的牌（和过关条件同一把尺子）
-export function countDone(slots, capacity) {
+// 统计条上的「已归位」：归位 + 底下没有扣着的牌（和过关条件同一把尺子）
+export function countDone(slots, copies) {
   return slots.reduce((n, slot) => {
     const hidden = Array.isArray(slot) ? 0 : slot.hidden || 0;
-    return n + (hidden === 0 && isComplete(slot, capacity) ? 1 : 0);
+    return n + (hidden === 0 && isComplete(slot, copies) ? 1 : 0);
   }, 0);
 }
 
-// 过关：所有水果都翻成正面 + 每个非空槽都装满同一种水果。
-// 不能只判「每槽同种」：同一种水果被拆到两个槽时（比如 [🍎🍎] 与 [🍎]）
-// 两个槽各自都只装一种水果，但并没有归位。每种水果的张数恰好等于容量 M，
-// 所以「每槽同种」+「装满」正好等价于「每种水果都聚在同一个槽里」
-export function isWon(slots, capacity) {
-  return slots.every(slot => {
+const allSame = items => !items.length || items.every(item => kindOf(item) === kindOf(items[0]));
+
+// 过关：所有水果都翻成正面 + 每个非空槽只装同一种 + 非空槽数正好等于水果种类数。
+// 最后一条是必须的：同一种水果被拆到两个槽时（比如 [🍎🍎] 与 [🍎]）两个槽各自
+// 都只装一种水果，但并没有归位；每种水果的张数固定为 copies，所以「K 个非空槽
+// 且每槽同种」正好等价于「每种水果都聚在同一个槽里」
+export function isWon(slots, copies, kinds) {
+  let filled = 0;
+  for (const slot of slots) {
     const items = Array.isArray(slot) ? slot : slot.items;
-    if (!items.length) return true;
+    if (!items.length) continue;
+    filled++;
     const hidden = Array.isArray(slot) ? 0 : slot.hidden || 0;
-    return hidden === 0 && isComplete(slot, capacity);
-  });
+    if (hidden !== 0 || !allSame(items)) return false;
+  }
+  return filled === kinds;
 }
 
 // 死局：所有槽都满了，且槽口的水果两两不同 —— 没有任何合规的搬运可做。
-// （每种水果的总数 = 容量 < 槽数能容纳的量，空槽又固定预留，所以
-//  「所有槽都满」在这种发牌下不可能发生，实际玩起来不会真的走进死局）
+// （每种水果的总数 = copies < 槽数能容纳的量，空槽又固定预留，所以
+//  「所有槽都满」在这两种玩法的发牌下都不可能发生，实际玩不会真的走进死局）
 export function isStuck(slots, capacity) {
   if (slots.some(slot => (Array.isArray(slot) ? slot : slot.items).length < capacity)) return false;
   const tops = slots.map(topKind);
@@ -172,14 +188,14 @@ export function isStuck(slots, capacity) {
 // 本关进度：已归位的槽里翻成正面的水果数 / 全部水果数。
 // 整槽同种但底下还扣着的只算露出来的那几张，所以进度条到 100% 必然
 // 同时满足「都翻面」和「同种归位」两个过关条件
-export function progressPct(slots, capacity) {
+export function progressPct(slots, copies) {
   let done = 0;
   let total = 0;
   slots.forEach(slot => {
     const items = Array.isArray(slot) ? slot : slot.items;
     const hidden = Array.isArray(slot) ? 0 : slot.hidden || 0;
     total += items.length;
-    if (isComplete(slot, capacity)) done += Math.max(0, items.length - hidden);
+    if (isComplete(slot, copies)) done += Math.max(0, items.length - hidden);
   });
   return total ? Math.min(100, Math.round((done / total) * 100)) : 0;
 }
@@ -194,13 +210,21 @@ function runLen(kinds) {
   return n;
 }
 
-export function isSolvedKinds(slots, capacity) {
-  return slots.every(slot => !slot.length || (slot.length === capacity && slot.every(k => k === slot[0])));
+// 求解器的终局判定：每个非空槽只装一种 + 非空槽数等于种类数（不看正反面，
+// 隐藏牌不影响可解性，见文件头）
+export function isSolvedKinds(slots, copies, kinds) {
+  let filled = 0;
+  for (const slot of slots) {
+    if (!slot.length) continue;
+    filled++;
+    if (slot.length > copies || !slot.every(k => k === slot[0])) return false;
+  }
+  return filled === kinds;
 }
 
 // 候选走法：只考虑「一次搬到搬不动为止」（和玩家点一下的搬运量完全一致）。
 // 剪枝：已归位的槽不动；整槽同种搬进空槽是纯搬家；多个空槽互为等价，只用第一个
-function candidateMoves(slots, capacity) {
+function candidateMoves(slots, capacity, copies) {
   const out = [];
   for (let from = 0; from < slots.length; from++) {
     const a = slots[from];
@@ -208,7 +232,7 @@ function candidateMoves(slots, capacity) {
     const run = runLen(a);
     const kind = a[a.length - 1];
     const uniform = run === a.length;
-    if (uniform && a.length === capacity) continue;
+    if (uniform && a.length === copies) continue;
     let usedEmpty = false;
     for (let to = 0; to < slots.length; to++) {
       if (to === from) continue;
@@ -233,10 +257,12 @@ function stateKey(slots) {
   return slots.map(slot => slot.join(',')).join('|');
 }
 
-// 是否有解：带访问集的深度优先搜索（预算用尽返回 null 表示「没算出来」）
-export function hasSolution(plain, capacity, budget = 40000) {
+// 是否有解：带访问集的深度优先搜索（预算用尽返回 null 表示「没算出来」）。
+// plain 是待判定的盘面（每槽一个种类数组），cfg 提供 capacity / copies / kinds
+export function hasSolution(plain, cfg, budget = 40000) {
+  const { capacity, copies, kinds } = cfg;
   const start = plain.map(kindsOf);
-  if (isSolvedKinds(start, capacity)) return true;
+  if (isSolvedKinds(start, copies, kinds)) return true;
   const seen = new Set();
   const stack = [start];
   let nodes = 0;
@@ -246,28 +272,28 @@ export function hasSolution(plain, capacity, budget = 40000) {
     const key = stateKey(st);
     if (seen.has(key)) continue;
     seen.add(key);
-    for (const mv of candidateMoves(st, capacity)) {
+    for (const mv of candidateMoves(st, capacity, copies)) {
       const next = st.map(slot => slot.slice());
       next[mv.to].push(...next[mv.from].splice(next[mv.from].length - mv.count, mv.count));
-      if (isSolvedKinds(next, capacity)) return true;
+      if (isSolvedKinds(next, copies, kinds)) return true;
       stack.push(next);
     }
   }
   return false;
 }
 
-// 发牌：每种水果 capacity 张，洗匀后按 capacity 张一槽铺开，空槽留空
+// 发牌：每种水果 copies 张，洗匀后按 copies 张一槽铺开，空槽留空
 function dealShuffled(cfg, rand) {
   const pool = [];
   for (let kind = 0; kind < cfg.kinds; kind++) {
-    for (let i = 0; i < cfg.capacity; i++) pool.push(kind);
+    for (let i = 0; i < cfg.copies; i++) pool.push(kind);
   }
   for (let i = pool.length - 1; i > 0; i--) {
     const j = ~~(rand() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   const slots = [];
-  for (let i = 0; i < cfg.kinds; i++) slots.push(pool.slice(i * cfg.capacity, (i + 1) * cfg.capacity));
+  for (let i = 0; i < cfg.kinds; i++) slots.push(pool.slice(i * cfg.copies, (i + 1) * cfg.copies));
   for (let i = 0; i < cfg.empties; i++) slots.push([]);
   return slots;
 }
@@ -279,12 +305,12 @@ export function generateSolvable(cfg, rand = Math.random, budget = 40000) {
   for (let attempt = 0; attempt < 40; attempt++) {
     const plain = dealShuffled(cfg, rand);
     // 已经整整齐齐（洗完还是每槽同种）的局面对玩家没意义，重洗
-    if (isSolvedKinds(plain, cfg.capacity)) continue;
-    if (hasSolution(plain, cfg.capacity, budget)) return wrap(plain, cfg.capacity);
+    if (isSolvedKinds(plain, cfg.copies, cfg.kinds)) continue;
+    if (hasSolution(plain, cfg, budget)) return wrap(plain, cfg.capacity);
   }
   // 兜底：每槽同种（必能过关，只是要先自己把牌翻出来）
   const plain = [];
-  for (let kind = 0; kind < cfg.kinds; kind++) plain.push(new Array(cfg.capacity).fill(kind));
+  for (let kind = 0; kind < cfg.kinds; kind++) plain.push(new Array(cfg.copies).fill(kind));
   for (let i = 0; i < cfg.empties; i++) plain.push([]);
   return wrap(plain, cfg.capacity);
 }

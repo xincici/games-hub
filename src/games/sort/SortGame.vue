@@ -1,6 +1,12 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <TopHeader @onScoreReset="onScoreReset">
+      <!-- 玩法开关（放在帮助图标旁边）：经典 = 2 个空槽；紧凑 = 1 个空槽 + 每槽顶部留一格 -->
+      <span class="item-wrapper" :title="i18n('modeTip')" @click="toggleMode">
+        <i i-mdi-test-tube v-if="mode === 1" />
+        <i i-mdi-test-tube-empty v-else />
+      </span>
+    </TopHeader>
     <div class="card score-area">
       <div class="stat">
         <span class="stat-label">{{ i18n('levelLabel') }}</span>
@@ -94,9 +100,14 @@ import {
 // 水果都翻成正面即过关。规则与关卡曲线见 board.js
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_sort__';
-const LEVEL_KEY = `${KEY_PREFIX}level`;          // 当前关卡
-const BEST_KEY = `${KEY_PREFIX}best_1`;          // 历史最高关卡（沿用「前缀+数字」以便连点标题清记录）
-const STATE_KEY = `${KEY_PREFIX}state`;          // 局面存档
+const MODE_KEY = `${KEY_PREFIX}mode`;            // 上次选的玩法
+// 两种玩法（经典 / 紧凑）的关卡进度与局面存档各自独立：模式 1 沿用不带后缀的
+// key（已经玩过的进度不丢），模式 2 加 _2 后缀；历史最高关卡沿用「前缀+数字」，
+// 正好让连点标题的彩蛋一次把两个玩法的记录都清掉（games.js 里 maxDifficulty = 2）
+const modeSuffix = () => (mode.value === 2 ? '_2' : '');
+const levelKey = () => `${KEY_PREFIX}level${modeSuffix()}`;
+const stateKey = () => `${KEY_PREFIX}state${modeSuffix()}`;
+const bestKey = () => `${KEY_PREFIX}best_${mode.value}`;
 
 // 水果池：emoji 列表里排最前的那几种（🍎🍌🍇🍉🥝🥭🫐🍒…），最多种类数就是它的长度
 const FRUITS = EMOJIS.slice(0, 8);
@@ -106,12 +117,15 @@ const BACK_ICON = gameConfig('sort').icon;
 // ---------- 棋盘几何 ----------
 // 槽位横向铺开、水果在槽内自下而上堆叠，槽口上方另留一条空白带（HEAD_ROWS 行）：
 // 选中时整摞水果抬到这条带子里，之后只在这里横向平移，再从目标槽正上方垂直落下
-const PAD = 8;          // 棋盘内边距（与大师的 BOARD_PAD 同款）
-const GAP_X = 5;        // 槽与槽的间距
-const GAP_Y = 3;        // 槽内相邻水果的间距
-const HEAD_ROWS = 5;    // 槽口上方预留的空白带行数（最多能整摞抬出这么多张）
-const HEAD_GAP = GAP_Y; // 抬起后最低那张与槽口之间的小缝
-const MAX_CELL = 46;    // 格子边长上限
+const PAD = 8;           // 棋盘内边距（与大师的 BOARD_PAD 同款）
+const GAP_X = 5;         // 槽与槽的间距
+const GAP_Y = 3;         // 槽内相邻水果的间距
+// 抬起的一摞里，上面那张盖住下面那张约 80% 的面积，所以每多一张只往上错开
+// 0.2 个格子 —— 槽口上方的空白带也就只要「一张 + 这么点」的高度，不用留一大条
+const LIFT_OVERLAP = 0.8;
+const HEAD_GAP = GAP_Y;  // 抬起后最低那张与槽口之间的小缝
+const HEAD_MARGIN = 8;   // 抬起的一摞顶到棋盘上边缘还要留的余量
+const MAX_CELL = 46;     // 格子边长上限
 
 // 三段动画时长（抬 → 平移 → 落），同一批水果之间再错峰一点
 const STAGGER_MS = 22;
@@ -120,12 +134,21 @@ const TRAVEL_MS = 200;  // 空白带里的横向平移
 const DROP_MS = 150;    // 落到目标槽里（纯竖向）
 const FLIP_MS = 340;    // 翻面动画
 
-function loadLevel() {
-  return Math.max(1, Math.floor(+(localStorage.getItem(LEVEL_KEY) || 1)) || 1);
+function loadMode() {
+  return +(localStorage.getItem(MODE_KEY) || 1) === 2 ? 2 : 1;
 }
 
+function loadLevel() {
+  return Math.max(1, Math.floor(+(localStorage.getItem(levelKey()) || 1)) || 1);
+}
+
+function loadBest() {
+  return Math.max(level.value, Math.floor(+(localStorage.getItem(bestKey()) || 1)) || 1);
+}
+
+const mode = ref(loadMode());
 const level = ref(loadLevel());
-const bestLevel = ref(Math.max(level.value, Math.floor(+(localStorage.getItem(BEST_KEY) || 1)) || 1));
+const bestLevel = ref(loadBest());
 // [{ id, kind, slot, depth, lift, liftN, moveMs, delay, flying, pending, flipping }]
 // lift = -1 表示在槽里，>= 0 表示正被抬起（值是在这一摞里从下往上的序号）
 // pending = 状态上已经翻成正面、但等这一摞落定后才播翻面（先继续画牌背）
@@ -139,7 +162,7 @@ const dealing = ref(false);    // 开局逐张入场中（期间不接受操作�
 const boardRef = ref(null);
 const viewport = ref({ w: window.innerWidth || 420, h: window.innerHeight || 700 });
 
-const cfg = computed(() => levelConfig(level.value));
+const cfg = computed(() => levelConfig(level.value, mode.value));
 const capacity = computed(() => cfg.value.capacity);
 
 // 盘面（board.js 需要的 { items, hidden } 形态，原地由水果对象组装）
@@ -149,8 +172,8 @@ const piles = computed(() => {
   return out.map((items, i) => ({ items, hidden: hidden.value[i] || 0 }));
 });
 
-const done = computed(() => countDone(piles.value, capacity.value));
-const progress = computed(() => progressPct(piles.value, capacity.value));
+const done = computed(() => countDone(piles.value, cfg.value.copies));
+const progress = computed(() => progressPct(piles.value, cfg.value.copies));
 const boardLabel = computed(() => i18n('boardLabel')
   .replace('{slots}', cfg.value.slots)
   .replace('{capacity}', cfg.value.capacity)
@@ -170,20 +193,25 @@ const metrics = computed(() => {
   const { slots, capacity: cap } = cfg.value;
   const boardW = Math.min(viewport.value.w, 440) - 32;          // .game-area 的宽度
   const availH = Math.max(200, viewport.value.h - 262);         // 标题栏 + 统计条 + 操作区
-  const headRows = Math.min(cap, HEAD_ROWS);
-  const rows = headRows + cap;                                  // 空白带 + 槽本身
+  // 最多会抬起 cap 张：每张之间错开 (1 - LIFT_OVERLAP) 个格子，
+  // 整块棋盘折算成「槽 cap 行 + 空白带」共 rowUnits 行格子来解高度约束
+  const overlapStep = 1 - LIFT_OVERLAP;
+  const rowUnits = 1 + cap + (cap - 1) * overlapStep;
+  const fixedH = PAD * 2 + HEAD_GAP + HEAD_MARGIN + (cap - 1) * GAP_Y;
   const cell = Math.max(16, Math.floor(Math.min(
     (boardW - PAD * 2 - GAP_X * (slots - 1)) / slots,
-    (availH - PAD * 2 + GAP_Y) / rows - GAP_Y,
+    (availH - fixedH) / rowUnits,
     MAX_CELL,
   )));
   const stepY = cell + GAP_Y;
-  const headH = headRows * stepY;
+  const hoverStep = overlapStep * cell;                        // 抬起的一摞里相邻两张的错位
+  const headH = (cap - 1) * hoverStep + cell + HEAD_GAP + HEAD_MARGIN;
   const groupW = slots * cell + GAP_X * (slots - 1);
   return {
     cell,
     stepX: cell + GAP_X,
     stepY,
+    hoverStep,
     font: Math.max(12, Math.round(cell * 0.55)),
     // 槽位整体在棋盘里居中（格子取整后会剩几个像素）
     offsetX: PAD + Math.max(0, (boardW - PAD * 2 - groupW) / 2),
@@ -218,19 +246,10 @@ const hitBoxes = computed(() => {
   }));
 });
 
-// 抬起的一摞水果之间的间距：空白带装得下就用标准间距，装不下就压紧一点
-// （抬起来的一摞都是同一种水果，稍微叠一点仍然看得清）
-function hoverStep(n) {
-  const m = metrics.value;
-  if (n <= 1) return m.stepY;
-  const room = m.headH - m.cell - HEAD_GAP;
-  return Math.max(m.stepY * 0.34, Math.min(m.stepY, room / (n - 1)));
-}
-
 function fruitStyle(f) {
   const m = metrics.value;
   const top = f.lift >= 0
-    ? m.slotTop - HEAD_GAP - m.cell - f.lift * hoverStep(f.liftN)
+    ? m.slotTop - HEAD_GAP - m.cell - f.lift * m.hoverStep
     : m.slotTop + (capacity.value - 1 - f.depth) * m.stepY;
   return {
     left: `${m.offsetX + f.slot * m.stepX}px`,
@@ -238,6 +257,8 @@ function fruitStyle(f) {
     width: `${m.cell}px`,
     height: `${m.cell}px`,
     fontSize: `${m.font}px`,
+    // 一摞里越靠上的越要盖在上面（层级按它在槽里的层数走，抬起来时也是这个相对次序）
+    zIndex: f.flying ? 30 + f.depth : 1,
     '--move-dur': `${f.moveMs}ms`,
     '--move-delay': `${f.delay}ms`,
     animationDelay: dealing.value ? `${f.deal * 18}ms` : '0ms',
@@ -257,8 +278,9 @@ function isTarget(i) {
 // ---------- 存档 ----------
 function save() {
   try {
-    localStorage.setItem(STATE_KEY, JSON.stringify({
+    localStorage.setItem(stateKey(), JSON.stringify({
       level: level.value,
+      mode: mode.value,
       moves: moves.value,
       hidden: hidden.value,
       // 水果按 [种类, 槽位, 层数] 存，顺序即 id
@@ -270,10 +292,11 @@ function save() {
 
 function restore() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STATE_KEY));
+    const saved = JSON.parse(localStorage.getItem(stateKey()));
     if (!saved || !Array.isArray(saved.fruits) || !saved.fruits.length) return false;
+    if (saved.mode && saved.mode !== mode.value) return false;
     const lv = Math.max(1, Math.floor(+(saved.level || 1)) || 1);
-    const c = levelConfig(lv);
+    const c = levelConfig(lv, mode.value);
     if (!Array.isArray(saved.hidden) || saved.hidden.length !== c.slots) return false;
     if (saved.fruits.length !== c.total) return false;
     const next = saved.fruits.map(([kind, slot, depth], id) => ({ id, kind, slot, depth }));
@@ -313,6 +336,7 @@ function newFruit(id, kind, slot, depth) {
 let dealTimer = null;
 let flipTimers = [];
 let phaseTimers = [];
+let generation = 0;    // 局面被换掉（初始化 / 恢复 / 切玩法）就 +1，动画尾声据此收手
 let busy = false;      // 有一手搬运正在播（只挡「下一手搬运」，不挡抬起）
 let liftUntil = 0;     // 当前这一摞抬到位的时间点
 // 搬运动画期间玩家按下的意图（等这一手落定后再执行）：{ type: 'select' | 'move', slot, to }
@@ -321,6 +345,7 @@ let disposed = false;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function clearTransient() {
+  generation += 1;
   clearTimeout(dealTimer);
   dealTimer = null;
   flipTimers.forEach(clearTimeout);
@@ -349,12 +374,7 @@ function startDealing() {
 
 onMounted(() => {
   window.addEventListener('resize', onResize);
-  if (!restore()) {
-    initLevel(level.value);
-    return;
-  }
-  if (phase.value === PLAY) startDealing();
-  else save();
+  bootMode();
 });
 
 onUnmounted(() => {
@@ -371,10 +391,10 @@ function initLevel(lv) {
   clearTransient();
   confirming.value = false;
   level.value = Math.max(1, lv);
-  localStorage.setItem(LEVEL_KEY, level.value);
+  localStorage.setItem(levelKey(), level.value);
   if (level.value > bestLevel.value) {
     bestLevel.value = level.value;
-    localStorage.setItem(BEST_KEY, bestLevel.value);
+    localStorage.setItem(bestKey(), bestLevel.value);
   }
   const c = cfg.value;
   const plain = generateSolvable(c);
@@ -403,17 +423,41 @@ function replayLevel() {
   initLevel(level.value);
 }
 
-// 新游戏：清除闯关记录（最高关卡）并从第 1 关重新开始，任何时候点都要二次确认
+// 新游戏：只清当前玩法的记录（关卡 / 局面 / 最高关卡）并从第 1 关重新开始，
+// 另一种玩法的进度完全不动，任何时候点都要二次确认
 function startNewGame() {
   confirming.value = false;
-  localStorage.removeItem(BEST_KEY);
+  localStorage.removeItem(levelKey());
+  localStorage.removeItem(stateKey());
+  localStorage.removeItem(bestKey());
   bestLevel.value = 1;
   initLevel(1);
 }
 
 function onScoreReset() {
-  localStorage.removeItem(BEST_KEY);
+  localStorage.removeItem(bestKey());
   bestLevel.value = level.value;
+}
+
+// 切换玩法：先把当前玩法落档，再按另一种玩法自己的关卡 / 存档接着玩
+function toggleMode() {
+  save();
+  clearTransient();
+  mode.value = mode.value === 1 ? 2 : 1;
+  localStorage.setItem(MODE_KEY, String(mode.value));
+  level.value = loadLevel();
+  bestLevel.value = loadBest();
+  bootMode();
+}
+
+// 进入某个玩法的局面：有存档就接着玩，没有就从它自己的关卡开一局
+function bootMode() {
+  if (!restore()) {
+    initLevel(level.value);
+    return;
+  }
+  if (phase.value === PLAY) startDealing();
+  else save();
 }
 
 // ---------- 操作 ----------
@@ -515,6 +559,7 @@ function dropRun(i) {
 // 界面要维持「每张水果一个稳定的 id + 自己的槽位/层数」，board.js 的 applyMove
 // 只搬 items 数组，改不到这两样
 async function performMove(from, to, n) {
+  const gen = generation;
   const srcPile = piles.value[from].items;
   const dstLen = piles.value[to].items.length;
   const oldLen = srcPile.length;
@@ -530,7 +575,7 @@ async function performMove(from, to, n) {
   // 手快在抬起动画没走完就点了目标槽：等它抬到位，横向平移才不会蹭到槽边
   const wait = Math.max(0, liftUntil - Date.now());
   if (wait) await sleep(wait);
-  if (disposed) return;
+  if (disposed || gen !== generation) return;
 
   // 第二段：横向平移到目标槽正上方。lift 不动，所以 top 一个像素都不变
   moved.forEach((f, i) => {
@@ -551,7 +596,7 @@ async function performMove(from, to, n) {
   save();
 
   await sleep(TRAVEL_MS + (n - 1) * STAGGER_MS + 20);
-  if (disposed) return;
+  if (disposed || gen !== generation) return;
 
   // 第三段：从目标槽正上方垂直落下（x 不变，只改 top）
   moved.forEach((f, i) => {
@@ -561,7 +606,7 @@ async function performMove(from, to, n) {
   });
 
   await sleep(DROP_MS + (n - 1) * STAGGER_MS + 40);
-  if (disposed) return;
+  if (disposed || gen !== generation) return;
 
   moved.forEach(f => {
     f.flying = false;
@@ -588,7 +633,7 @@ async function performMove(from, to, n) {
 
 function evaluate() {
   if (phase.value !== PLAY) return;
-  if (isWon(piles.value, capacity.value)) {
+  if (isWon(piles.value, cfg.value.copies, cfg.value.kinds)) {
     phase.value = WON;
     save();
     confetti();
@@ -788,10 +833,6 @@ function evaluate() {
     }
     &.picked {
       box-shadow: 0 0 0 2px var(--primary-bg);
-    }
-    // 抬起 / 在途中的水果压在其它牌上面
-    &.moving {
-      z-index: 30;
     }
     .fruit-face {
       line-height: 1;

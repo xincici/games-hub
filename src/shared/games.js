@@ -152,10 +152,11 @@ export const games = [
     icon: 'i-mdi-test-tube',
     accent: 'logic',
     helpKey: '__emoji_sort__help_showed',
-    // 闯关制后只记录「历史最高关卡」，存成前缀+1，沿用连点标题清记录的机制
+    // 闯关制后只记录「历史最高关卡」：1 = 经典玩法、2 = 紧凑玩法，
+    // 存成前缀+模式号，连点标题的彩蛋正好把两种玩法的记录一起清掉
     recordsPrefix: '__emoji_sort__best_',
     minDifficulty: 1,
-    maxDifficulty: 1,
+    maxDifficulty: 2,
   },
 ];
 
