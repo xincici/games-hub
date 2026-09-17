@@ -414,9 +414,17 @@ function dealShuffled(cfg, rand) {
     const j = ~~(rand() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
+  return layout(pool, cfg);
+}
+
+// 摆槽：各种类占中间，空槽分到两侧 —— 两个空槽时左右各一个（经典玩法），
+// 一个空槽时留在最右侧（紧凑玩法）。空槽在规则里完全等价，这里只管观感
+function layout(pool, cfg) {
+  const left = cfg.empties >= 2 ? 1 : 0;
   const slots = [];
+  for (let i = 0; i < left; i++) slots.push([]);
   for (let i = 0; i < cfg.kinds; i++) slots.push(pool.slice(i * cfg.copies, (i + 1) * cfg.copies));
-  for (let i = 0; i < cfg.empties; i++) slots.push([]);
+  for (let i = left; i < cfg.empties; i++) slots.push([]);
   return slots;
 }
 
@@ -431,10 +439,11 @@ export function generateSolvable(cfg, rand = Math.random, budget = 40000) {
     if (hasSolution(plain, cfg, budget)) return wrap(plain, cfg.capacity);
   }
   // 兜底：每槽同种（必能过关，只是要先自己把牌翻出来）
-  const plain = [];
-  for (let kind = 0; kind < cfg.kinds; kind++) plain.push(new Array(cfg.copies).fill(kind));
-  for (let i = 0; i < cfg.empties; i++) plain.push([]);
-  return wrap(plain, cfg.capacity);
+  const pool = [];
+  for (let kind = 0; kind < cfg.kinds; kind++) {
+    for (let i = 0; i < cfg.copies; i++) pool.push(kind);
+  }
+  return wrap(layout(pool, cfg), cfg.capacity);
 }
 
 function wrap(plain, capacity) {
