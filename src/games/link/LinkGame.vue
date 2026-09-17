@@ -232,35 +232,36 @@ function isHinting(r, c) {
   return !!hintPair.value && hintPair.value.some(([hr, hc]) => hr === r && hc === c);
 }
 
-const linkLayerStyle = computed(() => {
-  const [H, W] = size.value;
-  return {
-    width: `${((W + 2) / W) * 100}%`,
-    height: `${((H + 2) / H) * 100}%`,
-    left: `${-100 / W}%`,
-    top: `${-100 / H}%`,
-  };
-});
+// 连线层就是棋盘本身那么大：**不要**再往外放大一圈。之前它按 (W+2)/W 放大、
+// 再左上各偏一格，好让「棋盘外一圈」的虚拟通道落在 SVG 里——线本身画在小一圈
+// 的位置（LANE_GAP），可 SVG 这个**盒子**会伸到视口外（棋盘离屏幕边只有 16px，
+// 放大一圈就是 30px 上下），于是连线的那 0.7 秒里文档突然可滚动、线一消失又恢复，
+// 滚动条一进一出 / 手机端橡皮筋回弹，看起来就是「连线时界面抖一下」。
+// 现在盒子 = 棋盘，超出的部分只有 LANE_GAP 那一丁点（十几 px，落在 16px 页边距 /
+// 棋盘下方的留白里），文档可滚动范围在连线前后完全不变
+const linkLayerStyle = { width: '100%', height: '100%', left: 0, top: 0 };
 const linkViewBox = computed(() => {
   const [H, W] = size.value;
-  return `0 0 ${W + 2} ${H + 2}`;
+  return `0 0 ${W} ${H}`;
 });
 // 连线端点从牌中心沿路径方向内缩，让线贴近牌的边缘起止
 const ENDPOINT_INSET = 0.42;
 // 棋盘外一圈的虚拟通道渲染时贴着棋盘边缘（而非半格之外）：
 // 棋盘几乎占满屏宽（左右页边距仅 16px），绕左右两侧的线跑到半格外就会出屏
-const LANE_GAP = 0.2;
+const LANE_GAP = 0.14;
 const linkPoints = computed(() => {
   const pts = linkPath.value || [];
   if (pts.length < 2) return '';
   const [H, W] = size.value;
+  // 坐标系与格子 1:1（viewBox 就是 W×H）：格子中心 = (c + 0.5, r + 0.5)，
+  // 棋盘外那一圈落在 -LANE_GAP / W + LANE_GAP 上
   const svg = pts.map(([r, c]) => {
-    let x = c + 1.5;
-    let y = r + 1.5;
-    if (c === -1) x = 1 - LANE_GAP;
-    else if (c === W) x = W + 1 + LANE_GAP;
-    if (r === -1) y = 1 - LANE_GAP;
-    else if (r === H) y = H + 1 + LANE_GAP;
+    let x = c + 0.5;
+    let y = r + 0.5;
+    if (c === -1) x = -LANE_GAP;
+    else if (c === W) x = W + LANE_GAP;
+    if (r === -1) y = -LANE_GAP;
+    else if (r === H) y = H + LANE_GAP;
     return [x, y];
   });
   const inset = (idx, towards) => {

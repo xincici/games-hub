@@ -487,6 +487,7 @@ function win() {
     justify-content: center;
     gap: 12px;
     padding: 12px;
+    box-sizing: border-box;
   }
 }
 </style>

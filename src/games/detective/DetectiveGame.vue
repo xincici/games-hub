@@ -357,10 +357,13 @@ function onScoreReset() {
     border: 0 none;
     border-radius: var(--radius-tile);
   }
+  // 外框是 fit-content 居中的，这里就让 game-area 收缩到外框大小，
+  // 结算浮层（100% × 100%）才会严丝合缝地盖在棋盘上而不是整条内容宽度
   .game-area {
     position: relative;
-    width: calc(100% - 32px);
-    max-width: 440px;
+    width: fit-content;
+    max-width: calc(100% - 32px);
+    margin: 0 auto;
     box-sizing: border-box;
   }
   // 棋盘外框：宽度收缩到内容并居中，背景即棋盘底色；
@@ -461,6 +464,7 @@ function onScoreReset() {
     justify-content: center;
     gap: 12px;
     padding: 12px;
+    box-sizing: border-box;
     .result-actions {
       display: flex;
       gap: 12px;

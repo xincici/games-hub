@@ -769,6 +769,7 @@ function restore() {
     justify-content: center;
     gap: 12px;
     padding: 12px;
+    box-sizing: border-box;
     &.lose {
       color: var(--lose-color);
     }
