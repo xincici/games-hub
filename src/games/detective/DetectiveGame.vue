@@ -9,7 +9,7 @@
       <div class="divider"></div>
       <div class="stat">
         <span class="stat-label">{{ i18n('livesLabel') }}</span>
-        <span class="stat-value">{{ hearts }}</span>
+        <span class="stat-value stat-hearts"><Hearts :left="hearts" :max="HEARTS_MAX" /></span>
       </div>
     </div>
     <div class="card opt-area">
@@ -61,6 +61,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { gameConfig } from '@/shared/games';
@@ -84,7 +85,8 @@ const board = ref([]);
 const swappedIdx = ref(-1);
 const shakeIdx = ref(-1);
 const memoryLeft = ref(0);
-const hearts = ref(3);
+const HEARTS_MAX = 3;      // 每局 3 颗心
+const hearts = ref(HEARTS_MAX);
 const bestLevel = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const timerRef = ref(null);
 
@@ -147,7 +149,7 @@ function isFaceDown(idx) {
 function startLevel() {
   clearTimers();
   swappedIdx.value = -1;
-  hearts.value = 3;
+  hearts.value = HEARTS_MAX;
   const n = rows.value * cols.value;
   board.value = pickEmojis(n);
   phase.value = MEMORY;
@@ -247,7 +249,7 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(LEVEL_KEY));
     if (!saved || typeof saved.level !== 'number') return false;
     level.value = Math.min(SIZES.length - 1, Math.max(0, saved.level));
-    hearts.value = 3;
+    hearts.value = HEARTS_MAX;
     // 不恢复记忆中途：直接重开当前关（棋盘随机，公平）
     startLevel();
     return true;

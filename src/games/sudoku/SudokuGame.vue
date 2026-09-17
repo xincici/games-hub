@@ -9,11 +9,7 @@
       <div class="divider"></div>
       <div class="stat">
         <span class="stat-label">{{ i18n('hearts') }}</span>
-        <span class="stat-value stat-hearts">
-          <template v-for="h in heartsMax" :key="h">
-            <span class="heart" :class="{ dead: h > hearts }">{{ h <= hearts ? '❤️' : '🤍' }}</span>
-          </template>
-        </span>
+        <span class="stat-value stat-hearts"><Hearts :left="hearts" :max="heartsMax" /></span>
       </div>
     </div>
     <div class="card opt-area">
@@ -94,6 +90,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { generatePuzzle } from './sudoku';
@@ -534,19 +531,6 @@ function win() {
         font-weight: bold;
         line-height: 1.2;
         font-variant-numeric: tabular-nums;
-      }
-      .stat-value.stat-hearts {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 20px;
-        line-height: 1;
-        .heart {
-          font-size: 19px;
-          &.dead {
-            opacity: 0.3;
-          }
-        }
       }
     }
   }

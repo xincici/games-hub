@@ -9,7 +9,7 @@
       <div class="divider"></div>
       <div class="stat">
         <span class="stat-label">{{ i18n('livesLabel') }}</span>
-        <span class="stat-value">{{ hearts }}</span>
+        <span class="stat-value stat-hearts"><Hearts :left="hearts" :max="HEARTS_MAX" /></span>
       </div>
     </div>
     <div class="card opt-area">
@@ -69,6 +69,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { gameConfig } from '@/shared/games';
@@ -98,7 +99,8 @@ const stage = ref([]);
 const candidates = ref([]);
 const foundSet = ref(new Set());
 const wrongSet = ref(new Set());
-const hearts = ref(3);
+const HEARTS_MAX = 3;      // 每局 3 颗心
+const hearts = ref(HEARTS_MAX);
 const bestLevel = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const timerRef = ref(null);
 
@@ -172,7 +174,7 @@ async function startLevel() {
   clearTimers();
   foundSet.value = new Set();
   wrongSet.value = new Set();
-  hearts.value = 3;
+  hearts.value = HEARTS_MAX;
   const lv = LEVELS[level.value];
   // 展示牌 + 候选牌（含展示牌）互不重复
   const all = pickEmojis(lv.show + lv.grid[0] * lv.grid[1] - lv.show);
