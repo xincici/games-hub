@@ -420,14 +420,12 @@ function afterEdit() {
   win();
 }
 
-// 刚填入的数字若与答案不符：还有爱心则扣一颗，爱心已为 0 则游戏失败
+// 刚填入的数字若与答案不符：扣一颗心，扣掉最后一颗心的那次就失败。
+// 于是 简单（1 颗）错一次就结束、一般（2 颗）两次、困难（3 颗）三次
 function checkMistake(i) {
   if (!isWrong(i)) return;
-  if (hearts.value > 0) {
-    hearts.value--;
-  } else {
-    lose();
-  }
+  hearts.value = Math.max(0, hearts.value - 1);
+  if (hearts.value <= 0) lose();
 }
 
 function lose() {
