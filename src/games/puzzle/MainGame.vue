@@ -354,7 +354,7 @@ function onTouchEnd(e) {
   }
   &.rocker {
     .score-area {
-      margin-top: 70px;
+      margin-top: 64px;
     }
     .game-area {
       margin-top: 0px;
@@ -369,7 +369,7 @@ function onTouchEnd(e) {
   }
   .score-area {
     transition: margin-top 0.3s ease-in-out;
-    margin: 70px 0 0;
+    margin: 64px 0 0;
     display: flex;
     align-items: center;
     height: var(--row-height);

@@ -120,9 +120,10 @@ const BACK_ICON = gameConfig('sort').icon;
 const PAD = 8;           // 棋盘内边距（与大师的 BOARD_PAD 同款）
 const GAP_X = 5;         // 槽与槽的间距
 const GAP_Y = 3;         // 槽内相邻水果的间距
-// 抬起的一摞里，上面那张盖住下面那张约 80% 的面积，所以每多一张只往上错开
-// 0.2 个格子 —— 槽口上方的空白带也就只要「一张 + 这么点」的高度，不用留一大条
-const LIFT_OVERLAP = 0.8;
+// 抬起的一摞里，上面那张盖住下面那张约 85% 的面积，所以每多一张只往上错开
+// 0.15 个格子 —— 槽口上方的空白带也就只要「一张 + 这么点」的高度，不用留一大条
+// （叠得越紧，顶部的空白带越矮；紧凑玩法最高难度槽高 9 格，就靠这个把棋盘压住）
+const LIFT_OVERLAP = 0.85;
 const HEAD_GAP = GAP_Y;  // 抬起后最低那张与槽口之间的小缝
 const HEAD_MARGIN = 8;   // 抬起的一摞顶到棋盘上边缘还要留的余量
 const MAX_CELL = 46;     // 格子边长上限
@@ -703,7 +704,7 @@ function evaluate() {
   .score-area {
     position: relative;
     overflow: hidden;
-    margin-top: 70px;
+    margin-top: 64px;
     display: flex;
     align-items: center;
     height: var(--row-height);

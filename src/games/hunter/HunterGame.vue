@@ -306,7 +306,7 @@ function onScoreReset() {
     opacity: 0.6;
   }
   .score-area {
-    margin-top: 70px;
+    margin-top: 64px;
     display: flex;
     align-items: center;
     height: var(--row-height);

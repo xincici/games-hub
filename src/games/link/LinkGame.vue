@@ -656,7 +656,7 @@ function loseLevel() {
   .score-area {
     position: relative;
     overflow: hidden;
-    margin-top: 70px;
+    margin-top: 64px;
     display: flex;
     align-items: center;
     height: var(--row-height);

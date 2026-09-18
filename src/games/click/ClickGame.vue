@@ -260,7 +260,7 @@ function userRedo() {
   .score-card {
     display: flex;
     align-items: center;
-    margin-top: 70px;
+    margin-top: 64px;
     height: var(--row-height);
     .score-item {
       flex: 1;

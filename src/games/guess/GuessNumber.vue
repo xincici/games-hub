@@ -221,7 +221,7 @@ function guessOnce() {
   .opt-area {
     display: flex;
     align-items: stretch;
-    margin-top: 70px;
+    margin-top: 64px;
     margin-bottom: var(--row-gap);
     height: var(--row-height);
     .opt-half {
