@@ -99,7 +99,6 @@ onUnmounted(() => {
   width: 100%;
   height: 50px;
   border: 0 none;
-  border-bottom: 1px solid var(--border-color);
   z-index: 1;
   .side {
     display: flex;
