@@ -414,12 +414,15 @@ async function settlePass() {
 
 function win() {
   if (phase.value !== PLAY || winTimer) return;
-  // 过关：闯关进度推进到下一关（本次的盘面存档作废，下次进入直接开新关）
+  // 过关：闯关进度推进到下一关（万一没有结算存档，下次进入直接开新关）
   persistLevel(level.value + 1);
-  removeState();
   confetti();
-  // 等最后一组三消闪烁消失后再弹结算层
-  winTimer = setTimeout(() => { phase.value = WON; }, WIN_DELAY);
+  // 等最后一组三消闪烁消失后再弹结算层；结算层出现后再落盘，
+  // 退出重进还是这个结算层，由玩家自己决定点「下一关」还是回主页
+  winTimer = setTimeout(() => {
+    phase.value = WON;
+    saveWinState();
+  }, WIN_DELAY);
 }
 
 function lose() {
@@ -451,10 +454,37 @@ function saveState() {
   } catch { /* 忽略 */ }
 }
 
+// 胜利结算局面：盘面与槽都空了，只记「第几关 + 已过关」。
+// 必须在 phase 切到 WON 之后写，否则会被 saveState() 的清档分支覆盖
+function saveWinState() {
+  if (phase.value !== WON) return;
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify({
+      level: level.value,
+      phase: WON,
+      tiles: [],
+      tray: [],
+    }));
+  } catch { /* 忽略 */ }
+}
+
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!saved || !Array.isArray(saved.tiles) || !Array.isArray(saved.tray)) return false;
+    // 胜利结算局面：盘面与槽都是空的，恢复关卡与结算层即可，
+    // 由玩家自己决定点「下一关」还是回主页
+    if (saved.phase === WON) {
+      level.value = Math.max(1, Math.floor(+saved.level) || loadLevel());
+      tiles.value = [];
+      tray.value = [];
+      flights.value = [];
+      flyEls.clear();
+      clearTimeout(winTimer);
+      winTimer = null;
+      phase.value = WON;
+      return true;
+    }
     const list = saved.tiles.map(t => ({ id: +t[0], emoji: String(t[1]), layer: +t[2], x: +t[3], y: +t[4] }));
     const ok = list.length > 0
       && list.every(t => t.id > 0 && t.emoji && t.layer >= 0 && t.x >= 0 && t.y >= 0)

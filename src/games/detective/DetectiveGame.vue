@@ -241,6 +241,11 @@ function save() {
     level: level.value,
     hearts: hearts.value,
     phase: phase.value,
+    time: timerRef.value?.seconds() || 0,
+    // 这一局的盘面与「被偷换的那张」：胜利结算层要连牌一起还原，
+    // 回来时才是同一张盘、同一个答案
+    board: board.value,
+    swapped: swappedIdx.value,
   }));
 }
 
@@ -249,6 +254,19 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(LEVEL_KEY));
     if (!saved || typeof saved.level !== 'number') return false;
     level.value = Math.min(SIZES.length - 1, Math.max(0, saved.level));
+    // 胜利结算局面：原样还原那一盘并亮出答案，由玩家自己决定点「重玩本关」还是「下一关」
+    if (saved.phase === WON && Array.isArray(saved.board)
+      && saved.board.length === rows.value * cols.value) {
+      board.value = saved.board;
+      swappedIdx.value = Number.isInteger(+saved.swapped) ? +saved.swapped : -1;
+      shakeIdx.value = -1;
+      hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
+      phase.value = WON;
+      // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
+      timerRef.value?.restore(+saved.time || 0);
+      timerRef.value?.stop();
+      return true;
+    }
     hearts.value = HEARTS_MAX;
     // 不恢复记忆中途：直接重开当前关（棋盘随机，公平）
     startLevel();

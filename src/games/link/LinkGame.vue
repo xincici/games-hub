@@ -557,13 +557,15 @@ function win() {
   elapsed.value = timerRef.value?.seconds() || 0;
   timerRef.value?.stop();
   phase.value = WON;
-  // 过关：闯关进度推进到下一关（本次局面作废，下次进入直接开新关）
+  // 过关：闯关进度推进到下一关（万一没有结算存档，下次进入直接开新关）
   localStorage.setItem(LEVEL_KEY, level.value + 1);
   if (level.value + 1 > bestLevel.value) {
     bestLevel.value = level.value + 1;
     localStorage.setItem(BEST_KEY, bestLevel.value);
   }
-  localStorage.removeItem(STATE_KEY);   // 结算局面不留在存档里
+  // 胜利局面也落盘：退出重进还是这个结算层（计时钟停着），
+  // 由玩家自己决定点「下一关」还是回主页
+  save();
   // 结算遮罩等最后一对的消除动画播完再出现
   winTimer = setTimeout(confetti, 600);
 }

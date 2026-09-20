@@ -635,13 +635,15 @@ function finishTurn() {
 
 function winLevel() {
   if (phase.value !== PLAY) return;
-  removeState();
   confetti();
   if (level.value + 1 > bestLevel.value) {
     bestLevel.value = level.value + 1;
     localStorage.setItem(BEST_KEY, bestLevel.value);
   }
   phase.value = WON;
+  // 胜利局面也落盘：退出重进还是这个结算层，
+  // 由玩家自己决定点「下一关」还是回主页
+  save();
 }
 
 function loseLevel() {
@@ -670,17 +672,19 @@ function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!saved || !Array.isArray(saved.cells) || !saved.cells.length) return false;
-    if (saved.phase !== PLAY) return false;
+    // 只认「玩到一半」和「已过关」两种局面；失败结算不入档
+    if (saved.phase !== PLAY && saved.phase !== WON) return false;
     const c = levelConfig(+saved.level || 1);
     if (saved.cells.length !== c.cols * c.rows) return false;
     level.value = c.level;
     if (level.value > bestLevel.value) bestLevel.value = level.value;
     cells.value = saved.cells;
     syncGems([]);
-    playDeal();
     score.value = +saved.score || 0;
     moves.value = Math.min(c.moves, Math.max(0, +saved.moves));
-    phase.value = PLAY;
+    phase.value = saved.phase === WON ? WON : PLAY;
+    // 玩到一半才逐张发牌；恢复的是胜利结算层，盘面直接落定、不再播入场
+    if (phase.value === PLAY) playDeal();
     return true;
   } catch {
     return false;
