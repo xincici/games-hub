@@ -18,22 +18,31 @@ export const isSpecial = v => v === BOMB || v === WILD;
 export const isTile = v => v !== null && v !== WALL && v !== undefined;
 
 // ---------- 关卡配置 ----------
-// 难度由「面板大小 + emoji 种类 + 步数 + 目标分 + 墙数 + 特殊元素概率」共同决定，
-// 第 30 关全部到顶，之后关数继续增长但难度不再上升。各因素随关卡线性爬升：
+// 难度由「面板大小 + emoji 种类 + 步数 + 目标分 + 墙数 + 特殊元素概率」共同决定。
+// 前 30 关各因素随关卡线性爬升，第 30 关结构到顶（步数在 20 → 17 之间反向收紧）：
 //   列数 7 → 9、行数 7 → 10（面板 7×7 → 9×10）
 //   种类 5 → 7
 //   步数 20 → 17
 //   目标分 700 → 2100（由离线模拟校准：见下）
 //   墙   0 → 12
 //   炸弹概率 2% → 5%、万能元素 3% → 5%
-export const MAX_LEVEL = 30;
+// 30 关之后面板 / 种类 / 墙 / 特殊元素都不再变，但**步数与目标分继续线性上涨**
+// （每关 +1 步、目标分 +160），难度不会在第 30 关就固定下来。
+// 目标分按「只做基础消除的老实玩家」的中位得分标定（第 30 关约 2160 对 2100），
+// 也就是稳定地消就能过，连锁与炸弹是加分项而不是过关的必需；30 关之后每关
+// +160 比 +1 步带来的收益（约 +135）略高，通关率因此缓慢下降而不是原地踏步。
+export const CAP_LEVEL = 30;
 
-// 目标分的上限：模拟显示 9×10、7 种、17 步的一局得分中位数约 2000，取 2100 作为最高门槛
+// 结构上限：面板、种类、墙、特殊元素概率在第 30 关到顶（步数 / 目标分的延伸见上）
 const CAP = { cols: 9, rows: 10, kinds: 7, moves: 17, target: 2100, walls: 12, bomb: 0.05, wild: 0.05 };
+// 第 30 关之后每关的增量
+const EXTRA_MOVES = 1;
+const EXTRA_TARGET = 160;
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const t = Math.min(1, (lv - 1) / (MAX_LEVEL - 1));
+  const t = Math.min(1, (lv - 1) / (CAP_LEVEL - 1));
+  const extra = Math.max(0, lv - CAP_LEVEL);
   // 各因素到顶的时点刻意错开（列 21 关、种类 27 关、行 30 关），
   // 否则两条曲线会在同一关同时跳档，难度出现明显的断崖
   const ramp = span => Math.min(1, t / span);
@@ -42,8 +51,8 @@ export function levelConfig(level) {
     cols: Math.round(7 + (CAP.cols - 7) * ramp(0.70)),
     rows: Math.round(7 + (CAP.rows - 7) * ramp(1)),
     kinds: Math.round(5 + (CAP.kinds - 5) * ramp(0.90)),
-    moves: Math.round(20 + (CAP.moves - 20) * t),
-    target: Math.round(700 + (CAP.target - 700) * t),
+    moves: Math.round(20 + (CAP.moves - 20) * t) + extra * EXTRA_MOVES,
+    target: Math.round(700 + (CAP.target - 700) * t) + extra * EXTRA_TARGET,
     walls: Math.round(CAP.walls * t),
     bombChance: 0.02 + (CAP.bomb - 0.02) * t,
     wildChance: 0.03 + (CAP.wild - 0.03) * t,
@@ -256,18 +265,32 @@ export function applyGravity(board, cols, rows, kinds, opts = {}, rand = Math.ra
 }
 
 // ---------- 计分 ----------
+// 目标：让「稳稳地消」也能过关，连锁与炸弹只是加分项，而不是过关的必要条件。
+// 做法是「基础分给足 + 连锁加成改成线性且封顶 + 炸弹每格分值减半」：
+//   三连 60 分（原来 30），每多消一个 +35（原来 +20）
+//   连锁每多一层整段 +30%，最多翻倍（原来是每层 ×1.5，四层就到 3.4 倍）
+//   被炸掉的格子每格 12 分（原来 25）
+// 离线模拟（每关 100 局）：第 30 关「只看单步消除」的老实玩家得分里基础消除占 53%
+// （原来 31%）、炸弹占 19%（原来 48%）；目标分 2100 对应老实玩家中位 2160，
+// 也就是不需要靠连锁或炸弹的运气也能过关。
+export const MATCH_BASE = 60;
+export const MATCH_EXTRA = 35;
+export const CHAIN_STEP = 0.3;
+export const CHAIN_MAX = 2;
+export const SCORE_PER_BLAST = 12;
 
-// 3 连 30 分，每多 1 个 +20；cascade 从 1 开始，每层 ×1.5
-export function scoreForMatches(count, cascade) {
-  const base = 30 + Math.max(0, count - 3) * 20;
-  return Math.round(base * Math.pow(1.5, cascade - 1));
+// 连锁倍率：1 → 1.3 → 1.6 → 1.9 → 2（第 5 层起封顶）
+export function chainMultiplier(cascade) {
+  return Math.min(CHAIN_MAX, 1 + CHAIN_STEP * Math.max(0, cascade - 1));
 }
 
-// 被炸掉的格子按个计分（含炸弹自身）
-export const SCORE_PER_BLAST = 25;
+export function scoreForMatches(count, cascade) {
+  const base = MATCH_BASE + Math.max(0, count - 3) * MATCH_EXTRA;
+  return Math.round(base * chainMultiplier(cascade));
+}
 
 export function scoreForBlast(count, cascade) {
-  return Math.round(count * SCORE_PER_BLAST * Math.pow(1.5, cascade - 1));
+  return Math.round(count * SCORE_PER_BLAST * chainMultiplier(cascade));
 }
 
 // 无解时重洗：保持墙与特殊元素位置，只重排普通 emoji

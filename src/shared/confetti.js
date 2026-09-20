@@ -34,3 +34,20 @@ export default function celebrate() {
     }
   }());
 }
+
+// 原地小爆发：用在「一局之内」的即时庆祝（消消乐的大连消 / 连锁），
+// 与 celebrate 同一套配色，但只朝上方炸一次、不铺满全屏。
+// intensity 越大粒子越多（调用方按消除规模传 1~3）
+export function burstConfetti(intensity = 1) {
+  confetti({
+    colors: COLORS,
+    particleCount: Math.min(110, Math.round(22 + 26 * intensity)),
+    spread: 76,
+    startVelocity: 34,
+    gravity: 0.9,
+    scalar: 0.9,
+    ticks: 140,
+    origin: { x: 0.5, y: 0.64 },
+  });
+}
+

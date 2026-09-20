@@ -228,6 +228,11 @@ body {
   // 棋盘点阵底纹的点色（各 emoji 游戏的游戏区共用，很淡，空盘时不至于一片空白）
   --board-dot: rgba(255, 255, 255, 0.18);
   --cell-bg: rgba(238, 228, 218, 0.35);
+  // 消消乐空闲提示：被提示的牌背景脉冲色 + 外发光（要一眼看得见，故取暖黄 + 品牌绿）
+  --hint-bg: #fff1c2;
+  --hint-glow: rgba(35, 128, 78, 0.55);
+  // 消消乐大消 / 连锁庆祝：棋盘闪光与庆祝文字底色
+  --celebrate-glow: rgba(35, 128, 78, 0.5);
   background: var(--bg-color);
   &.dark {
     --border-color: #4a4a4a;
@@ -281,6 +286,10 @@ body {
     --board-bg: #4a443e;
     --board-dot: rgba(255, 255, 255, 0.08);
     --cell-bg: rgba(255, 255, 255, 0.08);
+    // 消消乐空闲提示（深色版）：暖黄转成半透明，外发光提亮一档
+    --hint-bg: rgba(242, 208, 145, 0.34);
+    --hint-glow: rgba(78, 201, 138, 0.6);
+    --celebrate-glow: rgba(78, 201, 138, 0.55);
   }
 }
 </style>

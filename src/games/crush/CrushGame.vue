@@ -35,7 +35,7 @@
     </div>
     <div class="game-area">
       <div class="board-frame dot-board" :class="{ shaking }" :style="boardStyle">
-        <div class="board" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend.passive="onTouchEnd">
+        <div class="board" :class="{ celebrating }" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend.passive="onTouchEnd">
           <div
             v-for="(cell, idx) in cells"
             :key="`bg-${idx}`"
@@ -55,7 +55,16 @@
           </div>
         </div>
       </div>
-      <div v-if="cascade > 1" class="cascade-tip">×{{ cascade }} {{ i18n('cascade') }}</div>
+      <!-- 大消 / 连锁的即时庆祝：中间弹一条文字 + 本次得分，配合棋盘闪光与撒花 -->
+      <div
+        v-if="celebration"
+        :key="celebration.id"
+        class="celebrate"
+        :class="`tier-${celebration.tier}`"
+      >
+        <span class="celebrate-text">{{ celebration.text }}</span>
+        <span class="celebrate-score">+{{ celebration.gained }}</span>
+      </div>
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-score">{{ score }}</div>
@@ -78,7 +87,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import { i18n } from '@/shared/i18n';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
-import confetti from '@/shared/confetti';
+import confetti, { burstConfetti } from '@/shared/confetti';
 import { EMOJIS } from '@/shared/emojis';
 import {
   WALL, BOMB, WILD, isWall, levelConfig, generateBoard, findMatches, explode,
@@ -112,9 +121,15 @@ const selected = ref(-1);
 const swapPair = ref([]);
 const matchedSet = ref(new Set());
 const blastSet = ref(new Set());
-const cascade = ref(0);
+const hugeClear = ref(false);
 const shaking = ref(false);
 const confirming = ref(false);
+// 大消 / 连锁庆祝：{ id, text, gained, tier }；tier 1 大消、2 连锁、3 两者同时
+const celebration = ref(null);
+const celebrating = ref(false);
+let celebrationId = 0;
+let celebrationTimer = null;
+let celebrateFlashTimer = null;
 
 const conf = computed(() => levelConfig(level.value));
 // 盘面上的真实墙数（生成时按关卡配置随机撒，极少数情况下会少一两面，所以直接数盘面）
@@ -150,11 +165,11 @@ const boardStyle = computed(() => {
 });
 
 // ---------- 空闲提示 ----------
-// 6s 没有任何操作 → 找一对能消的 emoji，让这两张牌的 emoji 呼吸两下
-// （只呼吸，不加边框 / 箭头 / 发光）；呼吸完就收起，
-// 之后又静置 6s 还没动作，就换另一对提示
+// 6s 没有任何操作 → 找一对能消的 emoji，让这两张牌的 emoji 大幅呼吸三下，
+// 同时牌面底色的脉冲发光（暖黄底 + 品牌绿光晕）跟着一起闪；
+// 呼吸完就收起，之后又静置 6s 还没动作，就换另一对提示
 const IDLE_HINT_MS = 6000;
-const HINT_MS = 1700;            // 两次呼吸（0.8s × 2，CSS 里同值）+ 一点余量
+const HINT_MS = 2600;            // 三次呼吸（0.8s × 3，CSS 里同值）+ 一点余量
 const hintSwap = ref(null);      // { a, b } 两个格子的下标
 let lastHints = [];              // 最近提示过的几对（避免连着几次都是同一对）
 let idleTimer = null;
@@ -245,6 +260,8 @@ onUnmounted(() => {
   clearTimeout(shakeTimer);
   clearTimeout(idleTimer);
   clearTimeout(hintTimer);
+  clearTimeout(celebrationTimer);
+  clearTimeout(celebrateFlashTimer);
   window.removeEventListener('resize', onResize);
 });
 
@@ -267,7 +284,10 @@ function gemClasses(gem) {
   if (gem.value === WILD) out.push('wild');
   if (selected.value === gem.idx) out.push('selected');
   if (swapPair.value.includes(gem.idx)) out.push('swapping');
-  if (matchedSet.value.has(gem.idx)) out.push('matched');
+  if (matchedSet.value.has(gem.idx)) {
+    out.push('matched');
+    if (hugeClear.value) out.push('huge');
+  }
   if (blastSet.value.has(gem.idx)) out.push('blasting');
   if (isHinted(gem.idx)) out.push('hinting');
   if (gem.fresh) out.push('fresh');
@@ -348,8 +368,9 @@ function initLevel(lv) {
   swapPair.value = [];
   matchedSet.value = new Set();
   blastSet.value = new Set();
-  cascade.value = 0;
   confirming.value = false;
+  hugeClear.value = false;
+  clearCelebration();
   level.value = Math.max(1, lv);
   localStorage.setItem(LEVEL_KEY, level.value);
   if (level.value > bestLevel.value) {
@@ -521,17 +542,19 @@ function resolveCascades(chain) {
   const { cols, rows, kinds } = conf.value;
   const matched = findMatches(cells.value, cols, rows);
   if (!matched.size) {
-    cascade.value = 0;
     gems.value = gems.value.map(g => ({ ...g, fresh: false, fall: undefined }));
     finishTurn();
     return;
   }
-  cascade.value = chain;
   // 炸弹：四邻有格子被消除就引爆，炸掉自己周围 3×3（可链式引爆其它炸弹）
   const { blast } = explode(cells.value, cols, rows, matched);
-  score.value += scoreForMatches(matched.size, chain) + scoreForBlast(blast.size, chain);
+  const gained = scoreForMatches(matched.size, chain) + scoreForBlast(blast.size, chain);
+  score.value += gained;
   matchedSet.value = matched;
+  // 一轮消掉 4 个以上 → 消除动画也升一档（爆得更大 + 轻微旋转）
+  hugeClear.value = matched.size > 3;
   blastSet.value = blast;
+  announceCelebration(matched.size, chain, gained);
   // 这一轮要消除的牌先摘掉「掉落中 / 刚落格」标记：
   // 连锁时它们往往是上一轮刚落地（甚至刚生成）的牌，带着 fresh/falling 时
   // 浏览器只会沿用 drop-in / land-bounce，pop-out 与 blast-out 根本播不出来
@@ -542,6 +565,7 @@ function resolveCascades(chain) {
   stepTimer = setTimeout(() => {
     const cleared = cells.value.map((v, i) => (matched.has(i) || blast.has(i) ? null : v));
     matchedSet.value = new Set();
+    hugeClear.value = false;
     blastSet.value = new Set();
     const survivors = gems.value.filter(g => !matched.has(g.idx) && !blast.has(g.idx));
     cells.value = applyGravity(cleared, cols, rows, kinds, spawnOpts());
@@ -556,6 +580,43 @@ function shakeBoard() {
   void document.querySelector('.board-frame')?.offsetWidth;
   shaking.value = true;
   shakeTimer = setTimeout(() => { shaking.value = false; }, 340);
+}
+
+// ---------- 大消 / 连锁庆祝 ----------
+// 一轮消掉 4 个以上（大消）或连锁 ≥2 层时，给一次「看得见」的庆祝：
+// 棋盘外圈闪光 + 中央弹出文字与本次得分 + 撒一把花。两者同时达成时强度最高。
+function announceCelebration(count, chain, gained) {
+  const big = count > 3;
+  const combo = chain > 1;
+  if (!big && !combo) return;
+  const tier = big && combo ? 3 : combo ? 2 : 1;
+  celebration.value = {
+    id: ++celebrationId,
+    tier,
+    gained,
+    text: big && combo
+      ? i18n('niceBoth').replace('{n}', chain).replace('{m}', count)
+      : combo
+        ? i18n('niceCombo').replace('{n}', chain)
+        : i18n('niceBig').replace('{n}', count),
+  };
+  clearTimeout(celebrationTimer);
+  celebrationTimer = setTimeout(() => { celebration.value = null; }, 1100 + tier * 220);
+  // 棋盘闪光：与炸弹的 shaking 是两套独立样式（一个动 box-shadow、一个动 transform），
+  // 同时发生也不会互相顶掉；重入前先摘一次类名，保证短时间内的连锁都能重播
+  clearTimeout(celebrateFlashTimer);
+  celebrating.value = false;
+  void document.querySelector('.board')?.offsetWidth;
+  celebrating.value = true;
+  celebrateFlashTimer = setTimeout(() => { celebrating.value = false; }, 900);
+  burstConfetti(tier + (chain > 3 ? 1 : 0));
+}
+
+function clearCelebration() {
+  clearTimeout(celebrationTimer);
+  clearTimeout(celebrateFlashTimer);
+  celebration.value = null;
+  celebrating.value = false;
 }
 
 function finishTurn() {
@@ -661,11 +722,52 @@ function onScoreReset() {
   to { transform: scale(1); opacity: 1; }
 }
 
-// 提示时牌面呼吸（与连连看同款节奏：放大再缩一下）
+// 提示时牌面呼吸：幅度比原来（1 → 1.2 → 0.8）大得多，还带一点摆动，
+// 否则在满盘 emoji 里不够显眼
 @keyframes breathe {
-  0%, 100% { transform: scale(1); }
-  25% { transform: scale(1.2); }
-  75% { transform: scale(0.8); }
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  22% { transform: scale(1.42) rotate(-7deg); }
+  62% { transform: scale(0.66) rotate(7deg); }
+  82% { transform: scale(1.08) rotate(-2deg); }
+}
+
+// 提示时牌面本体的底色 / 描边 / 光晕一起脉冲，和 emoji 的呼吸同节拍；
+// 用颜色而不是位置，避免和交换、下落的 left/top 过渡打架
+@keyframes hint-card {
+  0%, 100% {
+    background-color: var(--card-bg-color);
+    border-color: var(--tile-border-color);
+    box-shadow: var(--shadow-soft);
+  }
+  50% {
+    background-color: var(--hint-bg);
+    border-color: var(--primary-bg);
+    box-shadow: 0 0 0 2px var(--hint-glow), 0 0 14px 3px var(--hint-glow);
+  }
+}
+
+// 大消（一轮 ≥4 个）的爆开：比普通 pop-out 更大、带旋转高光
+@keyframes pop-out-big {
+  0% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+  35% { transform: scale(1.55) rotate(-12deg); filter: brightness(1.7); }
+  70% { transform: scale(1.3) rotate(10deg); filter: brightness(1.4); }
+  100% { transform: scale(0) rotate(0deg); opacity: 0; }
+}
+
+// 大消 / 连锁时棋盘外圈的一圈闪光
+@keyframes board-celebrate {
+  0% { box-shadow: 0 0 0 0 transparent; }
+  25% { box-shadow: 0 0 0 4px var(--celebrate-glow), 0 0 26px 8px var(--celebrate-glow); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+// 庆祝文字：弹出 → 顿一下 → 上飘淡出
+@keyframes celebrate-pop {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.4) rotate(-6deg); }
+  28% { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(3deg); }
+  44% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  78% { opacity: 1; transform: translate(-50%, -62%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -100%) scale(0.92); }
 }
 
 @keyframes swap-shake {
@@ -820,6 +922,11 @@ function onScoreReset() {
     grid-template-columns: repeat(var(--n), var(--cell));
     grid-auto-rows: var(--cell);
     gap: 4px;
+    // 大消 / 连锁时外圈闪一圈（动 box-shadow 不动 transform：不改变文档可滚动范围）
+    &.celebrating {
+      border-radius: var(--radius-tile);
+      animation: board-celebrate 0.9s ease-out;
+    }
     .cell {
       border-radius: var(--radius-tile);
       background: var(--cell-bg);
@@ -879,10 +986,16 @@ function onScoreReset() {
     &.swapping {
       animation: swap-shake 0.4s ease;
     }
-    // 提示到的那两张牌：只让 emoji 呼吸两下（不加边框 / 外发光 / 箭头）
+    // 提示到的那两张牌：emoji 大幅呼吸 + 牌面底色脉冲发光（不加箭头 / 数字）。
+    // 这两条写在 fresh / falling / dealt / matched / blasting 之前：提示只在静置时出现，
+    // 那几条动画类此时都不在牌上，不会互相顶掉；真撞上时也以消除 / 掉落动画优先
+    &.hinting {
+      z-index: 2;
+      animation: hint-card 0.8s ease-in-out 3;
+    }
     &.hinting .face {
       display: inline-block;
-      animation: breathe 0.8s ease-in-out 2;
+      animation: breathe 0.8s ease-in-out 3;
     }
     &.fresh {
       animation: drop-in 0.3s ease-out;
@@ -899,23 +1012,62 @@ function onScoreReset() {
       animation: pop-out 0.35s ease forwards;
       pointer-events: none;
     }
+    // 一轮消掉 4 个以上：这批牌爆得更大（权重更高，写在 matched 后面且多一个类）
+    &.matched.huge {
+      animation: pop-out-big 0.35s ease forwards;
+    }
     // 被炸弹波及：放大 + 闪白后消失
     &.blasting {
       animation: blast-out 0.34s ease forwards;
       pointer-events: none;
     }
   }
-  .cascade-tip {
+  // 大消 / 连锁的庆祝浮字：棋盘正中弹出，不挡操作
+  .celebrate {
     position: absolute;
-    top: -14px;
-    right: 8px;
-    padding: 2px 12px;
+    left: 50%;
+    top: 50%;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 18px;
+    box-sizing: border-box;
     border-radius: var(--radius-tile);
     background: var(--primary-bg);
     color: #fff;
-    font-size: 14px;
     font-weight: bold;
-    z-index: 3;
+    text-align: center;
+    // 不 nowrap：320px 宽的窄屏上 tier-3 的长文案（×4 连锁 · 6 连消！+304）
+    // 会顶出视口、把文档撑出横向滚动条，这里让它最多占满游戏区、必要时折行
+    max-width: calc(100% - 8px);
+    pointer-events: none;
+    box-shadow: 0 6px 18px var(--celebrate-glow);
+    animation: celebrate-pop 0.95s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
+    .celebrate-text {
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .celebrate-score {
+      font-size: 14px;
+      opacity: 0.92;
+      font-variant-numeric: tabular-nums;
+    }
+    // 连锁越深、消得越多，浮字越大、光圈越亮
+    &.tier-2 {
+      box-shadow: 0 6px 20px var(--celebrate-glow), 0 0 0 3px var(--celebrate-glow);
+      .celebrate-text {
+        font-size: 21px;
+      }
+    }
+    &.tier-3 {
+      padding: 12px 22px;
+      box-shadow: 0 8px 26px var(--celebrate-glow), 0 0 0 4px var(--celebrate-glow);
+      .celebrate-text {
+        font-size: 24px;
+      }
+    }
   }
   .result {
     position: absolute;
