@@ -35,19 +35,21 @@ export default function celebrate() {
   }());
 }
 
-// 原地小爆发：用在「一局之内」的即时庆祝（消消乐的大连消 / 连锁），
-// 与 celebrate 同一套配色，但只朝上方炸一次、不铺满全屏。
-// intensity 越大粒子越多（调用方按消除规模传 1~3）
-export function burstConfetti(intensity = 1) {
+// 原地小爆发：用在「一局之内」的即时庆祝（消消乐的大连消 / 连锁、连连看的连击），
+// 与 celebrate 同一套配色，但只炸一次、不铺满全屏。
+//   intensity：越大粒子越多（调用方按消除规模 / 连击数传 1~3）
+//   origin：喷发点，按视口比例给（默认屏幕中间偏下）；连连看会把喷发点搬到连击提示条那儿
+//   count：直接指定粒子数，用来压到更小的一束
+export function burstConfetti(intensity = 1, { origin, count } = {}) {
   confetti({
     colors: COLORS,
-    particleCount: Math.min(110, Math.round(22 + 26 * intensity)),
+    particleCount: count ?? Math.min(110, Math.round(22 + 26 * intensity)),
     spread: 76,
     startVelocity: 34,
     gravity: 0.9,
     scalar: 0.9,
     ticks: 140,
-    origin: { x: 0.5, y: 0.64 },
+    origin: origin ?? { x: 0.5, y: 0.64 },
   });
 }
 

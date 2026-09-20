@@ -18,9 +18,11 @@ export default {
     help2: 'One emoji can appear several times, as long as the total is even — every pair is matched the same way.',
     help3: 'The connecting line may go around outside the board, with at most 2 turns and no tiles or walls in the way.',
     help4: 'Every board is guaranteed solvable; when no pairs can be connected, the remaining tiles are reshuffled automatically.',
-    help5: 'Run out of time and the level fails — retry it from the result screen as often as you like. New Game clears your record and starts again from level 1 after a confirmation.',
+    help5: 'Chain your clears: two removals in a row with no wasted click and less than 2.5 seconds apart build a combo — a "N Combo!" chip pops up above the board with a quick burst of fireworks. A gap over 2.5 seconds, or a click that removes nothing (different emoji, no path, or deselecting), breaks the chain.',
+    help6: 'Run out of time and the level fails — retry it from the result screen as often as you like. New Game clears your record and starts again from level 1 after a confirmation.',
     confirmText: 'OK, I See',
     tipWin: 'You Win',
+    comboTip: '{n} Combo!',
     shuffleTip: 'No moves left — reshuffled',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -43,9 +45,11 @@ export default {
     help2: '同一种 emoji 可以出现多对（总数是偶数即可），每一对的消除规则都一样。',
     help3: '连线可以绕到棋盘外一圈，最多 2 个转折，路径上不能有其他牌或墙壁。',
     help4: '每一局都保证有解；当场上没有可连接的牌对时，会自动重新排列剩下的牌。',
-    help5: '时间用尽即本关失败，可以在结算遮罩上随时重玩本关；「新游戏」会二次确认后清除记录、从第 1 关重新开始。',
+    help5: '连着消有连击：两次消除之间没有无效点击、且间隔在 2.5 秒内，就会累积连击——棋盘上方会弹出「N 连击」并放一束快速烟花。间隔超过 2.5 秒，或点到的牌没被消掉（emoji 不同 / 连线不通 / 取消选择），连击就中断。',
+    help6: '时间用尽即本关失败，可以在结算遮罩上随时重玩本关；「新游戏」会二次确认后清除记录、从第 1 关重新开始。',
     confirmText: '好的，明白',
     tipWin: '你赢了',
+    comboTip: '{n} 连击！',
     shuffleTip: '无可消除，已重新排列',
     rotateTip: '请旋转设备至竖屏'
   }

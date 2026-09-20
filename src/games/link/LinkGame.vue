@@ -58,6 +58,13 @@
           <polyline class="link-comet" :points="linkPoints" pathLength="1" />
         </svg>
       </div>
+      <!-- 连击提示：落在棋盘上方那条 16px 的空隙里 -->
+      <div
+        v-if="comboTip"
+        :key="comboTip.id"
+        class="combo-tip"
+        :class="`n-${Math.min(comboTip.n, 4)}`"
+      >{{ i18n('comboTip').replace('{n}', comboTip.n) }}</div>
       <div v-if="shuffleTip" class="shuffle-tip">{{ i18n('shuffleTip') }}</div>
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
@@ -81,7 +88,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
-import confetti from '@/shared/confetti';
+import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, generateLevelBoard, hasMove, shuffleBoard, levelConfig } from './board';
@@ -110,6 +117,16 @@ const vanishing = ref([]);
 const linkPath = ref(null);
 const linkKey = ref(0);
 const shuffleTip = ref(false);
+// 连击：两次消除之间没有无效点击、且间隔在 COMBO_MS 内才算连上
+const COMBO_MS = 2500;        // 连击窗口
+const COMBO_TIP_MS = 1500;    // 提示条停留时长（比窗口短一点，收得干净）
+const comboTip = ref(null);   // { id, n } 棋盘上方那条「N 连击」
+const combo = ref(0);         // 当前连到几（1 = 刚消一对，0 = 没有连击在进行）
+let lastClearAt = 0;          // 上一次消除的时间戳
+let comboBroken = false;      // 上一次消除之后是否出现过无效点击
+let comboTimer = null;        // 窗口到期就断开
+let comboTipTimer = null;
+let comboSeq = 0;
 // 发牌动画中：牌按序号逐个入场（与对对碰一致），结束后恢复无延迟
 const dealing = ref(false);
 let dealTimer = null;
@@ -391,6 +408,14 @@ function clearTransient() {
   shuffleTimer = null;
   clearTimeout(shuffleTipTimer);
   shuffleTipTimer = null;
+  clearTimeout(comboTimer);
+  comboTimer = null;
+  clearTimeout(comboTipTimer);
+  comboTipTimer = null;
+  comboTip.value = null;
+  combo.value = 0;
+  lastClearAt = 0;
+  comboBroken = false;
   clearTimeout(winTimer);
   winTimer = null;
   vanishing.value = [];
@@ -470,21 +495,79 @@ function onTileClick(r, c) {
   const [sr, sc] = selected.value;
   if (sr === r && sc === c) {
     selected.value = null;
+    breakCombo();                  // 取消选择：这一下没有消掉任何牌
     return;
   }
   const [H, W] = size.value;
   if (board.value[sr][sc] !== board.value[r][c]) {
     // emoji 不同：静默把焦点切换到刚点的牌
     selected.value = [r, c];
+    breakCombo();                  // 点到的牌没被消掉 → 连击中断
     return;
   }
   const path = findPath(board.value, H, W, sr, sc, r, c, walls.value);
   if (!path) {
     // 相同但路径不通：双牌抖动提示
     onMismatch([sr, sc], [r, c]);
+    breakCombo();                  // 连线不通 → 连击中断
     return;
   }
   removePair(path, [sr, sc], [r, c]);
+}
+
+// ---------- 连击 ----------
+// 规则：两次消除之间没有无效点击、且间隔 < COMBO_MS 才算连上，弹出「N 连击」+ 一小束烟花；
+// 间隔超过 COMBO_MS，或者点到的牌没被消掉（emoji 不同 / 连线不通 / 取消选择），连击中断。
+function registerClear() {
+  const now = performance.now();
+  const chained = lastClearAt > 0 && !comboBroken && now - lastClearAt < COMBO_MS;
+  combo.value = chained ? combo.value + 1 : 1;
+  lastClearAt = now;
+  comboBroken = false;
+  clearTimeout(comboTimer);
+  comboTimer = setTimeout(breakCombo, COMBO_MS);
+  if (combo.value >= 2) showCombo(combo.value);
+}
+
+// 烟花喷发点：连击提示条的中心再往下 30px（提示条贴在棋盘上方，所以落点在棋盘顶部内侧）
+const FIRE_DROP_PX = 30;
+
+function comboOrigin() {
+  const board = document.querySelector('.board')?.getBoundingClientRect();
+  if (!board || !window.innerWidth || !window.innerHeight) return null;
+  // 提示条高度随连击数变，直接量它；万一量不到就退回「棋盘上边缘往上 5px」≈ 提示条中心
+  const tip = document.querySelector('.combo-tip')?.getBoundingClientRect();
+  const cy = tip ? tip.top + tip.height / 2 : board.top - 5;
+  return {
+    x: (board.left + board.width / 2) / window.innerWidth,
+    y: (cy + FIRE_DROP_PX) / window.innerHeight,
+  };
+}
+
+async function showCombo(n) {
+  comboTip.value = { id: ++comboSeq, n };
+  clearTimeout(comboTipTimer);
+  comboTipTimer = setTimeout(() => { comboTip.value = null; }, COMBO_TIP_MS);
+  // 等提示条真的渲染出来再量它的位置，喷发点才是「文案下方 30px」
+  await nextTick();
+  const origin = comboOrigin();
+  if (!origin) return;
+  // 与消消乐的连锁同一个烟花，但喷发点跟着提示条走、粒子也收得更少（连得越高越大）
+  burstConfetti(Math.min(3, 1 + (n - 2) * 0.6), {
+    origin,
+    count: Math.min(44, 12 + n * 4),
+  });
+}
+
+function breakCombo() {
+  combo.value = 0;
+  lastClearAt = 0;
+  comboBroken = false;
+  clearTimeout(comboTimer);
+  clearTimeout(comboTipTimer);
+  comboTimer = null;
+  comboTipTimer = null;
+  comboTip.value = null;
 }
 
 function onMismatch(a, b) {
@@ -506,6 +589,7 @@ function removePair(path, a, b) {
   board.value[ar][ac] = null;
   board.value[br][bc] = null;
   selected.value = null;
+  registerClear();          // 消掉一对了：结算连击
 
   clearTimeout(linkTimer);
   linkKey.value++;
@@ -582,6 +666,14 @@ function loseLevel() {
 </script>
 
 <style scoped lang="scss">
+// 连击提示：弹入 → 停顿 → 上飘淡出
+@keyframes combo-pop {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.6); }
+  14% { opacity: 1; transform: translate(-50%, 0) scale(1.12); }
+  26%, 78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.96); }
+}
+
 @keyframes deal {
   from {
     opacity: 0;
@@ -851,6 +943,29 @@ function loseLevel() {
       var(--wall-stripe) 6px 9px);
     border: 1px solid var(--tile-border-color);
     box-sizing: border-box;
+  }
+  // 连击提示：弹一下、停一会儿、往上收掉
+  .combo-tip {
+    position: absolute;
+    left: 50%;
+    // 棋盘上方只有 16px 空隙（opt-area 的 row-gap），所以提示条压扁到约 19px 高、
+    // 再微微压住棋盘顶边两三个像素 —— 既不碰到上面的统计卡，也不会挡住整格牌
+    top: -15px;
+    z-index: 5;
+    padding: 2px 10px;
+    border-radius: var(--radius-tile);
+    background: var(--primary-bg);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: bold;
+    line-height: 1.1;
+    white-space: nowrap;
+    box-shadow: var(--card-shadow);
+    pointer-events: none;
+    animation: combo-pop 1.5s ease forwards;
+    // 连得越高字越大（高度也跟着涨，往棋盘方向多压一点）
+    &.n-3 { font-size: 14px; }
+    &.n-4 { font-size: 16px; }
   }
   .shuffle-tip {
     position: absolute;
