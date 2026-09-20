@@ -55,14 +55,14 @@
           </div>
         </div>
       </div>
-      <!-- 大消 / 连锁的即时庆祝：中间弹一条文字 + 本次得分，配合棋盘闪光与撒花 -->
+      <!-- 大消 / 连锁的即时庆祝：中间弹出文字（两者同时达成时分两行）+ 本次得分，配合棋盘闪光与撒花 -->
       <div
         v-if="celebration"
         :key="celebration.id"
         class="celebrate"
         :class="`tier-${celebration.tier}`"
       >
-        <span class="celebrate-text">{{ celebration.text }}</span>
+        <span v-for="(line, i) in celebration.lines" :key="i" class="celebrate-text">{{ line }}</span>
         <span class="celebrate-score">+{{ celebration.gained }}</span>
       </div>
       <div v-if="phase === WON" class="result win">
@@ -590,16 +590,11 @@ function announceCelebration(count, chain, gained) {
   const combo = chain > 1;
   if (!big && !combo) return;
   const tier = big && combo ? 3 : combo ? 2 : 1;
-  celebration.value = {
-    id: ++celebrationId,
-    tier,
-    gained,
-    text: big && combo
-      ? i18n('niceBoth').replace('{n}', chain).replace('{m}', count)
-      : combo
-        ? i18n('niceCombo').replace('{n}', chain)
-        : i18n('niceBig').replace('{n}', count),
-  };
+  // 大消与连锁同时达成时分成两行显示（原来用「·」串成一行，两段信息挤在一起）
+  const lines = [];
+  if (combo) lines.push(i18n('niceCombo').replace('{n}', chain));
+  if (big) lines.push(i18n('niceBig').replace('{n}', count));
+  celebration.value = { id: ++celebrationId, tier, gained, lines };
   clearTimeout(celebrationTimer);
   celebrationTimer = setTimeout(() => { celebration.value = null; }, 1100 + tier * 220);
   // 棋盘闪光：与炸弹的 shaking 是两套独立样式（一个动 box-shadow、一个动 transform），
@@ -1043,18 +1038,21 @@ function onScoreReset() {
     color: #fff;
     font-weight: bold;
     text-align: center;
-    // 不 nowrap：320px 宽的窄屏上 tier-3 的长文案（×4 连锁 · 6 连消！+304）
-    // 会顶出视口、把文档撑出横向滚动条，这里让它最多占满游戏区、必要时折行
+    // 不 nowrap：320px 宽的窄屏上长文案会顶出视口、把文档撑出横向滚动条，
+    // 这里让它最多占满游戏区、必要时折行
     max-width: calc(100% - 8px);
     pointer-events: none;
     box-shadow: 0 6px 18px var(--celebrate-glow);
     animation: celebrate-pop 0.95s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
+    // 大消 + 连锁同时达成时这里是两行，每行各占一个 span
     .celebrate-text {
       font-size: 18px;
       line-height: 1.2;
     }
     .celebrate-score {
       font-size: 14px;
+      line-height: 1.2;
+      margin-top: 3px;
       opacity: 0.92;
       font-variant-numeric: tabular-nums;
     }
