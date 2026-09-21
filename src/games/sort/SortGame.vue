@@ -49,7 +49,7 @@
           v-for="f in fruits"
           :key="f.id"
           class="fruit"
-          :class="{ back: !faceUp(f), picked: pickedIds.has(f.id), lifted: f.lift >= 0, moving: f.flying, flipping: f.flipping, dealing }"
+          :class="{ back: !faceUp(f), picked: pickedIds.has(f.id), lifted: f.lift >= 0, moving: f.flying, flipping: f.flipping, waving, dealing }"
           :style="fruitStyle(f)"
           :data-id="f.id"
         >
@@ -134,6 +134,11 @@ const LIFT_MS = 150;    // 抬出槽口 / 放回槽里（纯竖向）
 const TRAVEL_MS = 200;  // 空白带里的横向平移
 const DROP_MS = 150;    // 落到目标槽里（纯竖向）
 const FLIP_MS = 340;    // 翻面动画
+// 失败演出：翻面之后先停一下，然后每个槽整摞抬起一格再落下
+const FAIL_PAUSE_MS = 500;
+const WAVE_MS = 560;        // 单个槽：抬起再落下
+const WAVE_STEP_MS = 75;    // 相邻槽之间的错峰（最左边那个槽先动）
+let lastFlipAt = 0;         // 最近一次翻面的开始时间（失败要等它播完）
 
 function loadMode() {
   return +(localStorage.getItem(MODE_KEY) || 1) === 2 ? 2 : 1;
@@ -158,6 +163,10 @@ const hidden = ref([]);        // 每槽底部扣着的张数（可见的永远�
 const moves = ref(0);
 const phase = ref(PLAY);
 const selected = ref(-1);      // 选中的槽位下标（-1 = 没选）
+// 失败演出：翻面播完 → 停 0.2s → 每个槽整摞抬起一格再落下（从左到右错峰）→ 才弹失败层。
+// failing 期间不响应玩家的操作
+const failing = ref(false);
+const waving = ref(false);
 const confirming = ref(false);
 const dealing = ref(false);    // 开局逐张入场中（期间不接受操作）
 const boardRef = ref(null);
@@ -223,7 +232,12 @@ const metrics = computed(() => {
   };
 });
 
-const boardStyle = computed(() => ({ height: `${metrics.value.height}px` }));
+const boardStyle = computed(() => ({
+  height: `${metrics.value.height}px`,
+  // 失败演出用：整摞抬起「一格」的高度（= 槽里相邻两张的间距）与单个槽的时长
+  '--wave-lift': `${metrics.value.stepY}px`,
+  '--wave-ms': `${WAVE_MS}ms`,
+}));
 
 // 槽位底座（只到槽口）与点击热区（连槽口上方的空白带一起）
 const slotBoxes = computed(() => {
@@ -262,7 +276,7 @@ function fruitStyle(f) {
     zIndex: f.flying ? 30 + f.depth : 1,
     '--move-dur': `${f.moveMs}ms`,
     '--move-delay': `${f.delay}ms`,
-    animationDelay: dealing.value ? `${f.deal * 18}ms` : '0ms',
+    animationDelay: dealing.value ? `${f.deal * 18}ms` : (waving.value ? `${f.slot * WAVE_STEP_MS}ms` : '0ms'),
   };
 }
 
@@ -364,6 +378,9 @@ function clearTransient() {
   busy = false;
   liftUntil = 0;
   deferred = null;
+  // 演出没播完就被换局 / 卸载时，异步流程会靠 generation 自己收手，但这两个标志要复位
+  failing.value = false;
+  waving.value = false;
 }
 
 // 逐张入场：从左到右、每槽自下而上（堆起来的感觉），结束后恢复无延迟
@@ -467,7 +484,7 @@ function bootMode() {
 // 抬起随时都能做：上一步搬运的动画还在播，也不耽误把另一摞抬起来。
 // 只有「搬运」本身是串行的——动画期间点的目标槽会记下来，等这一手落定再搬
 function onSlotClick(i) {
-  if (phase.value !== PLAY || dealing.value) return;
+  if (phase.value !== PLAY || dealing.value || failing.value) return;
   // 再点一次刚按下的那个槽位 = 取消挂起的操作
   if (deferred && (deferred.slot === i || deferred.to === i)) {
     deferred = null;
@@ -520,6 +537,7 @@ function runInFlight(i) {
 function reveal(f) {
   f.pending = false;
   f.flipping = true;
+  lastFlipAt = performance.now();
   flipTimers.push(setTimeout(() => { f.flipping = false; }, FLIP_MS));
 }
 
@@ -647,10 +665,28 @@ function evaluate() {
     confetti();
     return;
   }
-  if (isDeadEnd(piles.value, cfg.value)) {
-    phase.value = OVER;
-    save();
-  }
+  if (isDeadEnd(piles.value, cfg.value)) failSequence();
+}
+
+// 失败演出：① 等刚翻出来的那张播完翻面；② 停 0.2s；
+// ③ 每个槽整摞抬起一格再落下（从左到右错峰）；④ 全部落定才弹失败层。
+// 期间 failing = true，玩家的操作一律不响应
+async function failSequence() {
+  if (failing.value || phase.value !== PLAY) return;
+  const gen = generation;
+  failing.value = true;
+  await sleep(Math.max(0, FLIP_MS - (performance.now() - lastFlipAt)));
+  if (gen !== generation) return;
+  await sleep(FAIL_PAUSE_MS);
+  if (gen !== generation) return;
+  waving.value = true;
+  await sleep(WAVE_MS + WAVE_STEP_MS * (cfg.value.slots - 1) + 60);
+  if (gen !== generation) return;
+  waving.value = false;
+  failing.value = false;
+  if (phase.value !== PLAY) return;
+  phase.value = OVER;
+  save();
 }
 </script>
 
@@ -664,6 +700,12 @@ function evaluate() {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+// 失败演出：整摞抬起一格再落回原处（错峰从最左边的槽开始，见 animationDelay）
+@keyframes slot-wave {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(calc(-1 * var(--wave-lift))); }
 }
 
 // 翻面：横向压扁再弹回，配合牌背换成水果的瞬间
@@ -834,6 +876,10 @@ function evaluate() {
     }
     &.flipping {
       animation: flip 0.34s ease;
+    }
+    // 失败演出：抬起又落下（只动 transform，不碰 left/top 的搬运过渡）
+    &.waving {
+      animation: slot-wave var(--wave-ms, 400ms) cubic-bezier(0.34, 1.2, 0.64, 1);
     }
     // 牌背：底色主色 + 白图标（与其它 emoji 游戏同款）
     &.back {

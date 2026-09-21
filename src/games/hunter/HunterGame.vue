@@ -29,7 +29,7 @@
       <div class="stage-frame dot-board" :style="stageStyle">
         <div class="stage">
           <div v-for="(cell, idx) in stage" :key="idx" class="stage-cell">
-            <div class="card-flip" :class="{ flipped: isStageFaceDown(idx) }">
+            <div class="card-flip" :class="{ flipped: isStageFaceDown(idx), 'no-anim': snapping }">
               <div class="face back-face"><i :class="BACK_ICON" /></div>
               <div class="face front-face">{{ cell }}</div>
             </div>
@@ -43,7 +43,10 @@
           class="candidate-tile"
           @click="pick(idx)"
         >
-          <div class="cand-flip" :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(opt), wrong: wrongSet.has(opt) }">
+          <div
+            class="cand-flip"
+            :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(opt), wrong: wrongSet.has(opt), 'no-anim': snapping }"
+          >
             <div class="face cand-back"><i :class="BACK_ICON" /></div>
             <div class="face cand-front">{{ opt }}</div>
           </div>
@@ -95,6 +98,10 @@ const BEST_KEY = `${KEY_PREFIX}best`;
 
 const level = ref(0);
 const phase = ref(MEMORY);
+// 换一关的瞬间：全体先瞬移到背面（关掉过渡），画一帧之后再开过渡翻正面。
+// 不这么做的话，「加上 flipped 再两帧内摘掉」会把过渡反向取消，复用的旧节点
+// 等于没翻、只是把 emoji 换了，只有新建的节点（关卡牌数变多时）才看得到翻转
+const snapping = ref(false);
 const stage = ref([]);
 const candidates = ref([]);
 const foundSet = ref(new Set());
@@ -133,13 +140,18 @@ const candidateStyle = computed(() => ({
 }));
 
 let memoryTimer = null;
+// 换局 +1：上一次 startLevel 还停在 await 里时，这次换局作废旧流程
+let levelToken = 0;
 
 onMounted(() => {
   const saved = restore();
   if (!saved) initGame();
 });
 
-onUnmounted(() => clearTimeout(memoryTimer));
+onUnmounted(() => {
+  levelToken += 1;
+  clearTimeout(memoryTimer);
+});
 
 function clearTimers() {
   clearTimeout(memoryTimer);
@@ -159,6 +171,7 @@ function pickEmojis(n) {
 
 // 展示牌是否背面：记忆结束后未被找回的；结算（胜负）后全部翻正供复盘
 function isStageFaceDown(idx) {
+  if (snapping.value) return true;
   if (phase.value === MEMORY || phase.value === WON || phase.value === LOST) return false;
   return !foundSet.value.has(stage.value[idx]);
 }
@@ -166,29 +179,34 @@ function isStageFaceDown(idx) {
 // 候选牌是否背面：记忆阶段候选区整体背面（盖住内容防偷看），
 // 进入答题后翻正；胜负结算后全部翻正（含漏选的）供玩家复盘
 function isCandFaceDown(opt) {
-  if (phase.value === MEMORY || phase.value === FLIP) return true;
+  if (snapping.value || phase.value === MEMORY || phase.value === FLIP) return true;
   return false;
 }
 
 async function startLevel() {
   clearTimers();
+  const token = ++levelToken;
   foundSet.value = new Set();
   wrongSet.value = new Set();
   hearts.value = HEARTS_MAX;
   const lv = LEVELS[level.value];
   // 展示牌 + 候选牌（含展示牌）互不重复
   const all = pickEmojis(lv.show + lv.grid[0] * lv.grid[1] - lv.show);
+  // 新内容先在「全体背面 + 关掉过渡」的状态下渲染（snapping）：新 emoji 不会
+  // 先在正面闪一下，而且下一帧翻正面时，每一张（复用的旧节点也算）都有干净的起点
+  snapping.value = true;
   stage.value = all.slice(0, lv.show);
   const rest = all.slice(lv.show);
   // 候选区：展示牌 + 干扰项打乱
   candidates.value = [...stage.value, ...rest].sort(() => Math.random() - 0.5);
-  // 先以「全正面」渲染并 paint 一帧新内容，再进入记忆阶段（翻背面）：
-  // nextTick 只等 DOM 更新，同一 paint 前移除/添加 flipped 会被合并成瞬变，
-  // 必须跨过一次 requestAnimationFrame 让浏览器先画「正面」起始帧
-  phase.value = ANSWER;
   await nextTick();
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  phase.value = MEMORY;
+  if (token !== levelToken) return;
+  snapping.value = false;                        // 打开过渡（此时还都是背面，位置不变）
+  await nextTick();
+  await new Promise(r => requestAnimationFrame(r));
+  if (token !== levelToken) return;
+  phase.value = MEMORY;                          // 全体从背面翻到正面
   timerRef.value?.reset();
   memoryTimer = setTimeout(() => {
     phase.value = FLIP;
@@ -422,6 +440,10 @@ function onScoreReset() {
     &.flipped {
       transform: rotateY(180deg);
     }
+    // 换局那一下：瞬移到背面，不播过渡（见 startLevel）
+    &.no-anim {
+      transition: none;
+    }
   }
   // 通用翻牌面样式（两区共用基础部分）
   .face {
@@ -474,6 +496,9 @@ function onScoreReset() {
       transition: transform 0.45s ease-in-out;
       &.flipped {
         transform: rotateY(180deg);
+      }
+      &.no-anim {
+        transition: none;
       }
     }
     .cand-back {
