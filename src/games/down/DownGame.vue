@@ -18,8 +18,9 @@
       </div>
     </div>
     <div class="card opt-area">
-      <div class="difficulty-wrapper">
-        <span class="difficulty-value">{{ i18n('boardInfo') }}</span>
+      <div class="opt-half">
+        <!-- 本局计时：开局起算，失败时停在最终用时（页面隐藏时一并暂停） -->
+        <CountTimer ref="timerRef" :enable="timerRunning" :onTick="onTimerTick" />
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
@@ -59,7 +60,6 @@
       <div v-if="phase === OVER" class="result lose">
         <div class="result-title">🏁 {{ i18n('tipOver') }} 🏁</div>
         <div class="final-score">{{ score }}</div>
-        <button class="game-icon primary" @click="startNewGame">{{ i18n('retry') }}</button>
       </div>
     </div>
   </div>
@@ -69,6 +69,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import CountTimer from '@/shared/CountTimer.vue';
 import { i18n } from '@/shared/i18n';
 import {
   ROWS, COLS, START_TOP, START_ROWS, SPEED_BASE,
@@ -96,6 +97,10 @@ const colTarget = ref(~~(COLS / 2));
 
 const stackEl = ref(null);
 const playerEl = ref(null);
+const timerRef = ref(null);
+// 只有「进行中」才走表：失败结算层上停在最终用时
+const timerRunning = computed(() => phase.value === PLAY);
+const onTimerTick = () => save();   // 每秒落一次档，退出重进时用时不会退回去
 
 // 逐帧推进的量放在普通变量里（不进响应式，避免每帧触发整棵树重渲）
 let top = START_TOP;     // 整摞最上面那排所在的行（越小越靠上，上升 = 变小）
@@ -166,6 +171,7 @@ function startNewGame() {
   glyph.value = row[other >= 0 ? other : (startCol + 1) % COLS];
   arrived = true;
   best.value = +(localStorage.getItem(BEST_KEY) || 0);
+  timerRef.value?.reset();
   save();
   startLoop();
 }
@@ -231,6 +237,7 @@ function lose() {
   if (phase.value !== PLAY) return;
   phase.value = OVER;
   stopLoop();
+  timerRef.value?.stop();
   save();
 }
 
@@ -299,6 +306,7 @@ function save() {
     localStorage.setItem(STATE_KEY, JSON.stringify({
       phase: phase.value,
       score: score.value,
+      time: timerRef.value?.seconds() || 0,
       top,
       col: colTarget.value,
       glyph: glyph.value,
@@ -327,8 +335,13 @@ function restore() {
     arrived = true;
     busy = false;
     phase.value = saved.phase === OVER ? OVER : PLAY;
+    timerRef.value?.restore(Math.max(0, +saved.time || 0));
     if (phase.value === PLAY) startLoop();
-    else render();
+    else {
+      // 结算层：表停在存档的那一刻，不再往前走
+      timerRef.value?.stop();
+      render();
+    }
     return true;
   } catch {
     return false;
@@ -372,6 +385,14 @@ function onScoreReset() {
     border-radius: var(--card-radius);
     box-shadow: var(--card-shadow);
   }
+  // 统计条与操作区共用的竖分隔线（与其它游戏逐字一致）
+  .divider {
+    width: 1px;
+    height: 24px;
+    align-self: center;
+    background: var(--border-color);
+    opacity: 0.6;
+  }
   .score-area {
     margin-top: 64px;
     position: relative;
@@ -393,27 +414,17 @@ function onScoreReset() {
         font-variant-numeric: tabular-nums;
       }
     }
-    .divider {
-      width: 1px;
-      height: 60%;
-      background: var(--border-color);
-    }
   }
   .opt-area {
     display: flex;
     align-items: center;
     margin: var(--row-gap) 0;
     height: var(--row-height);
-    .difficulty-wrapper {
+    .opt-half {
       flex: 1.6;
       display: flex;
       align-items: center;
       justify-content: center;
-      .difficulty-value {
-        font-size: 16px;
-        font-weight: bold;
-        white-space: nowrap;
-      }
     }
     .start-wrapper {
       flex: 1.2;
