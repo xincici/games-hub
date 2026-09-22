@@ -643,8 +643,10 @@ function winLevel() {
 
 function loseLevel() {
   if (phase.value !== PLAY) return;
-  removeState();
   phase.value = OVER;
+  // 失败局面同样落盘：退出重进还是这个结算层，
+  // 由玩家自己决定点「重玩本关」（只有「新游戏」才清记录）
+  save();
 }
 
 // ---------- 存档 ----------
@@ -667,8 +669,8 @@ function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!saved || !Array.isArray(saved.cells) || !saved.cells.length) return false;
-    // 只认「玩到一半」和「已过关」两种局面；失败结算不入档
-    if (saved.phase !== PLAY && saved.phase !== WON) return false;
+    // 玩到一半、已过关、已失败三种局面都还原
+    if (saved.phase !== PLAY && saved.phase !== WON && saved.phase !== OVER) return false;
     const c = levelConfig(+saved.level || 1);
     if (saved.cells.length !== c.cols * c.rows) return false;
     level.value = c.level;
@@ -677,7 +679,7 @@ function restore() {
     syncGems([]);
     score.value = +saved.score || 0;
     moves.value = Math.min(c.moves, Math.max(0, +saved.moves));
-    phase.value = saved.phase === WON ? WON : PLAY;
+    phase.value = saved.phase === WON ? WON : saved.phase === OVER ? OVER : PLAY;
     // 玩到一半才逐张发牌；恢复的是胜利结算层，盘面直接落定、不再播入场
     if (phase.value === PLAY) playDeal();
     return true;

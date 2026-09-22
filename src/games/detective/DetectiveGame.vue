@@ -37,7 +37,7 @@
           <div v-for="(cell, idx) in board" :key="idx" class="cell">
             <div
               class="card-flip"
-              :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: phase === WON && idx === swappedIdx, wrong: wrongIdxs.includes(idx) }"
+              :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: (phase === WON || phase === LOST) && idx === swappedIdx, wrong: wrongIdxs.includes(idx) }"
               @click="onCellClick(idx)"
             >
               <!-- 牌背：emoji 模式用游戏图标，扑克模式复用扑克那边的迷你牌背 -->
@@ -366,15 +366,16 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(levelKey()));
     if (!saved || typeof saved.level !== 'number') return false;
     level.value = Math.min(sizes.value.length - 1, Math.max(0, saved.level));
-    // 胜利结算局面：原样还原那一盘并亮出答案，由玩家自己决定点「重玩本关」还是「下一关」
-    if (saved.phase === WON && Array.isArray(saved.board)
+    // 结算局面（胜利 / 失败都算）：原样还原那一盘并亮出答案，
+    // 由玩家自己决定点「重玩本关」还是「下一关」
+    if ((saved.phase === WON || saved.phase === LOST) && Array.isArray(saved.board)
       && saved.board.length === rows.value * cols.value) {
       board.value = saved.board;
       swappedIdx.value = Number.isInteger(+saved.swapped) ? +saved.swapped : -1;
       wrongIdxs.value = Array.isArray(saved.wrong) ? saved.wrong.filter(i => Number.isInteger(+i)).map(Number) : [];
       shakeIdx.value = -1;
       hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
-      phase.value = WON;
+      phase.value = saved.phase === LOST ? LOST : WON;
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
       timerRef.value?.restore(+saved.time || 0);
       timerRef.value?.stop();

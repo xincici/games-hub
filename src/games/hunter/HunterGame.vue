@@ -398,16 +398,16 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(levelKey()));
     if (!saved || typeof saved.level !== 'number') return false;
     level.value = Math.min(levels.value.length - 1, Math.max(0, saved.level));
-    // 胜利结算局面：原样还原那一盘（展示牌与候选牌都翻正、标出找回 / 标错），
-    // 由玩家自己决定点「重玩本关」还是「下一关」
-    if (saved.phase === WON && Array.isArray(saved.stage) && saved.stage.length
+    // 结算局面（胜利 / 失败都算）：原样还原那一盘（展示牌与候选牌都翻正、
+    // 标出找回 / 标错），由玩家自己决定点「重玩本关」还是「下一关」
+    if ((saved.phase === WON || saved.phase === LOST) && Array.isArray(saved.stage) && saved.stage.length
       && Array.isArray(saved.candidates) && saved.candidates.length) {
       stage.value = saved.stage;
       candidates.value = saved.candidates;
       foundSet.value = new Set(Array.isArray(saved.found) ? saved.found : []);
       wrongSet.value = new Set(Array.isArray(saved.wrong) ? saved.wrong : []);
       hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
-      phase.value = WON;
+      phase.value = saved.phase === LOST ? LOST : WON;
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
       timerRef.value?.restore(+saved.time || 0);
       timerRef.value?.stop();
