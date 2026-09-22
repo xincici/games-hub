@@ -18,6 +18,7 @@ import SudokuGame from './games/sudoku/SudokuGame.vue';
 import MasterGame from './games/master/MasterGame.vue';
 import SortGame from './games/sort/SortGame.vue';
 import DownGame from './games/down/DownGame.vue';
+import SlideGame from './games/slide/SlideGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -37,6 +38,7 @@ const routes = [
   { path: '/master', component: MasterGame, meta: { game: 'master' } },
   { path: '/sort', component: SortGame, meta: { game: 'sort' } },
   { path: '/down', component: DownGame, meta: { game: 'down' } },
+  { path: '/slide', component: SlideGame, meta: { game: 'slide' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

@@ -15,6 +15,7 @@ import sudokuDict from '@/games/sudoku/i18n';
 import masterDict from '@/games/master/i18n';
 import sortDict from '@/games/sort/i18n';
 import downDict from '@/games/down/i18n';
+import slideDict from '@/games/slide/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -159,6 +160,17 @@ export const games = [
     maxDifficulty: 1,
   },
   {
+    id: 'slide',
+    path: '/slide',
+    icon: 'i-mdi-arrow-all',
+    accent: 'logic',
+    helpKey: '__emoji_slide__help_showed',
+    // 只记录最高关卡，存成前缀+1，沿用连点标题清记录的机制
+    recordsPrefix: '__emoji_slide__best_',
+    minDifficulty: 1,
+    maxDifficulty: 1,
+  },
+  {
     id: 'sort',
     path: '/sort',
     icon: 'i-mdi-test-tube',
@@ -191,4 +203,5 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['master', masterDict],
   ['sort', sortDict],
   ['down', downDict],
+  ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));
