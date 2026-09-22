@@ -94,10 +94,10 @@ const cards = computed(() => order.value.map(id => {
   };
 }));
 
-// 蜂窝布局：按行分组，2/3/2/3/2/3 交替让每行都咬合。
+// 蜂窝布局：按行分组，1/2/3/2/3/2/3 交替让每行都咬合（正好 16 个位置，与游戏数一致）。
 // 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
 // 此时给该行加半格横向错位，保持蜂窝咬合
-const ROW_SIZES = [2, 3, 2, 3, 2, 3];
+const ROW_SIZES = [1, 2, 3, 2, 3, 2, 3];
 const rows = computed(() => {
   const list = cards.value;
   const groups = [];
@@ -283,7 +283,7 @@ function onVisibility() {
 // 相邻水平重叠 1/4 宽（边贴合），行间垂直重叠 1/4 高形成蜂窝咬合。
 // --hex-w 用 CSS 变量驱动，窄屏媒体查询可整体缩放
 .wrapper {
-  --hex-w: 126px;
+  --hex-w: 100px;
   --hex-h: calc(var(--hex-w) * 1.1547);
   width: 100%;
   min-height: 100vh;
@@ -422,20 +422,11 @@ function onVisibility() {
     }
   }
 }
-// 窄屏：六边形整体缩小，保证 3 格行（3w）不超出可用宽（视口 − 32px 边距）
+// 窄屏：六边形再缩小一档，保证 3 格行（3w + 2 条 3px 缝隙）不超出可用宽（视口 − 32px 边距）。
+// 376px 及以上用 100px 正好（3×100 + 6 = 306 ≤ 344），只有 320~375 的机型需要收到 92px
 @media only screen and (max-width: 375px) {
   .wrapper {
     --hex-w: 92px;
-  }
-}
-@media only screen and (min-width: 376px) and (max-width: 412px) {
-  .wrapper {
-    --hex-w: 106px;
-  }
-}
-@media only screen and (min-width: 413px) and (max-width: 430px) {
-  .wrapper {
-    --hex-w: 116px;
   }
 }
 </style>
