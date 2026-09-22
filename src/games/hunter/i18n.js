@@ -17,6 +17,10 @@ export default {
     help2: 'Every correct pick flips the matching card above face-up.',
     help3: 'A wrong pick shakes and costs a heart — three misses and the game is lost.',
     help4: 'Find them all to win, then replay or advance. New games always start from level 1.',
+    modeEmoji: 'emoji',
+    modePoker: 'cards',
+    modeTip: 'Switch the card faces: emoji / poker cards (levels and progress are kept separately)',
+    help6: 'The button next to Help switches between emoji and poker faces. The rules are identical, but poker mode shows more targets and a wider candidate grid (playing cards are tall rectangles), and each mode keeps its own level and saved game.',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -38,6 +42,10 @@ export default {
     help2: '每点对一个，上方对应的牌就会翻回来亮出。',
     help3: '点错会抖动并扣一颗心，扣满三颗则本局失败。',
     help4: '全部找出即胜利，可选重玩或进入下一关。新游戏永远从第 1 关开始。',
+    modeEmoji: 'emoji',
+    modePoker: '扑克',
+    modeTip: '切换牌面：emoji / 扑克牌（两种牌面的关卡与进度各自独立保存）',
+    help6: '帮助按钮旁边的按钮可以切换 emoji / 扑克牌面：两套牌面玩法完全一样，但扑克牌是 2:3 的长方形、牌面更好记，所以目标更多、候选区也更宽；两种牌面的关卡进度与当前局面分开保存，切回来接着上次继续。',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }
