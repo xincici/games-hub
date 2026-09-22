@@ -83,6 +83,9 @@ const STATE_KEY = `${KEY_PREFIX}state`;
 
 const MAX_CELL = 58;   // 格子边长上限（纵向 8 行，多数情况下是宽度在限）
 const GAP = 3;         // 每格之间的缝
+const POP_MS = 180;    // 整排炸开动画时长（CSS 里的 rise-pop 要同步）
+const FALL_K = 20;     // 落下一格的收敛速度（越大掉得越快）
+const RECHECK_MS = 110; // 落定后补判一次：炸开那段时间玩家可能已经滑到别的列了
 
 const phase = ref(PLAY);
 const score = ref(0);
@@ -167,8 +170,10 @@ function startNewGame() {
   startLoop();
 }
 
+// 点列就能滑过去：busy（正在炸开 / 落地）不挡这里，
+// 只挡「再开一次消除」——不然玩家消完一排立刻点下一列会白点一下
 function pick(c) {
-  if (phase.value !== PLAY || busy) return;
+  if (phase.value !== PLAY) return;
   if (c === colTarget.value) {
     // 点自己所在的列：立刻判定一次（比如刚落下来就同款的情况）
     if (arrived) checkMatch();
@@ -180,7 +185,8 @@ function pick(c) {
 
 // 到位后判定：顶排这一列跟自己同款 → 整排炸开
 function checkMatch() {
-  if (phase.value !== PLAY || busy) return;
+  // arrived = 玩家此刻确实停在某一列上（还在滑动途中不算，判定留到到位时）
+  if (phase.value !== PLAY || busy || !arrived) return;
   const row = stack.value[0];
   if (!row || row.popping) return;
   if (row.cells[colTarget.value] === glyph.value) clearTopRow();
@@ -213,11 +219,12 @@ function clearTopRow() {
     }
     busy = false;
     save();
-    // 落定之后再判定一次：新顶排要是也同款，就接着消（连锁）
+    // 落定之后补判一次：新顶排要是也同款就接着消（连锁），
+    // 或者玩家在炸开那会儿已经滑到同款上了，这一下也补上
     setTimeout(() => {
       if (g === gen && phase.value === PLAY) checkMatch();
-    }, 240);
-  }, 300);
+    }, RECHECK_MS);
+  }, POP_MS);
 }
 
 function lose() {
@@ -255,7 +262,7 @@ function frame(now) {
   }
   // 落下一格的动画
   if (playerLag !== 0) {
-    playerLag += (0 - playerLag) * Math.min(1, dt * 11);
+    playerLag += (0 - playerLag) * Math.min(1, dt * FALL_K);
     if (Math.abs(playerLag) < 0.02) playerLag = 0;
   }
   // 玩家（贴在整摞最上面那排的上方一格）顶到棋盘顶部 → 失败
@@ -454,7 +461,7 @@ function onScoreReset() {
     display: flex;
     transform-origin: center center;
     &.popping {
-      animation: rise-pop 0.3s ease-out forwards;
+      animation: rise-pop 0.18s ease-out forwards;   // 与 POP_MS 同步
     }
   }
   .rise-cell {
