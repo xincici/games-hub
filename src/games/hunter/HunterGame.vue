@@ -31,7 +31,7 @@
         <button @click="initGame" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
-    <div class="game-area">
+    <div class="game-area" :style="{ '--tip-band': `${TIP_BAND}px` }">
       <div class="stage-frame dot-board" :class="{ poker: mode === 2 }" :style="stageStyle">
         <div class="stage">
           <div v-for="(cell, idx) in stage" :key="idx" class="stage-cell">
@@ -123,6 +123,8 @@ const CARD_LEVELS = [
   { show: 9, grid: [4, 8] },
 ];
 const CARD_RATIO = 1.5;   // 与 CardItem 的 60×90 一致
+// 阶段提示条独占的空白带：舞台 / 候选区整体下移这么多，提示落在带子里、不再压住第一行牌
+const TIP_BAND = 28;
 const CARD_TYPES = ['spade', 'club', 'heart', 'diamond'];
 const MEMORIES = 3000;
 const [MEMORY, FLIP, ANSWER, WON, LOST] = ['memory', 'flip', 'answer', 'won', 'lost'];
@@ -179,7 +181,7 @@ const metrics = computed(() => {
     const candCell = Math.max(14, Math.min(CAND_CELL_MAX, candByW));
     return { stageW: stageCell, stageH: stageCell, candW: candCell, candH: candCell };
   }
-  const availH = Math.max(200, (window.innerHeight || 700) - 262);
+  const availH = Math.max(200, (window.innerHeight || 700) - 262 - TIP_BAND);
   const stageW = Math.max(12, Math.min(CARD_STAGE_MAX_W, stageByW));
   const fixedH = 48 + (rows - 1) * 8;   // 两个 8px 内边距 + 16px 区间距 + 候选区行间距
   const candBudget = Math.max(0, availH - fixedH - stageW * CARD_RATIO);
@@ -525,6 +527,9 @@ function onScoreReset() {
     width: calc(100% - 32px);
     max-width: 440px;
     box-sizing: border-box;
+    // 顶部留出提示带：提示条落在带子里，舞台与候选区从带子下面开始，两者永不重叠
+    --tip-band: 28px;
+    padding-top: var(--tip-band);
   }
   // 展示区：单行居中，卡片 64px 上限
   .stage-frame {
@@ -674,7 +679,8 @@ function onScoreReset() {
   }
   .phase-tip {
     position: absolute;
-    top: -14px;
+    // 带子内（原来贴棋盘上边缘 -14px，高难度时会压住第一行牌）
+    top: 2px;
     left: 50%;
     transform: translateX(-50%);
     padding: 2px 14px;

@@ -31,7 +31,7 @@
         <button @click="initGame" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
-    <div class="game-area">
+    <div class="game-area" :style="{ '--tip-band': `${TIP_BAND}px` }">
       <div class="board-frame dot-board" :style="boardStyle">
         <div class="board" :class="{ poker: mode === 2 }">
           <div v-for="(cell, idx) in board" :key="idx" class="cell">
@@ -100,6 +100,8 @@ const CARD_SIZES = [[1, 4], [2, 3], [2, 4], [2, 5], [3, 4], [3, 5], [3, 6], [4, 
 const CARD_MEMORIES = [2000, 2600, 3000, 3400, 3800, 4500, 5000, 5500, 6500, 7500];
 // 扑克牌的宽高比（与 CardItem 的 60×90 一致）
 const CARD_RATIO = 1.5;
+// 阶段提示条独占的空白带：棋盘整体下移这么多，提示落在带子里、不再压住第一行牌
+const TIP_BAND = 28;
 // 一副牌：4 花色 × A~K（CardItem 的 num 1~13，type 见下）
 const CARD_TYPES = ['spade', 'club', 'heart', 'diamond'];
 const FLIP_MS = 1000;
@@ -143,7 +145,8 @@ const GAP = 6;
 // 否则小屏（568 高）上四行牌会顶出屏幕
 const metrics = computed(() => {
   const availW = Math.min(window.innerWidth || 420, 440) - 32;   // game-area 宽
-  const availH = Math.max(200, (window.innerHeight || 700) - 262); // 标题栏 + 统计条 + 操作区
+  // 标题栏 + 统计条 + 操作区 + 提示带
+  const availH = Math.max(200, (window.innerHeight || 700) - 262 - TIP_BAND);
   const c = cols.value;
   const r = rows.value;
   const byW = Math.floor((availW - 2 * GAP - (c - 1) * GAP) / c);
@@ -497,6 +500,9 @@ function onScoreReset() {
     max-width: calc(100% - 32px);
     margin: 0 auto;
     box-sizing: border-box;
+    // 顶部留出提示带：提示条落在带子里，棋盘从带子下面开始，两者永不重叠
+    --tip-band: 28px;
+    padding-top: var(--tip-band);
   }
   // 棋盘外框：宽度收缩到内容并居中，背景即棋盘底色；
   // --cell（格子边长）由 JS 按视口宽度计算，96px 封顶
@@ -598,7 +604,8 @@ function onScoreReset() {
   // 阶段提示浮在棋盘上方
   .phase-tip {
     position: absolute;
-    top: -14px;
+    // 带子内（原来贴棋盘上边缘 -14px，高难度时会压住第一行牌）
+    top: 2px;
     left: 50%;
     transform: translateX(-50%);
     padding: 2px 14px;
@@ -614,9 +621,10 @@ function onScoreReset() {
   .result {
     position: absolute;
     width: 100%;
-    height: 100%;
+    // 跳过顶部的提示带，正好盖住棋盘
+    height: calc(100% - var(--tip-band, 28px));
     left: 0;
-    top: 0;
+    top: var(--tip-band, 28px);
     z-index: 2;
     border-radius: var(--card-radius);
     background: var(--mask-color);
