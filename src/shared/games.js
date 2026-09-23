@@ -165,10 +165,7 @@ export const games = [
     icon: 'i-mdi-arrow-all',
     accent: 'logic',
     helpKey: '__emoji_slide__help_showed',
-    // 只记录最高关卡，存成前缀+1，沿用连点标题清记录的机制
-    recordsPrefix: '__emoji_slide__best_',
-    minDifficulty: 1,
-    maxDifficulty: 1,
+    // 不记「最高关卡」（统计卡上不放这一格），连点标题的彩蛋只清局面存档
   },
   {
     id: 'sort',

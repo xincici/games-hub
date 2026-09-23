@@ -14,6 +14,11 @@
       </div>
       <div class="divider"></div>
       <div class="stat">
+        <span class="stat-label">{{ i18n('levelLabel') }}</span>
+        <span class="stat-value">{{ level + 1 }}</span>
+      </div>
+      <div class="divider"></div>
+      <div class="stat">
         <span class="stat-label">{{ i18n('livesLabel') }}</span>
         <span class="stat-value stat-hearts"><Hearts :left="hearts" :max="HEARTS_MAX" /></span>
       </div>
@@ -28,7 +33,7 @@
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
-        <button @click="initGame" class="game-icon">{{ i18n('start') }}</button>
+        <button @click="confirming = true" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
     <div class="game-area" :style="{ '--tip-band': `${TIP_BAND}px` }">
@@ -83,6 +88,8 @@
       <div v-else-if="phase === FLIP" class="phase-tip">{{ i18n('phaseFlip') }}</div>
       <div v-else-if="phase === ANSWER" class="phase-tip">{{ i18n('phaseAnswer') }}</div>
     </div>
+    <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->
+    <ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />
   </div>
 </template>
 
@@ -91,6 +98,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
@@ -152,6 +160,7 @@ const wrongSet = ref(new Set());
 const HEARTS_MAX = 3;      // 每局 3 颗心
 const hearts = ref(HEARTS_MAX);
 const bestLevel = ref(+(localStorage.getItem(bestKey()) || 0));
+const confirming = ref(false);   // 「新游戏」的二次确认
 const timerRef = ref(null);
 
 const targetCount = computed(() => levels.value[level.value].show);
@@ -361,6 +370,14 @@ function retryLevel() {
 function initGame() {
   level.value = 0;
   startLevel();
+}
+
+// 「新游戏」二次确认后：清掉当前牌面的最高关卡记录，从第 1 关重来（另一种牌面的记录不动）
+function startNewGame() {
+  confirming.value = false;
+  localStorage.removeItem(bestKey());
+  bestLevel.value = 0;
+  initGame();
 }
 
 // 切换牌面：先落档当前模式，再按另一种模式自己的存档接着玩

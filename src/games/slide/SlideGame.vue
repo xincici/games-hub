@@ -1,6 +1,7 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <!-- 本游戏不记「最高关卡」，所以连点标题的彩蛋不接（与 Emoji 大师一致） -->
+    <TopHeader />
     <!-- 隐藏的计时器：只用来驱动倒计时与每秒落档，数字显示在统计条里 -->
     <CountTimer
       ref="timerRef"
@@ -22,11 +23,6 @@
       <div class="stat">
         <span class="stat-label">{{ i18n('left') }}</span>
         <span class="stat-value">{{ pairsLeft }}</span>
-      </div>
-      <div class="divider"></div>
-      <div class="stat">
-        <span class="stat-label">{{ i18n('best') }}</span>
-        <span class="stat-value">{{ best || '--' }}</span>
       </div>
     </div>
     <div class="card opt-area">
@@ -84,8 +80,7 @@ import {
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_slide__';
-const BEST_KEY = `${KEY_PREFIX}best_1`;
-const STATE_KEY = `${KEY_PREFIX}state`;
+const STATE_KEY = `${KEY_PREFIX}state`;   // 局面存档（关卡进度就在里面）
 
 // 与棋盘点阵底纹、格子尺寸相关的常量
 const MAX_CELL = 56;    // 小棋盘（6×6）时别撑得太满
@@ -98,7 +93,6 @@ const GLYPHS = ['🍎', '🍋', '🍇', '🥝', '🫐', '🍑', '🥕', '🍄'];
 
 const phase = ref(PLAY);
 const level = ref(1);
-const best = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const conf = ref(levelConfig(1));
 const tiles = ref([]);          // [{ id, kind, r, c, popping }]
 const elapsed = ref(0);
@@ -208,7 +202,6 @@ function startLevel(lv, restored = null) {
 
 function startNewGame() {
   confirming.value = false;
-  best.value = +(localStorage.getItem(BEST_KEY) || 0);
   startLevel(1);
 }
 
@@ -223,10 +216,6 @@ function win() {
   if (phase.value !== PLAY) return;
   phase.value = WON;
   timerRef.value?.stop();
-  if (level.value + 1 > best.value) {
-    best.value = level.value + 1;
-    localStorage.setItem(BEST_KEY, best.value);
-  }
   confetti();
   save();
 }
@@ -415,7 +404,6 @@ function restore() {
     // 只还原「本关还没打完」的局面；已过关的存档直接推进到下一关重开
     if (saved.phase === WON) {
       level.value = lv;
-      best.value = +(localStorage.getItem(BEST_KEY) || 0);
       startLevel(lv + 1);
       return true;
     }
@@ -431,12 +419,6 @@ function restore() {
   }
 }
 
-function onScoreReset() {
-  localStorage.removeItem(BEST_KEY);
-  localStorage.removeItem(STATE_KEY);
-  best.value = 0;
-  startLevel(1);
-}
 </script>
 
 <style scoped lang="scss">

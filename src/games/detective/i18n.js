@@ -2,6 +2,7 @@ export default {
   en: {
     gameTitle: 'Emoji Detective',
     bestScore: '🏆 Best Level',
+    levelLabel: '🏁 Level',
     livesLabel: '❤️ Lives',
     start: '🎮 New Game',
     nextLevel: '➡️ Next Level',
@@ -28,6 +29,7 @@ export default {
   cn: {
     gameTitle: 'Emoji 侦探',
     bestScore: '🏆 最高关卡',
+    levelLabel: '🏁 关卡',
     livesLabel: '❤️ 生命',
     start: '🎮 新游戏',
     nextLevel: '➡️ 下一关',

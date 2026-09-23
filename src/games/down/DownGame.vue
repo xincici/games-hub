@@ -2,14 +2,15 @@
   <div class="wrapper">
     <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-area">
-      <div class="stat">
-        <span class="stat-label">{{ i18n('score') }}</span>
-        <span class="stat-value">{{ score }}</span>
-      </div>
-      <div class="divider"></div>
+      <!-- 最高分在前、本局得分在后 -->
       <div class="stat">
         <span class="stat-label">{{ i18n('best') }}</span>
         <span class="stat-value">{{ best || '--' }}</span>
+      </div>
+      <div class="divider"></div>
+      <div class="stat">
+        <span class="stat-label">{{ i18n('score') }}</span>
+        <span class="stat-value">{{ score }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
