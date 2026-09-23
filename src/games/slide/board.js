@@ -1,28 +1,39 @@
 // Emoji 滑行 · 纯逻辑：关卡曲线、发牌、相邻判定、整组滑动与消除结算。
 // 时间推进、拖拽与动画在 SlideGame.vue 里，这里只放能离线校准的部分。
 
-// 关卡曲线：行 × 列恒为偶数（每种 emoji 都成对出现，总格数也必须是偶数）
-const STEPS = [
-  { rows: 6, cols: 6, kinds: 4, seconds: 95 },    // 18 对，5.3s/对
-  { rows: 6, cols: 8, kinds: 5, seconds: 120 },   // 24 对，5.0s/对
-  { rows: 8, cols: 8, kinds: 6, seconds: 155 },   // 32 对，4.8s/对
-  { rows: 8, cols: 10, kinds: 7, seconds: 185 },  // 40 对，4.6s/对
-  { rows: 10, cols: 10, kinds: 7, seconds: 205 }, // 50 对，4.1s/对（种类在此封顶 7 种）
-];
-export const STRUCT_LEVELS = STEPS.length;
+// 关卡曲线：第 1 关最低（6×6 · 5 种，18 对），第 15 关到顶（11 行 × 8 列 · 7 种，44 对），
+// 行 / 列 / 种类都在第 1~15 关之间**线性**爬升（不再是几个大台阶）。
+// 限时按「对数 × 每对秒数」算：每对的时间同时从 5.5s 平缓收到 4.0s，
+// 所以限时跟着盘面平稳增长，每对时间（真正的难度）严格单调递减。
+// 第 15 关之后盘面不再变，只把限时每关收 3s，160s 保底。
+const MIN = { rows: 6, cols: 6, kinds: 5, secPerPair: 5.5 };
+const MAX = { rows: 11, cols: 8, kinds: 7, secPerPair: 4.0 };
+export const CAP_LEVEL = 15;
+const TIME_FLOOR = 160;
 
-// 第 5 关（10×10 · 7 种）结构到顶；之后不再变大，只把限时每关收 3s（160s 保底 ≈ 3.2s/对），压力继续递增
+// t = 0..1 时的盘面与「基准限时」（对数 × 每对秒数）
+function rawAt(t) {
+  const lerp = (a, b) => a + (b - a) * t;
+  const rows = Math.round(lerp(MIN.rows, MAX.rows));
+  const cols = Math.round(lerp(MIN.cols, MAX.cols));
+  const kinds = Math.round(lerp(MIN.kinds, MAX.kinds));
+  const pairs = Math.floor((rows * cols) / 2);
+  return { rows, cols, kinds, pairs, base: Math.round(pairs * lerp(MIN.secPerPair, MAX.secPerPair)) };
+}
+
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const step = STEPS[Math.min(lv, STEPS.length) - 1];
-  const extra = Math.max(0, lv - STEPS.length);
-  return {
-    level: lv,
-    rows: step.rows,
-    cols: step.cols,
-    kinds: step.kinds,
-    seconds: extra ? Math.max(160, step.seconds - extra * 3) : step.seconds,
-  };
+  const at = l => rawAt(Math.min(1, (l - 1) / (CAP_LEVEL - 1)));
+  const cur = at(lv);
+  const extra = Math.max(0, lv - CAP_LEVEL);
+  // 关卡之内：限时 = 对数 × 每对秒数。盘面是整数阶梯（同一尺寸会连着用两关），
+  // 但每对时间每关都在降，所以真正的难度是逐关单调上升的；盘面没变的那一关
+  // 限时会比上一关少几秒（同尺寸但给的时间更紧），这是有意的。
+  if (extra) {
+    // 封顶之后：盘面不变，限时每关再收 3s，160s 保底
+    return { level: lv, ...cur, seconds: Math.max(TIME_FLOOR, cur.base - extra * 3) };
+  }
+  return { level: lv, rows: cur.rows, cols: cur.cols, kinds: cur.kinds, seconds: cur.base };
 }
 
 // 判定邻居的顺序固定为 上 → 右 → 下 → 左，所以「消掉哪一个邻居」是可预期的
@@ -70,12 +81,15 @@ export function hasAdjacentPair(grid) {
 // 发牌：把 total/2 个「对子名额」按种类轮着分，每种出现偶数次，因此一定能两两消完。
 // 0 = 空格，1..kinds = 种类编号
 export function makeBoard(rows, cols, kinds, rand = Math.random) {
-  const pairCount = (rows * cols) / 2;
+  const pairCount = Math.floor((rows * cols) / 2);
   const cells = [];
   for (let i = 0; i < pairCount; i++) {
     const k = (i % kinds) + 1;
     cells.push(k, k);
   }
+  // 面积为奇数（如 7×7 / 9×7）时留一个空格子：棋盘本来就允许空洞，
+  // 这样行 / 列不必凑偶数，曲线才能逐关平滑爬升
+  if (cells.length < rows * cols) cells.push(0);
   const shuffled = shuffle(cells, rand);
   const grid = [];
   for (let r = 0; r < rows; r++) grid.push(shuffled.slice(r * cols, r * cols + cols));
