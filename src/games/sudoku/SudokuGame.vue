@@ -1,6 +1,12 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <TopHeader @onScoreReset="onScoreReset">
+      <!-- 候选按钮的行为开关：关 = 逐个点格填（按钮是开关）；开 = 按一下填满全盘 -->
+      <span class="item-wrapper" :title="i18n('candAllTip')" @click="toggleCandAll">
+        <i v-if="candAll" i-mdi-select-all />
+        <i v-else i-mdi-gesture-tap />
+      </span>
+    </TopHeader>
     <div class="card score-area">
       <div class="stat">
         <span class="stat-label">{{ i18n('bestScore') }}</span>
@@ -44,7 +50,13 @@
           >
             <span v-if="cell.v" class="num">{{ cell.v }}</span>
             <span v-else-if="cell.notes" class="notes">
-              <span v-for="d in NUMS" :key="d" class="note" :class="{ has: cell.notes & (1 << d) }">{{ d }}</span>
+              <!-- has = 这一格标了这个候选；hl = 与盘面上点中的数字相同（任何空格里的同数字笔记都一起高亮） -->
+              <span
+                v-for="d in NUMS"
+                :key="d"
+                class="note"
+                :class="{ has: cell.notes & (1 << d), hl: (cell.notes & (1 << d)) !== 0 && hlDigit === d }"
+              >{{ d }}</span>
             </span>
           </div>
         </div>
@@ -74,7 +86,10 @@
         </button>
       </div>
       <div class="tools">
-        <button class="tool" :class="{ active: notesMode }" @click="notesMode = !notesMode">
+        <button class="tool" :class="{ active: candMode }" @click="onCandButton">
+          <i i-mdi-format-list-numbered />{{ i18n('candidates') }}
+        </button>
+        <button class="tool" :class="{ active: notesMode }" @click="toggleNotesMode">
           <i i-mdi-pencil-outline />{{ i18n('notes') }}
         </button>
         <button class="tool" @click="onErase">
@@ -96,6 +111,10 @@ import { i18n } from '@/shared/i18n';
 import { generatePuzzle } from './sudoku';
 
 const NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+// 笔记用 1 << d 当位掩码（d = 1..9），所以数字 9 落在 bit 9 = 512 上：
+// 掩码至少要 (1 << 10) - 1。这里踩过坑 —— 原来写 511（只盖 bit 0~8），
+// 还原存档时会把 9 的笔记整位丢掉，只剩「候选=9」的格子会整格清空
+const NOTES_MASK = (1 << (NUMS.length + 1)) - 1;
 // 简单 / 一般 / 困难：预填数字越少越难（挖空数递增）
 const DIFFICULTIES = [
   { empties: 40 },
@@ -109,11 +128,14 @@ const MAX_DIFFICULTY = 3;
 const KEY_PREFIX = '__sudoku_game__';
 const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
 const STATE_KEY = `${KEY_PREFIX}state`;
+const CAND_ALL_KEY = `${KEY_PREFIX}cand_all`;   // 候选按钮的行为：1 = 一键填全盘
 
 const difficulty = ref(initDifficulty());
 const cells = ref([]);
 const selected = ref(-1);
 const notesMode = ref(false);
+const candMode = ref(false);   // 候选模式：点空白格一次性填入该格所有可用候选
+const candAll = ref(localStorage.getItem(CAND_ALL_KEY) === '1');   // 按下候选按钮就填满全盘
 const phase = ref(PLAY);
 const newBest = ref(false);
 const bestTime = ref(0);
@@ -146,6 +168,67 @@ const digitLeft = computed(() => {
 });
 function keyClass(d) {
   return { on: padDigit.value === d, used: digitLeft.value[d] <= 0 };
+}
+// 盘面上点中的那个数字（题面格与自己填的都算）：同数字的格子 + 其它空格里相同的笔记一起高亮
+const hlDigit = computed(() => {
+  const s = selected.value;
+  return s >= 0 ? cells.value[s]?.v || 0 : 0;
+});
+// 某一格的可用候选：排除同行、同列、同宫已经出现的数字（题面与自己填的都算）
+function candidatesFor(i) {
+  const r = (i / 9) | 0;
+  const c = i % 9;
+  const br = ((r / 3) | 0) * 3;
+  const bc = ((c / 3) | 0) * 3;
+  const used = new Set();
+  for (let k = 0; k < 9; k++) {
+    used.add(cells.value[r * 9 + k].v);
+    used.add(cells.value[k * 9 + c].v);
+    used.add(cells.value[(br + ((k / 3) | 0)) * 9 + (bc + (k % 3))].v);
+  }
+  let mask = 0;
+  for (const d of NUMS) {
+    if (used.has(d) || digitLeft.value[d] <= 0) continue;
+    mask |= 1 << d;
+  }
+  return mask;
+}
+// 按下「候选」：开关关着当模式用（再点格子逐个填），开着就直接把全盘空格填满
+function onCandButton() {
+  if (candAll.value) {
+    fillAllCandidates();
+    return;
+  }
+  toggleCandMode();
+}
+
+// 给所有空白格写入各自可用候选（已填数字的格跳过；重复按按当前盘面刷新）
+function fillAllCandidates() {
+  if (phase.value !== PLAY) return;
+  let touched = 0;
+  cells.value.forEach((c, i) => {
+    if (c.fixed || c.v) return;
+    c.notes = candidatesFor(i);
+    touched++;
+  });
+  if (touched) saveState();
+}
+
+function toggleCandAll() {
+  candAll.value = !candAll.value;
+  localStorage.setItem(CAND_ALL_KEY, candAll.value ? '1' : '0');
+  // 切到「一键填全盘」时把逐个填的模式收掉，免得两种语义叠着
+  if (candAll.value) candMode.value = false;
+}
+
+// 候选与笔记是同一块地盘上的两种输入方式，同时开着容易混，所以互斥
+function toggleCandMode() {
+  candMode.value = !candMode.value;
+  if (candMode.value) notesMode.value = false;
+}
+function toggleNotesMode() {
+  notesMode.value = !notesMode.value;
+  if (notesMode.value) candMode.value = false;
 }
 
 // 棋盘按视口收缩：外框与数字键盘同宽，9×9 单元格等分
@@ -212,6 +295,7 @@ function initGame() {
   hearts.value = difficulty.value; // 简单 1 / 一般 2 / 困难 3
   selected.value = -1;
   notesMode.value = false;
+  candMode.value = false;
   phase.value = PLAY;
   newBest.value = false;
   bestTime.value = +(localStorage.getItem(bestKey()) || 0);
@@ -276,7 +360,7 @@ function restore() {
     const arr = saved.cells.map(t => {
       const v = Math.min(9, Math.max(0, +t[0] || 0));
       const fixed = Boolean(t[1]) && v > 0;
-      const notes = fixed ? 0 : (+t[2] || 0) & 511;
+      const notes = fixed ? 0 : (+t[2] || 0) & NOTES_MASK;
       return { v, fixed, notes };
     });
     difficulty.value = d;
@@ -287,6 +371,7 @@ function restore() {
     hearts.value = hv >= 0 && hv <= d ? hv : d;
     selected.value = -1;
     notesMode.value = false;
+    candMode.value = false;
     phase.value = PLAY;
     newBest.value = false;
     bestTime.value = +(localStorage.getItem(bestKey()) || 0);
@@ -346,6 +431,14 @@ function cellStyle(i) {
 
 function onCellClick(i) {
   if (phase.value !== PLAY) return;
+  const cell = cells.value[i];
+  // 候选模式：点空白格就填入该格全部可用候选（重复点按当前盘面刷新，不是叠加）
+  if (candMode.value && !cell.fixed && !cell.v) {
+    cell.notes = candidatesFor(i);
+    selected.value = i;
+    saveState();
+    return;
+  }
   selected.value = selected.value === i ? -1 : i;
 }
 
@@ -663,6 +756,17 @@ function win() {
       .note.has {
         opacity: 0.62;
       }
+      // 与盘面上点中的数字相同的候选：底色块 + 白字，一眼看出这个数字还能放哪
+      .note.has.hl {
+        opacity: 1;
+        color: #fff;
+        font-weight: 700;
+        background: var(--primary-bg);
+        border-radius: 2px;
+        padding: 0 2px;
+        // 让色块比字号略高一点，数字不至于贴边
+        line-height: 1.35;
+      }
     }
     &.fixed {
       cursor: default;
@@ -671,17 +775,24 @@ function win() {
         color: var(--text-color);
       }
     }
+    // 同行 / 同列 / 同宫：最淡的一档
     &.hl {
-      background: var(--key-bg);
+      background: var(--sudoku-hl-bg);
     }
+    // 与点中的数字相同：更实的一档，数字也加粗
     &.same {
-      background: var(--enter-bg);
-    }
-    &.sel {
-      background: var(--enter-bg);
-      box-shadow: inset 0 0 0 2px var(--primary-bg);
+      background: var(--sudoku-same-bg);
       .num {
-        color: var(--primary-bg);
+        font-weight: 700;
+      }
+    }
+    // 选中格：最深的一档 + 主色描边，主角位
+    &.sel {
+      background: var(--sudoku-sel-bg);
+      box-shadow: inset 0 0 0 2px var(--primary-bg);
+      // 底色加深后不能再用主色绿写字（绿压绿发闷），改用实心字色：浅色主题是深字、深色主题是白字
+      .num {
+        color: var(--text-color);
         font-weight: 700;
       }
     }

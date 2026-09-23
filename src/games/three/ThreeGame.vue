@@ -1,5 +1,11 @@
 <template>
-  <div class="wrapper" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+  <div
+    class="wrapper"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerCancel"
+  >
     <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-area">
       <div class="stat">
@@ -27,13 +33,16 @@
       </div>
     </div>
     <div class="game-area">
-      <div class="grid">
+      <div ref="gridEl" class="grid">
         <div class="cell" v-for="idx in SIZE * SIZE" :key="`bg-${idx}`"></div>
         <div
           class="tile"
           v-for="tile in tiles"
           :key="tile.id"
-          :class="[`v-${capValue(tile.value)}`, { merged: tile.merged, fresh: tile.fresh, dealt: tile.dealIdx != null }]"
+          :class="[
+            `v-${capValue(tile.value)}`,
+            { merged: tile.merged, fresh: tile.fresh, dealt: tile.dealIdx != null, dragging: isDragMover(tile) },
+          ]"
           :style="tileStyle(tile)"
         >
           <span class="tile-value">{{ tile.value }}</span>
@@ -70,6 +79,7 @@ const score = ref(0);
 const nextTile = ref(1);
 const bestScore = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const timerRef = ref(null);
+const gridEl = ref(null);
 
 const timerRunning = computed(() => phase.value === GAMING);
 
@@ -337,9 +347,17 @@ function tileStyle(tile) {
   // 绝对定位 % 基于 padding box（比内容盒宽 16px），
   // 牌宽 = (内容宽 - 3×gap)/4 = (100% - 40px)/4
   const pos = n => `calc(${n} * ((100% - 40px) / 4 + 8px) + 8px)`;
+  const d = dragState.value;
+  const style = { left: pos(tile.col), top: pos(tile.row) };
+  // 跟手：拖动中把这一步会动的牌沿方向平移（最多一格），
+  // 于是不足一格时它会压在目标牌上面 —— 就是那个「重叠覆盖」的效果
+  if (d && dragMovers.value?.has(tile.id)) {
+    const [dr, dc] = DIRS[d.dir];
+    if (dc) style.left = `calc(${style.left} + ${d.dist * dc}px)`;
+    if (dr) style.top = `calc(${style.top} + ${d.dist * dr}px)`;
+  }
   return {
-    left: pos(tile.col),
-    top: pos(tile.row),
+    ...style,
     ...(tile.dealIdx != null ? { animationDelay: `${tile.dealIdx * dealStep}ms` } : null),
   };
 }
@@ -395,20 +413,87 @@ function onScoreReset() {
   bestScore.value = 0;
 }
 
-// ---------- 滑动操作 ----------
+// ---------- 滑动操作（跟手拖动）----------
 
-let touchStartX = 0;
-let touchStartY = 0;
-function onTouchStart(e) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+const DRAG_SLOP = 10;      // 认定方向所需的最小位移（轻点不会触发移动）
+// 阈值都按「跟手位移 / 一格间距」算，等价于「移动的牌盖住目标牌的比例」：
+// 盖不到一半就松手 → 弹回、不合并；盖到 95% → 不等松手当场合并
+const DRAG_MIN = 0.5;
+const DRAG_COMMIT = 0.95;
+
+const dragState = ref(null);   // { dir, dist }：dist = 沿方向位移的像素（已夹在一格内）
+let dragCtx = null;            // 非响应式：起点 / pointerId / 一格间距
+
+// 一格间距（牌宽 + gap）：牌宽 = (grid 宽 - 40px)/4
+function cellPitch() {
+  const w = gridEl.value?.clientWidth || 0;
+  return w ? (w - 40) / 4 + 8 : 0;
 }
-function onTouchEnd(e) {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
-  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
-  if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
-  else move(dy > 0 ? 'down' : 'up');
+
+// 这一步真的会动的牌。拖不动（该方向没有可移动的牌）时返回空集：牌不跟手，松手也不动
+const dragMovers = computed(() => {
+  const d = dragState.value;
+  if (!d) return null;
+  const { placements, moved } = computeMove(d.dir);
+  if (!moved) return new Set();
+  const now = new Map(tiles.value.map(t => [t.id, t]));
+  const set = new Set();
+  for (const p of placements) {
+    const t = now.get(p.id);
+    if (t && (t.row !== p.row || t.col !== p.col)) set.add(p.id);
+  }
+  return set;
+});
+
+function isDragMover(tile) {
+  return !!dragMovers.value?.has(tile.id);
+}
+
+function onPointerDown(e) {
+  if (phase.value !== GAMING || busy || dealing) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const pitch = cellPitch();
+  if (!pitch) return;
+  dragCtx = { id: e.pointerId, x: e.clientX, y: e.clientY, dir: null, pitch };
+}
+
+function onPointerMove(e) {
+  if (!dragCtx || e.pointerId !== dragCtx.id) return;
+  const dx = e.clientX - dragCtx.x;
+  const dy = e.clientY - dragCtx.y;
+  if (!dragCtx.dir) {
+    if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return;
+    // 方向一旦认定就锁住，避免手指来回抖时牌跟着来回跳
+    dragCtx.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  }
+  const [dr, dc] = DIRS[dragCtx.dir];
+  const along = dx * dc + dy * dr;                        // 沿锁定方向的净位移
+  const dist = Math.max(0, Math.min(along, dragCtx.pitch));
+  dragState.value = dist > 0 ? { dir: dragCtx.dir, dist } : null;
+  // 覆盖到 95%：不等松手，当场完成滑动（剩下的动画由 move 接手）
+  if (along >= dragCtx.pitch * DRAG_COMMIT) finishDrag(true);
+}
+
+function onPointerUp(e) {
+  if (!dragCtx || e.pointerId !== dragCtx.id) return;
+  finishDrag(false);
+}
+
+function onPointerCancel(e) {
+  if (!dragCtx || e.pointerId !== dragCtx.id) return;
+  dragCtx = null;
+  dragState.value = null;   // 手势被打断：只弹回，不移动
+}
+
+// forced = 已经满足「当场合并」的条件；否则看松手时的覆盖比例够不够一半
+function finishDrag(forced) {
+  const ctx = dragCtx;
+  dragCtx = null;
+  const d = dragState.value;
+  dragState.value = null;   // 先撤掉跟手位移：提交时 move 改 left/top 会从手指位置接着滑，
+                            // 不提交时 left/top 的过渡会把牌弹回原格
+  if (!ctx?.dir || !d?.dist) return;                      // 轻点 / 没跟手位移
+  if (forced || d.dist >= ctx.pitch * DRAG_MIN) move(ctx.dir);
 }
 </script>
 
@@ -517,6 +602,8 @@ function onTouchEnd(e) {
     padding: 8px;
     box-sizing: border-box;
     aspect-ratio: 1;
+    // 在棋盘上拖动是「滑牌」，不要让浏览器拿去滚动页面
+    touch-action: none;
     background: var(--board-bg);
     border-radius: var(--card-radius);
     .cell {
@@ -535,6 +622,12 @@ function onTouchEnd(e) {
     font-weight: bold;
     transition: left 0.14s ease-in-out, top 0.14s ease-in-out;
     z-index: 1;
+    // 跟手拖动中：位置直接跟着手指走（关掉过渡），并压到目标牌上面
+    &.dragging {
+      transition: none;
+      z-index: 2;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+    }
     &.fresh {
       animation: 0.16s ease-out appear;
     }

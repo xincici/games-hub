@@ -216,6 +216,11 @@ body {
   --tile-border-color: #c9d0da;
   --sudoku-line: #d3d8df;
   --sudoku-strong: #5f7086;
+  // 数独三档高亮：同行列宫（最淡）< 同数字 < 选中格（最深）。
+  // 不要复用 --key-bg / --enter-bg，那两个还被数字键盘和工具按钮共用
+  --sudoku-hl-bg: #c9d6e8;
+  --sudoku-same-bg: #8fdcb2;
+  --sudoku-sel-bg: #7ad0a4;
   --particle-dot: 90, 112, 140;
   --particle-line: 118, 140, 172;
   --key-bg: #eef0f4;
@@ -275,6 +280,9 @@ body {
     --tile-border-color: #5a5a5a;
     --sudoku-line: #545d6b;
     --sudoku-strong: #92a3ba;
+    --sudoku-hl-bg: #4a5462;
+    --sudoku-same-bg: rgba(78, 201, 138, 0.42);
+    --sudoku-sel-bg: rgba(78, 201, 138, 0.62);
     --particle-dot: 178, 204, 238;
     --particle-line: 150, 188, 232;
     --key-bg: #454545;
