@@ -3,15 +3,15 @@
 
 // 关卡曲线：行 × 列恒为偶数（每种 emoji 都成对出现，总格数也必须是偶数）
 const STEPS = [
-  { rows: 6, cols: 6, kinds: 4, seconds: 75 },
-  { rows: 6, cols: 8, kinds: 5, seconds: 90 },
-  { rows: 8, cols: 8, kinds: 6, seconds: 115 },
-  { rows: 8, cols: 10, kinds: 7, seconds: 140 },
-  { rows: 10, cols: 10, kinds: 8, seconds: 165 },
+  { rows: 6, cols: 6, kinds: 4, seconds: 95 },    // 18 对，5.3s/对
+  { rows: 6, cols: 8, kinds: 5, seconds: 120 },   // 24 对，5.0s/对
+  { rows: 8, cols: 8, kinds: 6, seconds: 155 },   // 32 对，4.8s/对
+  { rows: 8, cols: 10, kinds: 7, seconds: 185 },  // 40 对，4.6s/对
+  { rows: 10, cols: 10, kinds: 7, seconds: 205 }, // 50 对，4.1s/对（种类在此封顶 7 种）
 ];
 export const STRUCT_LEVELS = STEPS.length;
 
-// 第 5 关（10×10 · 8 种）结构到顶；之后不再变大，只把限时每关收 4s（100s 保底），压力继续递增
+// 第 5 关（10×10 · 7 种）结构到顶；之后不再变大，只把限时每关收 3s（160s 保底 ≈ 3.2s/对），压力继续递增
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
   const step = STEPS[Math.min(lv, STEPS.length) - 1];
@@ -21,7 +21,7 @@ export function levelConfig(level) {
     rows: step.rows,
     cols: step.cols,
     kinds: step.kinds,
-    seconds: extra ? Math.max(100, step.seconds - extra * 4) : step.seconds,
+    seconds: extra ? Math.max(160, step.seconds - extra * 3) : step.seconds,
   };
 }
 

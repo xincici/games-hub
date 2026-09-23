@@ -263,7 +263,7 @@ async function onPlayClick() {
   game.animating = true;
   if (game.stage === WAIT) {
     if (game.total <= 0) {
-      alert('破产了请重新来过！');
+      alert('破产了请重新来过!');
       game.total = DEFAULT_TOTAL;
     }
     if (game.total >= bet.value) {

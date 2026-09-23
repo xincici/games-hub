@@ -22,40 +22,41 @@ export const isTile = v => v !== null && v !== WALL && v !== undefined;
 // 前 30 关各因素随关卡线性爬升，第 30 关结构到顶（步数在 20 → 17 之间反向收紧）：
 //   列数 7 → 9、行数 7 → 10（面板 7×7 → 9×10）
 //   种类 5 → 7
-//   步数 20 → 17
-//   目标分 700 → 2100（由离线模拟校准：见下）
-//   墙   0 → 12
-//   炸弹概率 2% → 5%、万能元素 3% → 5%
+//   步数 22 → 20
+//   目标分 650 → 2200（由离线模拟校准：见下）
+//   墙   0 → 8
+//   炸弹概率 3% → 6%、万能元素 4% → 7%
 // 30 关之后面板 / 种类 / 墙 / 特殊元素都不再变，但**步数与目标分继续线性上涨**
-// （每关 +1 步、目标分 +160），难度不会在第 30 关就固定下来。
-// 目标分按「只做基础消除的老实玩家」的中位得分标定（第 30 关约 2160 对 2100），
-// 也就是稳定地消就能过，连锁与炸弹是加分项而不是过关的必需；30 关之后每关
-// +160 比 +1 步带来的收益（约 +135）略高，通关率因此缓慢下降而不是原地踏步。
+// （每关 +1 步、目标分 +110），难度不会在第 30 关就固定下来。
+// 目标分按「贪心挑最大三连」的模拟玩家的中位得分标定，整体留出充足余量
+// （第 30 关中位分约 3600 对目标 2200，过关率约 90%），也就是稳定地消就能过，
+// 连锁与炸弹是加分项而不是过关的必需；30 关之后每关 +110 与 +1 步带来的收益
+// 基本持平，所以通关率是缓慢下滑而不是断崖。
 export const CAP_LEVEL = 30;
 
 // 结构上限：面板、种类、墙、特殊元素概率在第 30 关到顶（步数 / 目标分的延伸见上）
-const CAP = { cols: 9, rows: 10, kinds: 7, moves: 17, target: 2100, walls: 12, bomb: 0.05, wild: 0.05 };
+const CAP = { cols: 9, rows: 10, kinds: 6, moves: 20, target: 2200, walls: 8, bomb: 0.06, wild: 0.07 };
 // 第 30 关之后每关的增量
 const EXTRA_MOVES = 1;
-const EXTRA_TARGET = 160;
+const EXTRA_TARGET = 110;
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
   const t = Math.min(1, (lv - 1) / (CAP_LEVEL - 1));
   const extra = Math.max(0, lv - CAP_LEVEL);
-  // 各因素到顶的时点刻意错开（列 21 关、种类 27 关、行 30 关），
-  // 否则两条曲线会在同一关同时跳档，难度出现明显的断崖
+  // 各因素到顶的时点刻意错开（列 ~23 关、墙 ~27 关、种类 ~27 关、行 30 关），
+  // 否则几条曲线会在同一关同时跳档，难度出现明显的断崖
   const ramp = span => Math.min(1, t / span);
   return {
     level: lv,
-    cols: Math.round(7 + (CAP.cols - 7) * ramp(0.70)),
+    cols: Math.round(7 + (CAP.cols - 7) * ramp(0.75)),
     rows: Math.round(7 + (CAP.rows - 7) * ramp(1)),
-    kinds: Math.round(5 + (CAP.kinds - 5) * ramp(0.90)),
-    moves: Math.round(20 + (CAP.moves - 20) * t) + extra * EXTRA_MOVES,
-    target: Math.round(700 + (CAP.target - 700) * t) + extra * EXTRA_TARGET,
-    walls: Math.round(CAP.walls * t),
-    bombChance: 0.02 + (CAP.bomb - 0.02) * t,
-    wildChance: 0.03 + (CAP.wild - 0.03) * t,
+    kinds: Math.round(4 + (CAP.kinds - 4) * ramp(0.90)),
+    moves: Math.round(22 + (CAP.moves - 22) * t) + extra * EXTRA_MOVES,
+    target: Math.round(650 + (CAP.target - 650) * t) + extra * EXTRA_TARGET,
+    walls: Math.round(CAP.walls * ramp(0.95)),
+    bombChance: 0.03 + (CAP.bomb - 0.03) * t,
+    wildChance: 0.04 + (CAP.wild - 0.04) * t,
   };
 }
 

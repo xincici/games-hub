@@ -45,8 +45,16 @@
         >
           <span class="tile-body">{{ GLYPHS[(t.kind - 1) % GLYPHS.length] }}</span>
         </div>
-        <div v-if="shuffling" class="shuffle-tip">{{ i18n('shuffled') }}</div>
       </div>
+      <!-- 提示条必须放在 .board 外面：.board 有 overflow: hidden，
+           放里面的话「向上探出棋盘」的部分会被整条裁掉（连击提示踩过） -->
+      <div
+        v-if="comboTip"
+        :key="comboTip.id"
+        class="combo-tip"
+        :class="`n-${Math.min(comboTip.n, 4)}`"
+      >{{ i18n('comboTip').replace('{n}', comboTip.n) }}</div>
+      <div v-if="shuffling" class="shuffle-tip">{{ i18n('shuffled') }}</div>
       <div v-if="phase === WON" class="result win">
         <div class="result-title">🎉 {{ i18n('tipWin') }} 🎉</div>
         <div class="result-line">{{ i18n('time') }} {{ clock }}</div>
@@ -66,12 +74,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
-import confetti from '@/shared/confetti';
+import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
   levelConfig, makeBoard, clone, findPartner, slideParams, shiftGroup,
@@ -89,6 +97,10 @@ const TAP_SLOP = 8;     // 位移小于它就当成「点击」而不是拖动
 const POP_MS = 280;     // 炸开动画时长（CSS 里的 tile-pop 要同步）
 const SHAKE_MS = 620;   // 同款晃动提示时长（CSS 里的 tile-shake 要同步）
 const SHUFFLE_MS = 1000; // 死局重排的提示时长（CSS 里的 tile-reshuffle 要同步）
+// 连击：两次消除之间没有无效操作、且间隔在 COMBO_MS 内才算连上（与连连看同款规则）
+const COMBO_MS = 2500;    // 连击窗口
+const COMBO_TIP_MS = 1500; // 提示条停留时长（比窗口短一点，收得干净）
+const FIRE_DROP_PX = 30;  // 烟花喷发点 = 提示条中心再往下这么多
 const GLYPHS = ['🍎', '🍋', '🍇', '🥝', '🫐', '🍑', '🥕', '🍄'];
 
 const phase = ref(PLAY);
@@ -98,6 +110,8 @@ const tiles = ref([]);          // [{ id, kind, r, c, popping }]
 const elapsed = ref(0);
 const shakeKind = ref(0);
 const shuffling = ref(false);   // 死局重排中（所有牌播打乱动画 + 顶部提示）
+const comboTip = ref(null);     // { id, n } 棋盘上方那条「N 连击」
+const combo = ref(0);           // 当前连到几（1 = 刚消一对，0 = 没有连击在进行）
 const confirming = ref(false);
 
 const boardEl = ref(null);
@@ -105,6 +119,11 @@ const timerRef = ref(null);
 let tileId = 0;
 let shakeTimer = null;
 let shuffleTimer = null;
+let lastClearAt = 0;            // 上一次消除的时刻
+let comboBroken = false;        // 上一次消除之后是否出现过无效操作
+let comboTimer = null;          // 窗口到期就断开
+let comboTipTimer = null;
+let comboSeq = 0;
 let generation = 0;             // 换局时 +1，异步动画据此收手
 
 // 拖拽状态：用普通对象存（不进响应式），逐帧只改 shift 一个数
@@ -174,6 +193,10 @@ function isDragging(t) {
 function startLevel(lv, restored = null) {
   generation += 1;
   clearTimeout(shakeTimer);
+  clearTimeout(shuffleTimer);
+  shuffleTimer = null;
+  shuffling.value = false;
+  breakCombo();
   shakeKind.value = 0;
   drag.value = null;
   level.value = Math.max(1, lv);
@@ -227,11 +250,70 @@ function lose() {
   save();
 }
 
+// ---------- 连击 ----------
+
+// 规则：两次消除之间没有无效操作（滑动没消掉 / 点了但没同款），且间隔 < COMBO_MS 才算连上，
+// 弹出「N 连击」+ 一小束烟花；间隔超时或出现无效操作则中断。
+function registerClear() {
+  const now = performance.now();
+  const chained = lastClearAt > 0 && !comboBroken && now - lastClearAt < COMBO_MS;
+  combo.value = chained ? combo.value + 1 : 1;
+  lastClearAt = now;
+  comboBroken = false;
+  clearTimeout(comboTimer);
+  comboTimer = setTimeout(breakCombo, COMBO_MS);
+  if (combo.value >= 2) showCombo(combo.value);
+}
+
+function breakCombo() {
+  combo.value = 0;
+  lastClearAt = 0;
+  comboBroken = false;
+  clearTimeout(comboTimer);
+  clearTimeout(comboTipTimer);
+  comboTimer = null;
+  comboTipTimer = null;
+  comboTip.value = null;
+}
+
+// 有一次操作没消掉 → 标记中断（真正清空留给 registerClear / 窗口超时）
+function missCombo() {
+  if (combo.value) comboBroken = true;
+}
+
+// 烟花喷发点：提示条中心再往下 30px（提示条贴在棋盘上方，落点就落在棋盘顶部内侧）
+function comboOrigin() {
+  const board = document.querySelector('.board')?.getBoundingClientRect();
+  if (!board || !window.innerWidth || !window.innerHeight) return null;
+  const tip = document.querySelector('.combo-tip')?.getBoundingClientRect();
+  const cy = tip ? tip.top + tip.height / 2 : board.top - 5;
+  return {
+    x: (board.left + board.width / 2) / window.innerWidth,
+    y: (cy + FIRE_DROP_PX) / window.innerHeight,
+  };
+}
+
+async function showCombo(n) {
+  comboTip.value = { id: ++comboSeq, n };
+  clearTimeout(comboTipTimer);
+  comboTipTimer = setTimeout(() => { comboTip.value = null; }, COMBO_TIP_MS);
+  // 等提示条真的渲染出来再量它的位置，喷发点才是「文案下方 30px」
+  await nextTick();
+  const origin = comboOrigin();
+  if (!origin) return;
+  // 与连连看同一个烟花，连得越高越大、粒子越多
+  burstConfetti(Math.min(3, 1 + (n - 2) * 0.6), {
+    origin,
+    count: Math.min(44, 12 + n * 4),
+  });
+}
+
 // ---------- 消除 ----------
 
 function eliminate(a, b) {
   const list = [tileAt(a[0], a[1]), tileAt(b[0], b[1])];
   if (list.some(t => !t)) return;
+  registerClear();
   const g = generation;
   list.forEach(t => { t.popping = true; });
   setTimeout(() => {
@@ -286,6 +368,8 @@ function tapTile(r, c) {
     eliminate([r, c], partner);
     return;
   }
+  // 点了但周围没有同款 → 只有晃动提示，算一次无效操作
+  missCombo();
   shakeKind.value = t.kind;
   clearTimeout(shakeTimer);
   shakeTimer = setTimeout(() => { shakeKind.value = 0; }, SHAKE_MS);
@@ -356,8 +440,11 @@ function onPointerUp() {
   const nc = d.c + d.dir.c * k;
   const next = shiftGroup(grid.value, d.groupCells, d.dir.r, d.dir.c, k);
   const partner = findPartner(next, nr, nc);
-  // 落点四周没有同款 → 不提交（上面已经把 drag 清掉，就是弹回原位）
-  if (!partner) return;
+  // 落点四周没有同款 → 不提交（上面已经把 drag 清掉，就是弹回原位），并算一次无效操作
+  if (!partner) {
+    missCombo();
+    return;
+  }
   // 提交：这一组落到滑过去的位置，其余 emoji 留在原地
   const snapshot = d.groupCells.map(([r, c]) => tileAt(r, c)).filter(Boolean);
   snapshot.forEach(t => {
@@ -375,6 +462,8 @@ onUnmounted(() => {
   generation += 1;
   clearTimeout(shakeTimer);
   clearTimeout(shuffleTimer);
+  clearTimeout(comboTimer);
+  clearTimeout(comboTipTimer);
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
   window.removeEventListener('pointercancel', onPointerUp);
@@ -441,6 +530,13 @@ function restore() {
   35% { transform: scale(0.7) rotate(-14deg); opacity: 0.3; }
   70% { transform: scale(1.14) rotate(9deg); opacity: 1; }
   100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes combo-pop {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.6); }
+  14% { opacity: 1; transform: translate(-50%, 0) scale(1.12); }
+  26%, 78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.96); }
 }
 
 @keyframes pop-ring {
@@ -598,6 +694,27 @@ function restore() {
     border-radius: 50%;
     background: var(--win-color);
     animation: pop-ring 0.28s ease-out forwards;
+  }
+  // 连击提示：与连连看同款，落在棋盘上方那 16px 空隙里
+  .combo-tip {
+    position: absolute;
+    left: 50%;
+    top: -15px;
+    z-index: 5;
+    padding: 2px 10px;
+    border-radius: var(--radius-tile);
+    background: var(--primary-bg);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: bold;
+    line-height: 1.1;
+    white-space: nowrap;
+    box-shadow: var(--card-shadow);
+    pointer-events: none;
+    animation: combo-pop 1.5s ease forwards;
+    // 连得越高字越大
+    &.n-3 { font-size: 14px; }
+    &.n-4 { font-size: 16px; }
   }
   // 死局重排的提示：棋盘正中浮一下
   .shuffle-tip {
