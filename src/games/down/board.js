@@ -14,7 +14,10 @@ export const START_ROWS = 2;              // 开局底部先摆几排
 export const START_TOP = ROWS - START_ROWS;
 export const SPEED_BASE = 0.35;  // 上升速度（行 / 秒）
 export const SPEED_STEP = 0.03;  // 每消除一排加快多少
-export const SPEED_MAX = 1.3;    // 速度上限
+// 速度上限 = 基础速度的 3 倍（顶部统计条显示的倍率因此最高正好停在 3.0×），
+// 到顶之后消再多排也不再加快
+export const SPEED_MAX_RATIO = 3;
+export const SPEED_MAX = SPEED_BASE * SPEED_MAX_RATIO;   // 1.05 行 / 秒
 export const CHANGE_MIN = 3;     // 玩家手里的 emoji 每 3~5 排换一次
 export const CHANGE_MAX = 5;
 
