@@ -85,9 +85,11 @@ export const games = [
     icon: 'i-mdi-lightbulb-on-50',
     accent: 'memory',
     helpKey: '__emoji_match__help_showed',
-    recordsPrefix: '__emoji_match__',
+    // 闯关制后只记录「历史最高关卡」，两种牌面各一份（前缀+1 / 前缀+2），
+    // 沿用连点标题清记录的机制
+    recordsPrefix: '__emoji_match__best_',
     minDifficulty: 1,
-    maxDifficulty: 3,
+    maxDifficulty: 2,
   },
   {
     id: 'link',
