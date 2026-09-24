@@ -427,6 +427,28 @@ function cellStyle(i) {
   };
 }
 
+// 正确填入 d 之后，同行 / 同列 / 同宫里其它空格的候选里不该再留着 d
+function pruneNotes(i, d) {
+  const r = (i / 9) | 0;
+  const c = i % 9;
+  const br = ((r / 3) | 0) * 3;
+  const bc = ((c / 3) | 0) * 3;
+  const bit = 1 << d;
+  let touched = false;
+  const clear = j => {
+    const cell = cells.value[j];
+    if (!cell || cell.fixed || cell.v || !(cell.notes & bit)) return;
+    cell.notes &= ~bit;
+    touched = true;
+  };
+  for (let k = 0; k < 9; k++) {
+    clear(r * 9 + k);                                  // 行
+    clear(k * 9 + c);                                  // 列
+    clear((br + ((k / 3) | 0)) * 9 + (bc + (k % 3)));  // 宫
+  }
+  return touched;
+}
+
 // ---------- 交互 ----------
 
 function onCellClick(i) {
@@ -464,6 +486,8 @@ function onPad(d) {
   cell.v = d;
   cell.notes = 0;
   checkMistake(s);
+  // 填对了才顺手清候选（填错时那个数字其实没落位，留着候选是对的）
+  if (phase.value === PLAY && !isWrong(s) && pruneNotes(s, d)) saveState();
   afterEdit();
 }
 
@@ -778,11 +802,18 @@ function win() {
     // 同行 / 同列 / 同宫：最淡的一档
     &.hl {
       background: var(--sudoku-hl-bg);
+      // 高亮底上的数字一律用实心字色：主色绿压在浅绿 / 浅蓝底上只有 3:1 出头，
+      // 和底色太接近。换成 --text-color 后浅色主题 7.4:1、深色主题也够看
+      .num {
+        color: var(--text-color);
+        font-weight: 700;
+      }
     }
-    // 与点中的数字相同：更实的一档，数字也加粗
+    // 与点中的数字相同：更实的一档，数字也加粗 + 实心字色（原来绿压绿只有 3.1:1）
     &.same {
       background: var(--sudoku-same-bg);
       .num {
+        color: var(--text-color);
         font-weight: 700;
       }
     }

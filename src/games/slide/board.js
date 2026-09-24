@@ -87,12 +87,14 @@ export function makeBoard(rows, cols, kinds, rand = Math.random) {
     const k = (i % kinds) + 1;
     cells.push(k, k);
   }
-  // 面积为奇数（如 7×7 / 9×7）时留一个空格子：棋盘本来就允许空洞，
-  // 这样行 / 列不必凑偶数，曲线才能逐关平滑爬升
-  if (cells.length < rows * cols) cells.push(0);
-  const shuffled = shuffle(cells, rand);
+  const flat = shuffle(cells, rand);
+  // 面积为奇数（如 7×7=49 / 9×7=63）时留一个空格子：棋盘本来就允许空洞，
+  // 这样行 / 列不必凑偶数，曲线才能逐关平滑爬升。
+  // 面积是奇数 ⇒ 行列都是奇数，所以棋盘有个真正的正中心，空位就固定插在那里
+  //（初始化时空白永远在正中间，而不是随机落在某个角上）
+  if (flat.length < rows * cols) flat.splice((rows >> 1) * cols + (cols >> 1), 0, 0);
   const grid = [];
-  for (let r = 0; r < rows; r++) grid.push(shuffled.slice(r * cols, r * cols + cols));
+  for (let r = 0; r < rows; r++) grid.push(flat.slice(r * cols, r * cols + cols));
   ensureAdjacentPair(grid, rand);
   return grid;
 }

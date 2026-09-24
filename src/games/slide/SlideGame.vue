@@ -209,6 +209,10 @@ function startLevel(lv, restored = null) {
     tiles.value = [];
     for (let r = 0; r < conf.value.rows; r++) {
       for (let c = 0; c < conf.value.cols; c++) {
+        // g[r][c] === 0 是奇数面积棋盘留下的空位：这里不建牌。
+        // 建了的话会渲染成一张没有 emoji 的白卡片（GLYPHS[-1] 是 undefined），
+        // 而且 findPartner 对 k=0 返回 null → 永远消不掉 → 胜利判定 !tiles.length 永远不成立
+        if (!g[r][c]) continue;
         tiles.value.push({ id: ++tileId, kind: g[r][c], r, c, popping: false });
       }
     }
@@ -497,7 +501,10 @@ function restore() {
       return true;
     }
     startLevel(lv, {
-      tiles: saved.tiles.map(([kind, r, c]) => ({ id: ++tileId, kind, r, c, popping: false })),
+      // 老存档里可能混进过 kind = 0 的空位牌（上面的 bug），这里一并丢掉
+      tiles: saved.tiles
+        .map(([kind, r, c]) => ({ id: ++tileId, kind, r, c, popping: false }))
+        .filter(t => t.kind > 0),
       elapsed: Math.max(0, +saved.elapsed || 0),
     });
     phase.value = saved.phase === OVER ? OVER : PLAY;
