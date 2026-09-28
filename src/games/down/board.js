@@ -18,8 +18,13 @@ export const SPEED_STEP = 0.03;  // 每消除一排加快多少
 // 到顶之后消再多排也不再加快
 export const SPEED_MAX_RATIO = 3;
 export const SPEED_MAX = SPEED_BASE * SPEED_MAX_RATIO;   // 1.05 行 / 秒
-export const CHANGE_MIN = 3;     // 玩家手里的 emoji 每 3~5 排换一次
-export const CHANGE_MAX = 5;
+// 换 emoji 的判定：每消掉一排就掷一次，换不换由「当前连续没换过几排」决定。
+// 第一次（连续 0 次没换）就有 CHANGE_P0 = 25% 的概率换；每多连续一次没换，
+// 「这次也不换」的概率就乘 CHANGE_DECAY —— 也就是连续越久越容易换。
+// 这套 hazard 下「多少排换一次」的期望 = 1 + Σ (0.75·0.97^k 的前缀积) ≈ 3.40 排、
+// 中位数 3 排（蒙特卡洛 100 万次实测 3.400 / 3），分布主要落在 1~8 排
+export const CHANGE_P0 = 0.25;      // 连续没换过时，这次换掉的概率
+export const CHANGE_DECAY = 0.97;   // 每多一次连续没换，「这次不换」的概率乘这个数
 
 // 上升速度只跟「已消除排数」有关：越消越快，到上限为止
 export function speedFor(cleared) {
@@ -44,9 +49,9 @@ export function makeRow(rand = Math.random) {
   return shuffle(cells, rand);
 }
 
-// 这一排还有几排换一次手里的 emoji（3~5）
-export function nextChangeIn(rand = Math.random) {
-  return CHANGE_MIN + ~~(rand() * (CHANGE_MAX - CHANGE_MIN + 1));
+// 连续 streak 次没换之后，这一次换掉手里 emoji 的概率（随 streak 单调递增、趋向 1）
+export function changeChance(streak) {
+  return 1 - (1 - CHANGE_P0) * Math.pow(CHANGE_DECAY, Math.max(0, streak | 0));
 }
 
 // 顶排里跟手里 emoji 相同的列（空数组 = 这排没法消）

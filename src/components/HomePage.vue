@@ -281,9 +281,11 @@ function onVisibility() {
 <style scoped lang="scss">
 // 正六边形（尖顶朝上）：宽 = --hex-w，高 = 宽 × 1.1547，
 // 相邻水平重叠 1/4 宽（边贴合），行间垂直重叠 1/4 高形成蜂窝咬合。
-// --hex-w 用 CSS 变量驱动，窄屏媒体查询可整体缩放
+// --hex-w 用 CSS 变量驱动：窄屏按「屏幕实际宽度 / 4 − 2px」随屏宽缩放
+// （最宽的一行是 3 格，占约 3/4 宽，两侧留出空白；320 宽 → 78px、390 → 95.5px），
+// 480px 时 480/4 − 2 = 118 正好接上封顶值，更宽的屏幕一律 118px 不再变大
 .wrapper {
-  --hex-w: 100px;
+  --hex-w: min(118px, calc(100vw / 4 - 2px));
   --hex-h: calc(var(--hex-w) * 1.1547);
   width: 100%;
   min-height: 100vh;
@@ -422,11 +424,6 @@ function onVisibility() {
     }
   }
 }
-// 窄屏：六边形再缩小一档，保证 3 格行（3w + 2 条 3px 缝隙）不超出可用宽（视口 − 32px 边距）。
-// 376px 及以上用 100px 正好（3×100 + 6 = 306 ≤ 344），只有 320~375 的机型需要收到 92px
-@media only screen and (max-width: 375px) {
-  .wrapper {
-    --hex-w: 92px;
-  }
-}
+// 六边形宽度已经由上面的 min(118px, 100vw/4 - 2px) 随屏宽自适应
+//（320 宽 → 78px，原来写死的 92px 一档因此不再需要）
 </style>

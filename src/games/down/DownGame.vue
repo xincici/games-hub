@@ -87,7 +87,7 @@ import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { i18n } from '@/shared/i18n';
 import {
   ROWS, COLS, START_TOP, START_ROWS, SPEED_BASE,
-  speedFor, makeRow, nextChangeIn,
+  speedFor, makeRow, changeChance,
 } from './board';
 
 const [PLAY, OVER] = ['play', 'over'];
@@ -123,7 +123,7 @@ let top = START_TOP;     // 整摞最上面那排所在的行（越小越靠上�
 let colVis = colTarget.value;   // 玩家横向的连续位置（滑过去靠它插值）
 let playerLag = 0;       // 消除后往下掉一格的落后量（-1 → 0）
 let cleared = 0;         // 已消除排数（速度只跟它有关）
-let changeIn = nextChangeIn();  // 再消几排换手里的 emoji
+let changeStreak = 0;           // 连续消了几排还没换手里的 emoji（越大越容易换）
 let arrived = true;      // 这一次滑动是否已经到位（到位才判定）
 let busy = false;        // 正在播炸开 / 落下的动画
 let rowId = 0;
@@ -175,7 +175,7 @@ function startNewGame() {
   score.value = 0;
   cleared = 0;
   clearedShown.value = 0;
-  changeIn = nextChangeIn();
+  changeStreak = 0;
   busy = false;
   top = START_TOP;
   playerLag = 0;
@@ -264,11 +264,17 @@ function clearTopRow() {
       best.value = score.value;
       localStorage.setItem(BEST_KEY, best.value);
     }
-    // 每 3~5 排换一次手里的 emoji，新的那个一定在当前顶排里
-    if (cleared >= changeIn) {
+    // 每消掉一排掷一次：连续没换的次数越多，这次换的概率越大
+    // （p(0) = 25%，均值约 3.4 排换一次）。换的时候从当前顶排里挑一个
+    // 「跟手里这个不一样」的列，保证玩家看到的变化是实打实的
+    if (Math.random() < changeChance(changeStreak)) {
       const next = stack.value[0];
-      glyph.value = next.cells[~~(Math.random() * COLS)];
-      changeIn = cleared + nextChangeIn();
+      const others = next.cells.map((g, c) => c).filter(c => next.cells[c] !== glyph.value);
+      const pick = others.length ? others[~~(Math.random() * others.length)] : ~~(Math.random() * COLS);
+      glyph.value = next.cells[pick];
+      changeStreak = 0;
+    } else {
+      changeStreak += 1;
     }
     busy = false;
     save();
@@ -362,7 +368,7 @@ function save() {
       col: colTarget.value,
       glyph: glyph.value,
       cleared,
-      changeIn,
+      changeStreak,
       stack: stack.value.map(r => r.cells),
     }));
   } catch { /* 隐私模式等写不进去的场景忽略 */ }
@@ -380,7 +386,7 @@ function restore() {
     colVis = colTarget.value;
     cleared = Math.max(0, +saved.cleared || 0);
     clearedShown.value = cleared;
-    changeIn = Math.max(cleared + 1, +saved.changeIn || nextChangeIn());
+    changeStreak = Math.max(0, +saved.changeStreak || 0);   // 旧存档没有这个字段 → 从 0 开始
     top = typeof saved.top === 'number' ? saved.top : START_TOP;
     playerLag = 0;
     arrived = true;
