@@ -519,6 +519,10 @@ function finishDrag(forced) {
   min-height: 100vh;
   min-height: 100dvh;
   box-sizing: border-box;
+  // 滑牌的手势要覆盖整页：指针事件虽然绑在 .wrapper 上，但只有 touch-action: none
+  // 才不会被浏览器当成「滚动页面」收走（那会触发 pointercancel，空白处滑动就失效了）。
+  // 这一页在 320~768 宽下纵向都不溢出（实测 scrollOver = 0），所以关掉页面滚动是安全的
+  touch-action: none;
   background: var(--bg-color);
   color: var(--text-color);
   display: flex;
