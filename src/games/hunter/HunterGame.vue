@@ -89,7 +89,12 @@
       <div v-else-if="phase === ANSWER" class="phase-tip">{{ i18n('phaseAnswer') }}</div>
     </div>
     <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->
-    <ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />
+    <ConfirmDialog
+      :show="confirming"
+      @confirm="startNewGame"
+      @replay="retryLevel"
+      @cancel="confirming = false"
+    />
   </div>
 </template>
 
@@ -371,6 +376,7 @@ function nextLevel() {
 }
 
 function retryLevel() {
+  confirming.value = false;   // 从「新游戏」弹窗里点进来时也要把弹窗收掉
   startLevel();
 }
 

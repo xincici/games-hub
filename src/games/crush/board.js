@@ -6,16 +6,26 @@
 //   WALL        不可消除的墙：不参与消除、不参与交换、不下落，但 emoji 下落时可以穿过
 //   BOMB        炸弹：可下落/可交换但自身不参与连线；相邻格被消除时引爆，炸掉自己周围的格子
 //   WILD        万能元素：可当作任意一种 emoji 参与连线判定
+//   FROZEN-kind 冰块：冻住的某种 emoji（kind = FROZEN - v）。
+//               不参与连线、不能交换、不随重力下落（和墙一样会被穿过），
+//               相邻格（含斜角）被消除时解冻变回普通 emoji。
+//               把种类编码进同一个数字里，存档就不需要额外的字段
 
 export const WALL = -1;
 export const BOMB = -2;
 export const WILD = -3;
+export const FROZEN = -100;
 
 export const isWall = v => v === WALL;
 export const isEmoji = v => typeof v === 'number' && v >= 0;
 export const isSpecial = v => v === BOMB || v === WILD;
-// 会随重力下落的实体（墙与空格除外）
-export const isTile = v => v !== null && v !== WALL && v !== undefined;
+export const isFrozen = v => typeof v === 'number' && v <= FROZEN;
+export const frozenKind = v => FROZEN - v;
+export const freeze = kind => FROZEN - kind;
+// 会随重力下落、可被交换的实体（墙、冰块与空格除外）
+export const isTile = v => v !== null && v !== WALL && v !== undefined && !isFrozen(v);
+// 占着格子但不是可操作的牌（墙 / 冰块）——重力回填时跳过，牌从它们身上穿过
+const isBlocker = v => v === WALL || isFrozen(v);
 
 // ---------- 关卡配置 ----------
 // 难度由「面板大小 + emoji 种类 + 步数 + 目标分 + 墙数 + 特殊元素概率」共同决定。
@@ -23,28 +33,33 @@ export const isTile = v => v !== null && v !== WALL && v !== undefined;
 //   列数 7 → 9、行数 7 → 10（面板 7×7 → 9×10）
 //   种类 5 → 7
 //   步数 22 → 20
-//   目标分 650 → 2200（由离线模拟校准：见下）
+//   目标分 1500 → 3000（由离线模拟校准：见下）
 //   墙   0 → 8
 //   炸弹概率 3% → 6%、万能元素 4% → 7%
 // 30 关之后面板 / 种类 / 墙 / 特殊元素都不再变，但**步数与目标分继续线性上涨**
 // （每关 +1 步、目标分 +110），难度不会在第 30 关就固定下来。
-// 目标分按「贪心挑最大三连」的模拟玩家的中位得分标定，整体留出充足余量
-// （第 30 关中位分约 3600 对目标 2200，过关率约 90%），也就是稳定地消就能过，
-// 连锁与炸弹是加分项而不是过关的必需；30 关之后每关 +110 与 +1 步带来的收益
-// 基本持平，所以通关率是缓慢下滑而不是断崖。
+// 目标分按「贪心挑最大三连」的模拟玩家（每关 100 局）的中位得分标定：
+// 目标 / 中位分从第 1 关的 0.12 缓升到第 30 关的 0.74，也就是**前半程轻松、
+// 后半程要打得稳**（第 30 关贪心玩家的过关率约 60%，人类玩家更低一些），
+// 连锁与炸弹是加分项而不是过关的必需。中途 4 种 → 5 种 → 6 种会让单步收益
+// 明显下降（约 590 → 285 → 200 分/步，见下表的实测中位分），目标分是线性的，
+// 所以难度比例在这两处会各上一个台阶 —— 这是刻意保留的，和「各因素错开到顶」同源。
 export const CAP_LEVEL = 30;
 
 // 结构上限：面板、种类、墙、特殊元素概率在第 30 关到顶（步数 / 目标分的延伸见上）
-const CAP = { cols: 9, rows: 10, kinds: 6, moves: 20, target: 2200, walls: 8, bomb: 0.06, wild: 0.07 };
-// 第 30 关之后每关的增量
+const CAP = { cols: 9, rows: 10, kinds: 6, moves: 20, target: 3000, walls: 8, ice: 6, bomb: 0.06, wild: 0.07 };
+// 第 1 关的目标分（新手仍在 22 步里轻松拿到）
+const TARGET_MIN = 1500;
+// 第 30 关之后每关的增量。+1 步在 6 种盘面上大约值 200 分，
+// 所以目标分至少要 +200 难度才不会一关关变松（原来 +110，越玩越容易）
 const EXTRA_MOVES = 1;
-const EXTRA_TARGET = 110;
+const EXTRA_TARGET = 230;
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
   const t = Math.min(1, (lv - 1) / (CAP_LEVEL - 1));
   const extra = Math.max(0, lv - CAP_LEVEL);
-  // 各因素到顶的时点刻意错开（列 ~23 关、墙 ~27 关、种类 ~27 关、行 30 关），
+  // 各因素到顶的时点刻意错开（列 ~23 关、冰块 ~24 关、墙 ~27 关、种类 ~27 关、行 30 关），
   // 否则几条曲线会在同一关同时跳档，难度出现明显的断崖
   const ramp = span => Math.min(1, t / span);
   return {
@@ -53,8 +68,10 @@ export function levelConfig(level) {
     rows: Math.round(7 + (CAP.rows - 7) * ramp(1)),
     kinds: Math.round(4 + (CAP.kinds - 4) * ramp(0.90)),
     moves: Math.round(22 + (CAP.moves - 22) * t) + extra * EXTRA_MOVES,
-    target: Math.round(650 + (CAP.target - 650) * t) + extra * EXTRA_TARGET,
+    target: Math.round(TARGET_MIN + (CAP.target - TARGET_MIN) * t) + extra * EXTRA_TARGET,
     walls: Math.round(CAP.walls * ramp(0.95)),
+    // 冰块：0 → 6，永远生成连通的一簇（见 generateBoard）
+    ice: Math.round(CAP.ice * ramp(0.80)),
     bombChance: 0.03 + (CAP.bomb - 0.03) * t,
     wildChance: 0.04 + (CAP.wild - 0.04) * t,
   };
@@ -103,15 +120,57 @@ function randomValue(kinds, opts, rand) {
 
 // ---------- 盘面生成 ----------
 
+// 随机撒墙（不重复），返回墙的下标集合
+function placeWalls(board, cols, rows, count, rand) {
+  const wallSet = new Set();
+  for (let i = 0; i < count * 6 && wallSet.size < count; i++) wallSet.add(~~(rand() * cols * rows));
+  wallSet.forEach(i => { board[i] = WALL; });
+  return wallSet;
+}
+
+// 冰块：从随机种子格往四邻扩散成一「片」连通簇（不会四散），
+// 且只冻普通 emoji——正好落在炸弹 / 万能元素上时换成一个随机普通种类
+// 返回实际放下的块数（调用方据此判断这一轮要不要重来）
+function placeIce(board, cols, rows, kinds, count, rand) {
+  if (count <= 0) return 0;
+  const freeIdx = [];
+  for (let i = 0; i < board.length; i++) if (board[i] !== WALL) freeIdx.push(i);
+  if (freeIdx.length < count) return 0;
+  // 种子格可能正好被墙围住、簇长不到目标大小 —— 换种子重试几次
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const seed = freeIdx[~~(rand() * freeIdx.length)];
+    const clump = [seed];
+    const taken = new Set([seed]);
+    while (clump.length < count) {
+      const frontier = [];
+      for (const i of clump) {
+        for (const nb of neighbors4(i, cols, rows)) {
+          if (taken.has(nb) || board[nb] === WALL) continue;
+          frontier.push(nb);
+        }
+      }
+      if (!frontier.length) break;
+      const pick = frontier[~~(rand() * frontier.length)];
+      taken.add(pick);
+      clump.push(pick);
+    }
+    if (clump.length < count) continue;
+    for (const i of clump) {
+      const v = board[i];
+      board[i] = freeze(isEmoji(v) ? v : ~~(rand() * kinds));
+    }
+    return clump.length;
+  }
+  return 0;
+}
+
 export function generateBoard(cols, rows, kinds, opts = {}, rand = Math.random) {
   const walls = opts.walls || 0;
   const specials = opts.initials || 0;
+  const ice = opts.ice || 0;
   for (let attempt = 0; attempt < 60; attempt++) {
     const board = new Array(cols * rows).fill(null);
-    // 随机撒墙（不重复）
-    const wallSet = new Set();
-    for (let i = 0; i < walls * 6 && wallSet.size < walls; i++) wallSet.add(~~(rand() * cols * rows));
-    wallSet.forEach(i => { board[i] = WALL; });
+    const wallSet = placeWalls(board, cols, rows, walls, rand);
     const free = [];
     for (let i = 0; i < board.length; i++) if (board[i] !== WALL) free.push(i);
     if (free.length < 12) continue;
@@ -137,11 +196,15 @@ export function generateBoard(cols, rows, kinds, opts = {}, rand = Math.random) 
       if (findMatches(board, cols, rows).size) board[idx] = save;
       else placed++;
     }
+    if (placeIce(board, cols, rows, kinds, ice, rand) < ice) continue;
     if (!findMatches(board, cols, rows).size && hasAnyMove(board, cols, rows, kinds)) return board;
   }
-  // 兜底：纯 emoji 盘面
+  // 兜底（60 次尝试都没能满足「无现成三连 + 有解」时才会走到）：
+  // 随机纯 emoji 盘面，但仍然把墙与冰块照配置放上，免得难度元素整个消失
   const board = new Array(cols * rows).fill(0);
   for (let i = 0; i < board.length; i++) board[i] = ~~(rand() * kinds);
+  placeWalls(board, cols, rows, walls, rand);
+  placeIce(board, cols, rows, kinds, ice, rand);
   return board;
 }
 
@@ -224,6 +287,25 @@ export function explode(board, cols, rows, cleared) {
   return { blast, bombs };
 }
 
+// ---------- 解冻 ----------
+// 冰块的四邻（含斜角）里有格子被消除 → 这块冰化掉。返回要解冻的格子集合
+export function thawTargets(board, cols, rows, cleared) {
+  const out = new Set();
+  for (let i = 0; i < board.length; i++) {
+    if (!isFrozen(board[i])) continue;
+    for (const nb of neighbors8(i, cols, rows)) {
+      if (cleared.has(nb)) { out.add(i); break; }
+    }
+  }
+  return out;
+}
+
+// 把要解冻的格子写回它下面那种 emoji（保留在原来的位置，不参与本轮消除）
+export function applyThaw(board, thawed) {
+  if (!thawed.size) return board;
+  return board.map((v, i) => (thawed.has(i) ? frozenKind(v) : v));
+}
+
 // ---------- 交换校验 ----------
 
 export function hasMatchAfterSwap(board, cols, rows, a, b) {
@@ -249,7 +331,8 @@ export function applyGravity(board, cols, rows, kinds, opts = {}, rand = Math.ra
   const next = [...board];
   for (let c = 0; c < cols; c++) {
     const rowsOk = [];
-    for (let r = 0; r < rows; r++) if (next[r * cols + c] !== WALL) rowsOk.push(r);
+    // 墙与冰块都不参与本列的堆叠 / 回填：上方的牌直接从它们身上落过去
+    for (let r = 0; r < rows; r++) if (!isBlocker(next[r * cols + c])) rowsOk.push(r);
     // 自下而上收集现有实体（顺序保持）
     const stack = [];
     for (let i = rowsOk.length - 1; i >= 0; i--) {
@@ -272,8 +355,8 @@ export function applyGravity(board, cols, rows, kinds, opts = {}, rand = Math.ra
 //   连锁每多一层整段 +30%，最多翻倍（原来是每层 ×1.5，四层就到 3.4 倍）
 //   被炸掉的格子每格 12 分（原来 25）
 // 离线模拟（每关 100 局）：第 30 关「只看单步消除」的老实玩家得分里基础消除占 53%
-// （原来 31%）、炸弹占 19%（原来 48%）；目标分 2100 对应老实玩家中位 2160，
-// 也就是不需要靠连锁或炸弹的运气也能过关。
+// （原来 31%）、炸弹占 19%（原来 48%）；基础分给足是为了让过关主要靠稳，
+// 而不是靠连锁或炸弹的运气。
 export const MATCH_BASE = 60;
 export const MATCH_EXTRA = 35;
 export const CHAIN_STEP = 0.3;
@@ -297,7 +380,7 @@ export function scoreForBlast(count, cascade) {
 // 无解时重洗：保持墙与特殊元素位置，只重排普通 emoji
 export function reshuffle(board, cols, rows, kinds, rand = Math.random) {
   for (let t = 0; t < 100; t++) {
-    const next = board.map(v => (isSpecial(v) || isWall(v) ? v : ~~(rand() * kinds)));
+    const next = board.map(v => (isSpecial(v) || isWall(v) || isFrozen(v) ? v : ~~(rand() * kinds)));
     if (!findMatches(next, cols, rows).size && hasAnyMove(next, cols, rows, kinds)) return next;
   }
   return board;
@@ -336,8 +419,12 @@ export function resolveTurn(board, cols, rows, kinds, a, b, opts = {}, rand = Ma
     cascade++;
     const { blast } = explode(cur, cols, rows, matched);
     const all = new Set([...matched, ...blast]);
+    // 先记下这轮被消除的格子四邻有哪些冰块要化（化掉后这格变回普通 emoji，
+    // 保留在盘面上，可能顺势凑出新的一组 → 下一轮 findMatches 会接上，形成连锁）
+    const thawed = thawTargets(cur, cols, rows, all);
     gained += scoreForMatches(matched.size, cascade) + scoreForBlast(blast.size, cascade);
     cur = cur.map((v, i) => (all.has(i) ? null : v));
+    cur = applyThaw(cur, thawed);
     cur = applyGravity(cur, cols, rows, kinds, opts, rand);
   }
   return { board: cur, gained, cascades: cascade };

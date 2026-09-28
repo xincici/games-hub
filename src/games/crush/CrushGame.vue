@@ -52,6 +52,16 @@
             @click="onCellClick(gem.idx)"
           >
             <span class="face">{{ faceOf(gem.value) }}</span>
+            <!-- 冰块：一层半透明冰蓝玻璃盖在 emoji 上（下面那种 emoji 依然看得见） -->
+            <span v-if="isFrozen(gem.value)" class="ice" aria-hidden="true"></span>
+            <!-- 解冻那一瞬：冰层裂开、飞出一圈冰屑（只在 thawing 期间存在） -->
+            <span v-if="thawSet.has(gem.idx)" class="ice-shards" aria-hidden="true">
+              <i
+                v-for="(sh, si) in ICE_SHARDS"
+                :key="si"
+                :style="{ '--sx': sh[0], '--sy': sh[1], '--sr': sh[2] + 'deg', '--ss': sh[3] }"
+              />
+            </span>
           </div>
         </div>
       </div>
@@ -77,7 +87,12 @@
       </div>
     </div>
     <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->
-    <ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />
+    <ConfirmDialog
+      :show="confirming"
+      @confirm="startNewGame"
+      @replay="replayLevel"
+      @cancel="confirming = false"
+    />
   </div>
 </template>
 
@@ -90,7 +105,8 @@ import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
 import { EMOJIS } from '@/shared/emojis';
 import {
-  WALL, BOMB, WILD, isWall, levelConfig, generateBoard, findMatches, explode,
+  WALL, BOMB, WILD, isWall, isFrozen, frozenKind, thawTargets, applyThaw,
+  levelConfig, generateBoard, findMatches, explode,
   hasMatchAfterSwap, adjacent, hasAnyMove, applyGravity, isTile,
   scoreForMatches, scoreForBlast, reshuffle,
 } from './board';
@@ -119,7 +135,27 @@ const score = ref(0);
 const moves = ref(0);
 const selected = ref(-1);
 const swapPair = ref([]);
+// 解冻时飞散的冰屑：每条 [横向, 纵向, 自转角度, 缩放]，位移单位是「格」
+// （写成格子比例而不是 px，这样 320 宽的矮屏和 480 宽的屏观感一致）
+const ICE_SHARDS = [
+  [-0.74, -0.6, -150, 0.95],
+  [0.68, -0.74, 130, 1.05],
+  [-0.86, 0.22, -85, 0.7],
+  [0.8, 0.52, 165, 0.85],
+  [0.04, -0.94, -35, 0.6],
+  [-0.26, 0.86, 65, 0.75],
+];
 const matchedSet = ref(new Set());
+// 本轮刚解冻的格子（冰层裂开 + 冰屑飞散，用自己的定时器回收）
+const thawSet = ref(new Set());
+let thawTimer = 0;
+// 冰屑动画 0.36s；元素多留一点（0.56s）再回收 ——
+// 否则它会被「落定清标记」那一步抢在前面删掉，最后几帧放不完
+function showThaw(set) {
+  thawSet.value = set;
+  clearTimeout(thawTimer);
+  thawTimer = setTimeout(() => { thawSet.value = new Set(); }, 560);
+}
 const blastSet = ref(new Set());
 const hugeClear = ref(false);
 const shaking = ref(false);
@@ -275,6 +311,7 @@ function onResize() {
 function faceOf(value) {
   if (value === BOMB) return BOMB_FACE;
   if (value === WILD) return WILD_FACE;
+  if (isFrozen(value)) return EMOJIS[frozenKind(value)];   // 冰下那种 emoji 照常显示
   return EMOJIS[value];
 }
 
@@ -282,6 +319,8 @@ function gemClasses(gem) {
   const out = [`k-${gem.value}`];
   if (gem.value === BOMB) out.push('bomb');
   if (gem.value === WILD) out.push('wild');
+  if (isFrozen(gem.value)) out.push('frozen');
+  if (thawSet.value.has(gem.idx)) out.push('thawing');
   if (selected.value === gem.idx) out.push('selected');
   if (swapPair.value.includes(gem.idx)) out.push('swapping');
   if (matchedSet.value.has(gem.idx)) {
@@ -355,6 +394,7 @@ function spawnOpts() {
   const c = conf.value;
   return {
     walls: c.walls,
+    ice: c.ice,
     bombChance: c.bombChance,
     wildChance: c.wildChance,
   };
@@ -367,6 +407,8 @@ function initLevel(lv) {
   selected.value = -1;
   swapPair.value = [];
   matchedSet.value = new Set();
+  clearTimeout(thawTimer);
+  thawSet.value = new Set();
   blastSet.value = new Set();
   confirming.value = false;
   hugeClear.value = false;
@@ -457,8 +499,8 @@ function onCellClick(idx) {
 }
 
 function isTileAt(idx) {
-  const v = cells.value[idx];
-  return v !== null && v !== undefined && v !== WALL;
+  // isTile 已排除墙与冰块：冰块不能交换，只能靠消掉相邻格来解冻
+  return isTile(cells.value[idx]);
 }
 
 function onTouchStart(e) {
@@ -548,6 +590,11 @@ function resolveCascades(chain) {
   }
   // 炸弹：四邻有格子被消除就引爆，炸掉自己周围 3×3（可链式引爆其它炸弹）
   const { blast } = explode(cells.value, cols, rows, matched);
+  const all = new Set([...matched, ...blast]);
+  // 解冻：这一轮被消除的格子四邻（含斜角）里的冰块开始融化 ——
+  // 化掉之后原地变回普通 emoji，可能顺势凑出新的一组，下一轮 findMatches 会接上（连锁）
+  const thawed = thawTargets(cells.value, cols, rows, all);
+  if (thawed.size) showThaw(thawed);
   const gained = scoreForMatches(matched.size, chain) + scoreForBlast(blast.size, chain);
   score.value += gained;
   matchedSet.value = matched;
@@ -563,12 +610,17 @@ function resolveCascades(chain) {
     : g);
   if (blast.size) shakeBoard();
   stepTimer = setTimeout(() => {
-    const cleared = cells.value.map((v, i) => (matched.has(i) || blast.has(i) ? null : v));
+    const cleared = cells.value.map((v, i) => (all.has(i) ? null : v));
     matchedSet.value = new Set();
     hugeClear.value = false;
     blastSet.value = new Set();
-    const survivors = gems.value.filter(g => !matched.has(g.idx) && !blast.has(g.idx));
-    cells.value = applyGravity(cleared, cols, rows, kinds, spawnOpts());
+    // 冰下那颗 gem 保留自己的身份（不换 DOM 节点），只把值换成普通 emoji，
+    // 这样 syncGems 还能复用同列上方的它，冰层是「化掉」而不是「换了一张牌」
+    const survivors = gems.value
+      .filter(g => !all.has(g.idx))
+      .map(g => (thawed.has(g.idx) ? { ...g, value: frozenKind(g.value) } : g));
+    cells.value = applyThaw(cleared, thawed);
+    cells.value = applyGravity(cells.value, cols, rows, kinds, spawnOpts());
     syncGems(survivors, true);
     stepTimer = setTimeout(() => resolveCascades(chain + 1), 300);
   }, 360);
@@ -771,6 +823,23 @@ function onScoreReset() {
   100% { opacity: 0; transform: translate(-50%, -100%) scale(0.92); }
 }
 
+// 冰面流光：只动背景位置与亮度，不动尺寸，免得和交换 / 下落的位置过渡打架
+@keyframes ice-sheen {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+// 解冻：冰层闪一下、裂开并淡出
+@keyframes ice-melt {
+  0% { opacity: 1; filter: brightness(1); }
+  30% { opacity: 1; filter: brightness(1.6); }
+  100% { opacity: 0; filter: brightness(1.4); }
+}
+// 碎冰飞散：从牌心往外抛，边飞边转、逐渐变小消失
+@keyframes ice-shard {
+  0% { opacity: 1; transform: translate(0, 0) scale(var(--ss, 1)) rotate(0deg); }
+  15% { opacity: 1; transform: translate(calc(var(--sx) * var(--cell) * 0.18), calc(var(--sy) * var(--cell) * 0.18)) scale(var(--ss, 1)) rotate(calc(var(--sr, 0deg) * 0.15)); }
+  100% { opacity: 0; transform: translate(calc(var(--sx) * var(--cell)), calc(var(--sy) * var(--cell))) scale(calc(var(--ss, 1) * 0.45)) rotate(var(--sr, 0deg)); }
+}
 @keyframes swap-shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-8%); }
@@ -986,6 +1055,63 @@ function onScoreReset() {
     }
     &.swapping {
       animation: swap-shake 0.4s ease;
+    }
+    // 冰块：冻住的 emoji 不参与消除。一层半透明冰蓝玻璃盖在牌上 ——
+    // 冰下的 emoji 若隐若现（褪色 + 压暗），右上角一枚雪花，冰面缓慢流光；
+    // 与墙（实心底色 + 斜条纹）区分开：牌还看得见，但一眼知道「这块冻住了」
+    &.frozen {
+      cursor: not-allowed;
+      // 冰下的 emoji 只是「冻住」：轻微褪色 + 压一点亮度，仍然看得清是哪种
+      .face {
+        filter: saturate(0.62) brightness(0.98);
+      }
+      .ice {
+        position: absolute;
+        inset: 0;
+        border-radius: var(--radius-tile);
+        background: linear-gradient(135deg,
+          var(--ice-fill-1) 0%, var(--ice-fill-2) 48%, var(--ice-fill-3) 100%);
+        border: 1px solid var(--ice-edge);
+        box-shadow: inset 0 0 8px var(--ice-edge), inset 0 0 3px var(--ice-glow);
+        pointer-events: none;
+        animation: ice-sheen 3.2s ease-in-out infinite;
+        // 雪花（用字符即可，不需要额外 DOM）
+        &::after {
+          content: '❄';
+          position: absolute;
+          right: 10%;
+          bottom: 2%;
+          font-size: calc(var(--cell) * 0.30);
+          line-height: 1;
+          color: #fff;
+          text-shadow: 0 0 3px var(--ice-glow);
+          opacity: 0.95;
+        }
+      }
+    }
+    // 解冻：冰层先亮一下再裂开淡出（0.22s），同时飞出一圈冰屑（0.36s），
+    // 两者都在「落定 → 值变回普通 emoji」的 360ms 窗口内收尾
+    &.thawing .ice {
+      animation: ice-melt 0.22s ease forwards;
+    }
+    .ice-shards {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      i {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: calc(var(--cell) * 0.30);
+        height: calc(var(--cell) * 0.30);
+        // 用 margin 把碎片中心对到牌中心（不能用 translate，transform 要留给飞行动画）
+        margin: calc(var(--cell) * -0.15) 0 0 calc(var(--cell) * -0.15);
+        background: linear-gradient(135deg, #fff 0%, var(--ice-shard) 100%);
+        // 菱形冰块（四边不等长，看起来像碎渣而不是整齐的方块）
+        clip-path: polygon(50% 0%, 100% 55%, 50% 100%, 0% 45%);
+        box-shadow: 0 0 4px var(--ice-glow);
+        animation: ice-shard 0.36s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+      }
     }
     // 提示到的那两张牌：emoji 大幅呼吸 + 牌面底色脉冲发光（不加箭头 / 数字）。
     // 这两条写在 fresh / falling / dealt / matched / blasting 之前：提示只在静置时出现，

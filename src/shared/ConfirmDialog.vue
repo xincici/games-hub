@@ -9,6 +9,7 @@
           <p class="confirm-msg">{{ msgText }}</p>
           <div class="confirm-actions">
             <button class="confirm-cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
+            <button class="confirm-replay" @click="emit('replay')">{{ replayLabel }}</button>
             <button class="confirm-ok" @click="emit('confirm')">{{ okLabel }}</button>
           </div>
         </div>
@@ -18,9 +19,11 @@
 </template>
 
 <script setup>
-// 各游戏共用的二次确认弹窗（闯关三件套的「新游戏」用它，文案与样式都只有这一份）。
-// 用法：<ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />
-// 需要换文案时传 title / message / confirmText / cancelText 覆盖即可。
+// 各游戏共用的二次确认弹窗（闯关游戏的「新游戏」用它，文案与样式都只有这一份）。
+// 三个按钮：取消 / 重玩本关 / 确定重来 —— 「重玩本关」= 只重开当前这一关、保留闯关进度。
+// 用法：<ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="replayLevel"
+//                      @cancel="confirming = false" />
+// 需要换文案时传 title / message / confirmText / replayText / cancelText 覆盖即可。
 import { computed } from 'vue';
 
 import { language } from '@/shared/i18n';
@@ -30,23 +33,26 @@ const props = defineProps({
   title: { type: String, default: '' },
   message: { type: String, default: '' },
   confirmText: { type: String, default: '' },
+  replayText: { type: String, default: '' },
   cancelText: { type: String, default: '' },
 });
 
-const emit = defineEmits(['confirm', 'cancel']);
+const emit = defineEmits(['confirm', 'replay', 'cancel']);
 
 // 弹窗自带一套中英文案（三处共用，所以不再各游戏各写一份 i18n key）
 const TEXT = {
   cn: {
     title: '🔄 开始新游戏？',
-    message: '会清除闯关记录并从第 1 关重新开始。如果只是想重玩本关，请点结算浮层上的「重玩本关」。',
+    message: '会清除闯关记录并从第 1 关重新开始；只想重玩当前这一关，就点「重玩本关」。',
     confirm: '确定重来',
+    replay: '重玩本关',
     cancel: '取消',
   },
   en: {
     title: '🔄 Start a new game?',
-    message: 'This clears your level record and restarts from level 1. To retry the level you are on, use Replay Level on the result screen.',
+    message: 'This clears your level record and restarts from level 1. To retry just the level you are on, pick Replay Level.',
     confirm: 'Yes, Restart',
+    replay: 'Replay Level',
     cancel: 'Cancel',
   },
 };
@@ -55,6 +61,7 @@ const text = computed(() => TEXT[language.value] || TEXT.cn);
 const titleText = computed(() => props.title || text.value.title);
 const msgText = computed(() => props.message || text.value.message);
 const okLabel = computed(() => props.confirmText || text.value.confirm);
+const replayLabel = computed(() => props.replayText || text.value.replay);
 const cancelLabel = computed(() => props.cancelText || text.value.cancel);
 </script>
 
@@ -105,10 +112,12 @@ const cancelLabel = computed(() => props.cancelText || text.value.cancel);
   .confirm-actions {
     display: flex;
     justify-content: flex-end;
+    // 三个按钮在窄屏（320 宽时盒子只有 256px）允许换行，不硬挤
+    flex-wrap: wrap;
     gap: 10px;
     button {
       cursor: pointer;
-      padding: 8px 16px;
+      padding: 8px 12px;
       font-size: 14px;
       border-radius: var(--radius-tile);
       border: 0 none;
@@ -117,6 +126,13 @@ const cancelLabel = computed(() => props.cancelText || text.value.cancel);
     .confirm-cancel {
       background: var(--key-bg);
       color: var(--text-color);
+    }
+    // 「重玩本关」是次要动作：描边款，和主按钮区分开
+    .confirm-replay {
+      background: transparent;
+      border: 1px solid var(--primary-bg);
+      color: var(--primary-bg);
+      font-weight: bold;
     }
     .confirm-ok {
       background: var(--primary-bg);

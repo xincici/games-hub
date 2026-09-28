@@ -69,7 +69,12 @@
         <button class="game-icon primary" @click="startLevel(level)">{{ i18n('retry') }}</button>
       </div>
     </div>
-    <ConfirmDialog :show="confirming" @confirm="startNewGame" @cancel="confirming = false" />
+    <ConfirmDialog
+      :show="confirming"
+      @confirm="startNewGame"
+      @replay="retryLevel"
+      @cancel="confirming = false"
+    />
   </div>
 </template>
 
@@ -230,6 +235,12 @@ function startLevel(lv, restored = null) {
 function startNewGame() {
   confirming.value = false;
   startLevel(1);
+}
+
+// 「重玩本关」：只重开当前这一关，闯关进度与局面之外的东西都不动
+function retryLevel() {
+  confirming.value = false;
+  startLevel(level.value);
 }
 
 function onTick(sec) {

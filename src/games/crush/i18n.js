@@ -16,7 +16,7 @@ export default {
     niceCombo: 'Combo {n}!',
     helpTip: 'Click for help!',
     helpMsg: 'Swap two neighbouring emojis (tap or drag) into a line of three — they pop, the rest falls, new ones drop in. Chains score more!',
-    help1: 'Reach the target score before your moves run out. Higher levels bring a bigger board, more kinds, more walls and a higher target; from level 30 the rest is maxed out and only moves and target keep climbing.',
+    help1: 'Reach the target score before your moves run out. Higher levels bring a bigger board, more kinds, more walls, more ice and a higher target; from level 30 the rest is maxed out and only moves and target keep climbing.',
     help2: 'No match: bounce back, free. Match: one move.',
     help3: 'Scoring: a 3-match is 60, each extra emoji +35; each cascade adds +30% (up to double); a bomb is 12 per tile. Clearing 4+ at once or chaining a cascade triggers a celebration — the board flashes, your points pop up, and confetti bursts.',
     help4: '💣 Bomb: never matches; a neighbouring clear sets it off, blowing up the 3×3 (12 each). Chains.',
@@ -24,6 +24,7 @@ export default {
     help6: '🧱 Wall: cannot be swapped or cleared; emojis fall through.',
     help7: 'No match? The board reshuffles.',
     help8: 'Stuck? After 6 idle seconds, the emojis worth swapping breathe and glow.',
+    help9: '❄️ Ice: a frozen emoji cannot be matched or swapped. Clear a neighbour (diagonals count) to thaw it — it stays put and becomes a normal emoji again. Ice always appears as one connected patch, and later levels have more of it.',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -44,7 +45,7 @@ export default {
     niceCombo: '{n} 连锁!',
     helpTip: '查看帮助',
     helpMsg: '交换相邻两个 emoji 凑成三连即消除（点或拖），上方掉落、顶部补新，连锁加分！',
-    help1: '在步数用完前达到目标分即过关；关卡越高面板越大、种类越多、目标分越高、墙也越多。第 30 关其余因素到顶，之后只有步数与目标分继续涨。',
+    help1: '在步数用完前达到目标分即过关；关卡越高面板越大、种类越多、目标分越高、墙与冰块也越多。第 30 关其余因素到顶，之后只有步数与目标分继续涨。',
     help2: '无效弹回不耗步；有效交换耗一步。',
     help3: '计分：三连 60 分，每多消一个 +35；连锁每层 +30%（最多翻倍）；炸弹每格 12 分。一次消 4 个以上或连成连锁会庆祝：棋盘闪光、中央弹出得分并撒花。',
     help4: '💣 炸弹：不能参与连线，相邻格被消除时引爆，炸掉周围 3×3（每格 12 分），连锁引爆。',
@@ -52,6 +53,7 @@ export default {
     help6: '🧱 墙：不能交换或消除，emoji 下落时穿过。',
     help7: '无解时自动重洗。',
     help8: '卡住了？6 秒没操作会给出提示：该换的两个 emoji 会呼吸、牌面发光。',
+    help9: '❄️ 冰块：冻住的 emoji 不能消除、也不能交换。消掉相邻（含斜角）的格子即可解冻——解冻后留在原地变回普通 emoji。冰块永远连成一片出现，关卡越高冰块越多。',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }
