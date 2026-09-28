@@ -517,8 +517,9 @@ function onScoreReset() {
       align-items: center;
       justify-content: center;
       .difficulty-value {
-        font-size: 16px;
-        font-weight: bold;
+        font-size: 14px;
+        color: var(--muted-color);
+        font-weight: 400;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
       }

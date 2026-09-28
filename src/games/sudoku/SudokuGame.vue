@@ -666,7 +666,8 @@ function win() {
         box-sizing: border-box;
         text-align: center;
         font-size: 14px;
-        font-weight: bold;
+        color: var(--muted-color);
+        font-weight: 400;
         white-space: nowrap;
       }
     }

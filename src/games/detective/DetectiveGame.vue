@@ -480,8 +480,9 @@ function onScoreReset() {
       .difficulty-value {
         min-width: 48px;
         text-align: center;
-        font-size: 16px;
-        font-weight: bold;
+        font-size: 14px;
+        color: var(--muted-color);
+        font-weight: 400;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
       }

@@ -802,7 +802,7 @@ function loseLevel() {
       justify-content: center;
     }
     .level-note {
-      font-size: 13px;
+      font-size: 14px;
       color: var(--muted-color);
       white-space: nowrap;
     }

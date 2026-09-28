@@ -419,7 +419,12 @@ function onTouchEnd(e) {
     }
     .difficulty-value {
       margin: 0;   // 间距统一交给上面的 gap: 4px
-      font-weight: bold;
+      // 与点击游戏 .difficulty-num 一致：预留 22px，数字位数变化时 +/- 按钮不会左右挪
+      min-width: 22px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted-color);
+      font-weight: 400;
     }
   }
   .opt-icon {
