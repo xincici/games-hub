@@ -17,18 +17,18 @@
         <span class="stat-value">{{ clickCount }}</span>
       </div>
     </div>
-    <div class="opt-area card">
-      <div class="difficulty-wrapper">
+    <div class="card opt-card">
+      <div class="opt-item">
         <button @click="changeDifficulty(-1)" class="opt-icon" :class="{disable: difficulty === MIN_DIFFICULTY}">
           <i i-carbon-subtract-alt />
         </button>
-        <span class="difficulty-value">{{ difficulty }}</span>
+        <span class="difficulty-num">{{ difficulty }}</span>
         <button @click="changeDifficulty(1)" class="opt-icon" :class="{disable: difficulty === MAX_DIFFICULTY}">
           <i i-carbon-add-alt />
         </button>
       </div>
       <div class="divider"></div>
-      <div class="start-wrapper">
+      <div class="opt-item">
         <button @click="initGame" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
@@ -391,56 +391,78 @@ function onTouchEnd(e) {
       }
     }
   }
-  .opt-icon,.game-icon {
+  // 难度加减的小方块：与点击游戏同款（28×28，用伪元素把点击热区扩到 44×44）
+  .opt-icon {
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border-color);
-    padding: 2px;
+    position: relative;
     width: 28px;
     height: 28px;
-    margin: 0 4px;
-    color: var(--text-color);
-    text-align: center;
-    font-style: normal;
-    font-weight: bold;
-    font-size: 15px;
+    padding: 0;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -8px;
+    }
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     background: var(--card-bg-color);
+    color: var(--text-color);
+    font-size: 15px;
     &.disable {
       color: var(--border-color);
       cursor: not-allowed;
     }
   }
+  // 主按钮：与其余游戏的 .game-icon 统一 —— padding 8px 16px、14px，高度由内容决定
+  //（原来它跟着上面的 .opt-icon 共享规则走，又额外写死 height: 40px 才够高）
   .game-icon {
-    width: auto;
-    height: 40px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 8px 16px;
     font-size: 14px;
+    font-style: normal;
+    font-weight: bold;
+    text-align: center;
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
+    border-radius: var(--radius-tile);
     &:disabled {
       background-color: #aaa;
       cursor: not-allowed;
     }
   }
-  .opt-area {
-    margin: var(--row-gap) 0;
-    height: var(--row-height);
+  // 难度调整区：结构与样式与「点击游戏」完全一致
+  //（.card.opt-card > .opt-item + .divider + .opt-item；难度那一格 flex: 3、按钮格 3.5）
+  .opt-card {
     display: flex;
     align-items: center;
-    font-weight: bold;
-    .difficulty-wrapper,
-    .start-wrapper {
+    margin: var(--row-gap) auto;
+    height: var(--row-height);
+    .opt-item {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 4px;
+      padding: 10px 4px;
+      &:first-child {
+        flex: 3;
+      }
+      &:not(:first-child) {
+        flex: 3.5;
+      }
     }
-    .difficulty-value {
-      margin: 0 8px;
+    .difficulty-num {
+      min-width: 22px;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
     }
   }
   .game-area {

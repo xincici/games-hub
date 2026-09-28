@@ -41,8 +41,10 @@
     <div class="game-area">
       <canvas ref="canvasRef" :width="canvasSize" :height="canvasSize"></canvas>
       <div v-if="paused && gameResult === GAMING && started" class="pause-mask" @click="togglePause">
-        <span>⏸️</span>
-        <span>{{ i18n('resumeTip') }}</span>
+        <!-- 点继续后先数 3 / 2 / 1，数完才真正恢复（数的时候仍然冻结） -->
+        <span v-if="resumeCount" :key="resumeCount" class="resume-count">{{ resumeCount }}</span>
+        <span v-else>⏸️</span>
+        <span>{{ resumeCount ? i18n('readyTip') : i18n('resumeTip') }}</span>
       </div>
       <div v-if="gameResult === LOSE" class="lose">
         <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
@@ -56,6 +58,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { throughWall, toggle as toggleWall } from './wall';
 
 const GRID = 20;                 // 20x20 格
@@ -107,13 +110,16 @@ onMounted(() => {
   ctx = canvasRef.value.getContext('2d');
   if (!restore()) initGame();
   window.addEventListener('keyup', onKeyUp);
+  document.addEventListener('visibilitychange', onVisibility);
 });
 
 // 退出时保存进行中的局面（已结束或未开始的不存）
 onUnmounted(() => {
   stopTimer();
+  cancelResume();
   saveState();
   window.removeEventListener('keyup', onKeyUp);
+  document.removeEventListener('visibilitychange', onVisibility);
 });
 
 function saveState() {
@@ -169,7 +175,13 @@ function turn(d) {
   nextDir = d;
 }
 
+// 切后台（离开游戏界面）时自动暂停，回来自己点「继续」
+function onVisibility() {
+  if (document.hidden && started.value && gameResult.value === GAMING && !paused.value) togglePause();
+}
+
 function initGame() {
+  cancelResume();
   localStorage.removeItem(STATE_KEY);
   snake = [[10, 10], [10, 9], [10, 8]];
   dir = nextDir = [0, 1];
@@ -184,12 +196,28 @@ function initGame() {
   draw();
 }
 
+// 暂停：立即冻结（并把局面落档，切后台后被关掉也接得上）。
+// 继续：先数 3 2 1 再真正恢复 —— 倒数期间 paused 仍是 true，tick 照旧直接返回
 function togglePause() {
   if (gameResult.value === LOSE || !started.value) return;
-  paused.value = !paused.value;
-  if (paused.value) stopTimer();
-  else timer = setInterval(tick, interval.value);
+  if (paused.value) {
+    if (!resumeCount.value) beginResume();
+    return;
+  }
+  paused.value = true;
+  cancelResume();
+  stopTimer();
+  saveState();
 }
+
+// 倒数结束：真正恢复
+function onResume() {
+  paused.value = false;
+  stopTimer();
+  timer = setInterval(tick, interval.value);
+}
+
+const { count: resumeCount, begin: beginResume, cancel: cancelResume } = useResumeCountdown(onResume);
 
 function stopTimer() {
   if (timer) clearInterval(timer);
@@ -314,6 +342,13 @@ function onTouchEnd(e) {
 </script>
 
 <style scoped lang="scss">
+
+@keyframes resume-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  35% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 .wrapper {
   width: 100%;
   min-height: 100vh;
@@ -383,7 +418,7 @@ function onTouchEnd(e) {
       flex: 3;
     }
     .difficulty-value {
-      margin: 0 8px;
+      margin: 0;   // 间距统一交给上面的 gap: 4px
       font-weight: bold;
     }
   }
@@ -414,8 +449,8 @@ function onTouchEnd(e) {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     background: var(--primary-bg);
     color: #fff;
@@ -456,6 +491,14 @@ function onTouchEnd(e) {
     cursor: pointer;
     span:first-child {
       font-size: 34px;
+    }
+    // 继续前的大号倒数数字（span. 前缀是为了压过上面的 span:first-child）
+    span.resume-count {
+      font-size: 72px;
+      line-height: 1;
+      color: var(--primary-bg);
+      font-variant-numeric: tabular-nums;
+      animation: resume-pop 0.8s ease;
     }
   }
   .lose {

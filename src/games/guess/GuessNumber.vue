@@ -207,8 +207,7 @@ function guessOnce() {
   .game-icon {
     cursor: pointer;
     min-width: 125px;
-    height: 40px;
-    padding: 0 16px;
+    padding: 8px 16px;   // 与其余游戏的 .game-icon 统一（原先写死 height: 40px + padding: 0 16px）
     color: #fff;
     font-size: 14px;
     font-weight: bold;

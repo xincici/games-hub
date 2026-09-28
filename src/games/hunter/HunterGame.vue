@@ -63,7 +63,7 @@
         >
           <div
             class="cand-flip"
-            :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(keyOf(opt)), wrong: wrongSet.has(keyOf(opt)), 'no-anim': snapping }"
+            :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(keyOf(opt)), wrong: wrongSet.has(keyOf(opt)), shaking: shakeIdx === idx, 'no-anim': snapping }"
           >
             <div class="face cand-back">
               <i v-if="mode === 1" :class="BACK_ICON" />
@@ -157,6 +157,8 @@ const stage = ref([]);
 const candidates = ref([]);
 const foundSet = ref(new Set());
 const wrongSet = ref(new Set());
+// 选错的那张抖一下（与侦探同一套：记下标 → 加 .shaking 播 0.4s animation → 600ms 后摘掉）
+const shakeIdx = ref(-1);
 const HEARTS_MAX = 3;      // 每局 3 颗心
 const hearts = ref(HEARTS_MAX);
 const bestLevel = ref(+(localStorage.getItem(bestKey()) || 0));
@@ -293,6 +295,7 @@ async function startLevel() {
   const token = ++levelToken;
   foundSet.value = new Set();
   wrongSet.value = new Set();
+  shakeIdx.value = -1;
   hearts.value = HEARTS_MAX;
   const lv = levels.value[level.value];
   // 展示牌 + 候选牌（含展示牌）互不重复
@@ -346,6 +349,7 @@ function pick(idx) {
     }
   } else {
     wrongSet.value = new Set([...wrongSet.value, key]);
+    shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
     if (hearts.value <= 0) {
       setTimeout(() => {
@@ -354,6 +358,9 @@ function pick(idx) {
         save();
       }, 600);
     }
+    setTimeout(() => {
+      if (shakeIdx.value === idx) shakeIdx.value = -1;
+    }, 600);
     save();
   }
 }
@@ -423,6 +430,7 @@ function restore() {
       candidates.value = saved.candidates;
       foundSet.value = new Set(Array.isArray(saved.found) ? saved.found : []);
       wrongSet.value = new Set(Array.isArray(saved.wrong) ? saved.wrong : []);
+      shakeIdx.value = -1;
       hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
       phase.value = saved.phase === LOST ? LOST : WON;
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
@@ -530,8 +538,8 @@ function onScoreReset() {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     white-space: nowrap;
     background: var(--primary-bg);
@@ -681,17 +689,18 @@ function onScoreReset() {
       border-color: var(--primary-bg);
       box-shadow: inset 0 0 0 1px var(--primary-bg);
     }
-    // 选错：红色高亮且不可再选
-    .cand-flip.wrong {
-      .cand-front {
-        background: var(--del-bg);
-        border-color: var(--lose-color);
-        color: var(--lose-color);
-      }
-      cursor: not-allowed;
+    // 选错：红标常驻 + 当场抖一下（与侦探同款）
+    .cand-flip.shaking {
+      animation: shake 0.4s ease;
     }
     .cand-flip.wrong {
       cursor: not-allowed;
+      .cand-front {
+        background: var(--del-bg);
+        border-color: var(--lose-color);
+        box-shadow: inset 0 0 0 1px var(--lose-color);
+        color: var(--lose-color);
+      }
     }
   }
   .phase-tip {

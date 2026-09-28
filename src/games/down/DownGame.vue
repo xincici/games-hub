@@ -27,6 +27,12 @@
       <div class="start-wrapper">
         <button @click="startNewGame" class="game-icon">{{ i18n('start') }}</button>
       </div>
+      <div class="divider"></div>
+      <div class="start-wrapper">
+        <button @click="togglePause" class="game-icon" :disabled="phase !== PLAY">
+          {{ paused ? i18n('resume') : i18n('pause') }}
+        </button>
+      </div>
     </div>
     <div class="game-area">
       <div class="board dot-board" :style="boardStyle">
@@ -58,6 +64,12 @@
           @click="pick(c - 1)"
         ></div>
       </div>
+      <div v-if="paused && phase === PLAY" class="pause-mask" @click="togglePause">
+        <!-- 点继续后先数 3 / 2 / 1，数完才真正恢复（数的时候整摞仍是冻结的） -->
+        <span v-if="resumeCount" :key="resumeCount" class="resume-count">{{ resumeCount }}</span>
+        <span v-else>⏸️</span>
+        <span>{{ resumeCount ? i18n('readyTip') : i18n('resumeTip') }}</span>
+      </div>
       <div v-if="phase === OVER" class="result lose">
         <div class="result-title">🏁 {{ i18n('tipOver') }} 🏁</div>
         <div class="final-score">{{ score }}</div>
@@ -71,6 +83,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { i18n } from '@/shared/i18n';
 import {
   ROWS, COLS, START_TOP, START_ROWS, SPEED_BASE,
@@ -90,6 +103,8 @@ const FALL_K = 20;     // 落下一格的收敛速度（越大掉得越快）
 const RECHECK_MS = 110; // 落定后补判一次：炸开那段时间玩家可能已经滑到别的列了
 
 const phase = ref(PLAY);
+// 暂停：主动点按钮、或切后台 / 离开页面时自动暂停；重进时也停在暂停态，等玩家点「继续」
+const paused = ref(false);
 const score = ref(0);
 const best = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const stack = ref([]);          // [{ id, cells: [6 个 emoji], popping }]，下标 0 = 最上面那排
@@ -100,7 +115,7 @@ const stackEl = ref(null);
 const playerEl = ref(null);
 const timerRef = ref(null);
 // 只有「进行中」才走表：失败结算层上停在最终用时
-const timerRunning = computed(() => phase.value === PLAY);
+const timerRunning = computed(() => phase.value === PLAY && !paused.value);
 const onTimerTick = () => save();   // 每秒落一次档，退出重进时用时不会退回去
 
 // 逐帧推进的量放在普通变量里（不进响应式，避免每帧触发整棵树重渲）
@@ -154,6 +169,8 @@ function fillPile() {
 function startNewGame() {
   gen += 1;
   stopLoop();
+  cancelResume();
+  paused.value = false;
   phase.value = PLAY;
   score.value = 0;
   cleared = 0;
@@ -177,10 +194,39 @@ function startNewGame() {
   startLoop();
 }
 
+// 暂停 / 继续：暂停时停掉 rAF 与计时（牌堆完全冻结），并把局面落档，
+// 这样切后台被关掉也能接上；继续先数 3 2 1，数完才真正跑起来
+function togglePause() {
+  if (phase.value !== PLAY) return;
+  if (paused.value) {
+    if (!resumeCount.value) beginResume();
+    return;
+  }
+  paused.value = true;
+  cancelResume();
+  stopLoop();
+  timerRef.value?.stop();
+  save();
+}
+
+// 倒数结束：真正恢复（startLoop 会把 last 清 0，所以恢复那一帧不会被 dt 跳一下）
+function onResume() {
+  paused.value = false;
+  timerRef.value?.start();
+  startLoop();
+}
+
+const { count: resumeCount, begin: beginResume, cancel: cancelResume } = useResumeCountdown(onResume);
+
+// 切后台（离开游戏界面）时自动暂停，回来自己点「继续」
+function onVisibility() {
+  if (document.hidden && phase.value === PLAY && !paused.value) togglePause();
+}
+
 // 点列就能滑过去：busy（正在炸开 / 落地）不挡这里，
 // 只挡「再开一次消除」——不然玩家消完一排立刻点下一列会白点一下
 function pick(c) {
-  if (phase.value !== PLAY) return;
+  if (phase.value !== PLAY || paused.value) return;
   if (c === colTarget.value) {
     // 点自己所在的列：立刻判定一次（比如刚落下来就同款的情况）
     if (arrived) checkMatch();
@@ -254,7 +300,7 @@ function render() {
 }
 
 function frame(now) {
-  if (phase.value !== PLAY) return;
+  if (phase.value !== PLAY || paused.value) return;
   // 切后台再回来时 dt 会很大，钳一下，免得牌堆瞬间窜到顶
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
   last = now;
@@ -293,11 +339,15 @@ function stopLoop() {
 
 onMounted(() => {
   if (!restore()) startNewGame();
+  document.addEventListener('visibilitychange', onVisibility);
 });
 
 onUnmounted(() => {
   gen += 1;
   stopLoop();
+  cancelResume();
+  save();   // 退出即暂停：把这一刻的局面落档，重进停在暂停态
+  document.removeEventListener('visibilitychange', onVisibility);
 });
 
 // ---------- 存档 ----------
@@ -337,9 +387,14 @@ function restore() {
     busy = false;
     phase.value = saved.phase === OVER ? OVER : PLAY;
     timerRef.value?.restore(Math.max(0, +saved.time || 0));
-    if (phase.value === PLAY) startLoop();
-    else {
+    if (phase.value === PLAY) {
+      // 局中：渲染出退出那一刻的画面并**保持暂停**，等玩家自己点「继续」
+      paused.value = true;
+      timerRef.value?.stop();
+      render();
+    } else {
       // 结算层：表停在存档的那一刻，不再往前走
+      paused.value = false;
       timerRef.value?.stop();
       render();
     }
@@ -356,6 +411,13 @@ function onScoreReset() {
 </script>
 
 <style scoped lang="scss">
+
+@keyframes resume-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  35% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 @keyframes rise-pop {
   0% { transform: scale(1); opacity: 1; }
   45% { transform: scale(1.07); opacity: 1; }
@@ -421,14 +483,15 @@ function onScoreReset() {
     align-items: center;
     margin: var(--row-gap) 0;
     height: var(--row-height);
+    // 计时区 : 两个按钮区 = 3 : 3.5 : 3.5（与贪吃蛇的操作区比例一致）
     .opt-half {
-      flex: 1.6;
+      flex: 3;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .start-wrapper {
-      flex: 1.2;
+      flex: 3.5;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -436,8 +499,8 @@ function onScoreReset() {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     white-space: nowrap;
     background: var(--primary-bg);
@@ -518,6 +581,34 @@ function onScoreReset() {
     z-index: 3;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+  }
+  // 暂停遮罩：与贪吃蛇同款（整块可点，点了继续）
+  .pause-mask {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border-radius: var(--card-radius);
+    background: var(--mask-color);
+    color: var(--text-color);
+    font-weight: bold;
+    font-size: 17px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    span:first-child {
+      font-size: 34px;
+    }
+    // 继续前的大号倒数数字（span. 前缀是为了压过上面的 span:first-child）
+    span.resume-count {
+      font-size: 72px;
+      line-height: 1;
+      color: var(--primary-bg);
+      font-variant-numeric: tabular-nums;
+      animation: resume-pop 0.8s ease;
+    }
   }
   .result {
     position: absolute;

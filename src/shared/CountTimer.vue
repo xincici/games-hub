@@ -76,7 +76,7 @@ function listenerFn() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 18px;
+  font-size: 14px;   // 各游戏顶部那一格计时 / 倒计时统一 14px
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

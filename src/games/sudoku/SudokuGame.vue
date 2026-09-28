@@ -659,7 +659,7 @@ function win() {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
       .difficulty-value {
         min-width: 40px;
         padding: 0 2px;
@@ -710,8 +710,8 @@ function win() {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     white-space: nowrap;
     background: var(--primary-bg);
@@ -738,12 +738,16 @@ function win() {
   .board {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    grid-auto-rows: 1fr;
+    // 必须是 minmax(0, 1fr)：1fr 等价于 minmax(auto, 1fr)，里面的内容一旦比轨道高
+    // 就会把这一行顶大、其余行被压小 —— 点击数字让候选高亮时整盘行高会跳一下
+    grid-auto-rows: minmax(0, 1fr);
     aspect-ratio: 1;
     background: var(--card-bg-color);
   }
   .cell {
     box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
     border-style: solid;
     border-color: var(--sudoku-line);
     background: var(--card-bg-color);
@@ -766,7 +770,7 @@ function win() {
     .notes {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      grid-template-rows: repeat(3, 1fr);
+      grid-template-rows: repeat(3, minmax(0, 1fr));
       width: 100%;
       height: 100%;
       align-items: center;
@@ -780,16 +784,22 @@ function win() {
       .note.has {
         opacity: 0.62;
       }
-      // 与盘面上点中的数字相同的候选：底色块 + 白字，一眼看出这个数字还能放哪
+      // 与盘面上点中的数字相同的候选：底色块 + 白字，一眼看出这个数字还能放哪。
+      // 色块高度靠「撑满自己那一格 1fr 网格区」拿到（配合上面的 minmax(0,1fr)），
+      // **不能再用 line-height 撑高** —— 那一格会比别的候选高，把整行的行高顶变形，
+      // 表现就是点击一个已填数字后盘面高度跳一下（玩家反馈的 bug）
       .note.has.hl {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 0 2px;
         opacity: 1;
         color: #fff;
         font-weight: 700;
         background: var(--primary-bg);
         border-radius: 2px;
-        padding: 0 2px;
-        // 让色块比字号略高一点，数字不至于贴边
-        line-height: 1.35;
       }
     }
     &.fixed {

@@ -658,7 +658,7 @@ function breakCombo() {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 17px;
+      font-size: 14px;   // 与其它游戏的计时 / 倒计时字号一致
       font-weight: 600;
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
@@ -676,8 +676,8 @@ function breakCombo() {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     white-space: nowrap;
     background: var(--primary-bg);

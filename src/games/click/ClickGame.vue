@@ -290,7 +290,7 @@ function userRedo() {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 4px;
       padding: 10px 4px;
       &:first-child {
         flex: 3;
@@ -334,8 +334,8 @@ function userRedo() {
   .game-icon {
     cursor: pointer;
     display: inline-block;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     background: var(--primary-bg);
     color: #fff;

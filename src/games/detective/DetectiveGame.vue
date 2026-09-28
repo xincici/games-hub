@@ -501,8 +501,8 @@ function onScoreReset() {
   }
   .game-icon {
     cursor: pointer;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: bold;
     white-space: nowrap;
     background: var(--primary-bg);
