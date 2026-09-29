@@ -29,6 +29,22 @@ import { i18n } from '@/shared/i18n';
   background-position: 5px 5px;
 }
 
+// 「选对了」的即时反馈（Emoji 侦探 / 猎手共用，比单纯高亮多一段动作）：
+// 弹一下 + 绿色光环从牌边扩散出去。**必须挂在正面那层**（.face），
+// 不能挂在外层 .card-flip / .cand-flip 上 —— 那一层的 transform 是翻面状态，
+// 动画的 transform 会把它顶掉，牌会当场翻回背面。
+@keyframes pick-right-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.18); }
+  58% { transform: scale(0.96); }
+  78% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes pick-right-ring {
+  0% { box-shadow: 0 0 0 0 var(--primary-bg), 0 0 10px 1px var(--primary-bg); }
+  100% { box-shadow: 0 0 0 14px transparent, 0 0 0 0 transparent; }
+}
+
 * {
   -webkit-user-select: none;
   user-select: none;

@@ -96,7 +96,7 @@ import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { gameConfig } from '@/shared/games';
 import {
-  levelConfig, generateSolvable, topRun, moveCount, isWon, isDeadEnd,
+  levelConfig, generateSolvable, topRun, moveCount, moveTargets, isWon, isDeadEnd,
   countDone, progressPct,
 } from './board';
 
@@ -168,6 +168,9 @@ const hidden = ref([]);        // 每槽底部扣着的张数（可见的永远�
 const moves = ref(0);
 const phase = ref(PLAY);
 const selected = ref(-1);      // 选中的槽位下标（-1 = 没选）
+// 自动搬运的目标槽：selected 在 performMove 一开头就被清成 -1 了，只靠它的话
+// 「可放置」高亮会在搬运刚开始时闪掉；这个瞬时下标让目标槽在整段搬运里一直亮着
+const autoTarget = ref(-1);
 // 失败演出：翻面播完 → 停 0.2s → 每个槽整摞抬起一格再落下（从左到右错峰）→ 才弹失败层。
 // failing 期间不响应玩家的操作
 const failing = ref(false);
@@ -291,6 +294,7 @@ function faceUp(f) {
 }
 
 function isTarget(i) {
+  if (autoTarget.value === i) return true;     // 自动搬运途中：目标槽保持高亮
   if (selected.value < 0 || selected.value === i) return false;
   return moveCount(piles.value, selected.value, i, capacity.value) > 0;
 }
@@ -366,6 +370,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function clearTransient() {
   generation += 1;
+  autoTarget.value = -1;
   clearTimeout(dealTimer);
   dealTimer = null;
   flipTimers.forEach(clearTimeout);
@@ -551,6 +556,7 @@ function liftRun(i) {
   const pile = piles.value[i].items;
   const n = topRun(piles.value[i]);
   if (!n) return;
+  autoTarget.value = -1;                       // 新抬起的一摞重新判定
   pile.slice(pile.length - n).forEach((f, idx) => {
     // 上一手刚露出来、还在等落定再翻面的那张：玩家既然直接抓起来了，就当场翻
     if (f.pending) reveal(f);
@@ -562,10 +568,22 @@ function liftRun(i) {
   });
   selected.value = i;
   liftUntil = Date.now() + LIFT_MS + (n - 1) * STAGGER_MS;
+  // 抬起来之后，如果全场只有这一个槽放得下，就不用玩家再点第二下：直接搬过去。
+  // 走的是同一条搬运路径（performMove 自己会等抬到位再横向平移），
+  // 所以动画、张数（装不下就只搬得下的张数、剩下的落回原槽）、存档、计步全都一致；
+  // 万一同一个槽被抬起时另一摞还在飞（搬运期间不锁输入），就排进 deferred 等落定再补
+  const targets = moveTargets(piles.value, i, capacity.value);
+  if (targets.length === 1) {
+    const { to, count } = targets[0];
+    autoTarget.value = to;                     // 搬运途中目标槽继续亮着
+    if (busy) deferred = { type: 'move', slot: i, to };
+    else performMove(i, to, count);
+  }
 }
 
 // 把抬起的一摞放回它自己的槽里（取消选中）
 function dropRun(i) {
+  autoTarget.value = -1;
   const run = fruits.value.filter(f => f.slot === i && f.lift >= 0).sort((a, b) => a.lift - b.lift);
   run.forEach((f, idx) => {
     f.lift = -1;
@@ -646,6 +664,7 @@ async function performMove(from, to, n) {
   if (exposedWasHidden && exposed.pending) reveal(exposed);
 
   busy = false;
+  autoTarget.value = -1;
   const next = deferred;
   deferred = null;
   evaluate();

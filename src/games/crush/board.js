@@ -47,7 +47,10 @@ const isBlocker = v => v === WALL || isFrozen(v);
 export const CAP_LEVEL = 30;
 
 // 结构上限：面板、种类、墙、特殊元素概率在第 30 关到顶（步数 / 目标分的延伸见上）
-const CAP = { cols: 9, rows: 10, kinds: 6, moves: 20, target: 3000, walls: 8, ice: 6, bomb: 0.06, wild: 0.07 };
+const CAP = { cols: 9, rows: 10, kinds: 6, moves: 20, target: 3000, walls: 8, ice: 8, bomb: 0.06, wild: 0.07 };
+// 冰块到顶（14）与「到顶后继续涨」的节奏：30 关之后每 2 关再 +1
+const ICE_MAX = 14;
+const ICE_GROW_STEP = 2;
 // 第 1 关的目标分（新手仍在 22 步里轻松拿到）
 const TARGET_MIN = 1500;
 // 第 30 关之后每关的增量。+1 步在 6 种盘面上大约值 200 分，
@@ -70,8 +73,9 @@ export function levelConfig(level) {
     moves: Math.round(22 + (CAP.moves - 22) * t) + extra * EXTRA_MOVES,
     target: Math.round(TARGET_MIN + (CAP.target - TARGET_MIN) * t) + extra * EXTRA_TARGET,
     walls: Math.round(CAP.walls * ramp(0.95)),
-    // 冰块：0 → 6，永远生成连通的一簇（见 generateBoard）
-    ice: Math.round(CAP.ice * ramp(0.80)),
+    // 冰块：0 → 8（30 关到顶，早中期与旧曲线基本一致：第 12 关 3、第 18 关 5、第 24 关 6），
+    // 30 关之后每 2 关再 +1、14 块封顶 —— 关卡越高冰越多，且永远生成连通的一簇（见 generateBoard）
+    ice: Math.min(ICE_MAX, Math.round(CAP.ice * ramp(1)) + Math.floor(Math.max(0, lv - CAP_LEVEL) / ICE_GROW_STEP)),
     bombChance: 0.03 + (CAP.bomb - 0.03) * t,
     wildChance: 0.04 + (CAP.wild - 0.04) * t,
   };

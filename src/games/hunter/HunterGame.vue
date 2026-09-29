@@ -63,7 +63,7 @@
         >
           <div
             class="cand-flip"
-            :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(keyOf(opt)), wrong: wrongSet.has(keyOf(opt)), shaking: shakeIdx === idx, 'no-anim': snapping }"
+            :class="{ flipped: isCandFaceDown(opt), found: foundSet.has(keyOf(opt)), wrong: wrongSet.has(keyOf(opt)), shaking: shakeIdx === idx, popping: justFound === keyOf(opt), 'no-anim': snapping }"
           >
             <div class="face cand-back">
               <i v-if="mode === 1" :class="BACK_ICON" />
@@ -104,6 +104,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
+import { useResultDelay } from '@/shared/resultDelay';
 import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
@@ -140,6 +141,9 @@ const CARD_RATIO = 1.5;   // 与 CardItem 的 60×90 一致
 const TIP_BAND = 28;
 const CARD_TYPES = ['spade', 'club', 'heart', 'diamond'];
 const MEMORIES = 3000;
+// 观察时长：目标越多越难记，高关卡适当放宽（第 3 关起每关 +0.4s：3.0 / 3.0 / 3.0 / 3.4 / 3.8 / 4.2s）
+const MEMORY_EXTRA = 400;
+const memoriesFor = lv => MEMORIES + Math.max(0, lv - 2) * MEMORY_EXTRA;
 const [MEMORY, FLIP, ANSWER, WON, LOST] = ['memory', 'flip', 'answer', 'won', 'lost'];
 const KEY_PREFIX = '__emoji_hunter__';
 const LEVEL_KEY = `${KEY_PREFIX}level`;
@@ -161,9 +165,14 @@ const snapping = ref(false);
 const stage = ref([]);
 const candidates = ref([]);
 const foundSet = ref(new Set());
+// 本次会话里刚找回的那张（键）：只用它驱动「弹一下 + 光环」动画。
+// foundSet 是会写进存档的，拿它当动画条件的话，还原存档 / 切模式时元素一重建动画就会重播
+const justFound = ref(null);
 const wrongSet = ref(new Set());
 // 选错的那张抖一下（与侦探同一套：记下标 → 加 .shaking 播 0.4s animation → 600ms 后摘掉）
 const shakeIdx = ref(-1);
+// 结算前停留 0.5s：让玩家看清最后一次选择，期间锁输入
+const { pending: settling, later: settleThen, cancel: cancelSettle } = useResultDelay();
 const HEARTS_MAX = 3;      // 每局 3 颗心
 const hearts = ref(HEARTS_MAX);
 const bestLevel = ref(+(localStorage.getItem(bestKey()) || 0));
@@ -249,6 +258,8 @@ onUnmounted(() => {
 
 function clearTimers() {
   clearTimeout(memoryTimer);
+  justFound.value = null;   // 换关 / 切模式后不再重播动画
+  cancelSettle();          // 换关 / 重开时把「结算前停留」一起取消，免得浮层冒到新一关
 }
 
 // ---------- 关卡流程 ----------
@@ -329,7 +340,7 @@ async function startLevel() {
         save();
       }
     }, 500);
-  }, MEMORIES);
+  }, memoriesFor(level.value));
   save();
 }
 
@@ -337,31 +348,37 @@ async function startLevel() {
 // 不是 → 红色高亮标错且不可再选，扣心
 function pick(idx) {
   if (phase.value !== ANSWER) return;
+  if (settling.value) return;                  // 结算前停留期间不可操作
   const item = candidates.value[idx];
   const key = keyOf(item);
   if (foundSet.value.has(key) || wrongSet.value.has(key)) return;
   if (stageKeySet.value.has(key)) {
     foundSet.value = new Set([...foundSet.value, key]);
+    justFound.value = key;                       // 只有这一张播动画
     if (foundSet.value.size === stage.value.length) {
-      phase.value = WON;
-      timerRef.value?.stop();
-      if (level.value + 1 > bestLevel.value) {
-        bestLevel.value = level.value + 1;
-        localStorage.setItem(bestKey(), bestLevel.value);
-      }
-      confetti();
-      save();
+      // 先让最后找回的那张亮 0.5s，再弹结算浮层
+      settleThen(() => {
+        phase.value = WON;
+        timerRef.value?.stop();
+        if (level.value + 1 > bestLevel.value) {
+          bestLevel.value = level.value + 1;
+          localStorage.setItem(bestKey(), bestLevel.value);
+        }
+        confetti();
+        save();
+      });
     }
   } else {
     wrongSet.value = new Set([...wrongSet.value, key]);
     shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
     if (hearts.value <= 0) {
-      setTimeout(() => {
+      // 生命耗尽：先留住 0.5s 让玩家看清标红的那张，再失败结算（计时器随之停止）
+      settleThen(() => {
         phase.value = LOST;
         timerRef.value?.stop();
         save();
-      }, 600);
+      });
     }
     setTimeout(() => {
       if (shakeIdx.value === idx) shakeIdx.value = -1;
@@ -437,6 +454,7 @@ function restore() {
       foundSet.value = new Set(Array.isArray(saved.found) ? saved.found : []);
       wrongSet.value = new Set(Array.isArray(saved.wrong) ? saved.wrong : []);
       shakeIdx.value = -1;
+      justFound.value = null;     // 还原出来的已找回牌不算「本次点击」，别重播动画
       hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
       phase.value = saved.phase === LOST ? LOST : WON;
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
@@ -695,6 +713,12 @@ function onScoreReset() {
       background: var(--enter-bg);
       border-color: var(--primary-bg);
       box-shadow: inset 0 0 0 1px var(--primary-bg);
+    }
+    // 弹一下 + 绿色光环扩散（关键帧在 App.vue，两个游戏共用）。
+    // **由 .popping（= 本次点击找的那张）驱动，不能挂在 .found 上**：
+    // .found 来自会写进存档的 foundSet，还原 / 切模式时元素重建动画会重播一遍
+    .cand-flip.popping .cand-front {
+      animation: pick-right-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), pick-right-ring 0.5s ease-out;
     }
     // 选错：红标常驻 + 当场抖一下（与侦探同款）
     .cand-flip.shaking {

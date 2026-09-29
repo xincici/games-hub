@@ -42,7 +42,7 @@
           <div v-for="(cell, idx) in board" :key="idx" class="cell">
             <div
               class="card-flip"
-              :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: (phase === WON || phase === LOST) && idx === swappedIdx, wrong: wrongIdxs.includes(idx) }"
+              :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: idx === swappedIdx && (rightIdx >= 0 || phase === WON || phase === LOST), popping: idx === rightIdx, wrong: wrongIdxs.includes(idx) }"
               @click="onCellClick(idx)"
             >
               <!-- 牌背：emoji 模式用游戏图标，扑克模式复用扑克那边的迷你牌背 -->
@@ -91,6 +91,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
+import { useResultDelay } from '@/shared/resultDelay';
 import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
@@ -137,6 +138,10 @@ const phase = ref(MEMORY);
 const board = ref([]);
 const swappedIdx = ref(-1);
 const shakeIdx = ref(-1);
+// 答对的那张牌：点击当下就记下来，这样「结算前停留」的 0.5s 里绿色高亮已经亮着
+const rightIdx = ref(-1);
+// 结算前停留 0.5s：让玩家看清最后一次选择，期间锁输入
+const { pending: settling, later: settleThen, cancel: cancelSettle } = useResultDelay();
 // 选错的牌：常驻红色标记，并且不能再点（否则同一张能被反复点、反复扣心）
 const wrongIdxs = ref([]);
 const memoryLeft = ref(0);
@@ -208,6 +213,8 @@ function clearTimers() {
   clearTimeout(memoryTimer);
   clearInterval(memoryTicker);
   clearTimeout(flipTimer);
+  cancelSettle();          // 换关 / 重开时把「结算前停留」一起取消，免得浮层冒到新一关
+  rightIdx.value = -1;
 }
 
 // ---------- 关卡流程 ----------
@@ -301,27 +308,32 @@ function flipPhase() {
 // 玩家凭记忆点出被换的那张；点其它牌 → 短暂抖动
 function onCellClick(idx) {
   if (phase.value !== ANSWER) return;
+  if (settling.value) return;                  // 结算前停留期间不可操作
   if (wrongIdxs.value.includes(idx)) return;   // 已经标错的牌不再响应
   if (idx === swappedIdx.value) {
-    phase.value = WON;
-    timerRef.value?.stop();
-    if (level.value + 1 > bestLevel.value) {
-      bestLevel.value = level.value + 1;
-      localStorage.setItem(bestKey(), bestLevel.value);
-    }
-    confetti();
-    save();
+    rightIdx.value = idx;                      // 立刻亮绿，停留期间玩家看得到「选对了」
+    // 高亮亮 0.5s 之后再弹结算浮层
+    settleThen(() => {
+      phase.value = WON;
+      timerRef.value?.stop();
+      if (level.value + 1 > bestLevel.value) {
+        bestLevel.value = level.value + 1;
+        localStorage.setItem(bestKey(), bestLevel.value);
+      }
+      confetti();
+      save();
+    });
   } else {
     wrongIdxs.value = [...wrongIdxs.value, idx];
     shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
     if (hearts.value <= 0) {
-      // 生命耗尽：失败结算，计时器停止
-      setTimeout(() => {
+      // 生命耗尽：先留住 0.5s 让玩家看清标红的那张，再失败结算（计时器随之停止）
+      settleThen(() => {
         phase.value = LOST;
         timerRef.value?.stop();
         save();
-      }, 600);
+      });
     }
     setTimeout(() => {
       if (shakeIdx.value === idx) shakeIdx.value = -1;
@@ -397,6 +409,7 @@ function restore() {
       swappedIdx.value = Number.isInteger(+saved.swapped) ? +saved.swapped : -1;
       wrongIdxs.value = Array.isArray(saved.wrong) ? saved.wrong.filter(i => Number.isInteger(+i)).map(Number) : [];
       shakeIdx.value = -1;
+      rightIdx.value = -1;          // 还原出来的答案不算「本次点击」，别重播动画
       hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
       phase.value = saved.phase === LOST ? LOST : WON;
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
@@ -577,6 +590,12 @@ function onScoreReset() {
         background: var(--enter-bg);
         box-shadow: 0 0 0 2px var(--primary-bg);
       }
+    }
+    // 弹一下 + 绿色光环扩散（关键帧在 App.vue，两个游戏共用）。
+    // **必须由 .popping（= 本次点击的那张）驱动，不能挂在 .revealed 上**：
+    // .revealed 靠 phase 也能成立，还原存档 / 切模式时元素一重建动画就会重播一遍
+    &.popping .front-face {
+      animation: pick-right-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), pick-right-ring 0.5s ease-out;
     }
   }
   .face {
