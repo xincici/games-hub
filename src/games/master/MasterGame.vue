@@ -119,7 +119,8 @@ const freeSet = computed(() => freeIds(tiles.value));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
 
 // 覆盖层级：压在这张牌上面的卡片数（0 张 = 亮色可点）。只用于视觉——
-// 压得越深越透明，堆叠的层次感就出来了；判定可点击与否仍走 freeIds
+// 被压住的牌整张**不透明**（压得再深也不透光，只有从上层牌边缘漏出来的那一部分看得见，
+// 想知道下面是什么就得先把它翻开）；判定可点击与否仍走 freeIds
 const MAX_COVER_DEPTH = 4;   // 更深的一律按最深一档算（层级只影响视觉）
 const coverDepth = computed(() => {
   const list = tiles.value;
@@ -729,7 +730,7 @@ function restore() {
     -webkit-tap-highlight-color: transparent;
     animation: tile-in 0.22s ease backwards;
     // 亮色 ⇄ 被遮挡之间的明暗变化走渐变（被遮挡时缓缓变暗，重新可点时缓缓变亮）
-    transition: filter 0.32s ease, opacity 0.32s ease, box-shadow 0.32s ease;
+    transition: filter 0.32s ease, box-shadow 0.32s ease;
     &:not(.covered):active {
       transform: scale(0.93);
     }
@@ -740,12 +741,8 @@ function restore() {
       cursor: default;
       pointer-events: none;
     }
-    // 压在上面的卡片越多越透明，堆叠的层次感靠这一步拉开
-    // （层数分布：第 50 关约 14% 不被压、22% 压 1 层、17% 压 2 层、14% 压 3 层、33% 压 4 层以上）
-    &.depth-1 { opacity: 0.82; }
-    &.depth-2 { opacity: 0.66; }
-    &.depth-3 { opacity: 0.52; }
-    &.depth-4 { opacity: 0.4; }
+    // 被压住的牌一律不透明：压得再深也只看得到从上层牌边缘漏出来的那一角，
+    // 于是「下面那张是什么」必须靠翻开来确认（depth-N 类保留，作纯样式钩子用）
   }
   .tray {
     position: relative;

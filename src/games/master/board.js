@@ -7,9 +7,9 @@ export const TRAY_SIZE = 7;    // 收集槽格数
 export const BLOCK_TILES = 9;  // 每 9 张一组发牌（3 组三消，保证按清盘顺序可解）
 
 export const MIN_TRIPLES = 8;   // 第 1 关 8 组三消 = 24 张
-export const MAX_TRIPLES = 32;  // 组数上限 = 96 张
-export const MIN_KINDS = 6;     // 第 1 关用 6 种 emoji
-export const MAX_KINDS = 16;    // emoji 种类上限
+export const MAX_TRIPLES = 32;  // 组数上限 = 96 张（这也是分层布局摆得下的上限，见 layoutTiles）
+export const MIN_KINDS = 7;     // 第 1 关用 7 种 emoji
+export const MAX_KINDS = 18;    // emoji 种类上限（池子有 147 个，够用）
 export const MIN_LAYERS = 2;    // 第 1 关 2 层
 export const MAX_LAYERS = 8;    // 层数上限
 
