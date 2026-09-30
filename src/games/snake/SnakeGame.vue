@@ -1,5 +1,5 @@
 <template>
-  <div class="wrapper" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+  <div class="wrapper" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerUp">
     <TopHeader @onScoreReset="bestScore = 0">
       <span class="item-wrapper" @click="toggleWall">
         <i i-mdi-wall-fire v-if="throughWall" />
@@ -326,15 +326,22 @@ function changeDifficulty(delta) {
   difficulty.value = next;
 }
 
-let touchStartX = 0;
-let touchStartY = 0;
-function onTouchStart(e) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+// 转向的滑动走 **Pointer Events**：鼠标 / 触摸 / 笔一套事件。原来只监听 touch 事件，
+// 于是 PC 上拿鼠标怎么拖都不转向（只有方向键能用）
+let dragStartX = 0;
+let dragStartY = 0;
+let dragId = -1;
+function onPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;   // 右键 / 中键不参与
+  dragId = e.pointerId;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
 }
-function onTouchEnd(e) {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
+function onPointerUp(e) {
+  if (e.pointerId !== dragId) return;
+  dragId = -1;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
   if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
   if (Math.abs(dx) > Math.abs(dy)) turn([0, dx > 0 ? 1 : -1]);
   else turn([dy > 0 ? 1 : -1, 0]);
@@ -359,6 +366,9 @@ function onTouchEnd(e) {
   display: flex;
   flex-direction: column;
   align-items: center;
+  // 转向手势归本页所有：没有这条，浏览器（尤其装成桌面应用后）会把滑动当成滚页面 /
+  // 拖窗口收走，中途补一个 pointercancel，蛇就不转向了（此页纵向不溢出，整页加安全）
+  touch-action: none;
   button {
     touch-action: manipulation;
   }

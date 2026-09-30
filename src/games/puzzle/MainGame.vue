@@ -1,5 +1,5 @@
 <template>
-  <div class="wrapper" :class="`${rocker? 'rocker' : '' }`" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+  <div class="wrapper" :class="`${rocker? 'rocker' : '' }`" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerUp">
     <TopHeader @onScoreReset="bestScore = null">
       <span class="item-wrapper" @click="toggleRocker">
         <i i-mdi-power-socket-fr v-if="rocker" />
@@ -290,15 +290,22 @@ function checkResult() {
   gameResult.value = WIN;
 }
 
-let touchStartX = 0;
-let touchStartY = 0;
-function onTouchStart(e) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+// 空白格跟手的滑动走 **Pointer Events**：鼠标 / 触摸 / 笔一套事件。原来只监听 touch 事件，
+// 于是 PC 上拿鼠标拖不会动格子（只有摇杆按钮与方向键能用）
+let dragStartX = 0;
+let dragStartY = 0;
+let dragId = -1;
+function onPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;   // 右键 / 中键不参与
+  dragId = e.pointerId;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
 }
-function onTouchEnd(e) {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
+function onPointerUp(e) {
+  if (e.pointerId !== dragId) return;
+  dragId = -1;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
   if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // 视为点击，忽略
   if (Math.abs(dx) > Math.abs(dy)) {
     // 水平滑动：空白格跟随手指移动方向，即向右滑 → 空白格右移 (dCol = -1)
@@ -471,6 +478,10 @@ function onTouchEnd(e) {
     transition: margin-top 0.3s ease-in-out;
     margin: 0 0 20px;
     padding: 15px;
+    // 滑动（空白格跟手）的手势归棋盘所有。**只能加在这里、不能加在整页 `.wrapper` 上**：
+    // 最高难度 6 × 320×568 时本页会溢出（实测 scrollH 590 > innerH 568），
+    // 整页 none 会把「滚到下面看棋盘」一起吃掉
+    touch-action: none;
     .win {
       background-color: var(--mask-color);
       position: absolute;

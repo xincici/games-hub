@@ -35,7 +35,14 @@
     </div>
     <div class="game-area">
       <div class="board-frame dot-board" :class="{ shaking }" :style="boardStyle">
-        <div class="board" :class="{ celebrating }" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend.passive="onTouchEnd">
+        <div
+          class="board"
+          :class="{ celebrating }"
+          @pointerdown="onPointerDown"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+        >
           <div
             v-for="(cell, idx) in cells"
             :key="`bg-${idx}`"
@@ -279,6 +286,7 @@ let stepTimer = null;
 let resetTimer = null;
 let shakeTimer = null;
 let touchFrom = -1;
+let dragId = -1;        // 正在跟手的指针 id（鼠标 / 触摸共用一套 Pointer Events）
 let touchHandled = false;
 
 onMounted(() => {
@@ -503,37 +511,47 @@ function isTileAt(idx) {
   return isTile(cells.value[idx]);
 }
 
-function onTouchStart(e) {
+// 拖到相邻格就换位。手势走 **Pointer Events**：鼠标 / 触摸 / 笔一套事件，
+// 用 touch 事件的话 PC 上鼠标拖动根本不触发（触摸屏才发 touch），装成桌面应用后也滑不动
+function onPointerDown(e) {
   pokeIdle();
-  const cell = touchTargetCell(e.touches[0]);
-  touchFrom = cell;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;   // 右键 / 中键不参与
+  // 每次按下都复位「这次拖动已经处理过了」的标记：拖动结束后浏览器补发的那个 click
+  // 要吃掉（否则会被当成「又选中一次」），但鼠标拖动时按下与抬起往往落在不同的 gem 上，
+  // 补发的 click 目标是它们的共同祖先（.board，没有 click 处理器），标记就没人消费了 ——
+  // 不在这里复位的话，它会把拖动之后的第一次点击一起吞掉
+  touchHandled = false;
+  dragId = e.pointerId;
+  touchFrom = cellAtPoint(e.clientX, e.clientY);
 }
 
-function onTouchMove(e) {
+function onPointerMove(e) {
   pokeIdle();
+  if (e.pointerId !== dragId) return;
   if (touchFrom < 0 || phase.value !== PLAY || busy) return;
-  const cell = touchTargetCell(e.touches[0]);
+  const cell = cellAtPoint(e.clientX, e.clientY);
   if (cell >= 0 && cell !== touchFrom && adjacent(touchFrom, cell, conf.value.cols)) {
     if (!isTileAt(touchFrom) || !isTileAt(cell)) { touchFrom = -1; return; }
-    touchHandled = true;
+    touchHandled = true;        // 拖完浏览器还会补一个 click，别让它再当成「选中」
     trySwap(touchFrom, cell);
     touchFrom = -1;
   }
 }
 
-function onTouchEnd() {
+function onPointerUp() {
   touchFrom = -1;
+  dragId = -1;
 }
 
-function touchTargetCell(touch) {
+function cellAtPoint(x, y) {
   const board = document.querySelector('.board');
   if (!board) return -1;
   const rect = board.getBoundingClientRect();
   const { cols, rows } = conf.value;
   const stepX = rect.width / cols;
   const stepY = rect.height / rows;
-  const c = ~~((touch.clientX - rect.left) / stepX);
-  const r = ~~((touch.clientY - rect.top) / stepY);
+  const c = ~~((x - rect.left) / stepX);
+  const r = ~~((y - rect.top) / stepY);
   if (r < 0 || r >= rows || c < 0 || c >= cols) return -1;
   return r * cols + c;
 }
