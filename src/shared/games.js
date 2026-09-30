@@ -16,6 +16,7 @@ import masterDict from '@/games/master/i18n';
 import sortDict from '@/games/sort/i18n';
 import downDict from '@/games/down/i18n';
 import slideDict from '@/games/slide/i18n';
+import alchemyDict from '@/games/alchemy/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -181,6 +182,17 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 2,
   },
+  {
+    id: 'alchemy',
+    path: '/alchemy',
+    icon: 'i-mdi-flask-outline',
+    accent: 'card',
+    helpKey: '__poker_alchemy__help_showed',
+    // 两种模式各记一份：1 = 闯关（记最高关卡）、2 = 无尽（记最高分）
+    recordsPrefix: '__poker_alchemy__best_',
+    minDifficulty: 1,
+    maxDifficulty: 2,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -201,6 +213,7 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['sudoku', sudokuDict],
   ['master', masterDict],
   ['sort', sortDict],
+  ['alchemy', alchemyDict],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

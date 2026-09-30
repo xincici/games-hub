@@ -41,5 +41,6 @@ export default defineConfig({
     'i-mdi-test-tube',
     'i-mdi-format-vertical-align-bottom',
     'i-mdi-arrow-all',
+    'i-mdi-flask-outline',
   ],
 });

@@ -94,10 +94,10 @@ const cards = computed(() => order.value.map(id => {
   };
 }));
 
-// 蜂窝布局：按行分组，2/3/2/3/2/3/2 交替让每行都咬合（正好 17 个位置，与游戏数一致）。
+// 蜂窝布局：按行分组，3/2/3/2/3/2/3 交替让每行都咬合（正好 18 个位置，与游戏数一致）。
 // 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
 // 此时给该行加半格横向错位，保持蜂窝咬合
-const ROW_SIZES = [2, 3, 2, 3, 2, 3, 2];
+const ROW_SIZES = [3, 2, 3, 2, 3, 2, 3];
 const rows = computed(() => {
   const list = cards.value;
   const groups = [];
