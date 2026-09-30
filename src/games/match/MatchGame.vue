@@ -48,7 +48,7 @@
           :key="card.id"
           class="tile"
           :class="{ flipped: card.flipped, matched: card.matched, settled: card.settled }"
-          :style="{ animationDelay: `${idx * 25}ms` }"
+          :style="{ animationDelay: `${(Math.floor(idx / cols) + (idx % cols)) * 25}ms` }"
           @click="onCardClick(card)"
         >
           <div class="card-inner">

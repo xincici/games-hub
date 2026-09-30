@@ -176,27 +176,20 @@ const boardStyle = computed(() => {
   };
 });
 
-// 发牌序号：按阅读顺序只数有牌的格子，空白格不占号，让入场节奏均匀
-const tileOrder = computed(() => {
-  const order = new Map();
-  let idx = 0;
-  board.value.forEach((row, r) => row.forEach((cell, c) => {
-    if (cell) order.set(`${r},${c}`, idx++);
-  }));
-  return order;
-});
+// 入场错峰序号 = 行 + 列：左上 → 右下的斜向波浪（同一条斜线上的牌一起出现）。
+// 以前是按阅读顺序编号，看起来是「一行一行往下刷」
 function tileIndex(r, c) {
-  return tileOrder.value.get(`${r},${c}`) || 0;
+  return r + c;
 }
 
 // 触发逐个入场动画；totalDelay 后结束（动画本身 0.35s）
 function startDealing() {
   clearTimeout(dealTimer);
   dealing.value = true;
-  const count = tileOrder.value.size;
+  // 最长延迟 = (行数 + 列数 - 2) × 25ms，再加动画本身的 0.35s
   dealTimer = setTimeout(() => {
     dealing.value = false;
-  }, count * 25 + 350);
+  }, (conf.value.rows + conf.value.cols) * 25 + 350);
 }
 
 // ---------- 空闲提示 ----------

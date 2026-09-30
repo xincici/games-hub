@@ -475,13 +475,14 @@ function playDeal() {
   if (!gems.value.length) return;
   clearTimeout(dealTimer);
   dealing = true;
-  const rank = new Map();
-  [...gems.value].sort((a, b) => a.idx - b.idx).forEach((g, i) => rank.set(g.id, i));
-  gems.value = gems.value.map(g => ({ ...g, dealIdx: rank.get(g.id) }));
+  const { cols, rows } = conf.value;
+  // 错峰序号 = 行 + 列：左上 → 右下的斜向波浪（同一条斜线上的牌一起出现）。
+  // 以前是按 idx 排序的行优先序号，看起来是「一行一行往下刷」
+  gems.value = gems.value.map(g => ({ ...g, dealIdx: ~~(g.idx / cols) + (g.idx % cols) }));
   dealTimer = setTimeout(() => {
     dealing = false;
     gems.value = gems.value.map(({ dealIdx, ...g }) => g);
-  }, gems.value.length * 16 + 400);
+  }, (rows + cols) * 16 + 400);
 }
 
 // ---------- 交互 ----------
