@@ -6,7 +6,7 @@ export const ROWS = 8;
 export const COLS = 6;
 
 // 只用这 5 种：颜色区分度高，一屏里能一眼扫出目标
-export const GLYPHS = ['🍎', '🍋', '🍇', '🥝', '🫐'];
+export const GLYPHS = ['🍎', '🍋', '🍇', '🍏', '🫐'];
 export const KINDS = GLYPHS.length;
 
 export const START_ROWS = 2;              // 开局底部先摆几排
