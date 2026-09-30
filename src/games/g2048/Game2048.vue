@@ -1,5 +1,5 @@
 <template>
-  <div class="wrapper" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+  <div class="wrapper" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerUp">
     <TopHeader @onScoreReset="onScoreReset" />
     <div class="card score-area">
       <div class="stat">
@@ -25,9 +25,15 @@
         <div class="cell" v-for="idx in SIZE * SIZE" :key="`bg-${idx}`"></div>
         <div
           class="cell tile"
-          v-for="tile in tiles"
+          v-for="tile in renderTiles"
           :key="tile.id"
-          :class="[`v-${tile.value > 2048 ? 2048 : tile.value}`, { merged: tile.merged, dealt: tile.dealIdx != null }]"
+          :class="[`v-${tile.value > 2048 ? 2048 : tile.value}`, {
+            ghost: tile.ghost,
+            merging: tile.merging,
+            popping: popping.has(tile.id),
+            dealt: tile.dealIdx != null,
+            'is-new': tile.isNew,
+          }]"
           :style="tileStyle(tile)"
         >
           {{ tile.value }}
@@ -44,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
@@ -60,13 +66,24 @@ const DEAL_STEP = 45;
 const DEAL_STEP_FEW = 140;
 const DEAL_MS = 280;
 const DEAL_TAIL = 120;
+// 滑动 / 合并的节奏（MOVE_MS 必须与 CSS 里 .tile 的 transition 时长一致）
+const MOVE_MS = 130;
+const POP_MS = 190;
 
 const score = ref(0);
 const bestScore = ref(+(localStorage.getItem(BEST_KEY) || 0));
 const gameResult = ref(GAMING);
 const newBest = ref(false);
 const tiles = ref([]);
+// 合并掉的那两张牌：仍然渲染（保持同一个 DOM 节点，所以能从原格滑到目标格），
+// 落定后由合并出来的新牌顶替。**不能塞进 tiles** —— tiles 是局面状态，
+// 会被存档 watch 与 emptyCells/checkLose 读，多出来的牌会让局面错乱
+const ghosts = ref([]);
+const popping = ref(new Set());
 let tileId = 0;
+let moveTimer = 0;
+let popTimer = 0;
+const renderTiles = computed(() => (ghosts.value.length ? [...tiles.value, ...ghosts.value] : tiles.value));
 let winShown = false;
 let dealing = false;
 let dealTimer = null;
@@ -126,6 +143,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keyup', onKeyUp);
   clearTimeout(dealTimer);
+  clearTimeout(moveTimer);
+  clearTimeout(popTimer);
 });
 
 function onKeyUp(e) {
@@ -204,7 +223,9 @@ function emptyCells() {
   return cells;
 }
 
-function spawnTile() {
+// fresh = 局中新生成的牌：延时缩放淡入（开局那两张走 playDeal 的逐张入场，
+// 这条不参与，否则两个 animation 会互相顶掉）
+function spawnTile(fresh = false) {
   const cells = emptyCells();
   if (!cells.length) return;
   const [row, col] = cells[~~(Math.random() * cells.length)];
@@ -213,7 +234,7 @@ function spawnTile() {
     row,
     col,
     value: Math.random() < 0.9 ? 2 : 4,
-    merged: false,
+    isNew: fresh,
   });
 }
 
@@ -241,6 +262,8 @@ function move(dir) {
     return acc;
   }, {});
   const next = [];
+  const ghostList = [];
+  const mergedIds = [];
   let moved = false;
 
   linesOf(dir).forEach(line => {
@@ -260,22 +283,51 @@ function move(dir) {
       if (first.row !== row || first.col !== col) moved = true;
       if (second) {
         moved = true;
-        next.push({ id: ++tileId, row, col, value: first.value * 2, merged: true });
+        // 合并牌是**新牌**（新 id），滑行期间先隐身（.merging），落定后才弹出来；
+        // 被吃掉的两张各自留一个幽灵，带着原来的数字滑到目标格再消失
+        next.push({ id: ++tileId, row, col, value: first.value * 2, merging: true });
+        // 幽灵先记下「自己原来在哪」，渲染时先放原位、下一个微任务再挪到目标格（FLIP）——
+        // 直接放目标格的话，如果这一步 Vue 重建了节点就完全没有过渡起点，等于瞬移
+        ghostList.push({ id: first.id, row: first.row, col: first.col, toRow: row, toCol: col, value: first.value, ghost: true });
+        ghostList.push({ id: second.id, row: second.row, col: second.col, toRow: row, toCol: col, value: second.value, ghost: true });
+        mergedIds.push(next[next.length - 1].id);
       } else {
-        next.push({ id: first.id, row, col, value: first.value, merged: false });
+        next.push({ id: first.id, row, col, value: first.value });
       }
     });
   });
 
   if (!moved) return;
+  // 上一手的幽灵 / 弹出还没收尾就再来一步：先收干净（放在 moved 判断之后，
+  // 无效方向不会把正在进行的合并动画打断成「永远隐身」）
+  clearTimeout(moveTimer);
+  clearTimeout(popTimer);
+  popping.value = new Set();
+  ghosts.value = ghostList;
   tiles.value = next;
+  // 等 DOM 更新后强制重排（锚定「原位」这个起点），再把幽灵挪到目标格，让过渡真的跑起来
+  nextTick(() => {
+    void document.querySelector('.grid')?.offsetWidth;
+    ghosts.value = ghosts.value.map(g => (g.ghost ? { ...g, row: g.toRow, col: g.toCol } : g));
+  });
   score.value = Math.max(...tiles.value.map(t => t.value));
   if (score.value > bestScore.value) {
     bestScore.value = score.value;
     localStorage.setItem(BEST_KEY, score.value);
     newBest.value = true;
   }
-  spawnTile();
+  spawnTile(true);
+  // 滑行结束后：撤掉幽灵，让合并出来的牌弹一下
+  moveTimer = setTimeout(() => {
+    ghosts.value = [];
+    if (mergedIds.length) {
+      // 同时摘掉 merging：它只是「滑行期间隐身」的数据标记，
+      // 留着的话弹出动画一结束就回落到 opacity:0，合并牌会当场消失
+      tiles.value = tiles.value.map(t => (t.merging ? { ...t, merging: false } : t));
+      popping.value = new Set(mergedIds);
+      popTimer = setTimeout(() => { popping.value = new Set(); }, POP_MS);
+    }
+  }, MOVE_MS);
   if (!winShown && tiles.value.some(t => t.value >= WIN_VAL)) {
     winShown = true;
     gameResult.value = WIN;
@@ -303,15 +355,22 @@ function keepGoing() {
   gameResult.value = GAMING;
 }
 
-let touchStartX = 0;
-let touchStartY = 0;
-function onTouchStart(e) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+// 滑动走 **Pointer Events**：鼠标 / 触摸 / 笔一套事件。原来只监听 touch 事件，
+// 于是在 PC 上拿鼠标拖完全没有反应（只有方向键能用）
+let dragStartX = 0;
+let dragStartY = 0;
+let dragId = -1;
+function onPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;   // 右键 / 中键不参与
+  dragId = e.pointerId;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
 }
-function onTouchEnd(e) {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
+function onPointerUp(e) {
+  if (e.pointerId !== dragId) return;
+  dragId = -1;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
   if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
   if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
   else move(dy > 0 ? 'down' : 'up');
@@ -319,21 +378,28 @@ function onTouchEnd(e) {
 </script>
 
 <style scoped lang="scss">
-@keyframes pop {
-  from {
-    transform: scale(0.4);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
 @keyframes deal-in {
   from {
     transform: scale(0.2);
     opacity: 0;
   }
   to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+// 合并落定：从半透明的小尺寸弹到略大于一格再收回来（经典 2048 的「合出来」手感）
+@keyframes merge-pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.16);
+    opacity: 1;
+  }
+  100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -349,6 +415,9 @@ function onTouchEnd(e) {
   display: flex;
   flex-direction: column;
   align-items: center;
+  // 滑动的手势归本页所有：没有这条，浏览器（尤其是装成桌面应用后）会把手势
+  // 当成滚页面 / 拖窗口收走，滑动中途收到 touchcancel，牌就永远不动
+  touch-action: none;
   button {
     touch-action: manipulation;
   }
@@ -462,10 +531,24 @@ function onTouchEnd(e) {
       // 只有 1.5~1.7:1，因此这里回到经典色阶并逐档保证 ≥3:1（大号粗体阈值）
       color: #776e65;
       background: #eee4da;
-      transition: left 0.12s ease-in-out, top 0.12s ease-in-out;
+      // 时长与 JS 里的 MOVE_MS 对齐：存活牌换格、以及下面两个幽灵滑向目标格都靠它
+      transition: left 0.13s ease-in-out, top 0.13s ease-in-out;
       z-index: 1;
-      &.merged {
-        animation: 0.16s ease-in-out pop;
+      // 被合并掉的两张：滑到目标格后就地消失（那一刻合并牌正好弹出来盖住它）
+      &.ghost {
+        z-index: 0;
+      }
+      // 合并出来的新牌：滑行期间隐身，等 popping 触发才弹出
+      &.merging {
+        opacity: 0;
+      }
+      &.popping {
+        animation: 0.19s ease-out merge-pop;
+        z-index: 2;
+      }
+      // 局中新生成的牌：等滑行结束（130ms）再缩放淡入
+      &.is-new {
+        animation: 0.18s ease-out 0.13s backwards deal-in;
       }
       // 开局 / 恢复存档：按行列顺序逐张弹出（间隔由 animationDelay 控制，
       // backwards 填充保证轮到自己之前先隐身）
