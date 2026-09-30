@@ -305,9 +305,13 @@ export function thawTargets(board, cols, rows, cleared) {
 }
 
 // 把要解冻的格子写回它下面那种 emoji（保留在原来的位置，不参与本轮消除）
+// **只化「还在盘面上的冰块」**：同一轮里已经被消除的格子是 null，不能在这里复活。
+// 冰块被炸弹波及时会同时落进 cleared 和 thawed（炸弹 3×3 里的冰必然紧邻炸弹格），
+// 老写法会给它算出 frozenKind(null) = -100，也就是一块「冰下是 0 号 emoji」的假冰 ——
+// 表现就是「炸到的冰没碎、还留在盘面上」
 export function applyThaw(board, thawed) {
   if (!thawed.size) return board;
-  return board.map((v, i) => (thawed.has(i) ? frozenKind(v) : v));
+  return board.map((v, i) => (thawed.has(i) && isFrozen(v) ? frozenKind(v) : v));
 }
 
 // ---------- 交换校验 ----------
