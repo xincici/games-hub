@@ -40,7 +40,7 @@
           v-for="t in tiles"
           :key="t.id"
           class="tile"
-          :class="{ dragging: isDragging(t), popping: t.popping, shaking: shakeKind === t.kind, shuffling }"
+          :class="{ dragging: isDragging(t), popping: t.popping, shaking: shakeKind === t.kind, shuffling, dealing: dealing && !t.popping }"
           :style="tileStyle(t)"
         >
           <span class="tile-body">{{ GLYPHS[(t.kind - 1) % GLYPHS.length] }}</span>
@@ -115,6 +115,10 @@ const tiles = ref([]);          // [{ id, kind, r, c, popping }]
 const elapsed = ref(0);
 const shakeKind = ref(0);
 const shuffling = ref(false);   // 死局重排中（所有牌播打乱动画 + 顶部提示）
+const dealing = ref(false);     // 开局 / 恢复存档的逐张入场（斜向波浪）
+// 入场错峰：按 (行 + 列) 排波浪，第几张就延迟几个 DEAL_STEP
+const DEAL_STEP = 28;
+const DEAL_MS = 320;
 const comboTip = ref(null);     // { id, n } 棋盘上方那条「N 连击」
 const combo = ref(0);           // 当前连到几（1 = 刚消一对，0 = 没有连击在进行）
 const confirming = ref(false);
@@ -124,6 +128,7 @@ const timerRef = ref(null);
 let tileId = 0;
 let shakeTimer = null;
 let shuffleTimer = null;
+let dealTimer = null;
 let lastClearAt = 0;            // 上一次消除的时刻
 let comboBroken = false;        // 上一次消除之后是否出现过无效操作
 let comboTimer = null;          // 窗口到期就断开
@@ -184,6 +189,8 @@ function tileStyle(t) {
     transform: `translate3d(${((t.c + dc) * c).toFixed(2)}px, ${((t.r + dr) * c).toFixed(2)}px, 0)`,
     // 重排动画的错峰序号（左上先动）
     '--shuffle-i': (t.r + t.c) % 10,
+    // 入场动画的错峰序号：按 (行 + 列) 排成一条斜向波浪（左上先出现）
+    '--deal-i': t.r + t.c,
   };
 }
 
@@ -195,12 +202,25 @@ function isDragging(t) {
 
 // ---------- 关卡流程 ----------
 
+// 开局与恢复存档都逐张入场：动画挂在内层 .tile-body 上（外层 .tile 的 transform
+// 是「自己在哪一格」，动画一旦写在外层就会把位置顶掉，牌会全堆到左上角）
+function playDeal() {
+  if (!tiles.value.length) return;
+  clearTimeout(dealTimer);
+  dealing.value = true;
+  const span = (conf.value.rows + conf.value.cols) * DEAL_STEP + DEAL_MS;
+  dealTimer = setTimeout(() => { dealing.value = false; }, span);
+}
+
 function startLevel(lv, restored = null) {
   generation += 1;
   clearTimeout(shakeTimer);
   clearTimeout(shuffleTimer);
   shuffleTimer = null;
+  clearTimeout(dealTimer);
+  dealTimer = null;
   shuffling.value = false;
+  dealing.value = false;
   breakCombo();
   shakeKind.value = 0;
   drag.value = null;
@@ -227,6 +247,7 @@ function startLevel(lv, restored = null) {
   timerRef.value?.reset();
   if (elapsed.value) timerRef.value?.restore(elapsed.value);
   save();
+  playDeal();
   if (!restored) return;
   // 还原的局面可能是死局（比如存档正好停在卡死的一步上）→ 下一帧再查，等牌先渲染出来
   requestAnimationFrame(() => checkDeadlock());
@@ -477,6 +498,7 @@ onUnmounted(() => {
   generation += 1;
   clearTimeout(shakeTimer);
   clearTimeout(shuffleTimer);
+  clearTimeout(dealTimer);
   clearTimeout(comboTimer);
   clearTimeout(comboTipTimer);
   window.removeEventListener('pointermove', onPointerMove);
@@ -533,6 +555,11 @@ function restore() {
   0% { transform: scale(1); opacity: 1; }
   35% { transform: scale(1.16); opacity: 1; }
   100% { transform: scale(0.12) rotate(30deg); opacity: 0; }
+}
+
+@keyframes tile-deal {
+  0% { transform: scale(0.2); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes tile-shake {
@@ -686,6 +713,12 @@ function restore() {
     &.shuffling .tile-body {
       animation: tile-reshuffle 0.55s ease-in-out both;
       animation-delay: calc(var(--shuffle-i, 0) * 22ms);
+    }
+    // 开局 / 恢复存档：斜向波浪逐张弹出（延迟按 (行 + 列) 错开，左上先出现）。
+    // **只能动内层 .tile-body**：外层的 transform 是这张牌在第几行第几列
+    &.dealing .tile-body {
+      animation: tile-deal 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      animation-delay: calc(var(--deal-i, 0) * 28ms);
     }
   }
   .tile-body {
