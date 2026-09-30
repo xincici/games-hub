@@ -25,8 +25,8 @@
         <div class="divider"></div>
       </template>
       <div class="stat">
-        <span class="stat-label">{{ i18n('left') }}</span>
-        <span class="stat-value">{{ mode === 1 ? cardsLeft : '♾️' }}</span>
+        <span class="stat-label">{{ i18n(mode === 1 ? 'left' : 'used') }}</span>
+        <span class="stat-value">{{ mode === 1 ? cardsLeft : played }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
@@ -152,6 +152,9 @@ const FX = { four: 'big', straightFlush: 'big', three: 'burst' };
 const mode = ref(+(localStorage.getItem(MODE_KEY) || 1));   // 1 闯关 / 2 无尽
 const level = ref(1);
 const score = ref(0);
+// 已用牌数（无尽模式用）：无尽牌堆会被裁剪（见 advanceHand），「还剩几张」没有意义；
+// 单独计数并写进存档，跟着局面一起走
+const played = ref(0);
 const bestScore = ref(0);
 const phase = ref(PLAY);
 const board = ref(new Array(CELLS).fill(null));
@@ -169,7 +172,7 @@ const flyingTo = ref(-1);
 const busy = ref(false);
 
 const cfg = computed(() => levelConfig(level.value));
-// 第三个统计格：闯关显示还剩多少张牌，无尽显示无穷
+// 第二格：闯关显示还剩多少张牌，无尽显示已经用掉多少张（都是「牌数」）
 const cardsLeft = computed(() => Math.max(0, pile.value.length - cursor.value));
 const hand = computed(() => pile.value[cursor.value] || null);
 const preview = computed(() => pile.value.slice(cursor.value + 1, cursor.value + 1 + PREVIEW));
@@ -257,6 +260,7 @@ function cardProps(c) {
 function startLevel(lv) {
   level.value = Math.max(1, lv);
   score.value = 0;
+  played.value = 0;
   phase.value = PLAY;
   board.value = new Array(CELLS).fill(null);
   clearing.value = new Map();
@@ -283,6 +287,7 @@ function startLevel(lv) {
 
 function startEndless() {
   score.value = 0;
+  played.value = 0;
   phase.value = PLAY;
   board.value = new Array(CELLS).fill(null);
   clearing.value = new Map();
@@ -349,6 +354,7 @@ function save() {
       mode: mode.value,
       level: level.value,
       score: score.value,
+      played: played.value,
       phase: phase.value,
       board: board.value.map(c => (c ? pack(c) : null)),
       pile: pile.value.map(pack),
@@ -378,6 +384,7 @@ function restore() {
     cursor.value = Math.min(Math.max(0, +saved.cursor || 0), Math.max(0, pile.value.length - 1));
     level.value = Math.max(1, +saved.level || 1);
     score.value = Math.max(0, +saved.score || 0);
+    played.value = Math.max(0, +saved.played || 0);
     phase.value = saved.phase;
     ensurePile(cursor.value + 1 + PREVIEW);
     return true;
@@ -395,6 +402,7 @@ function commitPlacement(idx, card) {
 
 function advanceHand() {
   cursor.value += 1;
+  played.value += 1;
   // 无尽模式的牌堆是无限的：丢掉已经翻过去的牌，否则存档会越存越大
   if (mode.value === 2 && cursor.value > 8) {
     pile.value = pile.value.slice(cursor.value - 1);
