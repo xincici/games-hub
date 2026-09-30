@@ -9,7 +9,7 @@
           <p class="confirm-msg">{{ msgText }}</p>
           <div class="confirm-actions">
             <button class="confirm-cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
-            <button class="confirm-replay" @click="emit('replay')">{{ replayLabel }}</button>
+            <button v-if="showReplay" class="confirm-replay" @click="emit('replay')">{{ replayLabel }}</button>
             <button class="confirm-ok" @click="emit('confirm')">{{ okLabel }}</button>
           </div>
         </div>
@@ -21,6 +21,7 @@
 <script setup>
 // 各游戏共用的二次确认弹窗（闯关游戏的「新游戏」用它，文案与样式都只有这一份）。
 // 三个按钮：取消 / 重玩本关 / 确定重来 —— 「重玩本关」= 只重开当前这一关、保留闯关进度。
+// 没有「本关」概念的模式（如扑克炼金术的无尽模式）传 showReplay=false 把中间那个按钮去掉。
 // 用法：<ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="replayLevel"
 //                      @cancel="confirming = false" />
 // 需要换文案时传 title / message / confirmText / replayText / cancelText 覆盖即可。
@@ -34,6 +35,8 @@ const props = defineProps({
   message: { type: String, default: '' },
   confirmText: { type: String, default: '' },
   replayText: { type: String, default: '' },
+  // false 时不渲染「重玩本关」按钮（默认 true，其它闯关游戏不受影响）
+  showReplay: { type: Boolean, default: true },
   cancelText: { type: String, default: '' },
 });
 
