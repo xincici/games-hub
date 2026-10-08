@@ -311,7 +311,7 @@ function onVisibility() {
 .game-list {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 84px 16px 24px;
+  padding: 64px 16px 24px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
