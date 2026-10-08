@@ -87,8 +87,6 @@
         <span class="celebrate-text">{{ celebration.name }}</span>
         <span class="celebrate-score">+{{ celebration.gained }}</span>
       </div>
-      <!-- 提示条：放在棋盘外（棋盘有 overflow: hidden，放里面会被裁掉） -->
-      <div v-if="toast" class="toast">{{ toast }}</div>
       <div v-if="phase !== 'play'" class="result" :class="phase === 'won' ? 'win' : 'lose'">
         <template v-if="phase === 'won'">
           <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
@@ -151,8 +149,10 @@ const LEVEL_KEY = '__poker_alchemy__level';
 const STATE_KEY = '__poker_alchemy__state';
 const BEST_KEY = '__poker_alchemy__best_';
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
-// 庆祝档位（与 board.js 的 COMBOS[].fx 一致）：四条 / 同花顺最强、三条次之，其余不弹浮字
-const FX = { four: 3, straightFlush: 3, three: 2 };
+// 中央得分浮字的档位（按分数大小放大）：≥1000 最强、≥500 次之、其余基础档
+const TIER_BY_SCORE = score => (score >= 1000 ? 3 : score >= 500 ? 2 : 1);
+// 低于这个分数的得分只弹浮字，不震屏、不闪光、不撒花
+const FX_MIN = 300;
 
 const mode = ref(+(localStorage.getItem(MODE_KEY) || 1));   // 1 闯关 / 2 无尽
 const level = ref(1);
@@ -166,7 +166,6 @@ const board = ref(new Array(CELLS).fill(null));
 const pile = ref([]);        // 已知的牌堆（闯关：整副；无尽：按需追加）
 const cursor = ref(0);       // pile 里当前手牌的下标
 const confirming = ref(false);
-const toast = ref('');
 const shaking = ref(false);
 // 大牌型的庆祝浮字（同消消乐：按档位放大、中央弹出、自动消失）
 const celebration = ref(null);
@@ -266,6 +265,7 @@ function cardProps(c) {
 
 // ---------- 关卡 / 开局 ----------
 function startLevel(lv) {
+  clearTimeout(endTimer);   // 上一局延后待出的结算层作废
   level.value = Math.max(1, lv);
   score.value = 0;
   played.value = 0;
@@ -273,7 +273,6 @@ function startLevel(lv) {
   board.value = new Array(CELLS).fill(null);
   clearing.value = new Map();
   cursor.value = 0;
-  toast.value = '';
   shaking.value = false;
   resetUid();
   uidCounter = 0;
@@ -294,13 +293,13 @@ function startLevel(lv) {
 }
 
 function startEndless() {
+  clearTimeout(endTimer);   // 上一局延后待出的结算层作废
   score.value = 0;
   played.value = 0;
   phase.value = PLAY;
   board.value = new Array(CELLS).fill(null);
   clearing.value = new Map();
   cursor.value = 0;
-  toast.value = '';
   shaking.value = false;
   uidCounter = 0;
   pile.value = [];
@@ -337,7 +336,6 @@ function toggleMode() {
   save();
   mode.value = mode.value === 1 ? 2 : 1;
   localStorage.setItem(MODE_KEY, String(mode.value));
-  toast.value = '';
   if (mode.value === 1) {
     level.value = Math.max(1, +(localStorage.getItem(LEVEL_KEY) || 1));
     bestScore.value = +(localStorage.getItem(BEST_KEY + 1) || 0);
@@ -506,16 +504,19 @@ function settle() {
     clearing.value = gone;
     clearTimeout(clearTimer);
     clearTimer = setTimeout(() => { clearing.value = new Map(); save(); }, 520);
-    const name = i18n(`combo${best.combo.id[0].toUpperCase()}${best.combo.id.slice(1)}`);
-    if (FX[best.combo.id]) announceCelebration(best.combo.id, gained);
-    else showToast(`${name} +${gained}`);
+    announceCelebration(best.combo.id, gained);
   }
-  checkEnd();
-  save();
+  // 结算层要等中央得分浮字消失之后再出现（没有浮字就立即结算）
+  const wait = celebration.value ? celebrateLife(celebration.value.tier) : 0;
+  clearTimeout(endTimer);
+  if (wait) endTimer = setTimeout(() => { checkEnd(); save(); }, wait);
+  else { checkEnd(); save(); }
 }
 
-// ---------- 大牌型的即时庆祝（照消消乐那一套）----------
-// 四条 / 同花顺 / 三条消除时：棋盘震一下 + 外圈闪一圈光 + 中央弹出牌型名与本次得分 + 撒一把花
+// ---------- 得分庆祝（照消消乐那一套）----------
+// 每一次得分都在棋盘中央弹出「牌型名 + 本次得分」的浮字（按分数分档放大）；
+// 得分 ≥ 300 时再加：棋盘震一下 + 外圈闪一圈光 + 撒一把花；低于 300 只有浮字。
+// 返回浮字的存活时长，结算层要等它消失后再出现。
 function shakeBoard() {
   clearTimeout(shakeTimer);
   shaking.value = false;
@@ -525,10 +526,10 @@ function shakeBoard() {
   shakeTimer = setTimeout(() => { shaking.value = false; }, 340);
 }
 
+const celebrateLife = tier => 1100 + tier * 220;
+
 function announceCelebration(id, gained) {
-  const tier = FX[id];
-  if (!tier) return;
-  shakeBoard();
+  const tier = TIER_BY_SCORE(gained);
   celebration.value = {
     id: ++celebrationId,
     tier,
@@ -536,7 +537,10 @@ function announceCelebration(id, gained) {
     name: i18n(`combo${id[0].toUpperCase()}${id.slice(1)}`),
   };
   clearTimeout(celebrateTimer);
-  celebrateTimer = setTimeout(() => { celebration.value = null; }, 1100 + tier * 220);
+  celebrateTimer = setTimeout(() => { celebration.value = null; }, celebrateLife(tier));
+  // 低于 300 分：只有浮字，不震屏、不闪光、不撒花
+  if (gained < FX_MIN) return;
+  shakeBoard();
   // 棋盘外圈闪光：与震动的 shaking 是两套独立样式（一个动 box-shadow、一个动 transform）
   clearTimeout(flashTimer);
   celebrating.value = false;
@@ -546,14 +550,10 @@ function announceCelebration(id, gained) {
   burstConfetti(tier);
 }
 
-function showToast(text) {
-  toast.value = text;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.value = ''; }, 1500);
-}
-
-// silent = true 时只补结算层、不播撒花（退出再进入时不该再放一次烟花）
+// silent = true 时只补结算层、不播撒花（退出再进入时不该再放一次烟花）。
+// 只有还在 PLAY 才结算：结算层是延后出现的，重复触发不能重复撒花
 function checkEnd(silent = false) {
+  if (phase.value !== PLAY) return;
   if (mode.value === 1) {
     if (score.value >= cfg.value.target) {
       phase.value = WON;
@@ -613,11 +613,11 @@ function cellAt(x, y) {
 
 // ---------- 生命周期 ----------
 let shakeTimer = 0;
-let toastTimer = 0;
 let clearTimer = 0;
 let flyTimer = 0;
 let celebrateTimer = 0;
 let flashTimer = 0;
+let endTimer = 0;
 let celebrationId = 0;
 
 function onResize() {
@@ -646,11 +646,11 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', onResize);
   clearTimeout(shakeTimer);
-  clearTimeout(toastTimer);
   clearTimeout(clearTimer);
   clearTimeout(flyTimer);
   clearTimeout(celebrateTimer);
   clearTimeout(flashTimer);
+  clearTimeout(endTimer);
   save();
 });
 </script>
@@ -681,10 +681,6 @@ onUnmounted(() => {
 @keyframes card-in {
   from { transform: scale(0.24); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
-}
-@keyframes toast-in {
-  from { transform: translate(-50%, 6px) scale(0.9); opacity: 0; }
-  to { transform: translate(-50%, 0) scale(1); opacity: 1; }
 }
 
 .wrapper {
@@ -879,22 +875,6 @@ onUnmounted(() => {
         box-shadow: 0 8px 26px var(--celebrate-glow), 0 0 0 4px var(--celebrate-glow);
         .celebrate-text { font-size: 24px; }
       }
-    }
-    .toast {
-      position: absolute;
-      left: 50%;
-      top: -12px;
-      transform: translate(-50%, 0);
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: var(--card-bg-color);
-      box-shadow: var(--shadow-soft);
-      font-size: 14px;
-      font-weight: bold;
-      color: var(--primary-bg);
-      white-space: nowrap;
-      pointer-events: none;
-      animation: toast-in 0.2s ease-out;
     }
     .result {
       position: absolute;

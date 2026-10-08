@@ -57,11 +57,17 @@
 - **无尽**：牌堆无限，直到 16 格全部放满（再也放不下任何牌）才结束，记录最高分。
   无尽模式点「新游戏」二次确认后**只清已用牌数与当前得分，最高分保留**（闯关模式仍是清记录 + 回第 1 关）。
 
-**大牌型的即时庆祝照抄消消乐**（四条 / 同花顺 / 三条消除时一起触发）：棋盘**震一下**（`.board.shaking`
-播 `board-shake`）+ 外圈**闪一圈光**（`.board.celebrating` 播 `board-celebrate`，与震动一个动 transform、
-一个动 box-shadow，同时发生不互相顶掉）+ 中央弹出**牌型名与本次得分**的浮字（`.celebrate`，按档位放大：
-三条 `tier-2`、四条/同花顺 `tier-3`）+ `burstConfetti(tier)` 撒一把花。低分牌型只在棋盘上方浮一条轻提示（`toast`），
-不弹浮字。**过关仍是 `confetti()`**（共用的大撒花，与消消乐同一份实现）。
+**得分庆祝照抄消消乐**：**每一次得分**都在棋盘中央弹出「牌型名 + 本次得分」的浮字（`.celebrate`，
+`celebrate-pop` 0.95s 播完即消失）；**得分 ≥ 300** 时再加三样 —— 棋盘**震一下**（`.board.shaking` 播
+`board-shake`）+ 外圈**闪一圈光**（`.board.celebrating` 播 `board-celebrate`，与震动一个动 transform、
+一个动 box-shadow，同时发生不互相顶掉）+ `burstConfetti(tier)` 撒一把花。**低于 300 分只有浮字**，
+不震屏、不闪光、不撒花。档位按**本次得分**分：≥1000 → `tier-3`、≥500 → `tier-2`、其余 `tier-1`。
+**过关仍是 `confetti()`**（共用的大撒花，与消消乐同一份实现）。
+
+**结算层要等得分浮字消失后再出现**：`settle()` 末尾不直接 `checkEnd()`，而是按浮字存活时长
+（`celebrateLife(tier) = 1100 + tier*220` ms）`setTimeout` 延迟；没有得分（如无尽满盘）时立即结算。
+`checkEnd()` 开头加了 `if (phase.value !== PLAY) return` —— 延迟期间玩家还能落子、可能再次触发，
+没有这道保护就会重复撒花。
 
 ## 关卡曲线与难度标定
 
@@ -147,6 +153,11 @@
    并且传 `checkEnd(true)` **静默**执行 —— 否则每次退出再进入都会重播一次过关撒花。
    验证手法：`document.querySelectorAll('canvas').length`，1 = 只有全站粒子背景、2 = canvas-confetti 又建了一块，
    据此可区分「真的又撒花了」和「只是把结算层补出来」。
+6. **改文案/样式后必须确认构建真的过了**：验证脚本里写成 `vite build | tail -1 && vite preview` 时，
+   管道让退出码变成 `tail` 的（恒为 0），构建失败也照样启动 preview —— 于是会拿着**上一版 dist** 验证，
+   得到一组看起来「符合预期」的旧数据。本轮就踩了：脚本删 `@keyframes toast-in` 时多留了一个 `}`，
+   Sass 报 `unmatched "}"` 构建失败，而验证结果全是旧行为。改成 `vite build > /tmp/b.log 2>&1; echo $?`
+   并检查日志，才定位到。
 
 ## 存档（localStorage）
 
@@ -174,10 +185,11 @@
   提示）与三个按钮；无尽模式没有「关卡」概念，所以传 `:title` / `:message`（`endlessTitle` / `endlessMsg`：
   「🔄 重新开始？」「确认重新开始新的游戏吗？会清空最高分记录。」）并传 `:show-replay="false"` 去掉「重玩本关」按钮
   （这个开关是本作给 `ConfirmDialog` 新加的 prop，默认 true，其它闯关游戏不受影响）。
-- 大牌型庆祝浮字 `.celebrate` 绝对定位在 `.game-area` 正中（父容器 `position: relative`），
+- 得分浮字 `.celebrate` 绝对定位在 `.game-area` 正中（父容器 `position: relative`），
   主色底 + 白字 + `--celebrate-glow` 光圈，`celebrate-pop` 0.95s 播完即消失，`pointer-events: none` 不挡操作；
-  与结算浮层 `.result` 互不影响（z-index 3 / 结果层更高）。
+  与结算浮层 `.result` 互不影响（z-index 3 / 结果层更高），而且结算层本来就等它消失后才出现。
+  早期版本另有一条棋盘上方的轻提示 `.toast`（低分牌型用），现在所有得分都走中央浮字，`toast` 已删。
 - 结算浮层：胜利是「🔄 重玩本关（左）/ ➡️ 下一关（右）」，失败只有「🔄 重玩本关」；
   **两个按钮都用主色绿 `--primary-bg`**（早期版把重玩本关画成失败红，已按需求改掉，与其它闯关游戏一致）。
 - 棋盘是 16 个常驻网格格位（描边 + 半透明底），牌嵌在格位里四周各留 3px。
-- 棋盘套 `.dot-board`；消除时棋盘正中浮一条 1.5s 的提示（`toast`，放在棋盘外，`.board` 有 `overflow: hidden`）。
+- 棋盘套 `.dot-board`（点阵底纹来自 `App.vue` 的全局类，别再写 `background: var(--board-bg)`）。
