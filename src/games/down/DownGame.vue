@@ -513,6 +513,12 @@ function onScoreReset() {
     color: #fff;
     border: 0 none;
     border-radius: var(--radius-tile);
+    // 与贪吃蛇一致：暂停按钮在非进行中（尤其失败）时是 disabled，
+    // 光有 disabled 属性不够 —— 还得有这条样式，否则按钮看起来仍然是亮绿的可点状态
+    &:disabled {
+      background-color: #aaa;
+      cursor: not-allowed;
+    }
   }
   .game-area {
     position: relative;

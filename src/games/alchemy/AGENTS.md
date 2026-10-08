@@ -199,3 +199,24 @@
   **两个按钮都用主色绿 `--primary-bg`**（早期版把重玩本关画成失败红，已按需求改掉，与其它闯关游戏一致）。
 - 棋盘是 16 个常驻网格格位（描边 + 半透明底），牌嵌在格位里四周各留 3px。
 - 棋盘套 `.dot-board`（点阵底纹来自 `App.vue` 的全局类，别再写 `background: var(--board-bg)`）。
+
+## 候选区与格子高亮（本轮补充）
+
+- **候选区主次**：当前牌 `.card-slot.current` 套一圈主色描边（`outline: 2px solid var(--primary-bg)`，
+  `outline-offset: 1px`），后面两张 `.card-slot.next` 压到 `opacity: 0.55`；缩放 `PREVIEW_SCALE = [0.8, 0.6]`
+  （实测渲染宽 44 → 35 → 26，相对 0.8 / 0.6）。
+- **格内那张牌要真正居中**：`CardItem` 的 `.card` 是「content-box + 1px 描边」且 `position: absolute;
+  left/top: 0`，外框比它自己的 wrapper 大 2px、多出来的全落在右下 —— 实测格内是「左 3px / 右 1px、
+  上 3px / 下 1px」。补一条 `.board .cell :deep(.card) { left: -1px; top: -1px }` 往左上各挪 1px 之后是
+  3 / 3 / 3 / 3，完全居中（候选区的槽位牌与槽等宽，**不能**跟着挪，所以规则只写在 `.board .cell` 下）。
+- **点击格子给实线高亮**：`onCellClick` 里记 `flashCell` + 450ms 后自动清掉，`.cell.flash` 把虚线/无边框
+  换成实线主色 + `box-shadow: 0 0 0 2px`（实测点击后 `solid rgb(35,128,78)`，450ms 后回到常态）。
+- **踩到的特异性坑**：那条 `.flash` 规则**不能**只写 `.board .cell.flash`。格子基础规则嵌在
+  `.wrapper > .game-area > .board > .cell` 里，编译出来是 `.wrapper .game-area .board .cell[data-v]`
+  （0,5,0），而 `.board .cell.flash[data-v]` 只有 0,4,0 —— 特异性更低，基础规则里那句
+  `border: 1px solid var(--tile-border-color)`（简写，连颜色一起覆盖）直接赢下来。
+  症状很有迷惑性：`box-shadow` 生效了（基础规则没设它）、`border-style: solid` 看着也"对"
+  （基础本来就是 solid），**只有边框色没变**。排查手法是在页内遍历 `document.styleSheets`、
+  把命中该元素且声明里带 `border` 的规则全列出来对比特异性。修法是把选择器提到同级：
+  `.wrapper .game-area .board .cell.flash`。
+

@@ -123,11 +123,16 @@ onUnmounted(() => {
 });
 
 function saveState() {
-  if (!started.value || gameResult.value !== GAMING || !food) return;
+  // 进行中与「已失败」两种局面都要落档：失败也存下来，退出重进才是同一个失败状态，
+  // 由玩家自己点「新游戏」，而不是一进来就自动重开
+  if (!started.value || !food) return;
+  if (gameResult.value !== GAMING && gameResult.value !== LOSE) return;
   localStorage.setItem(STATE_KEY, JSON.stringify({
     snake, dir, nextDir, food,
     score: score.value,
     difficulty: difficulty.value,
+    result: gameResult.value === LOSE ? 'lose' : 'gaming',
+    newBest: newBest.value,
   }));
 }
 
@@ -145,9 +150,18 @@ function restore() {
     nextDir = saved.nextDir || dir;
     food = saved.food;
     score.value = +saved.score || 0;
-    gameResult.value = GAMING;
-    newBest.value = false;
+    newBest.value = !!saved.newBest;
     started.value = true;
+    // 失败局面：还原成「已结束」的静止画面（不进暂停态、不起倒数），
+    // 等玩家自己点「新游戏」；进行中的局面仍照旧暂停 + 数 3 2 1
+    if (saved.result === 'lose') {
+      gameResult.value = LOSE;
+      paused.value = false;
+      stopTimer();
+      draw();
+      return true;
+    }
+    gameResult.value = GAMING;
     paused.value = true;
     draw();
     return true;
@@ -249,7 +263,7 @@ function tick() {
     || snake.some(([r, c]) => r === head[0] && c === head[1])) {
     gameResult.value = LOSE;
     stopTimer();
-    localStorage.removeItem(STATE_KEY);
+    saveState();          // 失败也落档（见 saveState 的注释）
     draw();
     return;
   }

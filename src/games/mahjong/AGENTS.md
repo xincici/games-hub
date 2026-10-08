@@ -164,3 +164,19 @@
 - 得分浮字 `.celebrate` 绝对定位在 `.game-area` 正中，主色底 + 白字，`celebrate-pop` 0.95s 播完即消失；
   连击时中间多一行 `.celebrate-chain`（「🔥 连击 ×N」，13px）。
 - 棋盘套 `.dot-board`（点阵底纹来自 `App.vue` 的全局类，别再写 `background: var(--board-bg)`）。
+
+## 候选区与格子高亮（本轮补充）
+
+- **候选区主次**：当前牌 `.tile-slot.current .mj` 套一圈主色描边（`outline: 2px solid var(--primary-bg)`，
+  `outline-offset: 1px`），下一张 `.preview` 压到 `opacity: 0.55`；缩放 `PREVIEW_SCALE = 0.8`
+  （实测渲染宽 44 → 35）。
+- **牌在格子里的垂直居中**：`boardTileW = min(格宽, 格高/1.5)` 只保证「牌面 + 厚度」塞得进格子，
+  但格子是居中排版、厚度画在元素外面，所以整块会**贴住下边缘**（实测上 7.25px / 下 0.15px）。
+  补一条 `.board .cell .mj { margin-bottom: calc(var(--mj-w) * 0.075) }`：flex 居中会把元素上移
+  「下外边距的一半」，正好等于厚度的一半，整块就回正了 —— 实测 6.47 / 6.48px，左右 7.5 / 7.5px。
+- **点击格子给实线高亮**：`onCellClick` 里记 `flashCell` + 450ms 后自动清掉（计时器 `cellFlashTimer`，
+  注意别和庆祝闪光用的 `flashTimer` 撞名），`.cell.flash` 换实线主色 + 光环。
+- **特异性坑同炼金术**：基础规则编译成 `.wrapper .game-area .board .cell[data-v]`（0,5,0），
+  所以 `.flash` 必须写成 `.wrapper .game-area .board .cell.flash`，只写 `.board .cell.flash` 会被
+  基础那条 `border: 1px solid var(--tile-border-color)` 压掉，表现为「光环出来了、边框色没变」。
+

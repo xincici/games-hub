@@ -136,7 +136,13 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - 这几项**别再写裸值**（72px / 16px / 8px 之类），改一处要七处一起改
 - **复用扑克牌面（`games/poker/CardItem.vue`）的两个坑**（侦探 / 猎手 / 对对碰的扑克模式共用同一套做法）：
   ① `CardItem` 的 `.card` 是 `width: var(--width)` + **1px 描边且没写 `box-sizing: border-box`**，渲染出来比它自己的 `.card-wrapper` 宽 2px、高 2px；而 wrapper 又会被外层 `.face` 的 1px 边框挤窄并居中，牌按 `left: 0` 贴住 wrapper 左边 —— 多出来的那 2px 全跑到右侧，看起来就是「牌在格子 / 容器里偏右、没居中」。做法是：扑克模式的外框写 `border: 0 none`（不是只把 `border-color` 弄透明，那样 1px 的位置还占着）+ 传进去的 `--width` / `--height` 取「格子 − 2」+ 把 `.card-wrapper` 绝对定位到外框左上角（`position: absolute; left: 0; top: 0`），这样牌的外框正好等于格子、四边严丝合缝（实测牌的 `left/top` 偏移归零、容器四边留白相同）。**同一个坑还会咬高亮**：猎手把「找回 / 标错」画成牌外一圈时，第一版画在 `.card-wrapper` 上，结果光环左边露 3px、右边被牌盖掉 1px（wrapper 比牌窄 2px，而且 `.card` 在 wrapper 之后绘制，本来就会盖住它的光环），看着既偏又像被压在牌底下；改画在 `:deep(.card)`（正好等于格子大小、且是这一格里最上层）后才四边等宽、完整可见。
-  ② 用 grid 摆牌时**行高必须跟着牌高走**（`grid-auto-rows: var(--cell-h, var(--cell))`）：漏掉这一条，行高还是按宽度算，2:3 的扑克牌每行只占 2/3 高度，表现是「行与行重叠 + 整块从容器底部溢出」（猎手候选区踩过，实测行高 50 而牌高 75）。
+  ② 同一个坑在**扑克炼金术**里的表现不同：它是把牌放进棋盘格子并用 flex 居中，于是牌在格内偏右下
+  （实测「左 3px / 右 1px、上 3px / 下 1px」），修法是给 `.board .cell :deep(.card)` 补
+  `left: -1px; top: -1px`（候选区的槽位牌与槽等宽，不能一起挪）。
+  ③ 给格子加「点击高亮」这类覆盖基础边框的样式时注意**特异性**：格子基础规则通常嵌在多层里
+    （编译成 `.wrapper .game-area .board .cell[data-v]`，0,5,0），只写 `.board .cell.flash` 会被它压掉，
+    且症状是「box-shadow 生效、边框色没变」——排查手段是页内遍历 `document.styleSheets` 列出命中的 border 规则。
+  ④ 用 grid 摆牌时**行高必须跟着牌高走**（`grid-auto-rows: var(--cell-h, var(--cell))`）：漏掉这一条，行高还是按宽度算，2:3 的扑克牌每行只占 2/3 高度，表现是「行与行重叠 + 整块从容器底部溢出」（猎手候选区踩过，实测行高 50 而牌高 75）。
 - **阶段提示条要占自己的空白带**（侦探 / 猎手共用同一套做法）：提示条原来是 `position: absolute; top: -14px` 贴在棋盘上边缘，棋盘一大（侦探 4×5、猎手 4×8）第一行牌就被压住。现在 `.game-area` 用 `padding-top: var(--tip-band)`（28px）留出带子、提示条落在带子内（`top: 2px`），牌区从带子下面开始 —— 实测提示条底边与牌顶间隙 3~5px、六种组合（两游戏 × 两种牌面 × 390/320 两档宽度）都不重叠、不滚动。这 28px 必须同时从 `metrics` 的高度预算里扣掉（`(innerHeight - 262 - TIP_BAND)`），否则最高难度会顶出屏幕。侦探的结算浮层也在 `.game-area` 里，所以它得写 `top: var(--tip-band); height: calc(100% - var(--tip-band))` 才能正好盖住棋盘（猎手的浮层在 `.candidate-area` 内，不受影响）。
 - **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - **页面滑动手势一律用 Pointer Events**（`pointerdown` / `pointermove` / `pointerup`）+ 手势区域内 `touch-action: none`。`touchstart/move/end` 是**只认触摸**的：PC 上拿鼠标怎么拖都不触发（装成桌面应用后更明显 —— 浏览器 / 窗口层会把整段手势当成滚页面或拖窗口收走，再补一个 `touchcancel`）。Threes、Emoji 消消乐、2048、贪吃蛇（转向）、数字迷宫（空白格跟手）都已按这套实现，并且都保留了原有的兜底操作（消消乐点两下换位、2048 / 数字迷宫方向键、数字迷宫摇杆按钮）。`touch-action: none` 只加在「真正拥有这个手势」的元素上：**先量这一页会不会溢出**——不溢出就加在整页 `.wrapper`（Threes / 2048 / 贪吃蛇），会溢出就加在棋盘那层（消消乐 `.board-frame`；数字迷宫 `.game-area`，最高难度 6 在 320×568 下 scrollH 590 > 568，整页 none 会把「滚下去看棋盘」一起吃掉）。

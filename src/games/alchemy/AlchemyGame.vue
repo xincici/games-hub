@@ -74,7 +74,7 @@
           v-for="idx in CELLS"
           :key="`cell-${idx}`"
           class="cell"
-          :class="{ filled: !!board[idx - 1], placeable: !board[idx - 1] && canPlace, incoming: flyingTo === idx - 1 }"
+          :class="{ filled: !!board[idx - 1], placeable: !board[idx - 1] && canPlace, incoming: flyingTo === idx - 1 , flash: flashCell === idx - 1 }"
           @click="onCellClick(idx - 1)"
         >
           <template v-if="board[idx - 1]">
@@ -180,6 +180,8 @@ const celebrating = ref(false);
 const clearing = ref(new Map());
 // 点击放置：牌从手牌位置飞到目标格；落点那一格先隐身，等飞到了再显形
 const flying = ref(null);
+const flashCell = ref(-1);      // 刚点过的格子（边框实线高亮，短暂反馈）
+let cellFlashTimer = 0;
 const flyingTo = ref(-1);
 const busy = ref(false);
 
@@ -492,6 +494,10 @@ const flyStyle = computed(() => {
 function onCellClick(idx) {
   if (phase.value !== PLAY || busy.value || !hand.value) return;
   if (board.value[idx]) return;
+  // 点击立刻给这个格子一个实线高亮反馈（450ms 后自动消失）
+  flashCell.value = idx;
+  clearTimeout(cellFlashTimer);
+  cellFlashTimer = setTimeout(() => { flashCell.value = -1; }, 450);
   placeByClick(idx);
 }
 
@@ -663,6 +669,7 @@ onUnmounted(() => {
   clearTimeout(celebrateTimer);
   clearTimeout(flashTimer);
   clearTimeout(endTimer);
+  clearTimeout(cellFlashTimer);
   save();
 });
 </script>
@@ -960,5 +967,30 @@ onUnmounted(() => {
         transition: width 0.3s ease;
       }
     }
+  }
+
+  // 格内扑克牌真正居中：CardItem 的 .card 是「content-box + 1px 描边」且 absolute left/top: 0，
+  // 外框比 wrapper 大 2px、多出来的全落在右下 —— 实测格内是「左 3px / 右 1px、上 3px / 下 1px」，
+  // 往左上各挪 1px 才是绝对居中（候选区那两个槽位牌与槽等宽，不能挪）
+  .board .cell :deep(.card) {
+    left: -1px;
+    top: -1px;
+  }
+  // 刚点过的格子：边框实线主色高亮（450ms 后自动消失）。
+  // 选择器要和上面那条基础规则（编译成 .wrapper .game-area .board .cell[data-v]）同级或更高：
+  // 基础规则里的 `border: 1px solid var(--tile-border-color)` 是简写、特异性还更高，
+  // 只写 .board .cell.flash 会被它压掉 —— 表现就是 box-shadow 出来了、边框色却没变
+  .wrapper .game-area .board .cell.flash {
+    border-style: solid;
+    border-color: var(--primary-bg);
+    box-shadow: 0 0 0 2px var(--primary-bg);
+  }
+  // 候选区主次：当前牌高亮描边，后面两张压暗（缩放 0.8 / 0.6 见 PREVIEW_SCALE）
+  .hand .card-slot.current :deep(.card) {
+    outline: 2px solid var(--primary-bg);
+    outline-offset: 1px;
+  }
+  .hand .card-slot.next {
+    opacity: 0.55;
   }
 </style>

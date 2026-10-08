@@ -73,7 +73,7 @@
           v-for="idx in CELLS"
           :key="`cell-${idx}`"
           class="cell"
-          :class="{ placeable: !board[idx - 1] && canPlace, actable: board[idx - 1] && canPlace, incoming: flyingTo === idx - 1 }"
+          :class="{ placeable: !board[idx - 1] && canPlace, actable: board[idx - 1] && canPlace, incoming: flyingTo === idx - 1 , flash: flashCell === idx - 1 }"
           @click="onCellClick(idx - 1)"
         >
           <template v-if="board[idx - 1]">
@@ -174,6 +174,8 @@ const clearing = ref(new Map());
 const loseReason = ref('deck');
 const combo = ref(0);             // 连击数：连续每次消除 +1，断一次归零   // 'stuck' = 满盘无处可放；'deck' = 牌用完了
 const flying = ref(null);
+const flashCell = ref(-1);      // 刚点过的格子（边框实线高亮，短暂反馈）
+let cellFlashTimer = 0;
 const flyingTo = ref(-1);
 const busy = ref(false);
 
@@ -235,6 +237,7 @@ let uidCounter = 0;
 
 // ---------- 开局 ----------
 function clearTimers() {
+  clearTimeout(cellFlashTimer);
   clearTimeout(shakeTimer);
   clearTimeout(celebrateTimer);
   clearTimeout(flashTimer);
@@ -458,6 +461,10 @@ const flyStyle = computed(() => {
 
 function onCellClick(idx) {
   if (phase.value !== PLAY || busy.value || !hand.value) return;
+  // 点击立刻给这个格子一个实线高亮反馈（450ms 后自动消失）
+  flashCell.value = idx;
+  clearTimeout(cellFlashTimer);
+  cellFlashTimer = setTimeout(() => { flashCell.value = -1; }, 450);
   placeByClick(idx);
 }
 
@@ -892,5 +899,29 @@ onUnmounted(() => {
         transition: width 0.3s ease;
       }
     }
+  }
+
+  // 格内那张牌整体（牌面 + 底部厚度）在格子里上下居中：厚度画在元素外面、格子又是居中排版，
+  // 只按 min(格宽, 格高/1.5) 缩的话整块会贴住下边缘（实测上 7.25px、下 0.15px）；
+  // flex 居中会把元素上移「下外边距的一半」，所以补一个等于厚度的下外边距正好把整块顶回中间
+  .board .cell .mj {
+    margin-bottom: calc(var(--mj-w) * 0.075);
+  }
+  // 刚点过的格子：边框实线主色高亮（450ms 后自动消失）。
+  // 选择器要和上面那条基础规则（编译成 .wrapper .game-area .board .cell[data-v]）同级或更高：
+  // 基础规则里的 `border: 1px solid var(--tile-border-color)` 是简写、特异性还更高，
+  // 只写 .board .cell.flash 会被它压掉 —— 表现就是 box-shadow 出来了、边框色却没变
+  .wrapper .game-area .board .cell.flash {
+    border-style: solid;
+    border-color: var(--primary-bg);
+    box-shadow: 0 0 0 2px var(--primary-bg);
+  }
+  // 候选区主次：当前牌高亮描边，下一张压暗（缩放 0.8 见 PREVIEW_SCALE）
+  .hand .tile-slot.current .mj {
+    outline: 2px solid var(--primary-bg);
+    outline-offset: 1px;
+  }
+  .hand .preview {
+    opacity: 0.55;
   }
 </style>

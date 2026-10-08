@@ -10,11 +10,12 @@
 
 ## 实现
 
-SnakeGame.vue（canvas 渲染；**暂停**：操作区「难度 | 新游戏 | 暂停」三格的暂停按钮、或 `visibilitychange` 变隐藏时自动暂停 —— 暂停即 `stopTimer()` 并 `saveState()` 落档，`restore()` 还原后停在暂停态等玩家点「继续」；**继续前先数 3 2 1**（共用 `shared/resumeCountdown.js`，倒数期间 `paused` 仍为 true、`tick()` 直接返回，数完才重启定时器）+ wall.js（穿墙开关）+ i18n.js（route /snake，key 前缀 __snake_game__）
+SnakeGame.vue（canvas 渲染；**暂停**：操作区「难度 | 新游戏 | 暂停」三格的暂停按钮、或 `visibilitychange` 变隐藏时自动暂停 —— 暂停即 `stopTimer()` 并 `saveState()` 落档，`restore()` 还原后停在暂停态等玩家点「继续」；**继续前先数 3 2 1**（共用 `shared/resumeCountdown.js`，倒数期间 `paused` 仍为 true、`tick()` 直接返回，数完才重启定时器）+ wall.js（穿墙开关：**默认开启**，只有显式存过 `'0'` 才算关；两种状态都显式落档，否则「关掉」会变成删 key、下次进来又落回默认的开）+ i18n.js（route /snake，key 前缀 __snake_game__）
 
 ## 存档（localStorage）
 
-  - 贪吃蛇：`__snake_game__*`（难度 `__snake_game__difficulty`，跨难度共享最佳分 `__snake_game__best`，穿墙开关 `__snake_game__through_wall`）
+  - 贪吃蛇：`__snake_game__*`（难度 `__snake_game__difficulty`，跨难度共享最佳分 `__snake_game__best`，穿墙开关 `__snake_game__through_wall`（`'1'` / `'0'`，**没有这个 key 时按「开」处理**））
+  - **进行中与「已失败」两种局面都落档**：`state` 里多存一个 `result`（`gaming` / `lose`，旧存档没有就按进行中）。撞墙/撞身体判负时**不再删存档**而是 `saveState()`，重进时 `restore()` 直接把局面还原成「已结束」的静止画面（不进暂停态、不起倒数、表不跑），由玩家自己点「新游戏」重开 —— 不会一进来就自动重开。暂停按钮本来就有 `:disabled="gameResult === LOSE || !started"`，配合 `.game-icon:disabled` 的灰底 + `not-allowed`。
 
 ## 界面约定
 
