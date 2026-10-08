@@ -57,7 +57,7 @@
         v-for="(card, idx) in tray"
         :key="card.uid"
         class="tray-card"
-        :class="{ clearing: card.clearing }"
+        :class="{ clearing: card.clearing, fresh: card.fresh }"
         :style="trayCardStyle(idx)"
       >{{ card.emoji }}</div>
     </div>
@@ -153,10 +153,18 @@ const progress = computed(() => {
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
 // 游戏区做成一张带底色的卡片（和连连看 / 消消乐的棋盘一样），内缩 BOARD_PAD 留出边框
 const BOARD_PAD = 8;
+// 牌底部那条厚度占牌宽的比例（与样式里 card-3d 的用法一致：改一处要两处一起改）
+const LIP_RATIO = 0.07;
 const layout = computed(() => {
   const avail = Math.min(window.innerWidth || 420, 440) - 32;
-  const unit = +(((avail - BOARD_PAD * 2) / 14)).toFixed(2);
+  // 牌是立体的：底部还有一条厚度（见样式里的 card-3d，厚度 = LIP_RATIO × 牌宽），它画在元素外面，
+  // 所以要把它算进盘面的底部内边距；同时把 unit 反解小一点，让「14 格 + 内边距 + 厚度」的总高
+  // 与加立体之前**完全一致**（格子只小约 1%，肉眼无感，但页面不会因此变高、多出滚动条）。
+  // 厚度 = r(2u − 2)，要求 14u + 2p + 厚度 = 14u₀ + 2p  →  u = (14u₀ + 2r) / (14 + 2r)
+  const u0 = (avail - BOARD_PAD * 2) / 14;
+  const unit = +(((14 * u0 + LIP_RATIO * 2) / (14 + LIP_RATIO * 2)).toFixed(2));
   const tile = +(unit * 2).toFixed(2);
+  const lip = +(tile * LIP_RATIO).toFixed(2);
   const gap = 6;
   const slot = +(((avail - 16) - gap * (TRAY_SIZE - 1)) / TRAY_SIZE).toFixed(2);
   return {
@@ -168,11 +176,13 @@ const layout = computed(() => {
     vars: {
       '--tile': `${tile}px`,
       '--tile-fs': `${Math.round(tile * 0.5)}px`,
+      '--lip': `${lip}px`,
       '--slot': `${slot}px`,
       '--slot-gap': `${gap}px`,
       '--tray-fs': `${Math.round(slot * 0.52)}px`,
-      '--board-h': `${(unit * 14 + BOARD_PAD * 2).toFixed(2)}px`,
+      '--board-h': `${(unit * 14 + BOARD_PAD * 2 + lip).toFixed(2)}px`,
       '--board-pad': `${BOARD_PAD}px`,
+      '--board-pad-b': `${(BOARD_PAD + lip).toFixed(2)}px`,
     },
   };
 });
@@ -186,6 +196,7 @@ function flyStyleOf(f) {
     width: `${f.w}px`,
     height: `${f.h}px`,
     fontSize: `${Math.round(f.h * 0.5)}px`,
+    '--lip': `${(f.w * LIP_RATIO).toFixed(2)}px`,
   };
 }
 
@@ -358,10 +369,20 @@ async function fly(flight) {
     await sleep(FLY_MS);
   }
 
+  // 期间开了新局 / 恢复存档（或已结算）→ 这次落格作废，直接撤掉飞行卡
+  if (flight.gen !== gameId.value || phase.value !== PLAY) {
+    flights.value = flights.value.filter(f => f.uid !== flight.uid);
+    return;
+  }
+  // 落格要「先插托盘卡、等它渲染出来，再撤飞行卡」：反过来的话中间至少有一帧
+  // 「飞行卡已消失、托盘卡还没出现」，看起来就是闪一下。
+  // fresh 让这张卡跳过 card-pop —— 它是飞进来的，再播一次「从 opacity 0 放大淡入」
+  // 同样会在交接处闪（普通入场 / 恢复存档的卡仍照常播 card-pop）。
+  tray.value.splice(insertIndex(tray.value, flight.emoji), 0, {
+    uid: flight.uid, emoji: flight.emoji, clearing: false, fresh: true,
+  });
+  await nextTick();
   flights.value = flights.value.filter(f => f.uid !== flight.uid);
-  // 期间开了新局 / 恢复存档（或已结算）→ 这次落格作废
-  if (flight.gen !== gameId.value || phase.value !== PLAY) return;
-  tray.value.splice(insertIndex(tray.value, flight.emoji), 0, { uid: flight.uid, emoji: flight.emoji, clearing: false });
   saveState();
   settle();
 }
@@ -518,6 +539,20 @@ function restore() {
 </script>
 
 <style scoped lang="scss">
+// 立体卡片：正面 + 底部一条实心厚度 + 落地阴影，像从正面偏下方斜着看过去
+// （和麻将英雄的牌同一套做法；区别是这里的卡面跟着主题走，所以侧面色用 color-mix
+//  从 --card-bg-color 压暗得到，浅色偏灰、深色更深）
+// $lip 传「厚度」的尺寸表达式，例如 calc(var(--tile) * 0.07)
+@mixin card-3d($lip) {
+  box-shadow:
+    // 面上一层高光 + 底部一道内阴影，让正面自己也有点起伏
+    inset 0 1px 0 rgb(255 255 255 / 45%),
+    inset 0 -1px 2px rgb(0 0 0 / 8%),
+    // 露出来的侧面（实心、不模糊）
+    0 #{$lip} 0 color-mix(in srgb, var(--card-bg-color) 74%, #000),
+    // 落在盘面上的阴影
+    0 calc(#{$lip} * 1.6) calc(#{$lip} * 2.2) rgb(0 0 0 / 22%);
+}
 // 「新游戏」二次确认弹窗（Teleport 到 body，层级要盖住帮助弹窗与飞行卡片）
 
 @keyframes tile-in {
@@ -582,10 +617,13 @@ function restore() {
   border-radius: var(--radius-tile);
   background: var(--card-bg-color);
   border: 1px solid var(--tile-border-color);
-  box-shadow: var(--shadow-float);
   line-height: 1;
   pointer-events: none;
   will-change: transform;
+  // 与盘面 / 托盘的卡一致：也带厚度（--lip 由 flyStyleOf 按飞行尺寸写进行内样式）。
+  // 这里只需要 card-3d 这一份阴影：飞行卡在动画末尾会被缩放到与托盘卡同尺寸，
+  // 厚度与阴影也跟着等比缩放，所以交接那一刻两张卡是像素级对齐的
+  @include card-3d(var(--lip, 3px));
 }
 
 .wrapper {
@@ -701,7 +739,8 @@ function restore() {
     box-sizing: border-box;
     // 游戏区本身是一张带底色的卡片（和连连看 / 消消乐的棋盘同色），
     // 浅色主题下卡片才有依托，不然白底白牌糊成一片
-    padding: var(--board-pad);
+    // 底部多留一条厚度
+    padding: var(--board-pad) var(--board-pad) var(--board-pad-b);
     border-radius: var(--card-radius);
     // 卡片带 z-index（层数），用 isolation 把它们的层叠限制在本区域内，
     // 否则会盖住 Teleport 到 body 的帮助弹窗（z-index 10）
@@ -722,7 +761,7 @@ function restore() {
     border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     border: 1px solid var(--tile-border-color);
-    box-shadow: var(--shadow-soft);
+    @include card-3d(calc(var(--tile) * 0.07));
     font-size: var(--tile-fs);
     line-height: 1;
     cursor: pointer;
@@ -734,10 +773,10 @@ function restore() {
     &:not(.covered):active {
       transform: scale(0.93);
     }
-    // 被上层卡片遮挡：变暗且不可点击
+    // 被上层卡片遮挡：变暗且不可点击。
+    // 厚度保留（filter 会连阴影一起压暗），这样叠起来的牌仍然是一摞有厚度的牌
     &.covered {
       filter: brightness(0.5) saturate(0.45);
-      box-shadow: none;
       cursor: default;
       pointer-events: none;
     }
@@ -770,12 +809,14 @@ function restore() {
       border-radius: var(--radius-tile);
       background: var(--card-bg-color);
       border: 1px solid var(--tile-border-color);
-      box-shadow: var(--card-shadow);
+      @include card-3d(calc(var(--slot) * 0.07));
       font-size: var(--tray-fs);
       line-height: 1;
       z-index: 2;
       transition: left 0.22s ease;
       animation: card-pop 0.2s ease backwards;
+      // 刚由飞行卡落格的：位置、尺寸、厚度都已经和飞行卡对齐，不能再播一次 card-pop
+      &.fresh { animation: none; }
       // 凑满三张：闪烁两下后旋转缩小消失（时长与 CLEAR_MS 一致）
       &.clearing {
         z-index: 3;

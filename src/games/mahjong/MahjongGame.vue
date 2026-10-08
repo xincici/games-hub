@@ -69,21 +69,22 @@
           v-for="idx in CELLS"
           :key="`cell-${idx}`"
           class="cell"
-          :class="{ placeable: !board[idx - 1] && canPlace, incoming: flyingTo === idx - 1 }"
+          :class="{ placeable: !board[idx - 1] && canPlace, actable: board[idx - 1] && canPlace, incoming: flyingTo === idx - 1 }"
           @click="onCellClick(idx - 1)"
         >
           <template v-if="board[idx - 1]">
-            <MahjongTile :value="board[idx - 1].value" :style="tileVars(cellW, cellH)" />
+            <MahjongTile :value="board[idx - 1].value" :style="tileVars(boardTileW)" />
           </template>
           <!-- 刚消掉的牌：浮影层播完「闪烁 → 消失」就走 -->
           <span v-else-if="clearing.has(idx - 1)" class="clearing">
-            <MahjongTile :value="clearing.get(idx - 1).value" :style="tileVars(cellW, cellH)" />
+            <MahjongTile :value="clearing.get(idx - 1).value" :style="tileVars(boardTileW)" />
           </span>
         </div>
       </div>
       <!-- 得分浮字：棋盘正中弹出牌型名与本次得分（照消消乐那一套） -->
       <div v-if="celebration" :key="celebration.id" class="celebrate" :class="`tier-${celebration.tier}`">
         <span class="celebrate-text">{{ celebration.name }}</span>
+        <span v-if="celebration.chain > 1" class="celebrate-chain">🔥 {{ i18n('chainName').replace('{n}', celebration.chain) }}</span>
         <span class="celebrate-score">+{{ celebration.gained }}</span>
       </div>
       <div v-if="phase !== 'play'" class="result" :class="phase === 'won' ? 'win' : 'lose'">
@@ -136,7 +137,8 @@ import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
   SIZE, CELLS, PREVIEW, TILE_RATIO,
-  createWall, resetUid, scoringLines, comboBonus, isStuck, levelConfig,
+  createWall, resetUid, scoringLines, comboBonus, chainBonus, levelConfig,
+  TILE_LIP_RATIO,
 } from './board';
 
 const MODE_KEY = '__mahjong_hero__mode';
@@ -165,7 +167,8 @@ const shaking = ref(false);
 const celebrating = ref(false);
 const celebration = ref(null);
 const clearing = ref(new Map());
-const loseReason = ref('deck');   // 'stuck' = 满盘无处可放；'deck' = 牌用完了
+const loseReason = ref('deck');
+const combo = ref(0);             // 连击数：连续每次消除 +1，断一次归零   // 'stuck' = 满盘无处可放；'deck' = 牌用完了
 const flying = ref(null);
 const flyingTo = ref(-1);
 const busy = ref(false);
@@ -180,6 +183,13 @@ const canPlace = computed(() => phase.value === PLAY && !!hand.value);
 const metrics = ref({ cw: 90, ch: 122, gap: 8 });
 const cellW = computed(() => metrics.value.cw - 6);
 const cellH = computed(() => metrics.value.ch - 6);
+// 格子里那张牌的宽：牌是「正面 + 底部厚度」的一块整体，格子又是居中排版，所以
+// 上面的富余与下面的厚度各占一半 —— 整体高度 1.35w + 0.075w 要连上下各留 0.075w 才不顶出去，
+// 即 w ≤ 格高 / (1.35 + 2 × 0.075) = 格高 / 1.5。高度仍按 1:1.35 走，保住实物牌的形状。
+const boardTileW = computed(() => Math.min(
+  cellW.value,
+  cellH.value / (TILE_RATIO + TILE_LIP_RATIO * 2),
+));
 const boardVars = computed(() => ({
   '--cw': `${metrics.value.cw}px`,
   '--ch': `${metrics.value.ch}px`,
@@ -188,11 +198,17 @@ const boardVars = computed(() => ({
 const slotVars = w => ({ width: `${w}px`, height: `${Math.round(w * TILE_RATIO)}px` });
 const tileVars = (w, h) => ({ '--mj-w': `${w}px`, '--mj-h': `${h || Math.round(w * TILE_RATIO)}px` });
 
+// 牌是立体的：底部一条厚度（0.075w）+ 落地阴影（偏移 0.1w、模糊 0.15w）会伸到格子外面，
+// 所以棋盘下方要多留 0.22 × 格子宽，否则最下面一排的影子会溢到棋盘外面（实测过）
+const LIP_RATIO = 0.22;
+
 function computeMetrics() {
   const vw = Math.min(window.innerWidth, 480);
   const availW = vw - 32 - 16;                       // 页面左右 16 + 棋盘内边距 8×2
   const byW = (availW - metrics.value.gap * (SIZE - 1)) / SIZE;
-  const byH = (window.innerHeight - 262 - 16 - metrics.value.gap * (SIZE - 1)) / SIZE / TILE_RATIO;
+  // 先用宽度估一个格子宽，据此算出底部要预留的立体高度（用真实 cw 会循环依赖）
+  const lip = Math.min(byW, 132) * LIP_RATIO;
+  const byH = (window.innerHeight - 262 - 16 - lip - metrics.value.gap * (SIZE - 1)) / SIZE / TILE_RATIO;
   const cw = Math.max(56, Math.min(byW, byH, 132));
   metrics.value = { cw: Math.round(cw), ch: Math.round(cw * TILE_RATIO), gap: metrics.value.gap };
 }
@@ -223,6 +239,7 @@ function startLevel(lv) {
   level.value = Math.max(1, lv);
   score.value = 0;
   played.value = 0;
+  combo.value = 0;
   phase.value = PLAY;
   board.value = new Array(CELLS).fill(null);
   clearing.value = new Map();
@@ -245,6 +262,7 @@ function startEndless() {
   clearTimers();
   score.value = 0;
   played.value = 0;
+  combo.value = 0;
   phase.value = PLAY;
   board.value = new Array(CELLS).fill(null);
   clearing.value = new Map();
@@ -314,6 +332,7 @@ function save() {
       level: level.value,
       score: score.value,
       played: played.value,
+      combo: combo.value,
       phase: phase.value,
       board: board.value.map(t => (t ? pack(t) : null)),
       pile: pile.value.map(pack),
@@ -344,6 +363,7 @@ function restore() {
     level.value = Math.max(1, +saved.level || 1);
     score.value = Math.max(0, +saved.score || 0);
     played.value = Math.max(0, +saved.played || 0);
+    combo.value = Math.max(0, +saved.combo || 0);
     phase.value = saved.phase;
     ensurePile(cursor.value + 1 + PREVIEW);
     return true;
@@ -369,9 +389,10 @@ function advanceHand() {
   ensurePile(cursor.value + 1 + PREVIEW);
 }
 
+// idx 上已经有牌时就是「替换」：手上的牌盖掉原来那张（原来那张直接弃掉，同样消耗一张手牌）
 function placeByClick(idx) {
   const tile = hand.value;
-  if (!tile || board.value[idx]) return;
+  if (!tile) return;
   busy.value = true;
   commitPlacement(idx, tile);
   flyingTo.value = idx;
@@ -384,7 +405,7 @@ function placeByClick(idx) {
 
 function placeByDrag(idx) {
   const tile = hand.value;
-  if (!tile || board.value[idx]) return;
+  if (!tile) return;
   commitPlacement(idx, tile);
   settle();
 }
@@ -428,7 +449,6 @@ const flyStyle = computed(() => {
 
 function onCellClick(idx) {
   if (phase.value !== PLAY || busy.value || !hand.value) return;
-  if (board.value[idx]) return;
   placeByClick(idx);
 }
 
@@ -438,8 +458,11 @@ const celebrateLife = tier => 1100 + tier * 220;
 function settle() {
   const hits = scoringLines(board.value);
   if (hits.length) {
-    // 一次落子可能同时成好几组：全部计分，并从第二组起每组再加 100
-    const gained = hits.reduce((sum, h) => sum + h.trio.score, 0) + comboBonus(hits.length);
+    // 连击：连续每次消除算一连，从第二连起每连一次多 50（中间没消掉就归零）
+    combo.value += 1;
+    // 一次落子可能同时成好几组：全部计分，并从第二组起每组再加 100，再叠加连击奖励
+    const gained = hits.reduce((sum, h) => sum + h.trio.score, 0)
+      + comboBonus(hits.length) + chainBonus(combo.value);
     const best = hits.reduce((a, b) => (b.trio.score > a.trio.score ? b : a));
     score.value += gained;
     const cleared = new Set(hits.flatMap(h => h.indices));
@@ -449,7 +472,9 @@ function settle() {
     clearing.value = gone;
     clearTimeout(clearTimer);
     clearTimer = setTimeout(() => { clearing.value = new Map(); save(); }, 520);
-    announceCelebration(best.trio.id, gained, hits.length);
+    announceCelebration(best.trio.id, gained, hits.length, combo.value);
+  } else {
+    combo.value = 0;      // 这一手没消掉，连击断
   }
   // 结算层等得分浮字消失之后再出现；没有得分就立即结算
   // 同扑克炼金术：不等浮字整条生命周期（1.32~1.76s），只按共用组件里 0.5s 的约定停一下
@@ -467,12 +492,13 @@ function shakeBoard() {
   shakeTimer = setTimeout(() => { shaking.value = false; }, 340);
 }
 
-function announceCelebration(trioId, gained, groups) {
+function announceCelebration(trioId, gained, groups, chain = 1) {
   const tier = TIER_BY_SCORE(gained);
   celebration.value = {
     id: ++celebrationId,
     tier,
     gained,
+    chain,
     name: groups > 1
       ? i18n('comboName').replace('{n}', groups)
       : i18n(trioId === 'triplet' ? 'tripletName' : 'runName'),
@@ -500,15 +526,11 @@ function checkEnd(silent = false) {
       if (level.value > bestScore.value) bestScore.value = level.value;
       return;
     }
-    if (isStuck(board.value)) { loseReason.value = 'stuck'; phase.value = OVER; return; }
+    // 棋盘满不再是死局（点已有牌的格子可以替换），所以只有「牌用完还没达标」才算输
     if (cursor.value >= pile.value.length) { loseReason.value = 'deck'; phase.value = OVER; }
     return;
   }
-  if (isStuck(board.value)) {
-    loseReason.value = 'stuck';
-    phase.value = OVER;
-    if (score.value > bestScore.value) bestScore.value = score.value;
-  }
+  // 无尽模式牌墙无限、又能替换，因此没有判负条件，一直玩到玩家自己点「新游戏」
 }
 
 // ---------- 拖拽 ----------
@@ -725,7 +747,9 @@ onUnmounted(() => {
       grid-template-columns: repeat(3, var(--cw));
       grid-auto-rows: var(--ch);
       gap: var(--gap);
-      padding: 8px;
+      // 底部多留一条：牌的厚度与落地阴影要伸到这里面，不然会溢出棋盘
+      --lip: calc(var(--cw) * 0.22);
+      padding: 8px 8px calc(8px + var(--lip));
       border-radius: var(--card-radius);
       box-sizing: content-box;
       &.shaking { animation: board-shake 0.34s ease; }
@@ -744,6 +768,11 @@ onUnmounted(() => {
           border-color: var(--primary-bg);
           border-style: dashed;
           cursor: pointer;
+        }
+        // 已经放了牌、但手上还有牌：点一下会用当前牌替换掉这张
+        &.actable {
+          cursor: pointer;
+          &:hover { box-shadow: 0 0 0 2px var(--primary-bg); }
         }
         &.incoming > * { opacity: 0; }
       }
@@ -779,6 +808,7 @@ onUnmounted(() => {
       box-shadow: 0 6px 18px var(--celebrate-glow);
       animation: celebrate-pop 0.95s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
       .celebrate-text { font-size: 18px; line-height: 1.2; }
+      .celebrate-chain { font-size: 13px; line-height: 1.2; margin-top: 2px; opacity: 0.95; }
       .celebrate-score {
         font-size: 14px;
         line-height: 1.2;

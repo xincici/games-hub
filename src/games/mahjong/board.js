@@ -10,6 +10,10 @@ export const WALL_SIZE = KINDS * COPIES;
 
 export const PREVIEW = 1;           // 提示区只有「当前要放的牌 + 下一张」
 export const TILE_RATIO = 1.35;      // 麻将牌是 1 : 1.35 的竖牌（算尺寸时要用）
+// 牌是立体的：正面往下还画了一条「厚度」（MahjongTile.vue 里 box-shadow 的纵向偏移），
+// 它是画在元素外面的，所以排版时必须把它算进高度，否则最下面一排会顶出格子。
+// 改 MahjongTile.vue 的 box-shadow 纵向偏移时要同步这个值。
+export const TILE_LIP_RATIO = 0.075;
 
 // 牌型：顺子（三张点数连续）100 分、刻子（三张相同）200 分
 export const TRIO = {
@@ -20,6 +24,10 @@ export const TRIO = {
 // 一次消掉多组时的额外奖励：n = 组数 - 1，每组再加 100
 export const COMBO_BONUS = 100;
 export const comboBonus = groups => Math.max(0, groups - 1) * COMBO_BONUS;
+
+// 连击奖励：连续每次消除算一连，从第二连起每连一次多 50（中间有一次没消掉就归零）
+export const CHAIN_STEP = 50;
+export const chainBonus = chain => Math.max(0, chain - 1) * CHAIN_STEP;
 
 const SUIT_IDS = ['yi', 'er', 'san', 'si', 'wu', 'liu', 'qi', 'ba', 'jiu'];
 export const suitId = value => SUIT_IDS[value - 1] || 'yi';
@@ -67,7 +75,8 @@ export function scoringLines(board) {
   return out;
 }
 
-// 满盘且再也消不掉 → 失败（能消的线在落子当次就已经结算掉了）
+// 满盘检测。**加入「替换」机制后它不再用于判负**（点已有牌的格子可以用手上的牌替换掉它，
+// 所以满盘也能继续玩）；保留这个纯函数给测试和以后可能的数值分析用。
 export function isStuck(board) {
   return board.every(Boolean);
 }
@@ -98,18 +107,20 @@ export function createWall(rand = Math.random) {
 }
 
 // ---------- 关卡曲线 ----------
-// 数值是离线标定的（见 AGENTS.md）：3×3 只有 9 格、三张一组，堵死得比扑克炼金术快得多，
-// 所以牌堆加长几乎不涨分（贪心玩家各关中位数都是 300）—— 目标分只能压着它的 p70~p90 慢慢爬。
-const DECK_BASE = 16;
+// 第 1 关 20 张牌 / 400 分过关；之后每关 +2 张牌、过关分 +50，
+// 逢 10 的整数关那一档的增量按 100 算（即在这些关上再多 50）。
+// 有了「替换」机制之后棋盘满不再是死局（可以一直换牌），所以牌堆长度重新成了主要变量。
+const DECK_BASE = 20;
+const DECK_STEP = 2;
 const TARGET_BASE = 400;
-const TARGET_STEP = 25;
-const TENS_BONUS = 100;
+const TARGET_STEP = 50;
+const TENS_STEP = 50;          // 第 10、20… 关那一档增量多 50（相当于 +100）
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
   return {
     level: lv,
-    deck: DECK_BASE + (lv - 1),
-    target: TARGET_BASE + (lv - 1) * TARGET_STEP + Math.floor(lv / 10) * TENS_BONUS,
+    deck: DECK_BASE + (lv - 1) * DECK_STEP,
+    target: TARGET_BASE + (lv - 1) * TARGET_STEP + Math.floor(lv / 10) * TENS_STEP,
   };
 }
