@@ -24,6 +24,10 @@
         <span class="stat-label">{{ i18n('left') }}</span>
         <span class="stat-value">{{ pairsLeft }}</span>
       </div>
+      <!-- 本关进度条（已消对数 / 本关总对数），样式与连连看一致 -->
+      <div class="progress">
+        <div class="progress-bar" :style="{ width: `${progress}%` }"></div>
+      </div>
     </div>
     <div class="card opt-area">
       <div class="opt-half">
@@ -161,6 +165,13 @@ const clock = computed(() => {
   return ('00' + ~~(s / 60)).slice(-2) + ':' + ('00' + s % 60).slice(-2);
 });
 const pairsLeft = computed(() => tiles.value.filter(t => !t.popping).length / 2);
+// 本关总对数：棋盘是 rows×cols、面积奇数时留一个空格，所以正好是 floor(rows×cols/2)
+// （与 board.js 的 makeBoard 一致）。从关卡配置推导而不是数当前牌数 ——
+// 数当前牌数的话，中途退出再进来（恢复存档）会把总数当成剩余数，进度条直接归零。
+const totalPairs = computed(() => Math.floor((conf.value.rows * conf.value.cols) / 2));
+const progress = computed(() => (totalPairs.value
+  ? Math.min(100, Math.round(((totalPairs.value - pairsLeft.value) / totalPairs.value) * 100))
+  : 0));
 
 // 逻辑用棋盘：炸着的牌已经算消掉了（空格才能当通道）
 const grid = computed(() => {
@@ -815,4 +826,23 @@ function restore() {
     }
   }
 }
+
+  // 统计条底部的本关进度条（与连连看同一套：3px 高、贴底、主色填充）
+  .score-area {
+    position: relative;
+    overflow: hidden;
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--border-color);
+      .progress-bar {
+        height: 100%;
+        background: var(--primary-bg);
+        transition: width 0.3s ease;
+      }
+    }
+  }
 </style>

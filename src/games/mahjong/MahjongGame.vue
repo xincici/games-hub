@@ -39,6 +39,10 @@
           <span class="stat-value">{{ cfg.target }}</span>
         </div>
       </template>
+      <!-- 本关进度条（得分 / 目标分），只在本关模式显示，样式与连连看一致 -->
+      <div v-if="mode === 1" class="progress">
+        <div class="progress-bar" :style="{ width: `${progress}%` }"></div>
+      </div>
     </div>
 
     <div class="card opt-area">
@@ -174,6 +178,11 @@ const flyingTo = ref(-1);
 const busy = ref(false);
 
 const cfg = computed(() => levelConfig(level.value));
+// 本关进度：得分占目标分的比例（无尽模式没有目标分，条也不显示）
+const progress = computed(() => {
+  const total = cfg.value.target;
+  return total ? Math.min(100, Math.round((score.value / total) * 100)) : 0;
+});
 const cardsLeft = computed(() => Math.max(0, pile.value.length - cursor.value));
 const hand = computed(() => pile.value[cursor.value] || null);
 const preview = computed(() => pile.value.slice(cursor.value + 1, cursor.value + 1 + PREVIEW));
@@ -198,9 +207,9 @@ const boardVars = computed(() => ({
 const slotVars = w => ({ width: `${w}px`, height: `${Math.round(w * TILE_RATIO)}px` });
 const tileVars = (w, h) => ({ '--mj-w': `${w}px`, '--mj-h': `${h || Math.round(w * TILE_RATIO)}px` });
 
-// 牌是立体的：底部一条厚度（0.075w）+ 落地阴影（偏移 0.1w、模糊 0.15w）会伸到格子外面，
-// 所以棋盘下方要多留 0.22 × 格子宽，否则最下面一排的影子会溢到棋盘外面（实测过）
-const LIP_RATIO = 0.22;
+// 牌是立体的，底部那条厚度（0.075 × 牌宽）会伸到「牌面」外面，所以棋盘底部要多留这一条
+// （见样式里的 --lip）。注意只留厚度、不留阴影的量，否则底部留白会明显大于上边。
+const LIP_RATIO = 0.075;
 
 function computeMetrics() {
   const vw = Math.min(window.innerWidth, 480);
@@ -747,8 +756,11 @@ onUnmounted(() => {
       grid-template-columns: repeat(3, var(--cw));
       grid-auto-rows: var(--ch);
       gap: var(--gap);
-      // 底部多留一条：牌的厚度与落地阴影要伸到这里面，不然会溢出棋盘
-      --lip: calc(var(--cw) * 0.22);
+      // 底部只多留「牌底厚度」那一条：格内牌已经按 1.5 倍格高缩进格子，实心部分本来就在里面；
+      // 再按落地阴影（0.1w 偏移 + 0.15w 模糊）留 0.22 格宽的话，底部会比上边空出二十多像素、
+      // 跟上边明显不对称。留这一条之后「牌面 + 底部厚度」这块视觉实体在棋盘里是上下居中的
+      // （上边 8px + 格子内的居中留白，下边同理再补上厚度），柔和的投影允许越过棋盘边缘。
+      --lip: calc((var(--cw) - 6px) * 0.075);
       padding: 8px 8px calc(8px + var(--lip));
       border-radius: var(--card-radius);
       box-sizing: content-box;
@@ -862,4 +874,23 @@ onUnmounted(() => {
     filter: drop-shadow(0 4px 10px rgb(0 0 0 / 22%));
   }
 }
+
+  // 统计条底部的本关进度条（与连连看同一套：3px 高、贴底、主色填充）
+  .score-area {
+    position: relative;
+    overflow: hidden;
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--border-color);
+      .progress-bar {
+        height: 100%;
+        background: var(--primary-bg);
+        transition: width 0.3s ease;
+      }
+    }
+  }
 </style>

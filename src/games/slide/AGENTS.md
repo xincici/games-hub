@@ -21,3 +21,12 @@ SlideGame.vue（Emoji 滑行 · 腾挪消除：每种 emoji 都成对出现（`m
 - **开局 / 恢复存档都逐张入场**（斜向波浪）：`.tile.dealing .tile-body` 播 `tile-deal`（`scale(0.2) → 1` + 淡入，0.32s），延迟按 `--deal-i`（= `t.r + t.c`，由 `tileStyle` 输出）错开 28ms，最多 `(行+列) × 28ms`；`playDeal()` 在 `startLevel` 里两种入口（新建 / `restored`）都调用，总时长 `(rows + cols) × 28 + 320` 之后撤掉标记。实测 6×6 的延迟分布是 `0s×1 / 0.028×2 / … / 0.14×6 / … / 0.28×1`（正好的 `(行+列)` 三角波），约 430ms 内 36 张依次出现。
 - **入场动画只能挂内层 `.tile-body`**：外层 `.tile` 的 `transform` 就是「这张牌在第几行第几列」（`translate3d`），动画写在外层会把位置顶掉 —— 表现是整盘牌全堆到左上角。`tile-shake` / `tile-reshuffle` / `tile-pop` 也都是挂内层的，照抄即可。
 - 正在消除的牌（`popping`）不参与入场动画（模板里 `dealing: dealing && !t.popping`），否则入场动画的权重会盖掉 `tile-pop`，被消掉的牌不会消失。
+
+## 界面约定补记
+
+- 统计卡（关卡 / 时间 / 剩余）底部有**本关进度条**（3px、`position: absolute; bottom: 0`、主色填充），
+  样式与连连看那份一致；宽度 = `(本关总对数 − 剩余对数) / 本关总对数`。
+  **总对数从关卡配置推导**（`floor(conf.rows × conf.cols / 2)`，与 board.js 的 `makeBoard` 一致），
+  **不要数当前牌数** —— 那样中途退出再进来（恢复存档）会把总数当成剩余数、进度条直接归零
+  （实测：恢复「只剩一半牌」的存档应显示 50%，改之前是 0%）。
+

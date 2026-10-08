@@ -40,6 +40,10 @@
           <span class="stat-value">{{ cfg.target }}</span>
         </div>
       </template>
+      <!-- 本关进度条（得分 / 目标分），只在本关模式显示，样式与连连看一致 -->
+      <div v-if="mode === 1" class="progress">
+        <div class="progress-bar" :style="{ width: `${progress}%` }"></div>
+      </div>
     </div>
 
     <div class="card opt-area">
@@ -180,6 +184,11 @@ const flyingTo = ref(-1);
 const busy = ref(false);
 
 const cfg = computed(() => levelConfig(level.value));
+// 本关进度：得分占目标分的比例（无尽模式没有目标分，条也不显示）
+const progress = computed(() => {
+  const total = cfg.value.target;
+  return total ? Math.min(100, Math.round((score.value / total) * 100)) : 0;
+});
 // 第二格：闯关显示还剩多少张牌，无尽显示已经用掉多少张（都是「牌数」）
 const cardsLeft = computed(() => Math.max(0, pile.value.length - cursor.value));
 const hand = computed(() => pile.value[cursor.value] || null);
@@ -933,4 +942,23 @@ onUnmounted(() => {
     filter: drop-shadow(0 4px 10px rgb(0 0 0 / 22%));
   }
 }
+
+  // 统计条底部的本关进度条（与连连看同一套：3px 高、贴底、主色填充）
+  .score-area {
+    position: relative;
+    overflow: hidden;
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--border-color);
+      .progress-bar {
+        height: 100%;
+        background: var(--primary-bg);
+        transition: width 0.3s ease;
+      }
+    }
+  }
 </style>

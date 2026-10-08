@@ -174,6 +174,10 @@
 ## 界面约定
 
 - 顶栏「游戏特色按钮」：模式切换（`i-mdi-trophy-variant-outline` ↔ `i-mdi-infinity`，`TopHeader` 默认插槽）。
+- **统计卡底部有本关进度条**（3px、`position: absolute; bottom: 0`、主色填充，抄连连看那份）：
+  宽度 = `score / cfg.target`（`progress` 计算属性，`min(100, …)`），**只在闯关模式渲染**
+  （无尽模式没有目标分，模板里 `v-if="mode === 1"`）；`.score-area` 要 `position: relative; overflow: hidden`，
+  靠 `overflow` 让这条 3px 的条跟着卡片的圆角一起裁掉。
 - **统计条按模式给不同格数**（`score-area` 上加 `.four` 控制字号）：
   - 闯关四格，从左到右 **🏁 关卡 / 🃏 剩余 / ✨ 得分 / 🎯 目标**（四格在 320 宽下每格只有约 65px，
     所以 `.score-area.four .stat-value` 降到 18px，否则后期四位数的目标分会被挤出去）；
