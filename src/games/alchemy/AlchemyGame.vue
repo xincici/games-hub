@@ -64,8 +64,8 @@
       </div>
     </div>
 
-    <div class="game-area" :class="{ shaking }">
-      <div class="board dot-board" :style="boardVars">
+    <div class="game-area">
+      <div class="board dot-board" :class="{ shaking, celebrating }" :style="boardVars">
         <div
           v-for="idx in CELLS"
           :key="`cell-${idx}`"
@@ -81,6 +81,11 @@
             <CardItem mini v-bind="cardProps(clearing.get(idx - 1))" :style="cardVars(cellW, cellH)" />
           </span>
         </div>
+      </div>
+      <!-- 大牌型的即时庆祝：中央弹出牌型名与本次得分（照消消乐的做法，连击/大消同一套） -->
+      <div v-if="celebration" :key="celebration.id" class="celebrate" :class="`tier-${celebration.tier}`">
+        <span class="celebrate-text">{{ celebration.name }}</span>
+        <span class="celebrate-score">+{{ celebration.gained }}</span>
       </div>
       <!-- 提示条：放在棋盘外（棋盘有 overflow: hidden，放里面会被裁掉） -->
       <div v-if="toast" class="toast">{{ toast }}</div>
@@ -146,8 +151,8 @@ const LEVEL_KEY = '__poker_alchemy__level';
 const STATE_KEY = '__poker_alchemy__state';
 const BEST_KEY = '__poker_alchemy__best_';
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
-// 三条及以上才震屏 + 撒花
-const FX = { four: 'big', straightFlush: 'big', three: 'burst' };
+// 庆祝档位（与 board.js 的 COMBOS[].fx 一致）：四条 / 同花顺最强、三条次之，其余不弹浮字
+const FX = { four: 3, straightFlush: 3, three: 2 };
 
 const mode = ref(+(localStorage.getItem(MODE_KEY) || 1));   // 1 闯关 / 2 无尽
 const level = ref(1);
@@ -163,6 +168,9 @@ const cursor = ref(0);       // pile 里当前手牌的下标
 const confirming = ref(false);
 const toast = ref('');
 const shaking = ref(false);
+// 大牌型的庆祝浮字（同消消乐：按档位放大、中央弹出、自动消失）
+const celebration = ref(null);
+const celebrating = ref(false);
 // 刚被消除的牌：局面里立刻清空（否则动画期间再落一子会把同一条线**重复计分**），
 // 但保留一层浮影把「闪烁 → 消失」播完
 const clearing = ref(new Map());
@@ -302,13 +310,15 @@ function startEndless() {
 
 function startNewGame() {
   confirming.value = false;
-  localStorage.removeItem(BEST_KEY + mode.value);
   if (mode.value === 1) {
+    // 闯关：清闯关记录，从第 1 关重开
+    localStorage.removeItem(BEST_KEY + 1);
     localStorage.removeItem(LEVEL_KEY);
     bestScore.value = 0;
     startLevel(1);
   } else {
-    bestScore.value = 0;
+    // 无尽：只清已用牌数与当前得分（startEndless 会重置这两项），**最高分保留**
+    bestScore.value = +(localStorage.getItem(BEST_KEY + 2) || 0);
     startEndless();
   }
 }
@@ -496,23 +506,44 @@ function settle() {
     clearing.value = gone;
     clearTimeout(clearTimer);
     clearTimer = setTimeout(() => { clearing.value = new Map(); save(); }, 520);
-    showToast(`${i18n(`combo${best.combo.id[0].toUpperCase()}${best.combo.id.slice(1)}`)} +${gained}`);
-    celebrateBest(best.combo.id);
+    const name = i18n(`combo${best.combo.id[0].toUpperCase()}${best.combo.id.slice(1)}`);
+    if (FX[best.combo.id]) announceCelebration(best.combo.id, gained);
+    else showToast(`${name} +${gained}`);
   }
   checkEnd();
   save();
 }
 
-function celebrateBest(id) {
-  const fx = FX[id];
-  if (!fx) return;
-  shaking.value = false;
-  void document.querySelector('.game-area')?.offsetWidth;   // 重排一次，动画能重播
-  shaking.value = true;
+// ---------- 大牌型的即时庆祝（照消消乐那一套）----------
+// 四条 / 同花顺 / 三条消除时：棋盘震一下 + 外圈闪一圈光 + 中央弹出牌型名与本次得分 + 撒一把花
+function shakeBoard() {
   clearTimeout(shakeTimer);
-  shakeTimer = setTimeout(() => { shaking.value = false; }, 420);
-  if (fx === 'big') confetti();
-  else burstConfetti(0.6, { count: 26 });
+  shaking.value = false;
+  // 先摘类名再重排，保证连续触发也能重播同一条动画
+  void document.querySelector('.board')?.offsetWidth;
+  shaking.value = true;
+  shakeTimer = setTimeout(() => { shaking.value = false; }, 340);
+}
+
+function announceCelebration(id, gained) {
+  const tier = FX[id];
+  if (!tier) return;
+  shakeBoard();
+  celebration.value = {
+    id: ++celebrationId,
+    tier,
+    gained,
+    name: i18n(`combo${id[0].toUpperCase()}${id.slice(1)}`),
+  };
+  clearTimeout(celebrateTimer);
+  celebrateTimer = setTimeout(() => { celebration.value = null; }, 1100 + tier * 220);
+  // 棋盘外圈闪光：与震动的 shaking 是两套独立样式（一个动 box-shadow、一个动 transform）
+  clearTimeout(flashTimer);
+  celebrating.value = false;
+  void document.querySelector('.board')?.offsetWidth;
+  celebrating.value = true;
+  flashTimer = setTimeout(() => { celebrating.value = false; }, 900);
+  burstConfetti(tier);
 }
 
 function showToast(text) {
@@ -585,6 +616,9 @@ let shakeTimer = 0;
 let toastTimer = 0;
 let clearTimer = 0;
 let flyTimer = 0;
+let celebrateTimer = 0;
+let flashTimer = 0;
+let celebrationId = 0;
 
 function onResize() {
   const keep = metrics.value.gap;
@@ -615,16 +649,34 @@ onUnmounted(() => {
   clearTimeout(toastTimer);
   clearTimeout(clearTimer);
   clearTimeout(flyTimer);
+  clearTimeout(celebrateTimer);
+  clearTimeout(flashTimer);
   save();
 });
 </script>
 
 <style scoped lang="scss">
+// 大牌型消除时的棋盘震动（与消消乐同一个关键帧）
 @keyframes board-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-6px) rotate(-0.6deg); }
-  45% { transform: translateX(5px) rotate(0.5deg); }
-  70% { transform: translateX(-3px); }
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-5px, 2px); }
+  30% { transform: translate(4px, -3px); }
+  45% { transform: translate(-3px, -2px); }
+  60% { transform: translate(3px, 2px); }
+}
+// 棋盘外圈的一圈闪光（与震动是两套独立样式：一个动 box-shadow、一个动 transform）
+@keyframes board-celebrate {
+  0% { box-shadow: 0 0 0 0 transparent; }
+  25% { box-shadow: 0 0 0 4px var(--celebrate-glow), 0 0 26px 8px var(--celebrate-glow); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+// 庆祝浮字：弹出 → 顿一下 → 上飘淡出
+@keyframes celebrate-pop {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.4) rotate(-6deg); }
+  28% { opacity: 1; transform: translate(-50%, -50%) scale(1.16) rotate(3deg); }
+  44% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  78% { opacity: 1; transform: translate(-50%, -62%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -100%) scale(0.92); }
 }
 @keyframes card-in {
   from { transform: scale(0.24); opacity: 0; }
@@ -751,8 +803,9 @@ onUnmounted(() => {
     position: relative;
     width: fit-content;
     margin: 0 auto;
-    &.shaking { animation: board-shake 0.42s ease-in-out; }
     .board {
+      &.shaking { animation: board-shake 0.34s ease; }
+      &.celebrating { animation: board-celebrate 0.9s ease-out; }
       display: grid;
       grid-template-columns: repeat(4, var(--cw));
       grid-auto-rows: var(--ch);
@@ -782,6 +835,49 @@ onUnmounted(() => {
         }
         // 点击放置：目标格的牌先隐身，等外面的浮牌飞到了再显形
         &.incoming > * { opacity: 0; }
+      }
+    }
+    // 大牌型的庆祝浮字：棋盘正中弹出，不挡操作
+    .celebrate {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 10px 18px;
+      box-sizing: border-box;
+      border-radius: var(--radius-tile);
+      background: var(--primary-bg);
+      color: #fff;
+      font-weight: bold;
+      text-align: center;
+      max-width: calc(100% - 8px);
+      pointer-events: none;
+      box-shadow: 0 6px 18px var(--celebrate-glow);
+      animation: celebrate-pop 0.95s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
+      .celebrate-text {
+        font-size: 18px;
+        line-height: 1.2;
+      }
+      .celebrate-score {
+        font-size: 14px;
+        line-height: 1.2;
+        margin-top: 3px;
+        opacity: 0.92;
+        font-variant-numeric: tabular-nums;
+      }
+      // 三条是 tier-2、四条 / 同花顺是 tier-3，越高浮字越大、光圈越亮
+      &.tier-2 {
+        box-shadow: 0 6px 20px var(--celebrate-glow), 0 0 0 3px var(--celebrate-glow);
+        .celebrate-text { font-size: 21px; }
+      }
+      &.tier-3 {
+        padding: 12px 22px;
+        box-shadow: 0 8px 26px var(--celebrate-glow), 0 0 0 4px var(--celebrate-glow);
+        .celebrate-text { font-size: 24px; }
       }
     }
     .toast {

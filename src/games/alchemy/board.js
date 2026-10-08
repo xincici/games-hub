@@ -20,15 +20,18 @@ export const JOKER_SUIT = { [BLACK]: 'spade', [RED]: 'heart' };
 export const colorOf = suit => (BLACK_SUITS.includes(suit) ? BLACK : RED);
 export const suitsForColor = color => (color === BLACK ? BLACK_SUITS : RED_SUITS);
 
-// 牌型表：**按分值从高到低**排列，评估时取第一条成立的
+// 牌型表：**按分值从高到低**排列，评估时取第一条成立的。
+// 注意顺序即优先级 —— 同花(200) 现在比顺子(300) 分低，但四张牌不可能既「非同花顺的同花」
+// 又「是顺子」（两者都成立就一定是同花顺，而它在前面已经命中），所以按分值排序是安全的。
+// fx 是庆祝档位（与消消乐一致：3 = 最强、2 = 次强、没有 fx = 不弹庆祝浮字）
 export const COMBOS = [
-  { id: 'four', score: 1000, fx: 'big' },          // 四条
-  { id: 'straightFlush', score: 800, fx: 'big' },  // 同花顺
-  { id: 'three', score: 400, fx: 'burst' },        // 三条
-  { id: 'flush', score: 300 },                     // 同花
-  { id: 'straight', score: 250 },                  // 顺子
-  { id: 'twoPair', score: 150 },                   // 两对
-  { id: 'pair', score: 50 },                       // 一对
+  { id: 'four', score: 1000, fx: 3 },          // 四条
+  { id: 'straightFlush', score: 1000, fx: 3 }, // 同花顺
+  { id: 'three', score: 500, fx: 2 },          // 三条
+  { id: 'straight', score: 300 },              // 顺子
+  { id: 'flush', score: 200 },                 // 同花
+  { id: 'twoPair', score: 100 },               // 两对
+  { id: 'pair', score: 50 },                   // 一对
 ];
 
 export const comboById = id => COMBOS.find(c => c.id === id) || null;
@@ -201,24 +204,18 @@ export function isStuck(board) {
 }
 
 // ---------- 关卡曲线 ----------
-// 闯关模式：牌堆张数与目标分随关卡上涨（牌堆第 20 关封顶，目标分之后继续涨）。
-// 数值是离线标定的（见 AGENTS.md 的「难度标定」）：目标分从「贪心模拟玩家」的 p20 起步、
-// 到第 20 关升到它的 p10 附近（贪心通关率 ~75% → ~10%）。这里要注意：本作的贪心玩家是**下界**
-// 而不是上界 —— 它只看一步、不会规划整条线，而人类会为了凑同花顺主动铺线，实际比它宽裕。
-const DECK_MIN = 30;
-const DECK_MAX = 42;
-const DECK_CAP_LEVEL = 20;
-const TARGET_MIN = 900;
+// 第 1 关 24 张牌、800 分过关；每关 +1 张牌、过关分 +50；每 10 的倍数关再多 +100。
+// 牌堆不封顶：棋盘只有 16 格，牌堆继续变长本身就是难度（必须先消出空位才放得下）。
+const DECK_BASE = 24;
+const TARGET_BASE = 800;
 const TARGET_STEP = 50;
-
-export const MAX_LEVEL = DECK_CAP_LEVEL;
+const TENS_BONUS = 100;
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  const t = Math.min(1, (lv - 1) / (DECK_CAP_LEVEL - 1));
   return {
     level: lv,
-    deck: Math.round(DECK_MIN + (DECK_MAX - DECK_MIN) * t),
-    target: TARGET_MIN + (lv - 1) * TARGET_STEP,
+    deck: DECK_BASE + (lv - 1),
+    target: TARGET_BASE + (lv - 1) * TARGET_STEP + Math.floor(lv / 10) * TENS_BONUS,
   };
 }
