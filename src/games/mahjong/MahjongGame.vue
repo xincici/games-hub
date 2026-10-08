@@ -131,6 +131,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import MahjongTile from './MahjongTile.vue';
+import { RESULT_DELAY_MS } from '@/shared/resultDelay';
 import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
@@ -451,7 +452,8 @@ function settle() {
     announceCelebration(best.trio.id, gained, hits.length);
   }
   // 结算层等得分浮字消失之后再出现；没有得分就立即结算
-  const wait = celebration.value ? celebrateLife(celebration.value.tier) : 0;
+  // 同扑克炼金术：不等浮字整条生命周期（1.32~1.76s），只按共用组件里 0.5s 的约定停一下
+  const wait = celebration.value ? RESULT_DELAY_MS : 0;
   clearTimeout(endTimer);
   if (wait) endTimer = setTimeout(() => { checkEnd(); save(); }, wait);
   else { checkEnd(); save(); }

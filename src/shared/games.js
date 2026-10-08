@@ -205,14 +205,6 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 2,
   },
-  {
-    id: 'wip',
-    // 首页的「建设中」占位卡：path 指向首页（点了不跳走，由 onCardClick 拦下）
-    path: '/',
-    icon: 'i-mdi-hammer-wrench',
-    accent: 'logic',
-    wip: true,
-  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -235,7 +227,6 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['sort', sortDict],
   ['alchemy', alchemyDict],
   ['mahjong', mahjongDict],
-  ['wip', { en: { gameTitle: 'Coming Soon' }, cn: { gameTitle: '建设中' } }],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

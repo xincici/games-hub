@@ -135,6 +135,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import CardItem from '@/games/poker/CardItem.vue';
+import { RESULT_DELAY_MS } from '@/shared/resultDelay';
 import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
@@ -507,7 +508,9 @@ function settle() {
     announceCelebration(best.combo.id, gained);
   }
   // 结算层要等中央得分浮字消失之后再出现（没有浮字就立即结算）
-  const wait = celebration.value ? celebrateLife(celebration.value.tier) : 0;
+  // 结算层只需让浮字露一下脸，不等它整条生命周期走完：消消乐的 winLevel() 是立刻铺结算层的，
+  // 实测按 celebrateLife(tier)（1.32~1.76s）延迟会有明显停顿，所以改用共用组件里那个 0.5s 约定
+  const wait = celebration.value ? RESULT_DELAY_MS : 0;
   clearTimeout(endTimer);
   if (wait) endTimer = setTimeout(() => { checkEnd(); save(); }, wait);
   else { checkEnd(); save(); }

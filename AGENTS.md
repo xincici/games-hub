@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 和麻将英雄 (Mahjong Hero)，现共十九个游戏；首页末尾还有一张「建设中」的占位卡（registry 里 id 为 `wip`，不是游戏、点了不跳转，只为占住排版位置）。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 和麻将英雄 (Mahjong Hero)，现共十九个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，2/3/4/3/4/3 共 19 格，与游戏数一一对应），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -76,7 +76,7 @@ src/
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典（新增游戏要在表尾追加，首页末位正好接上）
 ├── components/
-│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 2/3/2/3/2/3/2/3 正好 20 个位置（19 个游戏 + 1 张建设中占位卡）；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` = `min(118px, calc(100vw / 4 - 2px))`：**屏宽 ≤480 时按屏宽自适应**（最宽的一行 3 格约占 3/4 宽；320 → 78px、375 → 91.75px、390 → 95.5px），**480px 时 480/4 − 2 = 118 正好接上封顶值、更宽一律 118px 不再变大**（原来写死 100px + ≤375 时 92px 那一档已删）
+│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 2/3/4/3/4/3 正好 19 个位置，与 19 个游戏一一对应；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` **同时受宽度与高度两个约束取小值，保证首页不出滚动条**：宽度约束 `(min(100vw, 480px) − 41px) / 4`（最宽一行 4 格 + 3×3px 缝隙 + 左右各 16px 内边距），高度约束 `(100dvh − 195px) / 5.485`（6 行蜂窝总高 = 4.75h + 13.25px，h = 1.1547w，再扣掉顶栏 94 + 上下内边距 64/24）；实测 320×568 → 68px、375×667 → 84px、390×844 → 87px、414×896 → 93px、480×900 → 110px，五档文档高都等于视口高、无滚动条
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
@@ -142,7 +142,9 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **页面滑动手势一律用 Pointer Events**（`pointerdown` / `pointermove` / `pointerup`）+ 手势区域内 `touch-action: none`。`touchstart/move/end` 是**只认触摸**的：PC 上拿鼠标怎么拖都不触发（装成桌面应用后更明显 —— 浏览器 / 窗口层会把整段手势当成滚页面或拖窗口收走，再补一个 `touchcancel`）。Threes、Emoji 消消乐、2048、贪吃蛇（转向）、数字迷宫（空白格跟手）都已按这套实现，并且都保留了原有的兜底操作（消消乐点两下换位、2048 / 数字迷宫方向键、数字迷宫摇杆按钮）。`touch-action: none` 只加在「真正拥有这个手势」的元素上：**先量这一页会不会溢出**——不溢出就加在整页 `.wrapper`（Threes / 2048 / 贪吃蛇），会溢出就加在棋盘那层（消消乐 `.board-frame`；数字迷宫 `.game-area`，最高难度 6 在 320×568 下 scrollH 590 > 568，整页 none 会把「滚下去看棋盘」一起吃掉）。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
-  以后要补位（比如首页还差一格、或某游戏临时下线）就照它加一条 registry 条目即可，实现要点：
+  **当前首页没有这类卡**（19 个位置正好被 19 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、
+  `.hex.wip` 样式和 `uno.config.ts` 里 `i-mdi-hammer-wrench` 的 safelist 都原样留着，恢复时照下面加一条 registry 条目即可）。
+  以后要补位（比如首页还差一格、或某游戏临时下线）就照它加一条 registry 条目，实现要点：
   - `path` 指向 `'/'`；`HomePage` 的 `mergeOrder()` 末尾用 `games.filter(g => g.wip)` 把这类卡**强制移到队尾**，
     所以无论本地保存的拖动顺序是什么，它都在最后；
   - 卡片上挂 `.wip` 类，CSS 写 `pointer-events: none`（连拖拽与点击都收不到），并加个 🚧 角标、文字用 `--muted-color`；
