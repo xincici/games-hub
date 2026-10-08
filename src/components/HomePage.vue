@@ -9,7 +9,7 @@
             :key="card.id"
             :to="card.path"
             class="hex"
-            :class="{ dragging: dragId === card.id }"
+            :class="{ dragging: dragId === card.id, wip: card.wip }"
             :data-id="card.id"
             draggable="false"
             :style="hexStyle(card)"
@@ -20,6 +20,7 @@
             <span class="hex-body">
               <i :class="card.icon" :style="card.iconScale ? { transform: `scale(${card.iconScale})` } : null" />
               <span class="game-name">{{ card.name }}</span>
+              <span v-if="card.wip" class="wip-badge">🚧</span>
             </span>
           </router-link>
         </div>
@@ -63,6 +64,9 @@ function readOrder() {
 }
 
 // 存档顺序（去重、丢弃已下线的游戏）+ 新游戏按注册顺序追加
+// 排序结果：wip（「建设中」占位卡）**永远排最后**，而且不参与拖动排序
+const isWip = id => games.some(g => g.id === id && g.wip);
+
 function mergeOrder() {
   const ids = games.map(game => game.id);
   const ordered = [];
@@ -72,7 +76,8 @@ function mergeOrder() {
   ids.forEach(id => {
     if (!ordered.includes(id)) ordered.push(id);
   });
-  return ordered;
+  const wipIds = games.filter(g => g.wip).map(g => g.id);
+  return [...ordered.filter(id => !wipIds.includes(id)), ...wipIds];
 }
 
 const order = ref(mergeOrder());
@@ -90,14 +95,15 @@ const cards = computed(() => order.value.map(id => {
     icon: game.icon,
     iconScale: game.iconScale,
     accent: game.accent || 'logic',
+    wip: !!game.wip,
     name: dictOf(game.id)[language.value].gameTitle,
   };
 }));
 
-// 蜂窝布局：按行分组，3/2/3/2/3/2/3 交替让每行都咬合（正好 18 个位置，与游戏数一致）。
+// 蜂窝布局：按行分组，2/3/2/3/2/3/2/3 交替让每行都咬合（正好 20 个位置：19 个游戏 + 1 张建设中占位卡）。
 // 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
 // 此时给该行加半格横向错位，保持蜂窝咬合
-const ROW_SIZES = [3, 2, 3, 2, 3, 2, 3];
+const ROW_SIZES = [2, 3, 2, 3, 2, 3, 2, 3];
 const rows = computed(() => {
   const list = cards.value;
   const groups = [];
@@ -131,6 +137,7 @@ function cardEl(id) {
 
 function onPointerDown(card, e) {
   if (e.button > 0) return;
+  if (card.wip) return;          // 「建设中」占位卡不可拖动、也不可点击（由 CSS 的 pointer-events: none 兜住）
   suppressClick = false;
   press = { id: card.id, card, x: e.clientX, y: e.clientY, type: e.pointerType };
   clearTimeout(pressTimer);
@@ -173,6 +180,7 @@ function onPointerMove(e) {
 }
 
 function swapCards(a, b) {
+  if (isWip(a) || isWip(b)) return;   // 「建设中」占位卡不能被别的卡换走
   const arr = order.value.slice();
   const ia = arr.indexOf(a);
   const ib = arr.indexOf(b);
@@ -208,6 +216,12 @@ function onTouchMove(e) {
 function onCardClick(e, card) {
   if (suppressClick) {          // 刚拖拽过：吞掉这次 click，避免误跳转
     suppressClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  // 「建设中」占位卡：不可点击，什么都不做（连跳转都拦掉）
+  if (card.wip) {
     e.preventDefault();
     e.stopPropagation();
     return;
@@ -391,6 +405,23 @@ function onVisibility() {
       background: var(--enter-bg);
     }
   }
+  // 「建设中」占位卡：永远在最后、不可点击、不可拖动（pointer-events: none 后连拖拽都收不到），
+  // 只是压暗 + 挂个 🚧 角标占住排版位置
+  // 注意要写成 &.wip：直接写 .hex.wip 会编译成 `.hex .hex.wip`（要求有 .hex 祖先），永远匹配不上
+  &.wip {
+    pointer-events: none;
+    cursor: default;
+    i { color: var(--muted-color); }
+    .game-name { color: var(--muted-color); }
+    .wip-badge {
+      position: absolute;
+      top: 20%;
+      right: 12%;
+      font-size: 13px;
+      line-height: 1;
+    }
+  }
+
   .hex-body {
     position: absolute;
     // 与外层同形状，四周缩进 --hex-border 形成 2px 描边
@@ -427,3 +458,5 @@ function onVisibility() {
 // 六边形宽度已经由上面的 min(118px, 100vw/4 - 2px) 随屏宽自适应
 //（320 宽 → 78px，原来写死的 92px 一档因此不再需要）
 </style>
+
+}

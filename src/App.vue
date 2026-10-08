@@ -179,6 +179,7 @@ body.card-dragging {
   cursor: grabbing;
 }
 body {
+  color: var(--text-color);
   --border-color: #e1e1e1;
   --card-border-color: #dcdfe6;
   --text-color: #2c3e50;

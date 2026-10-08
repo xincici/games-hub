@@ -17,6 +17,7 @@ import sortDict from '@/games/sort/i18n';
 import downDict from '@/games/down/i18n';
 import slideDict from '@/games/slide/i18n';
 import alchemyDict from '@/games/alchemy/i18n';
+import mahjongDict from '@/games/mahjong/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -193,6 +194,25 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 2,
   },
+  {
+    id: 'mahjong',
+    path: '/mahjong',
+    icon: 'i-mdi-cards-playing-outline',
+    accent: 'card',
+    helpKey: '__mahjong_hero__help_showed',
+    // 两种模式各记一份：1 = 闯关（记最高关卡）、2 = 无尽（记最高分）
+    recordsPrefix: '__mahjong_hero__best_',
+    minDifficulty: 1,
+    maxDifficulty: 2,
+  },
+  {
+    id: 'wip',
+    // 首页的「建设中」占位卡：path 指向首页（点了不跳走，由 onCardClick 拦下）
+    path: '/',
+    icon: 'i-mdi-hammer-wrench',
+    accent: 'logic',
+    wip: true,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -214,6 +234,8 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['master', masterDict],
   ['sort', sortDict],
   ['alchemy', alchemyDict],
+  ['mahjong', mahjongDict],
+  ['wip', { en: { gameTitle: 'Coming Soon' }, cn: { gameTitle: '建设中' } }],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

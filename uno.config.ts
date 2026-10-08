@@ -42,5 +42,7 @@ export default defineConfig({
     'i-mdi-format-vertical-align-bottom',
     'i-mdi-arrow-all',
     'i-mdi-flask-outline',
+    'i-mdi-cards-playing-outline',
+    'i-mdi-hammer-wrench',
   ],
 });

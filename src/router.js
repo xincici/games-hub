@@ -20,6 +20,7 @@ import SortGame from './games/sort/SortGame.vue';
 import DownGame from './games/down/DownGame.vue';
 import SlideGame from './games/slide/SlideGame.vue';
 import AlchemyGame from './games/alchemy/AlchemyGame.vue';
+import MahjongGame from './games/mahjong/MahjongGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -41,6 +42,7 @@ const routes = [
   { path: '/down', component: DownGame, meta: { game: 'down' } },
   { path: '/slide', component: SlideGame, meta: { game: 'slide' } },
   { path: '/alchemy', component: AlchemyGame, meta: { game: 'alchemy' } },
+  { path: '/mahjong', component: MahjongGame, meta: { game: 'mahjong' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

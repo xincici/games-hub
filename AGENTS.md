@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide) 和扑克炼金术 (Poker Alchemy)，现共十八个游戏。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 和麻将英雄 (Mahjong Hero)，现共十九个游戏；首页末尾还有一张「建设中」的占位卡（registry 里 id 为 `wip`，不是游戏、点了不跳转，只为占住排版位置）。首页展示各游戏图标与名称，点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -23,7 +23,7 @@ yarn build     # 构建到 dist/
 yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`）做冒烟检查。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`）做冒烟检查。
 
 ## 各游戏分册（**改哪个游戏就先读哪个分册**）
 
@@ -50,6 +50,7 @@ yarn preview   # 预览构建产物
 | Emoji 滑行 | `src/games/slide/` | [`AGENTS.md`](src/games/slide/AGENTS.md) | `/#/slide` |
 | Emoji 排序 | `src/games/sort/` | [`AGENTS.md`](src/games/sort/AGENTS.md) | `/#/sort` |
 | 扑克炼金术 | `src/games/alchemy/` | [`AGENTS.md`](src/games/alchemy/AGENTS.md) | `/#/alchemy` |
+| 麻将英雄 | `src/games/mahjong/` | [`AGENTS.md`](src/games/mahjong/AGENTS.md) | `/#/mahjong` |
 
 读法：要看 / 改某个游戏，先打开上表里对应的分册；只改共享组件或全局约定时看本文件。
 新增游戏时，除了在 `src/games/<id>/` 放组件与 `i18n.js`，也要按上面的格式补一份 `<id>/AGENTS.md`，
@@ -75,7 +76,7 @@ src/
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典（新增游戏要在表尾追加，首页末位正好接上）
 ├── components/
-│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 3/2/3/2/3/2/3 正好 18 个位置，与现在的 18 个游戏一一对应；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` = `min(118px, calc(100vw / 4 - 2px))`：**屏宽 ≤480 时按屏宽自适应**（最宽的一行 3 格约占 3/4 宽；320 → 78px、375 → 91.75px、390 → 95.5px），**480px 时 480/4 − 2 = 118 正好接上封顶值、更宽一律 118px 不再变大**（原来写死 100px + ≤375 时 92px 那一档已删）
+│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 2/3/2/3/2/3/2/3 正好 20 个位置（19 个游戏 + 1 张建设中占位卡）；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` = `min(118px, calc(100vw / 4 - 2px))`：**屏宽 ≤480 时按屏宽自适应**（最宽的一行 3 格约占 3/4 宽；320 → 78px、375 → 91.75px、390 → 95.5px），**480px 时 480/4 − 2 = 118 正好接上封顶值、更宽一律 118px 不再变大**（原来写死 100px + ≤375 时 92px 那一档已删）
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
@@ -96,7 +97,8 @@ src/
     ├── down/             # Emoji 下坠 —— 见 src/games/down/AGENTS.md
     ├── slide/            # Emoji 滑行 —— 见 src/games/slide/AGENTS.md
     ├── sort/             # Emoji 排序 —— 见 src/games/sort/AGENTS.md
-    └── alchemy/          # 扑克炼金术 —— 见 src/games/alchemy/AGENTS.md
+    ├── alchemy/          # 扑克炼金术 —— 见 src/games/alchemy/AGENTS.md
+    └── mahjong/          # 麻将英雄 —— 见 src/games/mahjong/AGENTS.md
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -109,7 +111,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **localStorage 约定**（各游戏互不干扰，前缀与原独立项目一致）：**每个游戏的 key 清单、含义与
   「哪些局面会存档」都写在它自己的分册里**（见上方索引），根目录只保留共享 key。
   - 共享：`__games_hub__theme` / `__games_hub__language` / `__games_hub__home_order`（首页卡片排序，新游戏按注册顺序排在已排序结果之后）
-- **闯关游戏的统一约定**（对对碰 / 连连看 / 消消乐 / Emoji 大师 / Emoji 排序 / Emoji 侦探 / Emoji 猎手 / 扑克炼金术）：操作区分两半（对对碰在两者之间还有一格观察 / 操作倒计时）——左边是本关盘面信息（各游戏显示什么见该游戏分册），右边只放「🎮 新游戏」按钮（四者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——各处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，弹窗三个按钮：**取消 / 重玩本关 / 确定重来**（没有「本关」概念的模式传 `:show-replay="false"` 去掉中间那个按钮，目前只有扑克炼金术的无尽模式用）。调用方 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="retryLevel" @cancel="confirming = false" />`；`@replay` 只重开当前这一关、**保留闯关进度**（`retryLevel()` 里要顺手 `confirming = false`——五关走 `replayLevel()` → `initLevel()` 的那几个已经关））；失败结算浮层只放「🔄 重玩本关」；**侦探 / 猎手没有进度条**（它们是单关制、没有「本关总共多少」的概念），但同样：顶部统计卡**中间**一格显示「当前第几关」（`levelLabel` + `level + 1`，两边都是 0 基下标），「新游戏」也走同一个二次确认弹窗（`startNewGame` 里清掉当前牌面的 `bestKey()` 记录再回第 1 关；另一种牌面的记录不动，标题连点彩蛋才两边一起清）；除连连看（限定时间内清盘）外都不带计时器；闭环曲线：连连看 / 排序 / 大师在第 30 / 30 / 50 关封顶，消消乐第 30 关只是结构到顶，之后步数与目标分仍逐关上涨。
+- **闯关游戏的统一约定**（对对碰 / 连连看 / 消消乐 / Emoji 大师 / Emoji 排序 / Emoji 侦探 / Emoji 猎手 / 扑克炼金术 / 麻将英雄）：操作区分两半（对对碰在两者之间还有一格观察 / 操作倒计时）——左边是本关盘面信息（各游戏显示什么见该游戏分册），右边只放「🎮 新游戏」按钮（四者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——各处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，弹窗三个按钮：**取消 / 重玩本关 / 确定重来**（没有「本关」概念的模式传 `:show-replay="false"` 去掉中间那个按钮，扑克炼金术与麻将英雄的无尽模式都用）。调用方 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="retryLevel" @cancel="confirming = false" />`；`@replay` 只重开当前这一关、**保留闯关进度**（`retryLevel()` 里要顺手 `confirming = false`——五关走 `replayLevel()` → `initLevel()` 的那几个已经关））；失败结算浮层只放「🔄 重玩本关」；**侦探 / 猎手没有进度条**（它们是单关制、没有「本关总共多少」的概念），但同样：顶部统计卡**中间**一格显示「当前第几关」（`levelLabel` + `level + 1`，两边都是 0 基下标），「新游戏」也走同一个二次确认弹窗（`startNewGame` 里清掉当前牌面的 `bestKey()` 记录再回第 1 关；另一种牌面的记录不动，标题连点彩蛋才两边一起清）；除连连看（限定时间内清盘）外都不带计时器；闭环曲线：连连看 / 排序 / 大师在第 30 / 30 / 50 关封顶，消消乐第 30 关只是结构到顶，之后步数与目标分仍逐关上涨。
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关。每个游戏具体挂什么开关写在它自己的分册里。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供——注意 TopHeader 自己的帮助 / 主题 / 语言按钮也用 `.item-wrapper`，所以**页面上会有多个同名的 wrapper**，测试脚本要按里面的图标（`[i-mdi-xxx]` 属性）去定位，别直接 `querySelector('.item-wrapper')`。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、1A2B 判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
 
@@ -139,4 +141,16 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - **页面滑动手势一律用 Pointer Events**（`pointerdown` / `pointermove` / `pointerup`）+ 手势区域内 `touch-action: none`。`touchstart/move/end` 是**只认触摸**的：PC 上拿鼠标怎么拖都不触发（装成桌面应用后更明显 —— 浏览器 / 窗口层会把整段手势当成滚页面或拖窗口收走，再补一个 `touchcancel`）。Threes、Emoji 消消乐、2048、贪吃蛇（转向）、数字迷宫（空白格跟手）都已按这套实现，并且都保留了原有的兜底操作（消消乐点两下换位、2048 / 数字迷宫方向键、数字迷宫摇杆按钮）。`touch-action: none` 只加在「真正拥有这个手势」的元素上：**先量这一页会不会溢出**——不溢出就加在整页 `.wrapper`（Threes / 2048 / 贪吃蛇），会溢出就加在棋盘那层（消消乐 `.board-frame`；数字迷宫 `.game-area`，最高难度 6 在 320×568 下 scrollH 590 > 568，整页 none 会把「滚下去看棋盘」一起吃掉）。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
+- **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
+  以后要补位（比如首页还差一格、或某游戏临时下线）就照它加一条 registry 条目即可，实现要点：
+  - `path` 指向 `'/'`；`HomePage` 的 `mergeOrder()` 末尾用 `games.filter(g => g.wip)` 把这类卡**强制移到队尾**，
+    所以无论本地保存的拖动顺序是什么，它都在最后；
+  - 卡片上挂 `.wip` 类，CSS 写 `pointer-events: none`（连拖拽与点击都收不到），并加个 🚧 角标、文字用 `--muted-color`；
+  - JS 侧再兜三层：`onPointerDown` 里 `if (card.wip) return`（不能作为拖动源）、`swapCards()` 里 `isWip()` 直接返回
+    （不能作为交换目标）、`onCardClick` 里 `preventDefault + stopPropagation`（点了什么都不做，也不跳转）。
+  - **注意 SCSS 嵌套**：这条样式要写成 `.hex` 规则里的 `&.wip { ... }` —— 直接写 `.hex.wip` 会被编译成
+    `.hex .hex.wip`（要求有 `.hex` 祖先），选择器永远匹配不上，表现是「写了样式却没生效」。
+- **文字色要有全局兜底**：`App.vue` 的 `body` 上写了 `color: var(--text-color)`。各游戏页仍会在自己的 `.wrapper` 里
+  再写一次（历史习惯），但**新增页面忘了写也不会出问题** —— 麻将英雄第一版就漏了这句，深色主题下整页文字
+  继承浏览器默认的黑色（标题对深灰卡片只有 1.39:1、数字 1.66:1），是**穷举式对比度审计**才抓出来的。
 - 变更时同步检查 README.md：凡改动影响到 README 中描述的内容（游戏列表、路由、目录结构、localStorage key、功能特性等），必须同步修改 README.md，不许 README 落后于实际。
