@@ -199,7 +199,7 @@ const cellH = computed(() => metrics.value.ch - 6);
 // 即 w ≤ 格高 / (1.35 + 2 × 0.075) = 格高 / 1.5。高度仍按 1:1.35 走，保住实物牌的形状。
 const boardTileW = computed(() => Math.min(
   cellW.value,
-  cellH.value / (TILE_RATIO + TILE_LIP_RATIO * 2),
+  cellH.value / TILE_RATIO,
 ));
 const boardVars = computed(() => ({
   '--cw': `${metrics.value.cw}px`,
@@ -211,14 +211,14 @@ const tileVars = (w, h) => ({ '--mj-w': `${w}px`, '--mj-h': `${h || Math.round(w
 
 // 牌是立体的，底部那条厚度（0.075 × 牌宽）会伸到「牌面」外面，所以棋盘底部要多留这一条
 // （见样式里的 --lip）。注意只留厚度、不留阴影的量，否则底部留白会明显大于上边。
-const LIP_RATIO = 0.075;
+const LIP_RATIO = 0;             // 牌面改用雪碧图，底部厚度已画在图里
 
 function computeMetrics() {
   const vw = Math.min(window.innerWidth, 480);
   const availW = vw - 32 - 16;                       // 页面左右 16 + 棋盘内边距 8×2
   const byW = (availW - metrics.value.gap * (SIZE - 1)) / SIZE;
   // 先用宽度估一个格子宽，据此算出底部要预留的立体高度（用真实 cw 会循环依赖）
-  const lip = Math.min(byW, 132) * LIP_RATIO;
+  const lip = 0;
   const byH = (window.innerHeight - 262 - 16 - lip - metrics.value.gap * (SIZE - 1)) / SIZE / TILE_RATIO;
   const cw = Math.max(56, Math.min(byW, byH, 132));
   metrics.value = { cw: Math.round(cw), ch: Math.round(cw * TILE_RATIO), gap: metrics.value.gap };
@@ -709,7 +709,7 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     margin: var(--row-gap) 0;
-    // 本作偏离共享约定：左边是 1:1.35 的麻将牌，比 var(--row-height) 高，写死行高会盖住统计卡
+    // 本作偏离共享约定：左边是 竖牌（约 1:1.28），比 var(--row-height) 高，写死行高会盖住统计卡
     height: auto;
     min-height: var(--row-height);
     .opt-half {
@@ -767,8 +767,8 @@ onUnmounted(() => {
       // 再按落地阴影（0.1w 偏移 + 0.15w 模糊）留 0.22 格宽的话，底部会比上边空出二十多像素、
       // 跟上边明显不对称。留这一条之后「牌面 + 底部厚度」这块视觉实体在棋盘里是上下居中的
       // （上边 8px + 格子内的居中留白，下边同理再补上厚度），柔和的投影允许越过棋盘边缘。
-      --lip: calc((var(--cw) - 6px) * 0.075);
-      padding: 8px 8px calc(8px + var(--lip));
+      // 牌面改用雪碧图后厚度已经画在图里，底部不再需要额外留白（上下都是 8px）
+      padding: 8px;
       border-radius: var(--card-radius);
       box-sizing: content-box;
       &.shaking { animation: board-shake 0.34s ease; }
@@ -905,7 +905,7 @@ onUnmounted(() => {
   // 只按 min(格宽, 格高/1.5) 缩的话整块会贴住下边缘（实测上 7.25px、下 0.15px）；
   // flex 居中会把元素上移「下外边距的一半」，所以补一个等于厚度的下外边距正好把整块顶回中间
   .board .cell .mj {
-    margin-bottom: calc(var(--mj-w) * 0.075);
+    // （牌面换成雪碧图后不再需要为底部厚度做垂直补偿）
   }
   // 刚点过的格子：边框实线主色高亮（450ms 后自动消失）。
   // 选择器要和上面那条基础规则（编译成 .wrapper .game-area .board .cell[data-v]）同级或更高：

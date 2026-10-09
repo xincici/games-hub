@@ -148,16 +148,22 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **阶段提示条要占自己的空白带**（侦探 / 猎手共用同一套做法）：提示条原来是 `position: absolute; top: -14px` 贴在棋盘上边缘，棋盘一大（侦探 4×5、猎手 4×8）第一行牌就被压住。现在 `.game-area` 用 `padding-top: var(--tip-band)`（28px）留出带子、提示条落在带子内（`top: 2px`），牌区从带子下面开始 —— 实测提示条底边与牌顶间隙 3~5px、六种组合（两游戏 × 两种牌面 × 390/320 两档宽度）都不重叠、不滚动。这 28px 必须同时从 `metrics` 的高度预算里扣掉（`(innerHeight - 262 - TIP_BAND)`），否则最高难度会顶出屏幕。侦探的结算浮层也在 `.game-area` 里，所以它得写 `top: var(--tip-band); height: calc(100% - var(--tip-band))` 才能正好盖住棋盘（猎手的浮层在 `.candidate-area` 内，不受影响）。
 - **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - **页面滑动手势一律用 Pointer Events**（`pointerdown` / `pointermove` / `pointerup`）+ 手势区域内 `touch-action: none`。`touchstart/move/end` 是**只认触摸**的：PC 上拿鼠标怎么拖都不触发（装成桌面应用后更明显 —— 浏览器 / 窗口层会把整段手势当成滚页面或拖窗口收走，再补一个 `touchcancel`）。Threes、Emoji 消消乐、2048、贪吃蛇（转向）、数字迷宫（空白格跟手）都已按这套实现，并且都保留了原有的兜底操作（消消乐点两下换位、2048 / 数字迷宫方向键、数字迷宫摇杆按钮）。`touch-action: none` 只加在「真正拥有这个手势」的元素上：**先量这一页会不会溢出**——不溢出就加在整页 `.wrapper`（Threes / 2048 / 贪吃蛇），会溢出就加在棋盘那层（消消乐 `.board-frame`；数字迷宫 `.game-area`，最高难度 6 在 320×568 下 scrollH 590 > 568，整页 none 会把「滚下去看棋盘」一起吃掉）。
-- **整副牌面优先裁图**：需要成套牌面（麻将 / 扑克 / 塔罗之类）时，如果手上有现成的整副图，
-  直接按网格裁下来用比 CSS 画省事得多 —— 雀圣就是这么做的（`src/games/quesheng/tiles/*.webp`，
-  34 张 131×168 的 webp 共约 220KB，用 `import.meta.glob('./tiles/*.webp', { eager: true, query: '?url',
-  import: 'default' })` 取，键是 `m1` / `s8` / `z5`）。裁完要**先拼一张联络表截图肉眼核对**：
-  网格顺序不一定按你的直觉（那份图的第 4 行是「北白南中發東西…」而不是东南西北中发白），
-  而且原图可能有水印格。**拼成一张雪碧图**更省请求：雀圣把 34 张拼成 7×5 的一张 webp
-  （917×840，181KB），运行时用 `background-size: 700% 500%` + `background-position: c/6, r/4`
-  的百分比取格子（与元素尺寸无关，缩放不用改），并把这张图在开局前 `await` 预加载好 ——
-  **不预加载的话，牌的入场波浪会被图片加载顺序盖掉，看起来就是「顺序不对」**。
-  CSS 画法（麻将英雄的筒牌）仍保留给单套小牌面用。
+- **整副牌面优先裁图，并且拼成一张雪碧图**：需要成套牌面（麻将 / 扑克 / 塔罗之类）时，
+  如果手上有现成的整副图，直接按网格裁下来用比 CSS 画省事得多。做法（两个麻将游戏都在用）：
+  - 裁图：按网格切、每格往里收 2px 去掉相邻牌的边线，**直接从原图拼成一张**再存 webp
+    （只压一次，别拿裁好的小图再拼）。裁完**先拼一张联络表截图肉眼核对**：网格顺序不一定按直觉
+    （那张图的第 4 行是「北白南中發東西…」而不是东南西北中發白），原图还可能有水印格。
+  - 现在的成品：`src/shared/mahjong-tiles.webp`（7 列 × 5 行、每格 131×168，一张 181KB）
+    + `src/shared/mahjongTiles.js`（格子表、`spriteVars()`、长宽比 `TILE_RATIO = 1.282`）。
+    麻将英雄只用筒、雀圣用整副，**两个游戏共用这一份**。
+  - **取格子用百分比**：`background-size: 735% 525%`（= 列/行数 ×1.05）
+    + `background-position: slotPos(i) = (k(i+0.5) − 0.5)/(n·k − 1)`。`ZOOM = 1.05` 是为了把裁切时
+    带进来的那圈原图边缘（条牌下面会出现一条白线）推出元素之外；百分比写法与元素尺寸无关，
+    牌随视口缩放不用改样式。**分母别写错**（漏了分子里的 `k` 会每格偏位、露出一半邻居，实测踩过）。
+  - **开局前 `await` 预加载这张图**：不预加载的话，牌的入场波浪会被图片加载顺序盖掉，
+    看起来就是「顺序不对」。另外牌面要自带 `border-radius`（约 9% 牌宽），
+    否则雪碧图裁出来的直角会漏出原图的浅底。
+  - 换牌面记得同步长宽比：现在是 **1.282**（雪碧图 131:168），不是当年 CSS 画的 1.35 + 底部厚度。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
   **当前首页没有这类卡**（20 个位置正好被 20 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、

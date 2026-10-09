@@ -9,11 +9,11 @@ export const COPIES = 4;            // 每种 4 张
 export const WALL_SIZE = KINDS * COPIES;
 
 export const PREVIEW = 1;           // 提示区只有「当前要放的牌 + 下一张」
-export const TILE_RATIO = 1.35;      // 麻将牌是 1 : 1.35 的竖牌（算尺寸时要用）
+export const TILE_RATIO = 1.282;     // 麻将牌的长宽比（= 雪碧图每格 131:168）
 // 牌是立体的：正面往下还画了一条「厚度」（MahjongTile.vue 里 box-shadow 的纵向偏移），
 // 它是画在元素外面的，所以排版时必须把它算进高度，否则最下面一排会顶出格子。
 // 改 MahjongTile.vue 的 box-shadow 纵向偏移时要同步这个值。
-export const TILE_LIP_RATIO = 0.075;
+export const TILE_LIP_RATIO = 0;     // 牌面换成雪碧图后，厚度已经画在图里了
 
 // 牌型：顺子（三张点数连续）100 分、刻子（三张相同）200 分
 export const TRIO = {
@@ -110,17 +110,19 @@ export function createWall(rand = Math.random) {
 // 第 1 关 20 张牌 / 400 分过关；之后每关 +2 张牌、过关分 +50，
 // 逢 10 的整数关那一档的增量按 100 算（即在这些关上再多 50）。
 // 有了「替换」机制之后棋盘满不再是死局（可以一直换牌），所以牌堆长度重新成了主要变量。
-const DECK_BASE = 20;
-const DECK_STEP = 2;
-const TARGET_BASE = 400;
-const TARGET_STEP = 50;
-const TENS_STEP = 50;          // 第 10、20… 关那一档增量多 50（相当于 +100）
+const DECK_BASE = 18;         // 第 1 关 18 张
+const TARGET_BASE = 400;      // 第 1 关 400 分
+const TARGET_STEP = 50;       // 每关过关分 +50（不再有逢 10 加 100）
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
+  // 牌数：第 1 关 18 张；从第 2 关起「偶数关 +2 张、奇数关 +1 张」
+  //（2..lv 里的偶数各 +2、3..lv 里的奇数各 +1）
+  const evens = Math.floor(lv / 2);
+  const odds = Math.floor((lv - 1) / 2);
   return {
     level: lv,
-    deck: DECK_BASE + (lv - 1) * DECK_STEP,
-    target: TARGET_BASE + (lv - 1) * TARGET_STEP + Math.floor(lv / 10) * TENS_STEP,
+    deck: DECK_BASE + evens * 2 + odds,
+    target: TARGET_BASE + (lv - 1) * TARGET_STEP,
   };
 }

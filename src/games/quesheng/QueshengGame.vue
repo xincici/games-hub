@@ -1,6 +1,7 @@
 <template>
   <div
     class="wrapper"
+    :style="{ '--sheet': `url(${tileSheet})` }"
     @pointerdown="onPointerDown"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
@@ -133,39 +134,9 @@ import {
   SIZE, CELLS, HAND_TILES, levelConfig, newGame, slide, findGroups, sameBoard, tileName,
 } from './board';
 
-// 牌面是参考图裁出来的 34 张牌，拼成**一张雪碧图**（7 列 × 5 行，每格 131×168）：
-// 只用一次请求，运行时靠 background-position 取格子。百分比定位（background-size: 700% 500%，
-// 位置取 c/6、r/4）与元素尺寸无关，牌怎么缩放都对得上。
-import tileSheet from './tiles.webp';
-
-const COLS = 7;
-const ROWS = 5;
-// 每格再多显示一点（等价于把牌画小一点）：裁切时每格四周会带 1px 原图的行/列间隙，
-// 不去掉的话牌贴着的那条边会出现一条白线（条牌最明显）。放大 5% 就把这圈边缘推出元素之外了。
-const ZOOM = 1.05;
-const BG_COLS = COLS * ZOOM;
-const BG_ROWS = ROWS * ZOOM;
-
-// background-position 的百分比不是简单的 c/(COLS−1)：背景被放大了 ZOOM 倍之后，
-// 要让「第 i 格的中心」正好落在元素中心，解出来是 (k(i+0.5) − 0.5) / (n·k − 1)。
-// 漏了 k 的话每格都会偏位（表现为一张牌里露出半个邻居，实测过）。
-const slotPos = (i, n, k) => (((k * (i + 0.5) - 0.5) / (n * k - 1)) * 100);
-const SLOT_ORDER = [
-  ...Array.from({ length: 9 }, (_, i) => `m${i + 1}`),
-  ...Array.from({ length: 9 }, (_, i) => `s${i + 1}`),
-  ...Array.from({ length: 9 }, (_, i) => `p${i + 1}`),
-  'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7',
-];
-const TILE_SLOT = Object.fromEntries(SLOT_ORDER.map((k, i) => [k, [Math.floor(i / COLS), i % COLS]]));
-const spriteVars = t => {
-  const [r, c] = TILE_SLOT[`${t.suit}${t.num}`] || [0, 0];
-  return {
-    '--bg-x': `${slotPos(c, COLS, ZOOM)}%`,
-    '--bg-y': `${slotPos(r, ROWS, ZOOM)}%`,
-    '--bg-w': `${BG_COLS * 100}%`,
-    '--bg-h': `${BG_ROWS * 100}%`,
-  };
-};
+// 牌面是参考图裁出来的 34 张牌拼成的雪碧图（与麻将英雄共用，见 src/shared/mahjongTiles.js）
+import tileSheet from '@/shared/mahjong-tiles.webp';
+import { spriteVars } from '@/shared/mahjongTiles';
 
 // 开局前把这张雪碧图读进缓存：不预加载的话，牌元素会按波浪淡入、图却要等下载完才冒出来，
 // 肉眼看到的顺序就变成了「谁先加载完谁先出现」。
@@ -792,7 +763,7 @@ onUnmounted(() => {
           width: 100%;
           height: 100%;
           display: block;
-          background-image: url('./tiles.webp');
+          background-image: var(--sheet);
           background-repeat: no-repeat;
           background-size: var(--bg-w, 700%) var(--bg-h, 500%);
           background-position: var(--bg-x, 0%) var(--bg-y, 0%);
