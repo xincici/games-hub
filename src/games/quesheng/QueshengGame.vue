@@ -140,6 +140,16 @@ import tileSheet from './tiles.webp';
 
 const COLS = 7;
 const ROWS = 5;
+// 每格再多显示一点（等价于把牌画小一点）：裁切时每格四周会带 1px 原图的行/列间隙，
+// 不去掉的话牌贴着的那条边会出现一条白线（条牌最明显）。放大 5% 就把这圈边缘推出元素之外了。
+const ZOOM = 1.05;
+const BG_COLS = COLS * ZOOM;
+const BG_ROWS = ROWS * ZOOM;
+
+// background-position 的百分比不是简单的 c/(COLS−1)：背景被放大了 ZOOM 倍之后，
+// 要让「第 i 格的中心」正好落在元素中心，解出来是 (k(i+0.5) − 0.5) / (n·k − 1)。
+// 漏了 k 的话每格都会偏位（表现为一张牌里露出半个邻居，实测过）。
+const slotPos = (i, n, k) => (((k * (i + 0.5) - 0.5) / (n * k - 1)) * 100);
 const SLOT_ORDER = [
   ...Array.from({ length: 9 }, (_, i) => `m${i + 1}`),
   ...Array.from({ length: 9 }, (_, i) => `s${i + 1}`),
@@ -149,7 +159,12 @@ const SLOT_ORDER = [
 const TILE_SLOT = Object.fromEntries(SLOT_ORDER.map((k, i) => [k, [Math.floor(i / COLS), i % COLS]]));
 const spriteVars = t => {
   const [r, c] = TILE_SLOT[`${t.suit}${t.num}`] || [0, 0];
-  return { '--bg-x': `${(c / (COLS - 1)) * 100}%`, '--bg-y': `${(r / (ROWS - 1)) * 100}%` };
+  return {
+    '--bg-x': `${slotPos(c, COLS, ZOOM)}%`,
+    '--bg-y': `${slotPos(r, ROWS, ZOOM)}%`,
+    '--bg-w': `${BG_COLS * 100}%`,
+    '--bg-h': `${BG_ROWS * 100}%`,
+  };
 };
 
 // 开局前把这张雪碧图读进缓存：不预加载的话，牌元素会按波浪淡入、图却要等下载完才冒出来，
@@ -779,9 +794,13 @@ onUnmounted(() => {
           display: block;
           background-image: url('./tiles.webp');
           background-repeat: no-repeat;
-          background-size: 700% 500%;
+          background-size: var(--bg-w, 700%) var(--bg-h, 500%);
           background-position: var(--bg-x, 0%) var(--bg-y, 0%);
           user-select: none;
+          // 原图每张牌自己是圆角的（约 5.3% 牌宽），而裁出来的是直角矩形 ——
+          // 不给圆角的话四角会露出牌面之外的方块（浅底）。取 9%：比原图略大一点，
+          // 刚好把那一圈盖住，又不会明显啃掉牌自身的描边；按牌宽取所以任何尺寸都对得上。
+          border-radius: calc(var(--cell) * 0.09);
         }
         transition: left 0.17s cubic-bezier(0.3, 0.8, 0.4, 1), top 0.17s cubic-bezier(0.3, 0.8, 0.4, 1);
         // 开局从左上到右下逐张铺开（延迟由 JS 按 r + c 注入）
