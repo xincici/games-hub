@@ -77,7 +77,12 @@
           @click="onCellClick(idx - 1)"
         >
           <template v-if="board[idx - 1]">
-            <MahjongTile :value="board[idx - 1].value" :style="tileVars(boardTileW)" />
+            <MahjongTile
+              :key="`${dealSeq}-${idx}`"
+              :value="board[idx - 1].value"
+              :class="{ dealt: dealing }"
+              :style="{ ...tileVars(boardTileW), animationDelay: dealing ? `${dealDelay(idx - 1)}ms` : '0ms' }"
+            />
           </template>
           <!-- 刚消掉的牌：浮影层播完「闪烁 → 消失」就走 -->
           <span v-else-if="clearing.has(idx - 1)" class="clearing">
@@ -132,6 +137,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { preloadTiles } from '@/shared/mahjongTiles';
 
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -174,6 +180,8 @@ const clearing = ref(new Map());
 const loseReason = ref('deck');
 const combo = ref(0);             // 连击数：连续每次消除 +1，断一次归零   // 'stuck' = 满盘无处可放；'deck' = 牌用完了
 const flying = ref(null);
+const dealing = ref(false);       // 恢复存档时棋盘逐张铺开（波浪）
+const dealSeq = ref(0);
 const flashCell = ref(-1);      // 刚点过的格子（边框实线高亮，短暂反馈）
 let cellFlashTimer = 0;
 const flyingTo = ref(-1);
@@ -237,6 +245,7 @@ let uidCounter = 0;
 
 // ---------- 开局 ----------
 function clearTimers() {
+  clearTimeout(dealTimer);
   clearTimeout(cellFlashTimer);
   clearTimeout(shakeTimer);
   clearTimeout(celebrateTimer);
@@ -337,6 +346,16 @@ function onScoreReset() {
 // ---------- 存档 ----------
 const stateKey = () => (mode.value === 1 ? STATE_KEY : `${STATE_KEY}_2`);
 
+// 棋盘逐张铺开的波浪：延迟按「行 + 列」递增，波前从左上角扫到右下角
+const DEAL_MS = 340;
+function startDeal() {
+  dealing.value = true;
+  dealSeq.value += 1;
+  clearTimeout(dealTimer);
+  dealTimer = setTimeout(() => { dealing.value = false; }, (SIZE - 1) * 2 * 60 + DEAL_MS);
+}
+const dealDelay = cell => (Math.floor(cell / SIZE) + (cell % SIZE)) * 60;
+
 function save() {
   try {
     localStorage.setItem(stateKey(), JSON.stringify({
@@ -378,6 +397,8 @@ function restore() {
     combo.value = Math.max(0, +saved.combo || 0);
     phase.value = saved.phase;
     ensurePile(cursor.value + 1 + PREVIEW);
+    // 恢复的局面也按「从左上到右下」的波浪逐张出现（不然一进来牌是整块冒出来的）
+    startDeal();
     return true;
   } catch {
     return false;
@@ -593,6 +614,7 @@ function cellAt(x, y) {
 let shakeTimer = 0;
 let celebrateTimer = 0;
 let flashTimer = 0;
+let dealTimer = 0;
 let clearTimer = 0;
 let flyTimer = 0;
 let endTimer = 0;
@@ -602,13 +624,15 @@ function onResize() {
   computeMetrics();
 }
 
-onMounted(() => {
+onMounted(async () => {
   computeMetrics();
   const saved = +(localStorage.getItem(MODE_KEY) || 1);
   mode.value = saved === 2 ? 2 : 1;
   bestScore.value = +(localStorage.getItem(BEST_KEY + mode.value) || 0);
   if (mode.value === 1) level.value = Math.max(1, +(localStorage.getItem(LEVEL_KEY) || 1));
   window.addEventListener('resize', onResize);
+  // 先把牌面图读进缓存再铺盘，避免「牌先出现、图后到」的空白延迟
+  await preloadTiles();
   if (!restore()) {
     if (mode.value === 1) startLevel(level.value);
     else startEndless();
@@ -644,6 +668,10 @@ onUnmounted(() => {
   44% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
   78% { opacity: 1; transform: translate(-50%, -62%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -100%) scale(0.92); }
+}
+@keyframes tile-wave {
+  from { opacity: 0; transform: translate(-18px, -18px) scale(0.45); }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
 }
 @keyframes tile-in {
   from { transform: scale(0.24); opacity: 0; }
@@ -794,6 +822,8 @@ onUnmounted(() => {
           &:hover { box-shadow: 0 0 0 2px var(--primary-bg); }
         }
         &.incoming > * { opacity: 0; }
+        // 恢复存档时棋盘逐张铺开（延迟由 dealDelay() 按行列注入）
+        .mj.dealt { animation: tile-wave 0.34s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
       }
     }
     .clearing {

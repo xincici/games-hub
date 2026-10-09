@@ -1,5 +1,24 @@
 // 麻将牌面雪碧图：一整副 34 张牌拼成 7×5 的一张 webp（每格 131×168），
 // 麻将英雄（只用筒）和雀圣（用整副）共用这一份。
+import sheet from './mahjong-tiles.webp';
+
+export const TILE_SHEET = sheet;
+
+// 开局/恢复前先 await 一次，把这张图读进缓存：
+// 不预加载的话，牌元素先渲染出来、图却要等下载完才出现 —— 冷启动会看到明显的空白与延迟
+// （雀圣那边还会连带把入场波浪的顺序盖掉）。两个游戏共用这份缓存，先到先加载。
+let sheetPromise = null;
+export function preloadTiles() {
+  if (!sheetPromise) {
+    sheetPromise = new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve();     // 加载失败也不要卡住开局
+      img.src = sheet;
+    });
+  }
+  return sheetPromise;
+}
 //
 // 取格子用百分比而不是像素：background-size 放大 ZOOM 倍之后，
 // 「第 i 格的中心落在元素中心」解出来是 slotPos(i) = (k(i+0.5) − 0.5) / (n·k − 1)

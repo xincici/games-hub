@@ -1,7 +1,7 @@
 <template>
   <div
     class="wrapper"
-    :style="{ '--sheet': `url(${tileSheet})` }"
+    :style="{ '--sheet': `url(${TILE_SHEET})` }"
     @pointerdown="onPointerDown"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
@@ -135,24 +135,7 @@ import {
 } from './board';
 
 // 牌面是参考图裁出来的 34 张牌拼成的雪碧图（与麻将英雄共用，见 src/shared/mahjongTiles.js）
-import tileSheet from '@/shared/mahjong-tiles.webp';
-import { spriteVars } from '@/shared/mahjongTiles';
-
-// 开局前把这张雪碧图读进缓存：不预加载的话，牌元素会按波浪淡入、图却要等下载完才冒出来，
-// 肉眼看到的顺序就变成了「谁先加载完谁先出现」。
-const imageReady = ref(false);
-let imagePromise = null;
-function preloadTiles() {
-  if (!imagePromise) {
-    imagePromise = new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => { imageReady.value = true; resolve(); };
-      img.onerror = () => resolve();     // 加载失败也不要卡住开局
-      img.src = tileSheet;
-    });
-  }
-  return imagePromise;
-}
+import { TILE_SHEET, spriteVars, preloadTiles } from '@/shared/mahjongTiles';
 
 const MODE_KEY = '__quesheng__level';
 const STATE_KEY = '__quesheng__state';
@@ -517,7 +500,7 @@ onMounted(async () => {
   window.addEventListener('resize', computeMetrics);
   window.addEventListener('keyup', onKeyUp);
   // 先把牌图全部读进缓存，再开局 —— 这样铺牌动画才不会被图片加载打断
-  await preloadTiles();
+  await preloadTiles();   // 共享模块里缓存的同一个 promise
   if (!restoreState()) startLevel(Math.max(1, +(localStorage.getItem(MODE_KEY) || 1)));
 });
 

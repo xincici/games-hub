@@ -2,8 +2,7 @@
 // 牌面直接用雀圣那套雪碧图里的「筒」（与原 CSS 画的圆点相比，这套是实物牌的配色与质感）。
 // --mj-w / --mj-h 仍由父级给（牌是 131:168 的竖牌），组件本身不再画厚度。
 import { computed } from 'vue';
-import sheet from '@/shared/mahjong-tiles.webp';
-import { spriteVars } from '@/shared/mahjongTiles';
+import { TILE_SHEET, spriteVars } from '@/shared/mahjongTiles';
 
 const props = defineProps({
   // 1 = 一筒 … 9 = 九筒
@@ -11,7 +10,7 @@ const props = defineProps({
 });
 
 const vars = computed(() => ({
-  backgroundImage: `url(${sheet})`,
+  backgroundImage: `url(${TILE_SHEET})`,
   ...spriteVars(`p${props.value}`),
 }));
 </script>
