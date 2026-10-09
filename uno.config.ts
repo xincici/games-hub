@@ -43,6 +43,9 @@ export default defineConfig({
     'i-mdi-arrow-all',
     'i-mdi-flask-outline',
     'i-mdi-cards-playing-outline',
+    'i-mdi-cards-playing',
+    'i-mdi-undo-variant',
+    'i-mdi-redo-variant',
     'i-mdi-hammer-wrench',
   ],
 });

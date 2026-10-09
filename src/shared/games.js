@@ -18,6 +18,7 @@ import downDict from '@/games/down/i18n';
 import slideDict from '@/games/slide/i18n';
 import alchemyDict from '@/games/alchemy/i18n';
 import mahjongDict from '@/games/mahjong/i18n';
+import queshengDict from '@/games/quesheng/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -205,6 +206,16 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 2,
   },
+  {
+    id: 'quesheng',
+    path: '/quesheng',
+    icon: 'i-mdi-cards-playing',
+    accent: 'card',
+    helpKey: '__quesheng__help_showed',
+    recordsPrefix: '__quesheng__level',
+    minDifficulty: 1,
+    maxDifficulty: 1,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -227,6 +238,7 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['sort', sortDict],
   ['alchemy', alchemyDict],
   ['mahjong', mahjongDict],
+  ['quesheng', queshengDict],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

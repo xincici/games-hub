@@ -180,3 +180,20 @@
   所以 `.flash` 必须写成 `.wrapper .game-area .board .cell.flash`，只写 `.board .cell.flash` 会被
   基础那条 `border: 1px solid var(--tile-border-color)` 压掉，表现为「光环出来了、边框色没变」。
 
+## 与雀圣的关系（一段弯路，值得记）
+
+雀圣（`src/games/quesheng/`）最初复用本组件，我给它加了 `suit` 属性、用 CSS 画万 / 条 / 字。
+**后来用户提供了整副牌的图，改成直接从图里裁图用**（`src/games/quesheng/tiles/*.webp`），
+那段 `suit` 扩展与 CSS 万/条/字**已全部撤掉**，本文件回到只画筒的版本
+（`git checkout HEAD -- src/games/mahjong/MahjongTile.vue`）。
+
+这段弯路上踩了两个值得记的坑：
+
+1. **用脚本替换 `<script setup>` 开头一大段时，把 `BASE_DOT` / `DOT_SCALE` / `DOT_COLOR` / `LAYOUT`
+   一起删掉了** —— `dots` 计算属性引用了不存在的变量，**本作的牌整块不渲染**（棋盘 0 张、手牌空），
+   但构建**成功**、控制台**没有异常**（Vue 的渲染错误不走 `Runtime.exceptionThrown`）、
+   页面其它部分（统计 / 按钮 / 模态）全都正常。是「改完回头量一次本作手牌宽度」才发现
+   （`.tile-slot.current .mj` 取不到、宽 null）。**跨游戏复用组件的改动，改完必须回头把原游戏量一遍。**
+2. **CSS 画整副牌的性价比很低**：八条画成四根（用户：「只画出了一半」）、改成八根后并排间距
+   小于棍宽又叠成四根、白板的内阴影让整圈发红、一条的鸟太抽象（用户直接指定换 mdi 图标）……
+   而**裁图一次就全对了**。以后成套牌面优先找图裁（见根 AGENTS 的「整副牌面优先裁图」）。
