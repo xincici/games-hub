@@ -161,6 +161,20 @@
    Sass 报 `unmatched "}"` 构建失败，而验证结果全是旧行为。改成 `vite build > /tmp/b.log 2>&1; echo $?`
    并检查日志，才定位到。
 
+## 恢复记录时的铺牌波浪
+
+`restore()` 末尾调 `startDeal()`：棋盘上的牌加 `:class="{ dealt: dealing }"` 与
+`animation-delay = (行 + 列) × 60ms`（4×4 盘面，最大 360ms），由 `card-wave` 关键帧
+（从左上方滑入 + 放大）逐张出现；`:key` 里带上 `dealSeq` 保证元素重建、动画能重播；
+`onUnmounted` 里清掉 `dealTimer`。**只影响恢复**：新开一局棋盘本来是空的，没什么可铺。
+
+实测恢复一份 4 张牌的存档：`5@205ms(delay .12s) → 6@271ms(.18s) = 9@271ms → 10@321ms(.24s)`，
+跨度 116ms，延迟与 `(行+列)×60` 完全吻合。
+
+坑：把 `:class` 传给 `CardItem` 时它是**落在组件根元素上**的（`.card-wrapper`），
+所以样式要写成 `.cell .dealt`（父组件的 scoped 属性会同时打在子组件根节点上）；
+实测类名最终是 `card-wrapper dealt`、动画名 `card-wave-*`。
+
 ## 存档（localStorage）
 
 - `__poker_alchemy__mode`：1 闯关 / 2 无尽

@@ -49,15 +49,15 @@
           class="group-ring"
           :style="ringStyle(g)"
         />
-        <!-- 点齐两张后的消除提示（类 tooltip）：一对可以直接点它消，刻子 / 顺子再点第三张 -->
+        <!-- 点齐两张后的消除提示（类 tooltip）：只在真有一对可消时出现，且只给「消除这一对」 -->
         <span
           v-if="hint"
           class="clear-tip"
+          :class="{ below: hint.below }"
           :style="hintStyle"
-          @click.stop="hint.pair && clearGroup(hint.pair)"
+          @click.stop="clearGroup(hint.pair)"
         >
-          <span v-if="hint.pair" class="tip-act">✨ {{ i18n('clearPair') }}</span>
-          <span v-if="hint.meld" class="tip-hint">{{ i18n('clearMeldHint') }}</span>
+          <span class="tip-act">✨ {{ i18n('clearPair') }}</span>
         </span>
 
         <!-- 牌：绝对定位，滑动时靠 left/top 过渡动画 -->
@@ -319,23 +319,56 @@ function onTileClick(t) {
 // （纯一对在上面的 onTileClick 里就已经直接消掉了，轮不到这里）。
 // 歧义时提示里同时给出两条路：这两张本身也成一对 → 点提示消一对；
 // 想凑三张 → 提示里写着「或再点第三张」，点第三张即可消。
+// 点齐两张后的提示气泡：**只有「确实能消掉一对」时才浮出来**（点满两张相同的牌、且它们还能
+// 与旁边第三张凑成刻子的情形）。顺子点两张没有对子可消，就完全不弹提示（用户要求）；
+// 刻子那张也只给「消除这一对」一条路，不再提醒「再点第三张」——想消刻子直接点第三张即可。
 const hint = computed(() => {
   if (phase.value !== PLAY || selected.value.length !== 2 || clearing.value.size) return null;
   const sel = selected.value;
   const inBoth = groups.value.filter(g => sel.every(c => g.cells.includes(c)));
-  if (!inBoth.length) return null;
+  const pair = inBoth.find(g => g.cells.length === 2) || null;
+  if (!pair) return null;
+  // 第三张牌不能被子挡住，否则容易误点：纵向避开（它在上方就改到下方显示），
+  // 横向也朝远离它的方向贴边对齐（气泡比两张牌还宽时，居中会向旁边溢出压到第三张）
+  const rows = sel.map(c => Math.floor(c / SIZE));
+  const cols = sel.map(c => c % SIZE);
+  const minR = Math.min(...rows), maxR = Math.max(...rows);
+  const minC = Math.min(...cols), maxC = Math.max(...cols);
+  const thirds = inBoth.filter(g => g.cells.length === 3).flatMap(g => g.cells)
+    .filter(c => !sel.includes(c));
+  const rowOf = c => Math.floor(c / SIZE);
+  const colOf = c => c % SIZE;
+  const inCols = c => colOf(c) >= minC && colOf(c) <= maxC;
+  const inRows = c => rowOf(c) >= minR && rowOf(c) <= maxR;
+  const above = thirds.some(c => inCols(c) && rowOf(c) < minR);
+  const below = thirds.some(c => inCols(c) && rowOf(c) > maxR);
+  const right = thirds.some(c => inRows(c) && colOf(c) > maxC);
+  const left = thirds.some(c => inRows(c) && colOf(c) < minC);
   return {
-    cell: sel[1],
-    pair: inBoth.find(g => g.cells.length === 2) || null,
-    meld: inBoth.find(g => g.cells.length === 3) || null,
+    pair,
+    cells: sel,
+    // below = 气泡挂在下方（箭头朝上）；tx 是气泡相对锚点的水平对齐：
+    // 第三张在右边就让它向左延伸、在左边就向右延伸，都没有就居中
+    below: above && !below,
+    tx: right && !left ? '-100%' : (left && !right ? '0%' : '-50%'),
   };
 });
+// 气泡对齐「这两张牌的整体中心」而不是第二张牌：它比两张牌窄，就不会压到旁边 / 上下方的第三张
 const hintStyle = computed(() => {
-  if (!hint.value) return {};
-  const p = posOf(hint.value.cell);
-  const left = parseFloat(p.left) + metrics.value.cell / 2;
-  const top = parseFloat(p.top) - 6;
-  return { left: `${left}px`, top: `${top}px` };
+  const h = hint.value;
+  if (!h) return {};
+  const [a, b] = h.cells.map(posOf);
+  const xs = [parseFloat(a.left), parseFloat(b.left)];
+  const ys = [parseFloat(a.top), parseFloat(b.top)];
+  const cell = metrics.value.cell;
+  // 锚点：tx = -50% 时锚在两张牌的中心；-100% 时锚在右边缘（气泡向左长）；0% 时锚在左边缘
+  const anchorX = h.tx === '-100%' ? Math.max(...xs) + cell
+                : h.tx === '0%' ? Math.min(...xs)
+                : (Math.min(...xs) + Math.max(...xs)) / 2 + cell / 2;
+  const anchorY = h.below
+    ? Math.max(...ys) + metrics.value.cellH + 6
+    : Math.min(...ys) - 6;
+  return { left: `${anchorX}px`, top: `${anchorY}px`, '--tip-tx': h.tx, '--tip-ty': h.below ? '0%' : '-100%' };
 });
 
 function clearGroup(g) {
@@ -522,8 +555,9 @@ onUnmounted(() => {
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes qs-tip-in {
-  from { opacity: 0; transform: translate(-50%, -80%) scale(0.85); }
-  to { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+  // 入场只做缩放/淡入，位移沿用 --tip-tx / --tip-ty（否则动画期间会被硬编码的 -100% 拽到上方）
+  from { opacity: 0; transform: translate(var(--tip-tx, -50%), var(--tip-ty, -100%)) scale(0.86); }
+  to { opacity: 1; transform: translate(var(--tip-tx, -50%), var(--tip-ty, -100%)) scale(1); }
 }
 @keyframes qs-blink {
   0% { opacity: 1; filter: none; }
@@ -702,7 +736,8 @@ onUnmounted(() => {
       .clear-tip {
         position: absolute;
         z-index: 3;
-        transform: translate(-50%, -100%);
+        // 变换量由 hintStyle 给的 --tip-tx / --tip-ty 决定（避开第三张牌的方向）
+        transform: translate(var(--tip-tx, -50%), var(--tip-ty, -100%));
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -730,7 +765,15 @@ onUnmounted(() => {
           border-right: 5px solid transparent;
           border-top: 5px solid var(--primary-bg);
         }
-        .tip-hint { font-weight: 400; opacity: 0.9; }
+        // 第三张牌在正上方时改到下方显示，箭头也跟着翻过来，避免挡住要点的牌
+        &.below {
+          &::after {
+            bottom: auto;
+            top: -5px;
+            border-top: none;
+            border-bottom: 5px solid var(--primary-bg);
+          }
+        }
       }
       .tile {
         position: absolute;

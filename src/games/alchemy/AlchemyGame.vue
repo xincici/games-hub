@@ -78,7 +78,13 @@
           @click="onCellClick(idx - 1)"
         >
           <template v-if="board[idx - 1]">
-            <CardItem mini v-bind="cardProps(board[idx - 1])" :style="cardVars(cellW, cellH)" />
+            <CardItem
+              :key="`dealt-${dealSeq}-${idx}`"
+              mini
+              v-bind="cardProps(board[idx - 1])"
+              :class="{ dealt: dealing }"
+              :style="[cardVars(cellW, cellH), dealing ? { animationDelay: `${dealDelay(idx - 1)}ms` } : null]"
+            />
           </template>
           <!-- 刚消掉的牌：浮影层播完 pop-out 就走 -->
           <span v-else-if="clearing.has(idx - 1)" class="clearing">
@@ -182,6 +188,9 @@ const clearing = ref(new Map());
 const flying = ref(null);
 const flashCell = ref(-1);      // 刚点过的格子（边框实线高亮，短暂反馈）
 let cellFlashTimer = 0;
+const dealing = ref(false);      // 恢复存档时棋盘逐张铺开（波浪）
+const dealSeq = ref(0);
+let dealTimer = 0;
 const flyingTo = ref(-1);
 const busy = ref(false);
 
@@ -407,6 +416,8 @@ function restore() {
     played.value = Math.max(0, +saved.played || 0);
     phase.value = saved.phase;
     ensurePile(cursor.value + 1 + PREVIEW);
+    // 恢复的局面也按「从左上到右下」的波浪逐张出现（不然一进来牌是整块冒出来的）
+    startDeal();
     return true;
   } catch {
     return false;
@@ -638,6 +649,16 @@ let flashTimer = 0;
 let endTimer = 0;
 let celebrationId = 0;
 
+// 棋盘逐张铺开的波浪：延迟按「行 + 列」递增，波前从左上角扫到右下角
+const DEAL_MS = 340;
+const dealDelay = cell => (Math.floor(cell / SIZE) + (cell % SIZE)) * 60;
+function startDeal() {
+  dealing.value = true;
+  dealSeq.value += 1;
+  clearTimeout(dealTimer);
+  dealTimer = setTimeout(() => { dealing.value = false; }, (SIZE - 1) * 2 * 60 + DEAL_MS);
+}
+
 function onResize() {
   const keep = metrics.value.gap;
   computeMetrics();
@@ -670,6 +691,7 @@ onUnmounted(() => {
   clearTimeout(flashTimer);
   clearTimeout(endTimer);
   clearTimeout(cellFlashTimer);
+  clearTimeout(dealTimer);
   save();
 });
 </script>
@@ -696,6 +718,10 @@ onUnmounted(() => {
   44% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
   78% { opacity: 1; transform: translate(-50%, -62%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -100%) scale(0.92); }
+}
+@keyframes card-wave {
+  from { opacity: 0; transform: translate(-18px, -18px) scale(0.45); }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
 }
 @keyframes card-in {
   from { transform: scale(0.24); opacity: 0; }
@@ -842,6 +868,8 @@ onUnmounted(() => {
         // 半透明白：浅色主题下把米色棋盘提亮一点、深色下提亮更深，两种主题都能读出「槽位」
         background-color: rgb(255 255 255 / 8%);
         box-sizing: border-box;
+        // 恢复存档时棋盘逐张铺开（延迟由 dealDelay() 按行列注入）
+        .dealt { animation: card-wave 0.34s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
         // 手上有牌可放时，空格子换成主色虚线，明确「这里能落子」
         &.placeable {
           border-color: var(--primary-bg);
