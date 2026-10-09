@@ -68,7 +68,7 @@
     </div>
 
     <div class="game-area">
-      <div class="board dot-board" :class="{ shaking, celebrating }" :style="boardVars">
+      <div class="board dot-board" :class="{ shaking, celebrating, 'hover-muted': hoverMuted }" :style="boardVars">
         <div
           v-for="idx in CELLS"
           :key="`cell-${idx}`"
@@ -183,6 +183,20 @@ const flying = ref(null);
 const dealing = ref(false);       // 恢复存档时棋盘逐张铺开（波浪）
 const dealSeq = ref(0);
 const flashCell = ref(-1);      // 刚点过的格子（边框实线高亮，短暂反馈）
+// 恢复存档后先屏蔽「已有牌」格子的悬停光环：玩家退出时指针（手机上是刚点过的那张牌）还停在
+// 原处，重进后新渲染的格子立刻命中 :hover，看起来就是「上次点的那张牌还带着边框高亮」。
+// 等玩家真正动指针 / 按下（= 主动操作）之后再启用。
+const hoverMuted = ref(false);
+function unmuteHover() {
+  hoverMuted.value = false;
+  window.removeEventListener('pointermove', unmuteHover);
+  window.removeEventListener('pointerdown', unmuteHover);
+}
+function muteHover() {
+  hoverMuted.value = true;
+  window.addEventListener('pointermove', unmuteHover);
+  window.addEventListener('pointerdown', unmuteHover);
+}
 let cellFlashTimer = 0;
 const flyingTo = ref(-1);
 const busy = ref(false);
@@ -399,6 +413,7 @@ function restore() {
     ensurePile(cursor.value + 1 + PREVIEW);
     // 恢复的局面也按「从左上到右下」的波浪逐张出现（不然一进来牌是整块冒出来的）
     startDeal();
+    muteHover();
     return true;
   } catch {
     return false;
@@ -643,6 +658,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('pointermove', unmuteHover);
+  window.removeEventListener('pointerdown', unmuteHover);
   window.removeEventListener('resize', onResize);
   clearTimers();
   save();
@@ -800,6 +817,8 @@ onUnmounted(() => {
       border-radius: var(--card-radius);
       box-sizing: content-box;
       &.shaking { animation: board-shake 0.34s ease; }
+      // 静音期间不画「已有牌」的悬停光环（恢复存档后指针恰好停在上次点过的格子上时会出现）
+      &.hover-muted .cell.actable:hover { box-shadow: none; }
       &.celebrating { animation: board-celebrate 0.9s ease-out; }
       // 9 个格位画成常驻网格：格子就是牌的尺寸，牌四周各内缩 3px 让网格线露出来
       .cell {

@@ -11,7 +11,10 @@
 - **框架**：Vue 3（Composition API + `<script setup>`）+ Vue Router（hash 模式，懒加载/静态导入各游戏路由）
 - **构建**：Vite 5（`@` 别名指向 `src/`）
 - **样式**：SCSS + UnoCSS（presetUno / presetAttributify / presetIcons，图标用 carbon 和 mdi 集合）
-- **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）
+- **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）。**`workbox.globPatterns` 必须显式带上图片类型**
+  （现在是 `**/*.{js,css,html,webp,png,svg,ico,woff2}`）——插件默认只预缓存 `js/css/html`，
+  图片（麻将牌雪碧图、各图标）不进预缓存，离线时牌面就是空白（实测默认下预缓存只有 9 个文件、
+  加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时两个麻将游戏仍能画全牌面）
 - **依赖管理**：yarn 1.22.22（package.json `packageManager` 已固定；全局 yarn 已升级至 1.22.22，可直接 `yarn <cmd>`）
 
 ## 常用命令
@@ -165,6 +168,8 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
     （实测预加载后图 69ms 就绪、第一张牌 191ms 才出现），雀圣那边还会连带把入场波浪的顺序盖掉。另外牌面要自带 `border-radius`（约 9% 牌宽），
     否则雪碧图裁出来的直角会漏出原图的浅底。
   - 换牌面记得同步长宽比：现在是 **1.282**（雪碧图 131:168），不是当年 CSS 画的 1.35 + 底部厚度。
+  - **雪碧图要进 PWA 预缓存**：见上面技术栈里的 `workbox.globPatterns` —— 默认配置不含图片，
+    漏掉的话预加载只能指望浏览器 HTTP 缓存，离线或缓存被清时牌面空白。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
   **当前首页没有这类卡**（20 个位置正好被 20 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、

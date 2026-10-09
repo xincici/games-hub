@@ -27,6 +27,12 @@ export default defineConfig({
         enabled: true
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      // 默认 globPatterns 只有 js/css/html，图片不会进预缓存 ——
+      // 麻将牌雪碧图（以及各图标）就会只依赖浏览器 HTTP 缓存，首次访问要联网、离线时牌面是空白。
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,webp,png,svg,ico,woff2}'],
+        // 单张图最大 2MiB 是 workbox 默认值，181KB 的雪碧图远没到上限，无需调
+      },
       manifest: {
         name: 'Games Hub',
         short_name: 'Games',

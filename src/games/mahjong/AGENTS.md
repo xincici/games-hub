@@ -158,6 +158,12 @@
   `margin-bottom: calc(var(--mj-w) * 0.075)` 已经删掉）。
 - **点击格子给实线高亮**：`onCellClick` 里记 `flashCell` + 450ms 后自动清掉（计时器 `cellFlashTimer`，
   注意别和庆祝闪光用的 `flashTimer` 撞名），`.cell.flash` 换实线主色 + 光环。
+- **恢复存档后先屏蔽「已有牌」的悬停光环**（`hoverMuted` + 棋盘上的 `.hover-muted` 类）：
+  `.cell.actable:hover` 的 `box-shadow` 光环是给「点它会替换」用的，但玩家退出时指针
+  （手机上是刚点过的那张牌）还停在原处，**重进后新渲染的格子会立刻命中 `:hover`**，
+  看起来就是「上次点的那张牌还带着边框高亮」（用户报过）。现在 `restore()` 里调 `muteHover()`，
+  玩家真正 `pointermove` / `pointerdown` 之后再解除；卸载时摘掉监听。
+  实测：整页重载恢复 / SPA 返回恢复都是「静音 + 无光环」，动一下指针光环即恢复。
 - **特异性坑同炼金术**：基础规则编译成 `.wrapper .game-area .board .cell[data-v]`（0,5,0），
   所以 `.flash` 必须写成 `.wrapper .game-area .board .cell.flash`，只写 `.board .cell.flash` 会被
   基础那条 `border: 1px solid var(--tile-border-color)` 压掉，表现为「光环出来了、边框色没变」。
