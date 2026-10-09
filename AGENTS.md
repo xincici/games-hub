@@ -153,7 +153,11 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   34 张 131×168 的 webp 共约 220KB，用 `import.meta.glob('./tiles/*.webp', { eager: true, query: '?url',
   import: 'default' })` 取，键是 `m1` / `s8` / `z5`）。裁完要**先拼一张联络表截图肉眼核对**：
   网格顺序不一定按你的直觉（那份图的第 4 行是「北白南中發東西…」而不是东南西北中发白），
-  而且原图可能有水印格。CSS 画法（麻将英雄的筒牌）仍保留给单套小牌面用。
+  而且原图可能有水印格。**拼成一张雪碧图**更省请求：雀圣把 34 张拼成 7×5 的一张 webp
+  （917×840，181KB），运行时用 `background-size: 700% 500%` + `background-position: c/6, r/4`
+  的百分比取格子（与元素尺寸无关，缩放不用改），并把这张图在开局前 `await` 预加载好 ——
+  **不预加载的话，牌的入场波浪会被图片加载顺序盖掉，看起来就是「顺序不对」**。
+  CSS 画法（麻将英雄的筒牌）仍保留给单套小牌面用。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
   **当前首页没有这类卡**（20 个位置正好被 20 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、

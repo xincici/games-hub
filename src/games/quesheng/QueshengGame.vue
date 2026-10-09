@@ -41,9 +41,9 @@
       <!-- 网格底纹：常驻 25 格 -->
       <div class="board dot-board" :style="boardVars" @pointerdown="onBoardDown">
         <div v-for="i in CELLS" :key="`g${i}`" class="grid-cell" />
-        <!-- 可消牌组的高亮边框：圈住整组 -->
+        <!-- 可消牌组的高亮边框：圈住整组。等牌全部铺开之后再出现（铺牌期间 groups 为空） -->
         <span
-          v-for="(g, i) in groups"
+          v-for="(g, i) in ringGroups"
           :key="`r${i}-${g.cells.join('-')}`"
           class="group-ring"
           :style="ringStyle(g)"
@@ -62,13 +62,23 @@
         <!-- 牌：绝对定位，滑动时靠 left/top 过渡动画 -->
         <span
           v-for="t in tiles"
-          :key="t.id"
+          :key="`${dealSeq}-${t.id}`"
           class="tile"
           :class="{ active: selected.includes(t.cell), clearing: clearing.has(t.id), dealt: dealing }"
           :style="tileStyle(t)"
           @click.stop="onTileClick(t)"
         >
-          <img class="mj-img" :src="tileImg(t)" alt="" draggable="false" />
+          <span class="mj-face" :style="spriteVars(t)" />
+        </span>
+        <!-- 刚消掉的牌：留在场上播「闪烁 → 消失」。
+             注意不能只靠给 tiles 里的牌加 .clearing —— 消除时格子已经置 null、牌立刻就不在 tiles 里了 -->
+        <span
+          v-for="t in clearingTiles"
+          :key="`clear-${t.id}`"
+          class="tile clearing"
+          :style="posOf(t.cell)"
+        >
+          <span class="mj-face" :style="spriteVars(t)" />
         </span>
       </div>
 
@@ -123,15 +133,47 @@ import {
   SIZE, CELLS, HAND_TILES, levelConfig, newGame, slide, findGroups, sameBoard, tileName,
 } from './board';
 
-// 牌面直接用参考图裁出来的 34 张图片（万 / 条 / 筒 / 字），不再用 CSS 画
-const TILE_IMG = import.meta.glob('./tiles/*.webp', { eager: true, query: '?url', import: 'default' });
-const tileImg = t => TILE_IMG[`./tiles/${t.suit}${t.num}.webp`];
+// 牌面是参考图裁出来的 34 张牌，拼成**一张雪碧图**（7 列 × 5 行，每格 131×168）：
+// 只用一次请求，运行时靠 background-position 取格子。百分比定位（background-size: 700% 500%，
+// 位置取 c/6、r/4）与元素尺寸无关，牌怎么缩放都对得上。
+import tileSheet from './tiles.webp';
+
+const COLS = 7;
+const ROWS = 5;
+const SLOT_ORDER = [
+  ...Array.from({ length: 9 }, (_, i) => `m${i + 1}`),
+  ...Array.from({ length: 9 }, (_, i) => `s${i + 1}`),
+  ...Array.from({ length: 9 }, (_, i) => `p${i + 1}`),
+  'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7',
+];
+const TILE_SLOT = Object.fromEntries(SLOT_ORDER.map((k, i) => [k, [Math.floor(i / COLS), i % COLS]]));
+const spriteVars = t => {
+  const [r, c] = TILE_SLOT[`${t.suit}${t.num}`] || [0, 0];
+  return { '--bg-x': `${(c / (COLS - 1)) * 100}%`, '--bg-y': `${(r / (ROWS - 1)) * 100}%` };
+};
+
+// 开局前把这张雪碧图读进缓存：不预加载的话，牌元素会按波浪淡入、图却要等下载完才冒出来，
+// 肉眼看到的顺序就变成了「谁先加载完谁先出现」。
+const imageReady = ref(false);
+let imagePromise = null;
+function preloadTiles() {
+  if (!imagePromise) {
+    imagePromise = new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { imageReady.value = true; resolve(); };
+      img.onerror = () => resolve();     // 加载失败也不要卡住开局
+      img.src = tileSheet;
+    });
+  }
+  return imagePromise;
+}
 
 const MODE_KEY = '__quesheng__level';
 const STATE_KEY = '__quesheng__state';
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const SWIPE_MIN = 24;            // 滑动判定的最小位移
 const CLEAR_MS = 520;
+const DEAL_MS = 340;             // 单张牌的入场动画时长（与 qs-deal 保持一致）
 
 const level = ref(1);
 const board = ref(new Array(CELLS).fill(null));   // 每个格子放一张牌（或 null）
@@ -141,6 +183,7 @@ const selected = ref([]);        // 已点选、准备消掉的牌所在的格�
 const clearing = ref(new Map()); // 正在闪烁消失的牌 id -> 牌
 const groups = ref([]);          // 当前所有可消牌组
 const dealing = ref(false);      // 开局铺牌动画中
+const dealSeq = ref(0);          // 每次铺牌 +1：让 :key 变化，牌元素重建、入场动画才会重播
 const confirming = ref(false);
 const history = ref([]);         // undo 栈
 const future = ref([]);          // redo 栈
@@ -187,6 +230,7 @@ function computeMetrics() {
 const tiles = computed(() => board.value
   .map((t, cell) => (t ? { ...t, cell } : null))
   .filter(Boolean));
+const clearingTiles = computed(() => [...clearing.value.values()]);
 const tilesLeft = computed(() => tiles.value.filter(t => !clearing.value.has(t.id)).length);
 const progress = computed(() => Math.min(100, Math.round(((HAND_TILES - tilesLeft.value) / HAND_TILES) * 100)));
 const canUndo = computed(() => history.value.length > 0 && phase.value === PLAY);
@@ -201,19 +245,27 @@ function startLevel(lv) {
   level.value = Math.max(1, lv);
   const { board: b, moves } = newGame(level.value);
   board.value = b;
+  groups.value = [];        // 铺牌期间不显示高亮框
   movesLeft.value = moves;
   phase.value = PLAY;
   selected.value = [];
   clearing.value = new Map();
   history.value = [];
   future.value = [];
-  refreshGroups();
+  groups.value = [];        // 铺牌期间不显示高亮框，等牌铺完（下面的定时器里）再算
   // 铺牌动画：按「从左上到右下」的次序逐张出现
   dealing.value = true;
+  dealSeq.value += 1;
+  // 波浪：延迟按「行 + 列」递增，波前从左上角一路扫到右下角
   board.value = board.value.map((t, cell) => (t
-    ? { ...t, delay: (Math.floor(cell / SIZE) + (cell % SIZE)) * 55 }
+    ? { ...t, delay: (Math.floor(cell / SIZE) + (cell % SIZE)) * 60 }
     : null));
-  timers.push(setTimeout(() => { dealing.value = false; board.value = board.value.map(t => (t ? { ...t, delay: 0 } : null)); }, 900));
+  const last = (SIZE - 1) * 2 * 60 + DEAL_MS;
+  timers.push(setTimeout(() => {
+    dealing.value = false;
+    board.value = board.value.map(t => (t ? { ...t, delay: 0 } : null));
+    refreshGroups();          // 牌全部铺完之后才显示可消高亮
+  }, last));
   save();
 }
 
@@ -240,6 +292,14 @@ function refreshGroups() {
     if (!inSome) selected.value = [];
   }
 }
+
+// 实际画出来的高亮框：三张组旁边的「两两对子」框是多余的（刻子会同时产生 [0,1]、[1,2] 两个对子），
+// 只留三张那张。注意只影响**显示** —— groups 里仍保留对子，因为「消除这一对」还要靠它。
+const ringGroups = computed(() => {
+  const melds = groups.value.filter(g => g.cells.length === 3);
+  return groups.value.filter(g => !(g.cells.length === 2
+    && melds.some(m => g.cells.every(c => m.cells.includes(c)))));
+});
 
 // 一组牌的外框（圈住整组）
 function ringStyle(g) {
@@ -312,7 +372,7 @@ const hintStyle = computed(() => {
 function clearGroup(g) {
   pushHistory();
   const going = new Map();
-  g.cells.forEach(c => { if (board.value[c]) going.set(board.value[c].id, board.value[c]); });
+  g.cells.forEach(c => { if (board.value[c]) going.set(board.value[c].id, { ...board.value[c], cell: c }); });
   selected.value = [];
   clearing.value = going;
   board.value = board.value.map((t, i) => (g.cells.includes(i) ? null : t));
@@ -447,17 +507,31 @@ function restoreState() {
     phase.value = s.phase;
     selected.value = [];
     clearing.value = new Map();
-    refreshGroups();
+    groups.value = [];
+    // 恢复的局面也逐张铺开（不然一进来牌是「啪」地全出现的）
+    dealing.value = true;
+    dealSeq.value += 1;
+    board.value = board.value.map((t, cell) => (t
+      ? { ...t, delay: (Math.floor(cell / SIZE) + (cell % SIZE)) * 60 }
+      : null));
+    const last = (SIZE - 1) * 2 * 60 + DEAL_MS;
+    timers.push(setTimeout(() => {
+      dealing.value = false;
+      board.value = board.value.map(t => (t ? { ...t, delay: 0 } : null));
+      refreshGroups();
+    }, last));
     return true;
   } catch {
     return false;
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   computeMetrics();
   window.addEventListener('resize', computeMetrics);
   window.addEventListener('keyup', onKeyUp);
+  // 先把牌图全部读进缓存，再开局 —— 这样铺牌动画才不会被图片加载打断
+  await preloadTiles();
   if (!restoreState()) startLevel(Math.max(1, +(localStorage.getItem(MODE_KEY) || 1)));
 });
 
@@ -471,8 +545,12 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 @keyframes qs-deal {
-  from { opacity: 0; transform: translate(-14px, -14px) scale(0.6); }
+  from { opacity: 0; transform: translate(-18px, -18px) scale(0.45); }
   to { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes qs-ring-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes qs-tip-in {
   from { opacity: 0; transform: translate(-50%, -80%) scale(0.85); }
@@ -618,6 +696,8 @@ onUnmounted(() => {
 
   .game-area {
     position: relative;
+    // 可消牌组的高亮色：浅橙。深浅两套主题下都够醒目，所以不跟主题变量走
+    --group-ring: #ffa63d;
     width: fit-content;
     margin: 0 auto;
     .board {
@@ -637,14 +717,17 @@ onUnmounted(() => {
         box-sizing: border-box;
       }
       // 可消牌组的高亮边框（圈住整组）
+      // 可消高亮框用浅橙色（--group-ring），与主色绿区分开：绿是「可操作」、橙是「这一组能消」
       .group-ring {
         position: absolute;
         box-sizing: border-box;
-        border: 2px solid var(--primary-bg);
+        border: 2px solid var(--group-ring);
         border-radius: calc(var(--radius-tile) + 2px);
-        box-shadow: 0 0 0 3px rgb(255 255 255 / 10%), 0 0 12px var(--celebrate-glow);
+        box-shadow: 0 0 0 3px rgb(255 255 255 / 12%), 0 0 10px rgb(255 166 61 / 55%);
         pointer-events: none;
         transition: left 0.16s ease, top 0.16s ease, width 0.16s ease, height 0.16s ease;
+        // 牌铺完之后高亮框再淡入，而不是一开始就挂在那儿
+        animation: qs-ring-in 0.18s ease-out both;
       }
       // 消除提示气泡：贴在点过的第二张牌正上方
       .clear-tip {
@@ -688,12 +771,17 @@ onUnmounted(() => {
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        .mj-img {
+        // 雪碧图取格子：background-size 是「列数 × 100%」，位置按 c/(列数-1)、r/(行数-1) 给百分比，
+        // 这样与元素实际尺寸无关（牌随视口缩放也不用改）
+        .mj-face {
           width: 100%;
           height: 100%;
           display: block;
+          background-image: url('./tiles.webp');
+          background-repeat: no-repeat;
+          background-size: 700% 500%;
+          background-position: var(--bg-x, 0%) var(--bg-y, 0%);
           user-select: none;
-          -webkit-user-drag: none;
         }
         transition: left 0.17s cubic-bezier(0.3, 0.8, 0.4, 1), top 0.17s cubic-bezier(0.3, 0.8, 0.4, 1);
         // 开局从左上到右下逐张铺开（延迟由 JS 按 r + c 注入）
@@ -702,9 +790,13 @@ onUnmounted(() => {
         &.active {
           transform: translateY(-3px);
           filter: drop-shadow(0 4px 8px rgb(0 0 0 / 22%));
-          .mj-img { outline: 3px solid var(--primary-bg); outline-offset: 1px; }
+          .mj-face { outline: 3px solid var(--primary-bg); outline-offset: 1px; }
         }
-        &.clearing { animation: qs-blink 0.52s ease-in-out forwards; pointer-events: none; }
+        &.clearing {
+          animation: qs-blink 0.52s ease-in-out forwards;
+          pointer-events: none;
+          cursor: default;
+        }
       }
     }
     .result {
