@@ -1,7 +1,7 @@
 <script setup>
 // 麻将传奇：8×6 的游戏区，底部一行行升起条牌；消掉牌就不会升行，没消掉就升一行并把整盘往上顶一格。
 // 只用条牌（1条~9条），牌面复用共享雪碧图（MahjongTile 的 suit="s"）。
-import { ref, computed, reactive, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, reactive, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import { i18n } from '@/shared/i18n';
@@ -45,7 +45,8 @@ const flying = ref(null);              // 从候选区飞向目标格的那张�
 const incomingId = ref(-1);            // 刚落位的那张牌：飞行途中先隐身，落定才显形
 let flyTimer = 0;
 const shaking = ref(false);
-const isNewBest = ref(false);
+const isNewBest = ref(false);          // 这一局有没有刷新过最高分（结算浮层用）
+const beatBest = ref(false);
 const moveMs = ref(FALL_MS);           // 位移过渡时长（升行那一下稍长）
 
 const timers = [];
@@ -209,13 +210,19 @@ async function cascade(chain) {
   return { did, chain };
 }
 
+// 当前得分一超过最高分就**立刻**同步上去（用户要求）：最高分是实时涨的，
+// 不再等到这局结束才更新。`beatBest` 另外记「这一局刷新过纪录」，供结算浮层显示「新纪录诞生」——
+// 不能再用 `score > best` 判断，因为那时 best 已经被同步成 score 了。
+watch(score, v => {
+  if (v <= best.value) return;
+  best.value = v;
+  beatBest.value = true;
+  try { localStorage.setItem(BEST_KEY, String(best.value)); } catch { /* 隐私模式 */ }
+});
+
 function gameOver() {
   phase.value = OVER;
-  isNewBest.value = score.value > best.value;
-  if (isNewBest.value) {
-    best.value = score.value;
-    try { localStorage.setItem(BEST_KEY, String(best.value)); } catch { /* 隐私模式 */ }
-  }
+  isNewBest.value = beatBest.value;
   save();
 }
 
@@ -277,6 +284,7 @@ function newRun() {
   busy.value = false;
   phase.value = PLAY;
   isNewBest.value = false;
+  beatBest.value = false;
   score.value = 0;
   clearedCount.value = 0;
   clearing.value = new Map();

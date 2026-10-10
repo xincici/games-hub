@@ -140,7 +140,10 @@
 
 - `__mahjong_legend__state`：`{ phase, score, cleared, queue, grid }`（grid 只存点数，恢复时重新分配 id）
 - `__mahjong_legend__best_1`：最高分（注册表 `recordsPrefix: '__mahjong_legend__best_'` + 1..1，
-  正好被标题连点 5 次的清记录彩蛋命中）
+  正好被标题连点 5 次的清记录彩蛋命中）。**当前得分一超过最高分就立刻同步**（用户要求，`watch(score)`
+  里更新并落盘），不再是等到这局结束才更新 —— 所以「最高分」是实时涨的。
+  配套的 `beatBest` 单独记「这一局有没有刷新过纪录」，供结算浮层的「新纪录诞生」用：
+  **不能再用 `score > best` 判断**，那时 best 已经被同步成 score 了（否则那行字永远不会出现）。
 - `__mahjong_legend__help_showed`：帮助弹窗是否已弹过
 
 失败结算也会存档：退出重进还是那个失败浮层（`phase: 'over'`），由玩家自己决定要不要开新局。

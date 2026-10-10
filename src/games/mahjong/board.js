@@ -110,19 +110,17 @@ export function createWall(rand = Math.random) {
 // 第 1 关 20 张牌 / 400 分过关；之后每关 +2 张牌、过关分 +50，
 // 逢 10 的整数关那一档的增量按 100 算（即在这些关上再多 50）。
 // 有了「替换」机制之后棋盘满不再是死局（可以一直换牌），所以牌堆长度重新成了主要变量。
-const DECK_BASE = 18;         // 第 1 关 18 张
+const DECK_BASE = 20;         // 第 1 关 20 张
 const TARGET_BASE = 400;      // 第 1 关 400 分
-const TARGET_STEP = 50;       // 每关过关分 +50（不再有逢 10 加 100）
+const TARGET_STEP = 50;       // 每关过关分 +50（逢 10 加 100 那条早已去掉）
 
 export function levelConfig(level) {
   const lv = Math.max(1, Math.floor(level) || 1);
-  // 牌数：第 1 关 18 张；从第 2 关起「偶数关 +2 张、奇数关 +1 张」
-  //（2..lv 里的偶数各 +2、3..lv 里的奇数各 +1）
-  const evens = Math.floor(lv / 2);
-  const odds = Math.floor((lv - 1) / 2);
+  // 牌数：第 1 关 **20 张**；之后**每关 +1 张**，逢 5 的整数关那一档 **+2 张**。
+  // 也就是「2..lv 每关 +1」再加上「2..lv 里 5 的倍数各多 +1」= Math.floor(lv / 5) 张。
   return {
     level: lv,
-    deck: DECK_BASE + evens * 2 + odds,
+    deck: DECK_BASE + (lv - 1) + Math.floor(lv / 5),
     target: TARGET_BASE + (lv - 1) * TARGET_STEP,
   };
 }
