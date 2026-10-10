@@ -42,7 +42,7 @@
           <div v-for="(cell, idx) in board" :key="idx" class="cell">
             <div
               class="card-flip"
-              :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: idx === swappedIdx && (rightIdx >= 0 || phase === WON || phase === LOST), popping: idx === rightIdx, wrong: wrongIdxs.includes(idx) }"
+              :class="{ flipped: isFaceDown(idx), shaking: shakeIdx === idx, revealed: idx === swappedIdx && (rightIdx >= 0 || phase === WON || phase === LOST), popping: idx === rightIdx, wrong: wrongIdxs.includes(idx), stamped: idx === swappedIdx && stampShown }"
               @click="onCellClick(idx)"
             >
               <!-- 牌背：emoji 模式用游戏图标，扑克模式复用扑克那边的迷你牌背 -->
@@ -54,6 +54,14 @@
                 <template v-if="mode === 1">{{ cell }}</template>
                 <CardItem v-else mini :num="cell.num" :type="cell.type" :style="cardVars" />
               </div>
+              <!-- 生命耗尽：在正确答案上盖一个「✓」章（盖章 → 这张牌震一下 → 才出失败遮罩）；
+                   失败结算后（含重进存档）静态保留，不重播动画 -->
+              <span v-if="idx === swappedIdx && (stampShown || phase === LOST)" class="stamp">
+                <span class="stamp-inner">
+                  <span class="stamp-mark">✓</span>
+                  <span class="stamp-text">{{ i18n('stampText') }}</span>
+                </span>
+              </span>
             </div>
           </div>
         </div>
@@ -142,6 +150,17 @@ const shakeIdx = ref(-1);
 const rightIdx = ref(-1);
 // 结算前停留 0.5s：让玩家看清最后一次选择，期间锁输入
 const { pending: settling, later: settleThen, cancel: cancelSettle } = useResultDelay();
+// 生命耗尽后的两段停留（用户要求：等最后一次点错的抖动放完再盖章；章盖上、牌震完，才出失败遮罩）：
+//   ① 先等点错那张的抖动放完（`.shaking` 的 shake 是 0.4s，留 50ms 余量）
+//   ② 再给正确答案盖「✓」章（stamp-in 0.42s），随后这张牌震一下（0.45s 延迟 + 0.5s）
+const WRONG_SHAKE_MS = 450;
+const STAMP_MS = 1000;
+const { pending: stamping, later: stampThen, cancel: cancelStamp } = useResultDelay(WRONG_SHAKE_MS);
+const { pending: losing, later: loseThen, cancel: cancelLose } = useResultDelay(STAMP_MS);
+// 章已经盖上：驱动 .stamped 的盖章 / 震动动画；失败结算后由 phase === LOST 静态保留（重进不重播）
+const stampShown = ref(false);
+// 这几段停留期间都不能再点
+const locked = computed(() => settling.value || stamping.value || losing.value);
 // 选错的牌：常驻红色标记，并且不能再点（否则同一张能被反复点、反复扣心）
 const wrongIdxs = ref([]);
 const memoryLeft = ref(0);
@@ -213,7 +232,10 @@ function clearTimers() {
   clearTimeout(memoryTimer);
   clearInterval(memoryTicker);
   clearTimeout(flipTimer);
-  cancelSettle();          // 换关 / 重开时把「结算前停留」一起取消，免得浮层冒到新一关
+  cancelSettle();          // 换关 / 重开时把「结算停留 / 盖章停留」一起取消，免得浮层冒到新一关
+  cancelStamp();
+  cancelLose();
+  stampShown.value = false;
   rightIdx.value = -1;
 }
 
@@ -308,7 +330,7 @@ function flipPhase() {
 // 玩家凭记忆点出被换的那张；点其它牌 → 短暂抖动
 function onCellClick(idx) {
   if (phase.value !== ANSWER) return;
-  if (settling.value) return;                  // 结算前停留期间不可操作
+  if (locked.value) return;                    // 结算 / 亮答案的停留期间不可操作
   if (wrongIdxs.value.includes(idx)) return;   // 已经标错的牌不再响应
   if (idx === swappedIdx.value) {
     rightIdx.value = idx;                      // 立刻亮绿，停留期间玩家看得到「选对了」
@@ -328,11 +350,13 @@ function onCellClick(idx) {
     shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
     if (hearts.value <= 0) {
-      // 生命耗尽：先留住 0.5s 让玩家看清标红的那张，再失败结算（计时器随之停止）
-      settleThen(() => {
-        phase.value = LOST;
-        timerRef.value?.stop();
-        save();
+      // 生命耗尽：**不要立刻出失败遮罩**。先等点错这张的抖动放完，再在正确答案上盖一个「✓」章、
+      // 让它震一下，最后才铺失败效果与遮罩 —— 玩家因此能看清答案是哪张。
+      // 计时到失误这一刻就停（这一局的用时按失误那一刻算）。
+      timerRef.value?.stop();
+      stampThen(() => {
+        stampShown.value = true;                       // 盖章（stamp-in）+ 这张牌震一下（stamp-shake）
+        loseThen(() => { phase.value = LOST; save(); });
       });
     }
     setTimeout(() => {
@@ -403,15 +427,20 @@ function restore() {
     level.value = Math.min(sizes.value.length - 1, Math.max(0, saved.level));
     // 结算局面（胜利 / 失败都算）：原样还原那一盘并亮出答案，
     // 由玩家自己决定点「重玩本关」还是「下一关」
-    if ((saved.phase === WON || saved.phase === LOST) && Array.isArray(saved.board)
+    // 命中 saved.phase === ANSWER && 心已 0：说明存档停在「正在亮出正确答案」的 1s 里，
+    // 也算已结算（按失败恢复，答案照样亮着，只是不重播动画）
+    const over = saved.phase === WON || saved.phase === LOST
+      || (saved.phase === ANSWER && saved.hearts === 0);
+    if (over && Array.isArray(saved.board)
       && saved.board.length === rows.value * cols.value) {
       board.value = saved.board;
       swappedIdx.value = Number.isInteger(+saved.swapped) ? +saved.swapped : -1;
       wrongIdxs.value = Array.isArray(saved.wrong) ? saved.wrong.filter(i => Number.isInteger(+i)).map(Number) : [];
       shakeIdx.value = -1;
       rightIdx.value = -1;          // 还原出来的答案不算「本次点击」，别重播动画
+      stampShown.value = false;     // 章由 phase === LOST 静态保留，不重播盖章动画
       hearts.value = typeof saved.hearts === 'number' ? saved.hearts : HEARTS_MAX;
-      phase.value = saved.phase === LOST ? LOST : WON;
+      phase.value = saved.phase === WON ? WON : LOST;
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
       timerRef.value?.restore(+saved.time || 0);
       timerRef.value?.stop();
@@ -597,6 +626,36 @@ function onScoreReset() {
     &.popping .front-face {
       animation: pick-right-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), pick-right-ring 0.5s ease-out;
     }
+    // 生命耗尽时盖在正确答案上的「✓」章：放大着斜着落下来（带一点回弹），像盖章一样
+    .stamp {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      .stamp-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        padding: 3px 7px;
+        border: 2px solid var(--primary-bg);
+        border-radius: 9px;
+        background: rgb(255 255 255 / 84%);
+        color: var(--primary-bg);
+        font-weight: 900;
+        line-height: 1.05;
+        transform: rotate(-12deg);       // 盖章的手感：歪一点
+        box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+      }
+      .stamp-mark { font-size: calc(var(--cell, 64px) * 0.4); }
+      .stamp-text { font-size: calc(var(--cell, 64px) * 0.15); letter-spacing: 0.5px; }
+    }
+    &.stamped .stamp { animation: stamp-in 0.42s cubic-bezier(0.22, 1.5, 0.44, 1) both; }
+    // 章落下之后这张牌再震一下 —— **必须挂正面那层**：.card-flip 的 transform 是翻面状态，动它会顶掉翻面
+    &.stamped .front-face { animation: stamp-shake 0.5s ease 0.45s; }
   }
   .face {
     position: absolute;
@@ -686,6 +745,20 @@ function onScoreReset() {
       display: flex;
       gap: 12px;
     }
+  }
+  // 盖章：从放大 + 更斜落到正常大小（slam），带一点回弹
+  @keyframes stamp-in {
+    0% { opacity: 0; transform: scale(2.4); }
+    55% { opacity: 1; transform: scale(0.94); }
+    78% { transform: scale(1.04); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  // 章落下后牌震一下（幅度比点错的 shake 小，像是被按了一下）
+  @keyframes stamp-shake {
+    0%, 100% { transform: translate(0, 0) rotate(0); }
+    20% { transform: translate(-2px, 1px) rotate(-1.2deg); }
+    45% { transform: translate(2px, -1px) rotate(1.2deg); }
+    70% { transform: translate(-1px, 1px) rotate(-0.8deg); }
   }
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
