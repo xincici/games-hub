@@ -29,12 +29,16 @@
     </div>
 
     <div class="card opt-area">
-      <div class="opt-half">
-        <span class="board-info">{{ i18n('boardInfo') }}</span>
-      </div>
-      <div class="divider"></div>
+      <!-- 原来这里是一句「滑动合并 · 点组消除」的说明文案（用户要求去掉）；
+           现在两半放「新游戏」与「上帝模式」两个按钮 -->
       <div class="start-wrapper">
         <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
+      </div>
+      <div class="divider"></div>
+      <div class="opt-half">
+        <button class="game-icon god-btn" :disabled="!canGod && !godPlaying" @click="godPlay">
+          {{ godPlaying ? i18n('godStop') : i18n('godMode') }}
+        </button>
       </div>
     </div>
 
@@ -60,6 +64,8 @@
           <span class="tip-act">✨ {{ i18n('clearPair') }}</span>
         </span>
 
+        <!-- 上帝模式播放期间盖一层透明遮罩：挡住点击 / 滑动，和点击游戏同款做法 -->
+        <div v-if="godPlaying" class="automask" />
         <!-- 牌：绝对定位，滑动时靠 left/top 过渡动画 -->
         <span
           v-for="t in tiles"
@@ -100,14 +106,14 @@
     <!-- 撤销 / 重做：放在游戏区下方（与点击游戏同一套做法） -->
     <div class="card undo-card">
       <div class="undo-item">
-        <button class="undo" :disabled="!canUndo" @click="undo">
+        <button class="undo" :disabled="!canUndo || godPlaying" @click="undo">
           <i i-carbon-undo />
           <span>{{ i18n('undo') }}</span>
         </button>
       </div>
       <div class="divider"></div>
       <div class="undo-item">
-        <button class="undo" :disabled="!canRedo" @click="redo">
+        <button class="undo" :disabled="!canRedo || godPlaying" @click="redo">
           <i i-carbon-redo />
           <span>{{ i18n('redo') }}</span>
         </button>
@@ -131,7 +137,7 @@ import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
-  SIZE, CELLS, HAND_TILES, levelConfig, newGame, slide, findGroups, sameBoard, tileName,
+  SIZE, CELLS, HAND_TILES, levelConfig, newGame, slide, findGroups, sameBoard, tileName, solvePuzzle,
 } from './board';
 
 // 牌面是参考图裁出来的 34 张牌拼成的雪碧图（与麻将英雄共用，见 src/shared/mahjongTiles.js）
@@ -156,6 +162,26 @@ const dealSeq = ref(0);          // 每次铺牌 +1：让 :key 变化，牌元�
 const confirming = ref(false);
 const history = ref([]);         // undo 栈
 const future = ref([]);          // redo 栈
+// ---------- 上帝模式 ----------
+// 只对「还没动过的开局」开放（和点击游戏的上帝模式一样）：发牌时 newGame 已经把解算好放在这里，
+// 所以点下去是零延迟开始播；万一没有（例如是旧存档恢复出来的局面）就现场再解一次。
+const godPlaying = ref(false);
+const godSolution = ref(null);
+const GOD_SLIDE_MS = 620;        // 一次滑动：过渡 0.17s + 停留让人看清
+const GOD_PICK_MS = 360;         // 消除前先把这一组点亮，让玩家看清消的是哪组
+const GOD_CLEAR_MS = 600;        // 闪烁消除 520ms + 余量
+let godTimers = [];              // 可取消的等待（卸载 / 停止时立刻唤醒）
+const godSleep = ms => new Promise(resolve => {
+  const one = { id: 0, resolve };
+  one.id = setTimeout(() => { godTimers = godTimers.filter(x => x !== one); resolve(); }, ms);
+  godTimers.push(one);
+});
+function stopGod() {
+  godPlaying.value = false;
+  godTimers.forEach(t => clearTimeout(t.id));
+  godTimers.forEach(t => t.resolve());
+  godTimers = [];
+}
 
 // ---------- 尺寸 ----------
 const metrics = ref({ cell: 56, cellH: 80, gap: 6, pad: 8 });
@@ -212,8 +238,10 @@ const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
 function startLevel(lv) {
   clearTimers();
   level.value = Math.max(1, lv);
-  const { board: b, moves } = newGame(level.value);
+  const { board: b, moves, solution } = newGame(level.value);
   board.value = b;
+  godSolution.value = solution || null;   // 发牌时就算好的解（上帝模式直接用）
+  stopGod();
   groups.value = [];        // 铺牌期间不显示高亮框
   movesLeft.value = moves;
   phase.value = PLAY;
@@ -287,7 +315,7 @@ function ringStyle(g) {
 
 // ---------- 点击 ----------
 function onTileClick(t) {
-  if (phase.value !== PLAY || clearing.value.size) return;
+  if (phase.value !== PLAY || clearing.value.size || godPlaying.value) return;
   const cell = t.cell;
   const hit = groups.value.filter(g => g.cells.includes(cell));
   if (!hit.length) { selected.value = []; return; }
@@ -387,6 +415,39 @@ function clearGroup(g) {
   save();
 }
 
+// 上帝模式：只要**当前局面回到本关的初始局**就可用 —— history 为空正是这个意思
+//（undo 栈里存的是每一步之前的快照，全部撤销回去 = 发牌时的那个局面；快照连牌 id 都存了，
+// 所以缓存的最优解对同一副初始局仍然成立）。**不能再要求 future 为空**：玩家撤销回初始局时，
+// future 里正留着刚撤销掉的那些步骤，那样按钮会一直是灰的（用户报过）。
+const canGod = computed(() => phase.value === PLAY && !godPlaying.value && !clearing.value.size
+  && history.value.length === 0 && tilesLeft.value === HAND_TILES);
+
+async function godPlay() {
+  if (godPlaying.value) { stopGod(); return; }        // 播放中再点一下 = 停止
+  if (!canGod.value) return;
+  // 发牌时就算了，正常一定有解；万一没有（旧存档恢复出来的局面）就现场再解一次，解不出就静默不动
+  const solution = godSolution.value || solvePuzzle(board.value, movesLeft.value);
+  if (!solution || !solution.length) return;
+  godPlaying.value = true;
+  await godSleep(420);
+  for (const step of solution) {
+    if (!godPlaying.value || phase.value !== PLAY) break;
+    if (step.type === 'slide') {
+      applySlide(step.dir);
+      await godSleep(GOD_SLIDE_MS);
+    } else {
+      selected.value = [...step.cells];      // 先点亮这一组（抬起 + 外框），让玩家看清消的是哪组
+      await godSleep(GOD_PICK_MS);
+      if (!godPlaying.value || phase.value !== PLAY) break;
+      const g = groups.value.find(x => x.cells.length === step.cells.length
+        && step.cells.every(c => x.cells.includes(c)));
+      if (g) clearGroup(g);
+      await godSleep(GOD_CLEAR_MS);
+    }
+  }
+  stopGod();
+}
+
 // ---------- 滑动 ----------
 function applySlide(dir) {
   if (phase.value !== PLAY || clearing.value.size) return;
@@ -416,7 +477,7 @@ function onKeyUp(e) {
 // 用 Pointer Events 做滑动（手势区域 touch-action: none）
 let press = null;
 function onBoardDown(e) {
-  if (phase.value !== PLAY) return;
+  if (phase.value !== PLAY || godPlaying.value) return;
   press = { x: e.clientX, y: e.clientY };
 }
 function onPointerDown(e) {
@@ -424,6 +485,7 @@ function onPointerDown(e) {
   onBoardDown(e);
 }
 function onPointerUp(e) {
+  if (godPlaying.value) { press = null; return; }
   if (!press) return;
   const dx = e.clientX - press.x;
   const dy = e.clientY - press.y;
@@ -538,6 +600,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  stopGod();
   window.removeEventListener('resize', computeMetrics);
   window.removeEventListener('keyup', onKeyUp);
   clearTimers();
@@ -640,7 +703,8 @@ onUnmounted(() => {
       &:first-child { flex: 1.4; }
       &:last-child { flex: 1.2; }
     }
-    .board-info { font-size: 14px; color: var(--muted-color); font-weight: 400; }
+    // 上帝模式按钮：和「新游戏」同一套 .game-icon 外观，只是稍微窄一点
+    .god-btn { padding: 8px 12px; font-size: 13px; }
     .start-wrapper { display: flex; align-items: center; justify-content: center; flex: 1.2; }
   }
 
@@ -695,6 +759,17 @@ onUnmounted(() => {
         cursor: not-allowed;
       }
     }
+  }
+
+  // 上帝模式播放期间挡输入的透明遮罩（点击游戏同款）。
+  // 注意要写在能被匹配到的层级：它渲染在 .board 里，若跟着 .opt-area 一起嵌套就选不中了
+  //（踩过：没有样式 → 变成 grid 里的普通子项、多撑出一行把棋盘撑高，而且完全挡不住输入）
+  .automask {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: rgb(255 255 255 / 0%);
+    touch-action: none;
   }
 
   .game-area {
