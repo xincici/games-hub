@@ -561,9 +561,13 @@ function restoreState() {
     const s = JSON.parse(localStorage.getItem(STATE_KEY));
     if (!s || !Array.isArray(s.board) || s.board.length !== CELLS) return false;
     if (![PLAY, WON, OVER].includes(s.phase)) return false;
-    if (!s.board.some(Boolean)) return false;
+    // **过关时棋盘是全空的**（最后那一组消完就没了），所以「棋盘必须有牌」这条不能一刀切，
+    // 否则胜利结算永远恢复不出来（用户报过：退出重进后又从这一关重新开始）
+    if (!s.board.some(Boolean) && s.phase !== WON) return false;
     level.value = Math.max(1, +s.level || 1);
-    movesLeft.value = Math.max(0, +s.movesLeft ?? levelConfig(level.value).moves);
+    // +undefined 是 NaN，`??` 挡不住它，所以用 Number.isFinite 判
+    const savedMoves = Number(s.movesLeft);
+    movesLeft.value = Number.isFinite(savedMoves) ? Math.max(0, savedMoves) : levelConfig(level.value).moves;
     let n = 0;
     board.value = s.board.map(t => (t ? { suit: t.suit, num: t.num, id: ++n, delay: 0 } : null));
     history.value = Array.isArray(s.history) ? s.history : [];
