@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 和雀圣 (Mahjong Master)，现共二十个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，1/2/3/4/3/4/3 共 20 格，与游戏数一一对应），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 和麻将传奇 (Mahjong Legend)，现共二十一个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，3/4/3/4/3/4 共 21 格，与游戏数一一对应），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -14,7 +14,7 @@
 - **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）。**`workbox.globPatterns` 必须显式带上图片类型**
   （现在是 `**/*.{js,css,html,webp,png,svg,ico,woff2}`）——插件默认只预缓存 `js/css/html`，
   图片（麻将牌雪碧图、各图标）不进预缓存，离线时牌面就是空白（实测默认下预缓存只有 9 个文件、
-  加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时两个麻将游戏仍能画全牌面）
+  加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时三个用到雪碧图的游戏仍能画全牌面）
 - **依赖管理**：yarn 1.22.22（package.json `packageManager` 已固定；全局 yarn 已升级至 1.22.22，可直接 `yarn <cmd>`）
 
 ## 常用命令
@@ -26,7 +26,7 @@ yarn build     # 构建到 dist/
 yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`）做冒烟检查。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`）做冒烟检查。
 
 ## 各游戏分册（**改哪个游戏就先读哪个分册**）
 
@@ -55,6 +55,7 @@ yarn preview   # 预览构建产物
 | 扑克炼金术 | `src/games/alchemy/` | [`AGENTS.md`](src/games/alchemy/AGENTS.md) | `/#/alchemy` |
 | 麻将英雄 | `src/games/mahjong/` | [`AGENTS.md`](src/games/mahjong/AGENTS.md) | `/#/mahjong` |
 | 雀圣 | `src/games/quesheng/` | [`AGENTS.md`](src/games/quesheng/AGENTS.md) | `/#/quesheng` |
+| 麻将传奇 | `src/games/legend/` | [`AGENTS.md`](src/games/legend/AGENTS.md) | `/#/legend` |
 
 读法：要看 / 改某个游戏，先打开上表里对应的分册；只改共享组件或全局约定时看本文件。
 新增游戏时，除了在 `src/games/<id>/` 放组件与 `i18n.js`，也要按上面的格式补一份 `<id>/AGENTS.md`，
@@ -80,7 +81,7 @@ src/
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典（新增游戏要在表尾追加，首页末位正好接上）
 ├── components/
-│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 1/2/3/4/3/4/3 正好 20 个位置，与 20 个游戏一一对应；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` **同时受宽度与高度两个约束取小值，保证首页不出滚动条**：宽度约束 `(min(100vw, 480px) − 41px) / 4`（最宽一行 4 格 + 3×3px 缝隙 + 左右各 16px 内边距），高度约束 `(100dvh − 195px) / 5.485`（6 行蜂窝总高 = 4.75h + 13.25px，h = 1.1547w，再扣掉顶栏 94 + 上下内边距 64/24）；实测 320×568 → 68px、375×667 → 84px、390×844 → 87px、414×896 → 93px、480×900 → 110px，五档文档高都等于视口高、无滚动条
+│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 3/4/3/4/3/4 正好 21 个位置，与 21 个游戏一一对应；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` **同时受宽度与高度两个约束取小值，保证首页不出滚动条**：宽度约束 `(min(100vw, 480px) − 41px) / 4`（最宽一行 4 格 + 3×3px 缝隙 + 左右各 16px 内边距），高度约束 `(100dvh − 195px) / 5.485`（6 行蜂窝总高 = 4.75h + 13.25px，h = 1.1547w，再扣掉顶栏 94 + 上下内边距 64/24）；实测 320×568 → 68px、375×667 → 84px、390×844 → 87px、414×896 → 93px、480×900 → 110px，五档文档高都等于视口高、无滚动条
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
@@ -103,7 +104,8 @@ src/
     ├── sort/             # Emoji 排序 —— 见 src/games/sort/AGENTS.md
     ├── alchemy/          # 扑克炼金术 —— 见 src/games/alchemy/AGENTS.md
     ├── mahjong/          # 麻将英雄 —— 见 src/games/mahjong/AGENTS.md
-    └── quesheng/         # 雀圣 —— 见 src/games/quesheng/AGENTS.md
+    ├── quesheng/         # 雀圣 —— 见 src/games/quesheng/AGENTS.md
+    └── legend/           # 麻将传奇 —— 见 src/games/legend/AGENTS.md
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -152,18 +154,18 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **全站粒子背景**：`shared/ParticleBackground.vue` 由 `App.vue` 挂在内容层（`.app-content`，z-index 1）之下，canvas 为 `fixed + z-index 0 + pointer-events: none`。各页面根容器 `.wrapper` 的不透明底色被 `App.vue` 里的 `#app .wrapper { background: transparent }` 统一置空，改由 `body` 的 `--bg-color` 兜底，粒子才透得上来——**新增游戏不要给根容器或全屏元素加大面积不透明背景**（会挡住粒子）。粒子颜色走 `body` / `body.dark` 的 `--particle-dot`、`--particle-line` 变量（light 灰蓝、dark 淡蓝白），canvas 每帧读取并做 0.25s 缓动过渡。
 - **页面滑动手势一律用 Pointer Events**（`pointerdown` / `pointermove` / `pointerup`）+ 手势区域内 `touch-action: none`。`touchstart/move/end` 是**只认触摸**的：PC 上拿鼠标怎么拖都不触发（装成桌面应用后更明显 —— 浏览器 / 窗口层会把整段手势当成滚页面或拖窗口收走，再补一个 `touchcancel`）。Threes、Emoji 消消乐、2048、贪吃蛇（转向）、数字迷宫（空白格跟手）都已按这套实现，并且都保留了原有的兜底操作（消消乐点两下换位、2048 / 数字迷宫方向键、数字迷宫摇杆按钮）。`touch-action: none` 只加在「真正拥有这个手势」的元素上：**先量这一页会不会溢出**——不溢出就加在整页 `.wrapper`（Threes / 2048 / 贪吃蛇），会溢出就加在棋盘那层（消消乐 `.board-frame`；数字迷宫 `.game-area`，最高难度 6 在 320×568 下 scrollH 590 > 568，整页 none 会把「滚下去看棋盘」一起吃掉）。
 - **整副牌面优先裁图，并且拼成一张雪碧图**：需要成套牌面（麻将 / 扑克 / 塔罗之类）时，
-  如果手上有现成的整副图，直接按网格裁下来用比 CSS 画省事得多。做法（两个麻将游戏都在用）：
+  如果手上有现成的整副图，直接按网格裁下来用比 CSS 画省事得多。做法（三个麻将游戏都在用）：
   - 裁图：按网格切、每格往里收 2px 去掉相邻牌的边线，**直接从原图拼成一张**再存 webp
     （只压一次，别拿裁好的小图再拼）。裁完**先拼一张联络表截图肉眼核对**：网格顺序不一定按直觉
     （那张图的第 4 行是「北白南中發東西…」而不是东南西北中發白），原图还可能有水印格。
   - 现在的成品：`src/shared/mahjong-tiles.webp`（7 列 × 5 行、每格 131×168，一张 181KB）
     + `src/shared/mahjongTiles.js`（格子表、`spriteVars()`、长宽比 `TILE_RATIO = 1.282`）。
-    麻将英雄只用筒、雀圣用整副，**两个游戏共用这一份**。
+    麻将英雄只用筒、雀圣用整副、麻将传奇只用条，**三个游戏共用这一份**（`MahjongTile` 的 `suit` 属性选花色）。
   - **取格子用百分比**：`background-size: 735% 525%`（= 列/行数 ×1.05）
     + `background-position: slotPos(i) = (k(i+0.5) − 0.5)/(n·k − 1)`。`ZOOM = 1.05` 是为了把裁切时
     带进来的那圈原图边缘（条牌下面会出现一条白线）推出元素之外；百分比写法与元素尺寸无关，
     牌随视口缩放不用改样式。**分母别写错**（漏了分子里的 `k` 会每格偏位、露出一半邻居，实测踩过）。
-  - **开局/恢复前 `await` 预加载这张图**（`preloadTiles()` 就放在共享模块里，两个游戏共用同一个
+  - **开局/恢复前 `await` 预加载这张图**（`preloadTiles()` 就放在共享模块里，三个游戏共用同一个
     promise）：不预加载的话，牌元素会先渲染、图要等下载完才出现 —— 冷启动有肉眼可见的延迟
     （实测预加载后图 69ms 就绪、第一张牌 191ms 才出现），雀圣那边还会连带把入场波浪的顺序盖掉。另外牌面要自带 `border-radius`（约 9% 牌宽），
     否则雪碧图裁出来的直角会漏出原图的浅底。
@@ -172,7 +174,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
     漏掉的话预加载只能指望浏览器 HTTP 缓存，离线或缓存被清时牌面空白。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
-  **当前首页没有这类卡**（20 个位置正好被 20 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、
+  **当前首页没有这类卡**（21 个位置正好被 21 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、
   `.hex.wip` 样式和 `uno.config.ts` 里 `i-mdi-hammer-wrench` 的 safelist 都原样留着，恢复时照下面加一条 registry 条目即可）。
   以后要补位（比如首页还差一格、或某游戏临时下线）就照它加一条 registry 条目，实现要点：
   - `path` 指向 `'/'`；`HomePage` 的 `mergeOrder()` 末尾用 `games.filter(g => g.wip)` 把这类卡**强制移到队尾**，

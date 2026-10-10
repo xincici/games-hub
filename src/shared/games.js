@@ -19,6 +19,7 @@ import slideDict from '@/games/slide/i18n';
 import alchemyDict from '@/games/alchemy/i18n';
 import mahjongDict from '@/games/mahjong/i18n';
 import queshengDict from '@/games/quesheng/i18n';
+import legendDict from '@/games/legend/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -216,6 +217,17 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 1,
   },
+  {
+    id: 'legend',
+    path: '/legend',
+    icon: 'i-mdi-cards-playing-club-multiple-outline',
+    accent: 'card',
+    helpKey: '__mahjong_legend__help_showed',
+    // 单局制：只记最高分（清记录彩蛋按 min..max 拼 key）
+    recordsPrefix: '__mahjong_legend__best_',
+    minDifficulty: 1,
+    maxDifficulty: 1,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -239,6 +251,7 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['alchemy', alchemyDict],
   ['mahjong', mahjongDict],
   ['quesheng', queshengDict],
+  ['legend', legendDict],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

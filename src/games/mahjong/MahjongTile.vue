@@ -5,13 +5,15 @@ import { computed } from 'vue';
 import { TILE_SHEET, spriteVars } from '@/shared/mahjongTiles';
 
 const props = defineProps({
-  // 1 = 一筒 … 9 = 九筒
+  // 1 = 一筒 … 9 = 九筒（默认筒）
   value: { type: Number, required: true },
+  // 花色：'p' 筒（麻将英雄）/ 's' 条（麻将传奇）/ 'm' 万 / 'z' 字，都取自同一张雪碧图
+  suit: { type: String, default: 'p' },
 });
 
 const vars = computed(() => ({
   backgroundImage: `url(${TILE_SHEET})`,
-  ...spriteVars(`p${props.value}`),
+  ...spriteVars(`${props.suit}${props.value}`),
 }));
 </script>
 

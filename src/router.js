@@ -22,6 +22,7 @@ import SlideGame from './games/slide/SlideGame.vue';
 import AlchemyGame from './games/alchemy/AlchemyGame.vue';
 import MahjongGame from './games/mahjong/MahjongGame.vue';
 import QueshengGame from './games/quesheng/QueshengGame.vue';
+import MahjongLegendGame from './games/legend/MahjongLegendGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -45,6 +46,7 @@ const routes = [
   { path: '/alchemy', component: AlchemyGame, meta: { game: 'alchemy' } },
   { path: '/mahjong', component: MahjongGame, meta: { game: 'mahjong' } },
   { path: '/quesheng', component: QueshengGame, meta: { game: 'quesheng' } },
+  { path: '/legend', component: MahjongLegendGame, meta: { game: 'legend' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 
