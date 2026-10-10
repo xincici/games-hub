@@ -643,12 +643,14 @@ function onScoreReset() {
         padding: 3px 7px;
         border: 2px solid var(--primary-bg);
         border-radius: 9px;
-        background: rgb(255 255 255 / 84%);
+        // 底色要薄：原来给了 84% 的白底，几乎把牌面图案整个盖掉了（用户要求提高透明度）；
+        // 但 20% 又太透（用户反馈），最终取 40% —— 图案透得出来，章也还压得住
+        background: rgb(255 255 255 / 40%);
         color: var(--primary-bg);
         font-weight: 900;
         line-height: 1.05;
         transform: rotate(-12deg);       // 盖章的手感：歪一点
-        box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
       }
       .stamp-mark { font-size: calc(var(--cell, 64px) * 0.4); }
       .stamp-text { font-size: calc(var(--cell, 64px) * 0.15); letter-spacing: 0.5px; }

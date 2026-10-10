@@ -33,6 +33,9 @@ if (hearts.value <= 0) {
   锁输入用 `locked = settling || stamping || losing`，换关 / 重开时三个 `cancel` 一起调。
 - **盖章的观感**：`.stamp`（绝对定位盖在牌上，`pointer-events: none`）里是一个歪 12° 的
   方章（`--primary-bg` 描边 + 「✓」+ 本地化文字 `stampText`），进场 `stamp-in 0.42s`：
+  **底色取 `rgb(255 255 255 / 40%)`**（调过两轮：第一版 84% 的白底几乎把牌面图案整个盖住
+  （用户报「完全挡住原来的图案」），改成 20% 又太透（用户反馈），最后定在 40% —— emoji / 扑克
+  牌面透得出来，章也还压得住）；阴影同时减淡到 `0 1px 2px rgb(0 0 0 / 12%)`。
   从 `scale(2.4)` 落到 `scale(0.94)` 再回弹到 1（像按下去的章）。随后这张牌
   `stamp-shake 0.5s ease 0.45s` 震一下（幅度比点错的 shake 小）。
   **震动的类必须挂在正面那层 `.front-face`** —— `.card-flip` 的 transform 是翻面状态，
