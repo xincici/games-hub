@@ -271,8 +271,7 @@ export function findGroups(board) {
 // 通一关需要的步数 p80 是 3 / 4 / 4 / 6 / 7 步 —— 步数上限按「比 p80 宽一点」定，
 // 于是第 1 关 14 步、第 20 关 9 步。
 export const MAX_LEVEL = 20;
-const MOVES_EASY = 14;
-const MOVES_HARD = 9;
+const MOVES_FLAT = 30;    // 步数上限统一 30 步（用户要求；原来是 14 → 9 逐关收紧）
 const EASE_EASY = 1;      // 第 1 关：4 组全都已经摆好
 const EASE_HARD = 0;      // 第 20 关：全散着放
 
@@ -281,9 +280,10 @@ export function levelConfig(level) {
   const t = MAX_LEVEL === 1 ? 1 : (lv - 1) / (MAX_LEVEL - 1);
   return {
     level: lv,
-    // 步数：14 → 7（第 1 关很宽松，第 20 关要精打细算）
-    moves: Math.round(MOVES_EASY + (MOVES_HARD - MOVES_EASY) * t),
-    // 简易程度：1 → 0（已经摆好的组数 4 → 0）
+    // 步数上限**统一 30 步**（放宽，用户要求）：难度不再靠收紧步数
+    moves: MOVES_FLAT,
+    // 难度全交给摆盘：简易程度 1 → 0（已经摆好的组数 4 → 0）——
+    // 前边的牌局常常一开局就有整组挨着（点掉就行），后边的牌局全散着放，要靠滑动凑
     ease: EASE_EASY + (EASE_HARD - EASE_EASY) * t,
   };
 }

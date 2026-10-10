@@ -28,7 +28,11 @@
       </div>
       <div class="divider"></div>
       <div class="opt-item">
-        <button @click="autoplayGame" :disabled="clickCount !== 0" class="game-icon">{{ i18n('godMode') }}</button>
+        <!-- 上帝模式：暂停 = 把操作权交回玩家；玩家的操作全部撤销回初始局（undoIndex === -1）
+             才能再点一次（上帝模式自己点的也是可撤销的操作，所以暂停后能一路撤回去） -->
+        <button @click="autoplayGame" :disabled="!autoplaying && undoIndex !== -1" class="game-icon">
+          {{ autoplaying ? i18n('godPause') : i18n('godMode') }}
+        </button>
       </div>
     </div>
     <div class="game-area" :class="`cell-${cellSize}`">
@@ -64,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, watchEffect } from 'vue';
+import { ref, reactive, computed, watch, watchEffect, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import confetti from '@/shared/confetti';
@@ -79,7 +83,7 @@ const [TINY, MINI, SMALL, MIDDLE, LARGE] = ['tiny', 'mini', 'small', 'middle', '
 const neighbours = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]];
 const clickCount = ref(0);
 const gameResult = ref(GAMING);
-const autoplaying = ref(false);
+const autoplaying = ref(false);   // 上帝模式播放中；点一下「暂停」就退出、把操作权交回玩家
 const autoClick = reactive([-1, -1]);
 const userOpts = reactive([]);
 const undoIndex = ref(-1);
@@ -107,6 +111,8 @@ watchEffect(() => {
   bestScore.value = localStorage.getItem(storageKey.value);
 });
 watch(difficulty, initGame, { immediate: true });
+onUnmounted(stopAutoplay);      // 离开页面时把播放停掉，别让循环继续跑
+
 watch(gameResult, val => {
   if (val === WIN) {
     updateBestScore();
@@ -119,7 +125,7 @@ function initGame() {
   maskData = reactive(randomData(difficulty.value));
   randomSomeOperations();
   gameResult.value = GAMING;
-  autoplaying.value = false;
+  stopAutoplay();
   clickCount.value = 0;
   userOpts.length = 0;
   undoIndex.value = -1;
@@ -129,7 +135,14 @@ function initGame() {
   }
   toggleMask(0);
 }
+// 播放中再点按钮 = 暂停：退出循环、把操作权交回玩家（之后可以手动点、也可以撤销）
+function stopAutoplay() {
+  autoplaying.value = false;
+  autoClick[0] = autoClick[1] = -1;      // 清掉「正在点这一格」的高亮
+}
+
 async function autoplayGame() {
+  if (autoplaying.value) { stopAutoplay(); return; }
   autoplaying.value = true;
   const opts = [];
   Array.from(historyOpts.list.keys()).forEach(item => {
@@ -139,12 +152,12 @@ async function autoplayGame() {
   });
   opts.sort((a, b) => a[0] + a[1] - b[0] - b[1]);
   for (let i = 0; i < opts.length; i++) {
-    if (!autoplaying.value) return;
+    if (!autoplaying.value || gameResult.value !== GAMING) break;   // 中途赢了 / 被暂停就收工
     onCellClick(...opts[i]);
     await virtualClick(...opts[i]);
     await sleep(VIRTUAL_CLICK_WAIT_DURATION);
   }
-  autoplaying.value = false;
+  stopAutoplay();
 }
 async function virtualClick(row, col) {
   autoClick[0] = row;
