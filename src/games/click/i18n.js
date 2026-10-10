@@ -37,8 +37,8 @@ Make every number 0 to win. If your clicks run out first, you lose.`,
     newBest: '新纪录诞生',
     tipWin: '你赢了',
     tipLost: '你输了',
-    undo: '撤销',
-    redo: '重做',
+    undo: '上一步',
+    redo: '下一步',
     rotateTip: '请旋转设备至竖屏'
   }
 };
