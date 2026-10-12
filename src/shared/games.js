@@ -20,6 +20,7 @@ import alchemyDict from '@/games/alchemy/i18n';
 import mahjongDict from '@/games/mahjong/i18n';
 import queshengDict from '@/games/quesheng/i18n';
 import legendDict from '@/games/legend/i18n';
+import mirrorDict from '@/games/mirror/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -228,6 +229,17 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 1,
   },
+  {
+    id: 'mirror',
+    path: '/mirror',
+    icon: 'i-mdi-mirror-variant',
+    accent: 'memory',
+    helpKey: '__emoji_mirror__help_showed',
+    // 五档难度各自记录最佳时间（秒），沿用连点标题清记录的机制
+    recordsPrefix: '__emoji_mirror__best_',
+    minDifficulty: 1,
+    maxDifficulty: 5,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -252,6 +264,7 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['mahjong', mahjongDict],
   ['quesheng', queshengDict],
   ['legend', legendDict],
+  ['mirror', mirrorDict],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

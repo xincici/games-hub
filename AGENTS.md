@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 和麻将传奇 (Mahjong Legend)，现共二十一个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**2/3/4/3/4/3/2 共 21 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 和 Emoji 镜像 (Emoji Mirror)，现共二十二个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**1/2/3/4/3/4/3/2 共 22 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -26,7 +26,7 @@ yarn build     # 构建到 dist/
 yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`）做冒烟检查。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`、`/#/mirror`）做冒烟检查。
 
 ## 各游戏分册（**改哪个游戏就先读哪个分册**）
 
@@ -56,6 +56,7 @@ yarn preview   # 预览构建产物
 | 麻将英雄 | `src/games/mahjong/` | [`AGENTS.md`](src/games/mahjong/AGENTS.md) | `/#/mahjong` |
 | 雀圣 | `src/games/quesheng/` | [`AGENTS.md`](src/games/quesheng/AGENTS.md) | `/#/quesheng` |
 | 麻将传奇 | `src/games/legend/` | [`AGENTS.md`](src/games/legend/AGENTS.md) | `/#/legend` |
+| Emoji 镜像 | `src/games/mirror/` | [`AGENTS.md`](src/games/mirror/AGENTS.md) | `/#/mirror` |
 
 读法：要看 / 改某个游戏，先打开上表里对应的分册；只改共享组件或全局约定时看本文件。
 新增游戏时，除了在 `src/games/<id>/` 放组件与 `i18n.js`，也要按上面的格式补一份 `<id>/AGENTS.md`，
@@ -81,7 +82,7 @@ src/
 │   ├── ParticleBackground.vue  # 全站粒子连线背景（固定置底、跟随指针并轻微排斥、按主题实时换色、DPR ≤ 2）
 │   └── games.js          # 游戏注册表：路由、首页图标、帮助弹窗 storage key、清记录彩蛋所需前缀/难度范围；同时向 i18n 注册各游戏字典（新增游戏要在表尾追加，首页末位正好接上）
 ├── components/
-│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 2/3/4/3/4/3/2 正好 21 个位置，与 21 个游戏一一对应；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` **同时受宽度与高度两个约束取小值，保证首页不出滚动条**：宽度约束 `(min(100vw, 480px) − 41px) / 4`（最宽一行 4 格 + 3×3px 缝隙 + 左右各 16px 内边距），高度约束 `(100dvh − 198px) / 6.351`（7 行蜂窝总高 = 6.351w + 15.9px = 1.1547w × (1 + 0.75×6) + 2.65×6，再扣掉顶栏 94 + 上下内边距 64/24）；实测 **320×568 → 58px**、**375×667 → 74px**、390×844 → 87px、414×896 → 93px、480×900 → 110px，五档文档高都等于视口高、无滚动条（320 / 375 这两档现在由高度约束决定，所以比 6 行时小）
+│   ├── HomePage.vue      # 首页：蜂窝排布的卡片网格（ROW_SIZES = 1/2/3/4/3/4/3/2 正好 22 个位置，与 22 个游戏一一对应；比 ROW_SIZES 多出来的卡片走兜底行，且与上一行同奇偶时加半格横向错位保持咬合），支持拖动排序（顺序存本地）。六边形宽度 `--hex-w` **同时受宽度与高度两个约束取小值，保证首页不出滚动条**：宽度约束 `(min(100vw, 480px) − 41px) / 4`（最宽一行 4 格 + 3×3px 缝隙 + 左右各 16px 内边距），高度约束 `(100dvh − 200.6px) / 7.217`（8 行蜂窝总高 = 7.217w + 18.55px = 1.1547w × (1 + 0.75×7) + 2.65×7，再扣掉顶栏 94 + 上下内边距 64/24）；实测 **320×568 → 51px**、**375×667 → 65px**、390×844 → 77px、414×896 → 82px、480×900 → 98px，五档文档高都等于视口高、无滚动条
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
@@ -105,7 +106,8 @@ src/
     ├── alchemy/          # 扑克炼金术 —— 见 src/games/alchemy/AGENTS.md
     ├── mahjong/          # 麻将英雄 —— 见 src/games/mahjong/AGENTS.md
     ├── quesheng/         # 雀圣 —— 见 src/games/quesheng/AGENTS.md
-    └── legend/           # 麻将传奇 —— 见 src/games/legend/AGENTS.md
+    ├── legend/           # 麻将传奇 —— 见 src/games/legend/AGENTS.md
+    └── mirror/           # Emoji 镜像 —— 见 src/games/mirror/AGENTS.md
 
 scripts/                  # 图标源文件（make-icon.svg + icon-512.png），用其缩放生成 public/ 下各尺寸
 public/                   # favicon、PWA 图标（已替换为 games hub 专属手柄图标）
@@ -126,10 +128,18 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 
 - 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标来自运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
-- 布局 mobile-first，内容最大宽度 480px（`--max-width`）。各游戏首张卡片（`.score-area`，点击游戏叫 `.score-card`、1A2B 是 `.opt-area`）的 `margin-top` 统一为 **64px**（内容区因此从 240px 开始，改这个值要连带留意各游戏 JS 里算棋盘尺寸用的视口留白常量，它们按 262 留的余量，偏保守不会溢出）。
+- 布局 mobile-first，内容最大宽度 480px（`--max-width`）。各游戏首张卡片（`.score-area`，点击游戏叫 `.score-card`、1A2B 是 `.opt-area`）的 `margin-top` 统一为 **64px**（**Emoji 镜像例外**：它把这 64px 写成 `.wrapper` 的 `padding-top` —— `.wrapper` 没有上 padding 时，这个 margin 会塌陷到 `#app` 之外，而 `#app` 有 `min-height: 100dvh`，整页就会恒多出 64px 可滚动高度；判断能否滚动要用 `window.scrollTo(0, 9999)` 看 `scrollY`，`body.scrollHeight` 看不出来）（内容区因此从 240px 开始，改这个值要连带留意各游戏 JS 里算棋盘尺寸用的视口留白常量，它们按 262 留的余量，偏保守不会溢出）。
 - 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。
+- **切页过渡的 `.app-open-enter-active` / `.app-close-enter-active` 必须带 `box-sizing: border-box`**（`App.vue`）。
+  这两条给了 `position: absolute; width: 100%`，而各游戏的 `.wrapper` 都带左右各 16px 内边距 ——
+  默认 content-box 会算成「100% + 32px」：切页的那 0.3s 里整页比视口宽 32px（横向滚动条闪现），
+  而且内宽是「视口宽」、过渡一结束变回「视口宽 − 32」，看起来就是**「先横向超出视窗、再缩短恢复」的跳动**。
+  实测 320×568 下超宽 12 帧、最多 32px，**每个游戏都一样**（数独与 Emoji 镜像数字完全相同），
+  补上 `box-sizing` 后同样的脚本跑 200 帧、溢出 0 帧。排查这类问题的办法：`Page.addScriptToEvaluateOnNewDocument`
+  里逐帧记 `documentElement.scrollWidth` 与 `innerWidth`，超宽帧顺手把 `getBoundingClientRect().right > innerWidth`
+  的元素及其 `offsetWidth` / `transform` 打出来 —— 一眼就能看出是布局宽度问题还是过渡的 transform 问题。
 - **棋盘点阵底纹**：`App.vue` 里的全局类 `.dot-board`（`background-color: var(--board-bg)` + 10px 间距的 `radial-gradient` 点阵，点色 `--board-dot` 浅色 0.18 / 深色 0.08 透明度，对比约 1.17:1，很淡不抢牌）。**各 emoji 游戏的游戏区都套它**——对对碰 `.board`、连连看 `.board`、侦探 `.board-frame`、猎手 `.stage-frame` 与 `.candidate-area`、大师 `.board-wrap`、消消乐 `.board-frame`、排序 `.board`、下坠 `.board`、滑行 `.board`；数字类游戏（2048 / Threes）不用。用了这个类**不要再写 `background: var(--board-bg)`**：简写会把 `background-image` 清掉。
-- **emoji 游戏的统一视觉语言**（对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 大师 / 排序，新增 emoji 游戏请照抄）：
+- **emoji 游戏的统一视觉语言**（对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 大师 / 排序 / 镜像，新增 emoji 游戏请照抄）：
   - 棋子 / 牌面：圆角 `var(--radius-tile)` + `1px solid var(--tile-border-color)` 描边 + `var(--shadow-soft)` 软阴影 + `box-sizing: border-box`；**Emoji 大师例外**：它的卡片是立体的（正面 + 底部厚度 + 落地阴影，用本地的 `card-3d` mixin，见大师分册的「立体卡片」一节），翻牌类另加 `transform-style: preserve-3d` + `backface-visibility: hidden`，翻面 `transition: transform 0.45s ease-in-out`
   - 牌背：底色 `var(--primary-bg)` + `#fff` 图标，图标统一取本游戏在首页的图标（`gameConfig(id).icon`，对对碰 / 侦探 / 猎手都是这么做的），图标字号随格子走
   - 面板 `.card`：`--card-bg-color` + `--card-radius` + `--card-shadow`；统计条高 `var(--row-height)`、操作区 `margin: var(--row-gap) 0` + `height: var(--row-height)`；`.stat-label` 12px、`.stat-value` 22px 粗体
@@ -174,7 +184,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
     漏掉的话预加载只能指望浏览器 HTTP 缓存，离线或缓存被清时牌面空白。
 - 新增游戏：在 `src/games/<id>/` 放组件与 `i18n.js`，在 `shared/games.js` 注册（id/path/icon/helpKey，可选 recordsPrefix + 难度范围），在 `router.js` 加路由，首页图标加进 uno safelist。
 - **首页「建设中」占位卡（registry 里 `wip: true`）的硬性规矩：永远排在最后、不可点击、不可拖动、也不能被别的卡片换走。**
-  **当前首页没有这类卡**（21 个位置正好被 21 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、
+  **当前首页没有这类卡**（22 个位置正好被 22 个游戏占满，所以暂时把 registry 条目去掉了；`HomePage` 里的整套 `wip` 机制、
   `.hex.wip` 样式和 `uno.config.ts` 里 `i-mdi-hammer-wrench` 的 safelist 都原样留着，恢复时照下面加一条 registry 条目即可）。
   以后要补位（比如首页还差一格、或某游戏临时下线）就照它加一条 registry 条目，实现要点：
   - `path` 指向 `'/'`；`HomePage` 的 `mergeOrder()` 末尾用 `games.filter(g => g.wip)` 把这类卡**强制移到队尾**，
