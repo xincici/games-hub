@@ -122,6 +122,28 @@
 
 切换难度 = 立刻开新的一局（难度按钮就是 `startRound(next)`），**不做二次确认**。
 
+## 隐藏彩蛋：长按计时器偷看展示区
+
+**在「⏱ 用时」那一格上按住 4 秒，展示区会整片翻回正面**，松手立刻翻回去（用户要的「作弊手段」）。
+**刻意不写进帮助文案**（`help1..help3` 里不含「长按 / 偷看 / 按住」任何字眼，实测 0 处）——
+这是有意留的彩蛋，新增帮助条目时别顺手写进去。
+
+实现：`PEEK_MS = 4000`，`pointerdown` 起一个定时器、`pointerup` / `pointercancel` / `pointerleave` 收掉；
+到点把 `peeking = true`，展示区的 `face-down` 类改成 `hidden[i] && !peeking`。
+
+- **只改这一个独立标记**：不碰 `hidden`、不碰 `display` / `game`、**也不写存档**，所以游戏逻辑与进度
+  完全不受影响（实测偷看前后存档里 `display` / `game` / `phase` / `difficulty` 逐字相同，只有计时器的
+  `elapsed` 会随时间走）。
+- 只在 `PLAY` / `CHECKING` 阶段生效；`WON` 时展示区本来就正面，按了也没有变化。
+- `startPeek` 里用 `setPointerCapture` 保证松手一定能收到 `pointerup`，**但要包 try/catch** ——
+  合成事件（测试脚本 dispatch 的）没有真实 `pointerId`，不捕获会抛。
+- 换局 / 恢复存档 / 卸载都会清掉定时器并把 `peeking` 复位（`clearTimers` 里一并清）。
+- 那一格加了 `user-select: none` + `touch-action: none` + `-webkit-touch-callout: none`，
+  免得长按变成选中文字 / 滚动 / 系统长按菜单。
+
+实测：短按 1.5s 不翻开（4/4 仍背面）✓；按满 4.3s → 0/4 背面（翻开）✓、继续按住保持翻开 ✓、
+松手 → 回到 4/4 ✓；偷看期间计时器照常走（00:08 → 00:10）✓；交换一次之后再偷看同样有效 ✓。
+
 ## 界面
 
 - 统计条**两格**：「🏆 最佳 / ⏱ 用时」（用户要求交换位置、并去掉原来的「🎯 正确」——

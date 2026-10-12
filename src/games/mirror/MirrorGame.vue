@@ -8,7 +8,15 @@
         <span class="stat-value">{{ best ? fmtTime(best) : '--:--' }}</span>
       </div>
       <div class="divider" />
-      <div class="stat">
+      <!-- 隐藏彩蛋：在计时器这一格上长按 4 秒可以偷看展示区，松手翻回去（帮助文案里不写） -->
+      <div
+        class="stat time-stat"
+        :class="{ peeking }"
+        @pointerdown="startPeek"
+        @pointerup="endPeek"
+        @pointercancel="endPeek"
+        @pointerleave="endPeek"
+      >
         <span class="stat-label">{{ i18n('time') }}</span>
         <span class="stat-value">{{ fmtTime(elapsed) }}</span>
       </div>
@@ -41,7 +49,7 @@
               v-for="i in row"
               :key="`dc${i}`"
               class="mirror-card"
-              :class="{ 'face-down': hidden[i], gather: gathering, silent: silent }"
+              :class="{ 'face-down': hidden[i] && !peeking, gather: gathering, silent: silent }"
               :style="displayStyle(i)"
             >
               <div class="flip">
@@ -137,6 +145,7 @@ const pick = ref(null);
 const swap = ref(null);         // { a, b, delta } —— 交换动画期间的两张牌
 const settling = ref(false);    // 撤掉交换位移的那一帧禁用过渡
 const silent = ref(true);       // 恢复存档后的首帧禁用一切过渡（否则展示区会「翻」一下）
+const peeking = ref(false);     // 彩蛋：长按计时器满 4s 时把展示区翻开偷看（松手就翻回去）
 const phase = ref(DEAL);
 const elapsed = ref(0);
 const best = ref(0);
@@ -146,8 +155,9 @@ const timerRef = ref(null);
 const metrics = reactive({ card: 56, gap: GAP });
 
 let timers = [];
+let peekTimer = null;
 let round = 0;                  // 局序号：换难度 / 重开时作废旧动画
-const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+const clearTimers = () => { timers.forEach(clearTimeout); timers = []; if (peekTimer) { clearTimeout(peekTimer); peekTimer = null; } };
 const wait = ms => new Promise(res => { timers.push(setTimeout(res, ms)); });
 
 const count = computed(() => emojiCount(difficulty.value));
@@ -207,6 +217,7 @@ async function startRound(lv = difficulty.value) {
   isNewBest.value = false;
   showResult.value = false;
   phase.value = DEAL;
+  peeking.value = false;      // 新一局开始时收掉偷看态
   loadBest();
   computeMetrics();
   timerRef.value?.reset();
@@ -336,6 +347,21 @@ function finishWin() {
   save();
 }
 
+// ---------- 隐藏彩蛋：长按计时器 4s 偷看展示区 ----------
+// 只改一个独立标记，**不动 hidden、也不写存档**，所以松手就恢复原状，游戏逻辑与进度都不受影响。
+const PEEK_MS = 4000;
+function startPeek(e) {
+  if (phase.value !== PLAY && phase.value !== CHECKING) return;
+  if (peekTimer) clearTimeout(peekTimer);
+  // 捕获指针，保证松手 / 移出元素都能收到 pointerup（合成事件下可能不支持，忽略即可）
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 合成事件没有真实 pointerId */ }
+  peekTimer = setTimeout(() => { peekTimer = null; peeking.value = true; }, PEEK_MS);
+}
+function endPeek() {
+  if (peekTimer) { clearTimeout(peekTimer); peekTimer = null; }
+  peeking.value = false;
+}
+
 function onTimerTick() {
   if (phase.value === WON || phase.value === DEAL) return;   // 胜利 / 铺牌期间的时间不再变化
   elapsed.value = Math.floor(timerRef.value?.seconds() || 0);
@@ -388,6 +414,7 @@ function restoreState() {
     isNewBest.value = false;
     showResult.value = s.phase === WON;    // 恢复胜利态直接铺遮罩
     loadBest();
+    peeking.value = false;
     phase.value = s.phase === WON ? WON : PLAY;
     elapsed.value = Math.max(0, Math.floor(Number(s.elapsed) || 0));
     return true;
@@ -460,6 +487,13 @@ onUnmounted(() => {
   .stat-value {
     font-size: 22px;
     font-weight: 700;
+  }
+  // 计时器那格是长按彩蛋的热区：别让长按变成选中文字 / 滚动 / 系统长按菜单
+  .time-stat {
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    -webkit-touch-callout: none;
   }
 }
 
