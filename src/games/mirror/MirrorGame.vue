@@ -110,7 +110,7 @@ import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
-  MIN_DIFFICULTY, MAX_DIFFICULTY, emojiCount, rowsOf, sameCount, newRound, swapAt, fmtTime,
+  MIN_DIFFICULTY, MAX_DIFFICULTY, emojiCount, rowsOf, sameCount, newRound, derange, swapAt, fmtTime,
 } from './board';
 
 const [DEAL, PLAY, CHECKING, WON] = ['deal', 'play', 'checking', 'won'];
@@ -227,6 +227,10 @@ async function startRound(lv = difficulty.value) {
   if (my !== round) return;
   // ④ 数据打乱（牌背朝上，玩家看不到结果），再让每张按随机顺序飞回自己的格子
   display.value = shuffle(display.value);
+  // **打乱之后必须重取一次错排**：newRound 里的错排是针对「打乱前的展示区」算的，
+  // 展示区一被打乱，那个保证就失效了（n=4 时至少撞上一个位置的概率约 63%）——
+  // 用户报的「初始化时没有确保一处都不对」就是这个。此刻游戏区还是背面，改它看不见。
+  game.value = derange(display.value);
   const delays = new Array(n).fill(0);
   shuffle(Array.from({ length: n }, (_, i) => i)).forEach((card, k) => { delays[card] = k * FLY_STEP; });
   flyDelay.value = delays;
