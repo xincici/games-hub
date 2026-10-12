@@ -112,12 +112,18 @@ html, body, #app {
   background: transparent;
 }
 // iOS 风格的 App 打开 / 关闭过渡：游戏页从点击的图标位置缩放展开 / 缩回
-// 过渡期间进入的页面绝对定位覆盖在上层，避免与离开页面叠加撑高文档流
+// 过渡期间进入的页面绝对定位覆盖在上层，避免与离开页面叠加撑高文档流。
+// **必须配 box-sizing: border-box**：各游戏的 .wrapper 带左右各 16px 内边距，
+// 而这个规则给了 width: 100% —— 默认 content-box 会算成 100% + 32px，
+// 于是过渡的这 0.3s 里整页比视口宽 32px（横向滚动条闪现），而且内宽是「视口宽」、
+// 过渡一结束变回「视口宽 − 32」，看起来就是「先横向超出视窗、再缩短恢复」的跳动
+// （实测 320×568 下超宽 12 帧、最多 32px，每个游戏都一样，和游戏本身无关）。
 .app-open-enter-active {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
+  box-sizing: border-box;
   transform-origin: var(--launch-x, 50%) var(--launch-y, 50%);
   transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.32s ease-out;
 }
@@ -137,6 +143,7 @@ html, body, #app {
   top: 0;
   left: 0;
   width: 100%;
+  box-sizing: border-box;   // 同上：回首页的那一次过渡也要
   transition: transform 0.3s ease-out, opacity 0.3s ease-out;
 }
 .app-close-leave-active {
