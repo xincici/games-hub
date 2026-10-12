@@ -7,7 +7,9 @@ export const KINDS = 9;            // 条牌 1~9（点数就是 1~9 条）
 // 它们**只能靠刻子 / 杠消除**（点数不连续，凑不出顺子）—— 这是加难度的主要来源。
 export const HONOR_BASE = 9;
 export const HONORS = 7;
-export const HONOR_RATE = 0.12;    // 每个格子出字牌的概率（用户要求「频率不要太高」）
+// 每个格子出字牌的概率：1/14 ≈ 7.1%，也就是**平均每 14 张牌才出一张字牌**
+// （用户要求落在「每 12~15 张一张」区间里，取区间中段；原来是 12% = 每 8.3 张一张，偏多）
+export const HONOR_RATE = 1 / 14;
 export const suitOf = v => (v > HONOR_BASE ? 'z' : 's');
 export const faceOf = v => (v > HONOR_BASE ? v - HONOR_BASE : v);
 export const isHonor = v => v > HONOR_BASE;
