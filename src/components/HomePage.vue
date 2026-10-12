@@ -103,7 +103,7 @@ const cards = computed(() => order.value.map(id => {
 // 蜂窝布局：按行分组，1/2/3/4/3/4/3 交替让每行都咬合（一行最多 4 个，正好 20 个位置 = 20 个游戏）。
 // 兜底：若某行与上一行同奇偶（同为奇数/偶数个），六个尖角会上下对顶，
 // 此时给该行加半格横向错位，保持蜂窝咬合
-const ROW_SIZES = [3, 4, 3, 4, 3, 4];
+const ROW_SIZES = [2, 3, 4, 3, 4, 3, 2];   // 2+3+4+3+4+3+2 = 21，正好 21 个游戏；每行奇偶交替，蜂巢自然咬合
 const rows = computed(() => {
   const list = cards.value;
   const groups = [];
@@ -305,8 +305,10 @@ function onVisibility() {
 // 实测 320×568 → w=67.9（高度先到顶）、375×667 → 83.5、390×844 → 87.3、480×900 → 109.8（宽度先到顶），
 // 四档都不出滚动条
 .wrapper {
-  --hex-w: min(calc((min(100vw, 480px) - 41px) / 4), calc((100vh - 195px) / 5.485));
-  --hex-w: min(calc((min(100vw, 480px) - 41px) / 4), calc((100dvh - 195px) / 5.485));
+  // 7 行（2/3/4/3/4/3/2）：总高 = 1.1547w × (1 + 0.75×6) + 2.65×6 = 6.351w + 15.9
+  // 再扣顶栏 94 + 上下内边距 64/24 → w ≤ (100dvh − 197.9) / 6.351（原来是 6 行的 5.485）
+  --hex-w: min(calc((min(100vw, 480px) - 41px) / 4), calc((100vh - 198px) / 6.351));
+  --hex-w: min(calc((min(100vw, 480px) - 41px) / 4), calc((100dvh - 198px) / 6.351));
   --hex-h: calc(var(--hex-w) * 1.1547);
   width: 100%;
   min-height: 100vh;
