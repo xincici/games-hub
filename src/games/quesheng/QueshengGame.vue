@@ -6,7 +6,13 @@
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
   >
-    <TopHeader @onScoreReset="() => {}" />
+    <TopHeader @onScoreReset="() => {}">
+      <!-- 模式切换：老模式「一路滑到底」/ 新模式「一次一格」（图标按用户指定） -->
+      <span class="item-wrapper mode-btn" @click="toggleMode" :title="i18n('modeTip')">
+        <i i-mdi-arrow-right-bold v-if="mode === 1" />
+        <i i-mdi-arrow-right-bold-outline v-else />
+      </span>
+    </TopHeader>
 
     <!-- 统计条：关卡 / 剩余牌 / 剩余步数 -->
     <div class="card score-area">
@@ -137,14 +143,18 @@ import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
-  SIZE, CELLS, HAND_TILES, levelConfig, newGame, slide, findGroups, sameBoard, tileName, solvePuzzle,
+  SIZE, CELLS, HAND_TILES, levelConfig, newGame, slideBy, findGroups, sameBoard, tileName,
+  solvePuzzle, solveBeam,
 } from './board';
 
 // 牌面是参考图裁出来的 34 张牌拼成的雪碧图（与麻将英雄共用，见 src/shared/mahjongTiles.js）
 import { TILE_SHEET, spriteVars, preloadTiles } from '@/shared/mahjongTiles';
 
-const MODE_KEY = '__quesheng__level';
-const STATE_KEY = '__quesheng__state';
+// 两种模式各自独立的记录：老模式沿用原来的 key，新模式加 _2 后缀（与麻将英雄同一套约定）
+const MODE_KEY = '__quesheng__mode';           // 1 = 老模式（滑到底）/ 2 = 新模式（一次一格）
+const BEST_KEY = () => (mode.value === 2 ? '__quesheng__level_2' : '__quesheng__level');
+const STATE_KEY = () => (mode.value === 2 ? '__quesheng__state_2' : '__quesheng__state');
+const mode = ref(+(localStorage.getItem(MODE_KEY) || 1) === 2 ? 2 : 1);
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const SWIPE_MIN = 24;            // 滑动判定的最小位移
 const CLEAR_MS = 520;
@@ -235,10 +245,19 @@ const canRedo = computed(() => future.value.length > 0 && phase.value === PLAY);
 let timers = [];
 const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
 
+// 切换模式：存下当前模式、切过去恢复那个模式的存档（没有就按它自己的最高关卡开新局）
+function toggleMode() {
+  stopGod();
+  mode.value = mode.value === 2 ? 1 : 2;
+  try { localStorage.setItem(MODE_KEY, String(mode.value)); } catch { /* 隐私模式 */ }
+  godSolution.value = null;
+  if (!restoreState()) startLevel(Math.max(1, +(localStorage.getItem(BEST_KEY()) || 1)));
+}
+
 function startLevel(lv) {
   clearTimers();
   level.value = Math.max(1, lv);
-  const { board: b, moves, solution } = newGame(level.value);
+  const { board: b, moves, solution } = newGame(level.value, Math.random, mode.value);
   board.value = b;
   godSolution.value = solution || null;   // 发牌时就算好的解（上帝模式直接用）
   stopGod();
@@ -426,7 +445,9 @@ async function godPlay() {
   if (godPlaying.value) { stopGod(); return; }        // 播放中再点一下 = 停止
   if (!canGod.value) return;
   // 发牌时就算了，正常一定有解；万一没有（旧存档恢复出来的局面）就现场再解一次，解不出就静默不动
-  const solution = godSolution.value || solvePuzzle(board.value, movesLeft.value);
+  const solution = godSolution.value
+    || solveBeam(board.value, movesLeft.value, mode.value)
+    || solvePuzzle(board.value, movesLeft.value, mode.value);
   if (!solution || !solution.length) return;
   godPlaying.value = true;
   await godSleep(420);
@@ -451,7 +472,7 @@ async function godPlay() {
 // ---------- 滑动 ----------
 function applySlide(dir) {
   if (phase.value !== PLAY || clearing.value.size) return;
-  const next = slide(board.value, dir);
+  const next = slideBy(board.value, dir, mode.value);
   if (sameBoard(board.value, next)) return;
   pushHistory();
   selected.value = [];
@@ -543,7 +564,7 @@ function checkEnd() {
 
 function save() {
   try {
-    localStorage.setItem(STATE_KEY, JSON.stringify({
+    localStorage.setItem(STATE_KEY(), JSON.stringify({
       level: level.value,
       phase: phase.value,
       movesLeft: movesLeft.value,
@@ -551,14 +572,14 @@ function save() {
       history: history.value,
       future: future.value,
     }));
-    const best = +(localStorage.getItem(MODE_KEY) || 1);
-    if (level.value > best) localStorage.setItem(MODE_KEY, String(level.value));
+    const best = +(localStorage.getItem(BEST_KEY()) || 1);
+    if (level.value > best) localStorage.setItem(BEST_KEY(), String(level.value));
   } catch { /* 隐私模式写不进去就算了 */ }
 }
 
 function restoreState() {
   try {
-    const s = JSON.parse(localStorage.getItem(STATE_KEY));
+    const s = JSON.parse(localStorage.getItem(STATE_KEY()));
     if (!s || !Array.isArray(s.board) || s.board.length !== CELLS) return false;
     if (![PLAY, WON, OVER].includes(s.phase)) return false;
     // **过关时棋盘是全空的**（最后那一组消完就没了），所以「棋盘必须有牌」这条不能一刀切，
@@ -567,7 +588,7 @@ function restoreState() {
     level.value = Math.max(1, +s.level || 1);
     // +undefined 是 NaN，`??` 挡不住它，所以用 Number.isFinite 判
     const savedMoves = Number(s.movesLeft);
-    movesLeft.value = Number.isFinite(savedMoves) ? Math.max(0, savedMoves) : levelConfig(level.value).moves;
+    movesLeft.value = Number.isFinite(savedMoves) ? Math.max(0, savedMoves) : levelConfig(level.value, mode.value).moves;
     let n = 0;
     board.value = s.board.map(t => (t ? { suit: t.suit, num: t.num, id: ++n, delay: 0 } : null));
     history.value = Array.isArray(s.history) ? s.history : [];
@@ -600,7 +621,7 @@ onMounted(async () => {
   window.addEventListener('keyup', onKeyUp);
   // 先把牌图全部读进缓存，再开局 —— 这样铺牌动画才不会被图片加载打断
   await preloadTiles();   // 共享模块里缓存的同一个 promise
-  if (!restoreState()) startLevel(Math.max(1, +(localStorage.getItem(MODE_KEY) || 1)));
+  if (!restoreState()) startLevel(Math.max(1, +(localStorage.getItem(BEST_KEY()) || 1)));
 });
 
 onUnmounted(() => {

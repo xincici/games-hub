@@ -271,17 +271,21 @@ export function findGroups(board) {
 // 通一关需要的步数 p80 是 3 / 4 / 4 / 6 / 7 步 —— 步数上限按「比 p80 宽一点」定，
 // 于是第 1 关 14 步、第 20 关 9 步。
 export const MAX_LEVEL = 20;
-const MOVES_FLAT = 30;    // 步数上限统一 30 步（用户要求；原来是 14 → 9 逐关收紧）
+const MOVES_FLAT = 30;    // 老模式：步数上限统一 30 步（用户要求；原来是 14 → 9 逐关收紧）
+const MOVES_ONE_STEP = 50; // 新模式（一次一格）：每局最高操作次数 50（用户要求）
+// 逆向生成时最多打乱几次（随关卡从 0 升到它）：老模式一次逆操作就把每条线全部重排，4 次足够乱；
+// 新模式一次只退一格，要给到 10 次才够看。**必须 ≤ 步数上限**（构造解正好用掉这么多次滑动）。
+const SCRAMBLE_MAX = { 1: 4, 2: 10 };
 const EASE_EASY = 1;      // 第 1 关：4 组全都已经摆好
 const EASE_HARD = 0;      // 第 20 关：全散着放
 
-export function levelConfig(level) {
+export function levelConfig(level, mode = 1) {
   const lv = Math.max(1, Math.min(MAX_LEVEL, Math.floor(level) || 1));
   const t = MAX_LEVEL === 1 ? 1 : (lv - 1) / (MAX_LEVEL - 1);
   return {
     level: lv,
-    // 步数上限**统一 30 步**（放宽，用户要求）：难度不再靠收紧步数
-    moves: MOVES_FLAT,
+    // 步数上限：老模式统一 30 步；新模式「一次一格」走得慢，按用户要求给 50 步
+    moves: mode === 2 ? MOVES_ONE_STEP : MOVES_FLAT,
     // 难度全交给摆盘：简易程度 1 → 0（已经摆好的组数 4 → 0）——
     // 前边的牌局常常一开局就有整组挨着（点掉就行），后边的牌局全散着放，要靠滑动凑
     ease: EASE_EASY + (EASE_HARD - EASE_EASY) * t,
@@ -335,8 +339,40 @@ export function canSplit(tiles) {
   return go(false);
 }
 
-export function solvePuzzle(board, maxMoves, budget = 2000000) {
-  const memo = new Set();
+// 新模式（mode 2）：所有牌一次只移动一格 —— 目标格空着才走。
+// 处理顺序必须从「前进方向的领头牌」开始，这样前一张让出来的格，后一张同一回合还能跟上去一格
+//（[A,B,空] 向右 → [空,A,B]，两张各走一格；反过来先动 A 的话 B 就永远堵在它前面了）。
+export function slideOne(board, dir) {
+  const { dr, dc } = DIRS[dir];
+  const next = board.slice();
+  const vertical = dc === 0;
+  for (let line = 0; line < SIZE; line++) {
+    const cells = [];
+    for (let k = 0; k < SIZE; k++) cells.push(vertical ? idx(k, line) : idx(line, k));
+    const ordered = dr + dc > 0 ? [...cells].reverse() : cells;   // 领头优先
+    for (const i of ordered) {
+      const t = next[i];
+      if (!t) continue;
+      const nr = Math.floor(i / SIZE) + dr;
+      const nc = (i % SIZE) + dc;
+      if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+      const j = idx(nr, nc);
+      if (next[j]) continue;                 // 前面挡着，这一格就走不了
+      next[j] = t;
+      next[i] = null;
+    }
+  }
+  return next;
+}
+
+// 按模式选滑动：mode 1 = 老模式（一路滑到底），mode 2 = 新模式（一次一格）
+export const slideBy = (board, dir, mode = 1) => (mode === 2 ? slideOne(board, dir) : slide(board, dir));
+
+export function solvePuzzle(board, maxMoves, mode = 1, budget = 2000000) {
+  // 置换表剪枝：key 只按**局面**存（不带剩余步数），值是「用 ≥ 这么多步都失败过」。
+  // 原来把剩余步数拼进 key，等于迭代加深每一轮都从零重搜 —— 新模式（一次一格）需要的步数多，
+  // 那一版在第 20 关要 p95 6.3s、最慢 16s，发牌直接卡住。改成这个剪枝后回到毫秒级。
+  const memo = new Map();
   let nodes = 0;
   // 同一局里可能有等价的可消组（同 cell 集合），去重后再分支；先清三张组（将留到最后）
   const groupsOf = b => {
@@ -356,8 +392,9 @@ export function solvePuzzle(board, maxMoves, budget = 2000000) {
     if (nodes++ > budget) return null;
     const left = b.filter(Boolean);
     if (!left.length) return path;
-    const k = `${boardKey(b)}#${moves}`;
-    if (memo.has(k)) return null;
+    const k = boardKey(b);
+    const failedWith = memo.get(k);
+    if (failedWith !== undefined && failedWith >= moves) return null;
     // ① 消除是免费的：把每个可消组都试一遍（清完还得拆得完才继续）
     for (const cells of groupsOf(b)) {
       const nb = b.map((t, i) => (cells.includes(i) ? null : t));
@@ -368,13 +405,13 @@ export function solvePuzzle(board, maxMoves, budget = 2000000) {
     // ② 还有步数再试四个方向
     if (moves > 0) {
       for (const dir of ['up', 'down', 'left', 'right']) {
-        const nb = slide(b, dir);
+        const nb = slideBy(b, dir, mode);
         if (b.every((t, i) => t === nb[i])) continue;   // 滑不动
         const r = dfs(nb, moves - 1, [...path, { type: 'slide', dir }]);
         if (r) return r;
       }
     }
-    memo.add(k);
+    memo.set(k, Math.max(failedWith ?? -1, moves));
     return null;
   }
   for (let m = 0; m <= maxMoves; m++) {     // 迭代加深：m 步能赢就不试 m+1 步
@@ -385,25 +422,239 @@ export function solvePuzzle(board, maxMoves, budget = 2000000) {
   return null;
 }
 
-export function newGame(level, rand = Math.random) {
-  const cfg = levelConfig(level);
-  // 发牌时就把「步数上限内解不开」的开局扔掉重发：
-  // placeHand 是「预先摆好几组 + 剩下随机撒点」，随机撒出来的局面在高关卡有相当比例
-  // 是 9 步内无解的（实测第 20 关 300 局里 103 局如此）——那种局玩家再厉害也过不去。
-  // 重发到可解为止，顺便把解缓存下来给上帝模式直接用（一次搜索 ~10ms，重发平均 1.5 次）。
+// 发牌用的**快速**求解器：贪心清掉「清完残局还拆得开」的组，再按层做束搜索（beam）。
+// 关键区别：它给出的是**一整条真实路径** —— 找到就等于构造性证明了「这局解得开」；
+// 找不到**不代表无解**，发牌时重发就行（所以它只用来发牌，不影响任何正确性）。
+// 为什么要它：新模式「一次一格」下最短解很长，精确求解器要穷举「≤16 步无解」，
+// 实测第 20 关 p95 6.0s、最慢 15s，发牌会卡住；束搜索把这一档拉回毫秒级。
+export function solveBeam(board, maxMoves, mode = 1, width = 32) {
+  const clearAll = start => {
+    let cur = start;
+    const path = [];
+    for (;;) {
+      const safe = findGroups(cur).filter(g => {
+        const rest = cur.filter((t, i) => !g.cells.includes(i));
+        return canSplit(rest.filter(Boolean));
+      });
+      if (!safe.length) break;
+      safe.sort((a, c) => c.cells.length - a.cells.length);
+      const g = safe[0];
+      cur = cur.map((t, i) => (g.cells.includes(i) ? null : t));
+      path.push({ type: 'clear', cells: [...g.cells] });
+      if (!cur.filter(Boolean).length) break;
+    }
+    return { board: cur, path };
+  };
+  let frontier = [{ board: board.map(t => t), path: [] }];
+  for (let depth = 0; depth <= maxMoves; depth++) {
+    const next = [];
+    for (const node of frontier) {
+      const { board: cleared, path: clears } = clearAll(node.board);
+      const walked = [...node.path, ...clears];
+      if (!cleared.filter(Boolean).length) return walked;      // 清空 = 找到一条真解
+      if (depth === maxMoves) continue;
+      for (const dir of ['up', 'down', 'left', 'right']) {
+        const nb = slideBy(cleared, dir, mode);
+        if (cleared.every((t, i) => t === nb[i])) continue;    // 滑不动
+        next.push({ board: nb, path: [...walked, { type: 'slide', dir }] });
+      }
+    }
+    const seen = new Set();
+    const pruned = [];
+    // 启发式排序：剩下的牌越少越有希望
+    next.sort((a, c) => a.board.filter(Boolean).length - c.board.filter(Boolean).length);
+    for (const n of next) {
+      const k = boardKey(n.board);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      pruned.push(n);
+      if (pruned.length >= width) break;
+    }
+    frontier = pruned;
+    if (!frontier.length) return null;
+  }
+  return null;
+}
+
+// ---------- 逆向生成：不跑求解器，直接构造「一定能解」的开局 ----------
+// 用户给的思路：**先有解，再倒着打乱**。从空盘（= 已经赢了的盘面）出发：
+//   ① 逆向消除 = 把手上的一组（刻子/顺子，最后是一个将）摆成紧挨着的一排；
+//   ② 逆向滑动 = 正向滑动的**精确逆操作**（老模式：每条线里的牌保持相对顺序、随机重排位置；
+//      新模式：从尾部起每张牌朝反方向退一格）。
+// 把这些操作按顺序记下来，**正向倒着走一遍就是一条必胜解法** —— 可解性是构造出来的，
+// 不需要搜索（老做法「发到求解器解出来为止」在新模式下一次一格地走要穷举，实测 p95 6s；
+// 逆向生成是 0.1ms 级，实测 300 局生成最慢 1.8ms）。
+function inverseSlide(board, rand, mode) {
+  const dirs = ['up', 'down', 'left', 'right'];
+  const dir = dirs[Math.floor(rand() * 4)];
+  const { dr, dc } = DIRS[dir];
+  const next = board.slice();
+  const vertical = dc === 0;
+  for (let line = 0; line < SIZE; line++) {
+    const cells = [];
+    for (let k = 0; k < SIZE; k++) cells.push(vertical ? idx(k, line) : idx(line, k));
+    if (mode === 2) {
+      // 一次一格：从尾部先动（与正向「领头先动」相反），每张牌退一格
+      const ordered = dr + dc > 0 ? cells : [...cells].reverse();
+      for (const i of ordered) {
+        const t = next[i];
+        if (!t) continue;
+        const nr = Math.floor(i / SIZE) - dr;
+        const nc = (i % SIZE) - dc;
+        if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+        const j = idx(nr, nc);
+        if (next[j]) continue;
+        next[j] = t;
+        next[i] = null;
+      }
+      continue;
+    }
+    // 老模式：与 slide() 同一套顺序，随机挑严格递增的位置重新放这排牌（正向再压一次就回原位）
+    const tiles = cells.map(i => next[i]).filter(Boolean);
+    if (!tiles.length) continue;
+    const order = dr + dc > 0 ? [...cells].reverse() : cells;
+    order.forEach(i => { next[i] = null; });
+    const need = tiles.length;
+    const pos = [];
+    let at = -1;
+    for (let n = 0; n < need; n++) {
+      const hi = cells.length - (need - n);
+      at = at + 1 + Math.floor(rand() * (hi - at));
+      pos.push(at);
+    }
+    pos.forEach((p, n) => { next[order[p]] = tiles[n]; });
+  }
+  let moved = false;
+  for (let c = 0; c < next.length; c++) if (next[c] !== board[c]) { moved = true; break; }
+  return moved ? { board: next, dir } : null;
+}
+
+// 把一组牌摆成「紧挨着的一排」（横向或纵向都试，随机挑一个放得下的）
+function placeRun(board, tiles, rand) {
+  const spots = [];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c + tiles.length <= SIZE; c++) {
+      const cs = [];
+      let ok = true;
+      for (let k = 0; k < tiles.length; k++) { const i = idx(r, c + k); if (board[i]) { ok = false; break; } cs.push(i); }
+      if (ok) spots.push(cs);
+    }
+  }
+  for (let c = 0; c < SIZE; c++) {
+    for (let r = 0; r + tiles.length <= SIZE; r++) {
+      const cs = [];
+      let ok = true;
+      for (let k = 0; k < tiles.length; k++) { const i = idx(r + k, c); if (board[i]) { ok = false; break; } cs.push(i); }
+      if (ok) spots.push(cs);
+    }
+  }
+  if (!spots.length) return null;
+  const cells = spots[Math.floor(rand() * spots.length)];
+  const next = board.slice();
+  cells.forEach((i, k) => { next[i] = tiles[k]; });
+  return { board: next, cells };
+}
+
+// 把 14 张牌拆成 4 组 + 1 个将（回溯，从最小的那张开始试，见分册的坑 #3）
+function splitHand(tiles, rand) {
+  const rest = tiles.slice();
+  const melds = [];
+  const go = () => {
+    if (!rest.length) return melds.length === 4;
+    if (melds.length === 4) return rest.length === 2 && kindKey(rest[0]) === kindKey(rest[1]);
+    const g = takeMeld(rest, rand);
+    if (!g) return false;
+    melds.push(g);
+    if (canSplit(rest) && go()) return true;
+    melds.pop();
+    rest.push(...g);
+    return false;
+  };
+  if (!go()) return null;
+  return { melds, pair: rest.slice() };
+}
+
+// 用**真实规则**复演一遍解：每一步滑动都要真能挪动、每一步消除都必须是当场 findGroups() 给的组之一
+//（摆好的组旁边若还有别的牌，findGroups 可能给出另一种拆法，那条解就不成立了 —— 实测 300 局里
+// 有六七成是这种「解不成立」的，所以要自检；生成只要 0.13ms，不成立就重发，几乎不花时间）。
+function replaySolution(board, solution, mode) {
+  let b = board.map(t => t);
+  for (const step of solution) {
+    if (step.type === 'slide') {
+      const nb = slideBy(b, step.dir, mode);
+      let moved = false;
+      for (let i = 0; i < b.length; i++) if (b[i] !== nb[i]) { moved = true; break; }
+      if (!moved) return false;
+      b = nb;
+    } else {
+      const want = [...step.cells].sort((x, y) => x - y).join(',');
+      const hit = findGroups(b).some(g => [...g.cells].sort((x, y) => x - y).join(',') === want);
+      if (!hit) return false;
+      b = b.map((t, i) => (step.cells.includes(i) ? null : t));
+    }
+  }
+  return b.every(t => !t);
+}
+
+export function newGame(level, rand = Math.random, mode = 1) {
+  const cfg = levelConfig(level, mode);
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const g = buildByReverse(cfg, rand, mode);
+    if (g && replaySolution(g.board, g.solution, mode)
+        && g.solution.filter(x => x.type === 'slide').length <= cfg.moves) return { ...g, cfg, moves: cfg.moves };
+  }
+  // 兜底（几乎到不了）：用精确求解器发到可解为止
+  return newGameBySolver(cfg, rand, mode);
+}
+
+// 逆向生成一次（不保证「解在真实规则下成立」，由 newGame 复演自检）
+function buildByReverse(cfg, rand, mode) {
+  resetUid();
+  const hand = dealHand(rand);
+  const split = splitHand(hand, rand) || { melds: [], pair: hand };
+  const parts = [...split.melds, split.pair];        // 4 组 + 1 个将
+  // 难度 = 打乱次数：先把 5 个部件都摆好（此时整盘是「一副现成的牌」），再逆着滑动 k 次把它打散。
+  // 正向解法就是「先滑回来、再一组一组消」，用的滑动数正好 = k，所以 k 一定要 ≤ 步数上限。
+  // （把滑动插在摆放之间也试过：最后摆的那几组还是现成的，解里几乎不需要滑动，局太简单。）
+  const k = Math.round((1 - cfg.ease) * SCRAMBLE_MAX[mode]);
+
+  let board = emptyBoard();
+  const ops = [];                                     // 逆向操作的记录（正向倒着走就是解）
+  const doSlide = () => {
+    const r = inverseSlide(board, rand, mode);
+    if (!r) return false;
+    board = r.board;
+    ops.push({ type: 'slide', dir: r.dir });
+    return true;
+  };
+  for (const part of parts) {
+    const put = placeRun(board, part, rand);
+    if (!put) continue;
+    board = put.board;
+    ops.push({ type: 'clear', cells: put.cells });
+  }
+  for (let n = 0; n < k; n++) doSlide();
+  // 正向解法 = 逆向操作倒着走：逆向滑动 → 同方向的滑动；逆向消除 → 消除那一组
+  const solution = ops.slice().reverse().map(o => (
+    o.type === 'slide' ? { type: 'slide', dir: o.dir } : { type: 'clear', cells: [...o.cells] }
+  ));
+  return { board, solution };
+}
+
+// 老兜底：发到求解器能在步数上限内解出来为止
+function newGameBySolver(cfg, rand, mode) {
   let board = null;
   let solution = null;
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 40 && !solution; attempt++) {
     resetUid();
     board = placeHand(dealHand(rand), rand, cfg.ease);
-    solution = solvePuzzle(board, cfg.moves);
-    if (solution) break;
+    solution = solveBeam(board, cfg.moves, mode) || solvePuzzle(board, cfg.moves, mode);
   }
   if (!solution) {
-    // 极端兜底（40 次都没发到可解的，几乎不可能）：把步数放宽到刚好够用，
-    // 宁可这一关比标定多几步，也不给玩家一个解不开的局
-    for (let m = cfg.moves + 1; m <= cfg.moves + 8 && !solution; m++) solution = solvePuzzle(board, m);
-    if (solution) return { board, cfg: { ...cfg, moves: solution.filter(x => x.type === 'slide').length + 1 }, moves: solution.filter(x => x.type === 'slide').length + 1, solution };
+    resetUid();
+    board = placeHand(dealHand(rand), rand, cfg.ease);
+    solution = solveBeam(board, cfg.moves + 8, mode) || solvePuzzle(board, cfg.moves + 8, mode);
+    if (solution) return { board, cfg: { ...cfg }, moves: cfg.moves, solution };
   }
   return { board, cfg, moves: cfg.moves, solution };
 }
