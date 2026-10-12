@@ -26,7 +26,7 @@ yarn build     # 构建到 dist/
 yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`、`/#/mirror`）做冒烟检查。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`、`/#/mirror`）做冒烟检查。**冒烟至少跑 375×667（最低支持尺寸）与 390×844 两档**。
 
 ## 各游戏分册（**改哪个游戏就先读哪个分册**）
 
@@ -128,7 +128,10 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 
 - 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标来自运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。
 - 主题色一律走 `src/App.vue` 里 `body` / `body.dark` 的 CSS 变量（`--bg-color`、`--card-bg-color`、`--primary-bg`、`--win-color`、`--lose-color` 等，为四个原项目变量名的并集），不要硬编码需要响应深色模式的颜色。
-- 布局 mobile-first，内容最大宽度 480px（`--max-width`）。各游戏首张卡片（`.score-area`，点击游戏叫 `.score-card`、1A2B 是 `.opt-area`）的 `margin-top` 统一为 **64px**（**Emoji 镜像例外**：它把这 64px 写成 `.wrapper` 的 `padding-top` —— `.wrapper` 没有上 padding 时，这个 margin 会塌陷到 `#app` 之外，而 `#app` 有 `min-height: 100dvh`，整页就会恒多出 64px 可滚动高度；判断能否滚动要用 `window.scrollTo(0, 9999)` 看 `scrollY`，`body.scrollHeight` 看不出来）（内容区因此从 240px 开始，改这个值要连带留意各游戏 JS 里算棋盘尺寸用的视口留白常量，它们按 262 留的余量，偏保守不会溢出）。
+- 布局 mobile-first，内容最大宽度 480px（`--max-width`）。**最小兼容尺寸是 375×667（iPhone SE）**，
+  更小的屏幕（320×568 之类）不再作为验收标准 —— 历史上在 320 下量到的溢出/滚动数据只作参考，
+  不必为它牺牲 375 以上的排版（用户明确过这一点）。新增页面与改动布局时，验收看 **375×667 与 390×844**
+  两档：不出现横向滚动条、纵向不滚动（能滚的游戏除外，见各分册的「已知情况」）。各游戏首张卡片（`.score-area`，点击游戏叫 `.score-card`、1A2B 是 `.opt-area`）的 `margin-top` 统一为 **64px**（**Emoji 镜像例外**：它把这 64px 写成 `.wrapper` 的 `padding-top` —— `.wrapper` 没有上 padding 时，这个 margin 会塌陷到 `#app` 之外，而 `#app` 有 `min-height: 100dvh`，整页就会恒多出 64px 可滚动高度；判断能否滚动要用 `window.scrollTo(0, 9999)` 看 `scrollY`，`body.scrollHeight` 看不出来）（内容区因此从 240px 开始，改这个值要连带留意各游戏 JS 里算棋盘尺寸用的视口留白常量，它们按 262 留的余量，偏保守不会溢出）。
 - 公共逻辑放 `src/shared/`（如 `confetti.js` 撒花动画、`CountTimer.vue` 计时器），各游戏直接 `import ... from '@/shared/xxx'`，不要再复制一份。
 - **切页过渡的 `.app-open-enter-active` / `.app-close-enter-active` 必须带 `box-sizing: border-box`**（`App.vue`）。
   这两条给了 `position: absolute; width: 100%`，而各游戏的 `.wrapper` 都带左右各 16px 内边距 ——
