@@ -151,7 +151,14 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   - 棋子 / 牌面：圆角 `var(--radius-tile)` + `1px solid var(--tile-border-color)` 描边 + `var(--shadow-soft)` 软阴影 + `box-sizing: border-box`；**Emoji 大师例外**：它的卡片是立体的（正面 + 底部厚度 + 落地阴影，用本地的 `card-3d` mixin，见大师分册的「立体卡片」一节），翻牌类另加 `transform-style: preserve-3d` + `backface-visibility: hidden`，翻面 `transition: transform 0.45s ease-in-out`
   - 牌背：底色 `var(--primary-bg)` + `#fff` 图标，图标统一取本游戏在首页的图标（`gameConfig(id).icon`，对对碰 / 侦探 / 猎手都是这么做的），图标字号随格子走
   - 面板 `.card`：`--card-bg-color` + `--card-radius` + `--card-shadow`；统计条高 `var(--row-height)`、操作区 `margin: var(--row-gap) 0` + `height: var(--row-height)`；`.stat-label` 12px、`.stat-value` 22px 粗体
-  - 主按钮 `.game-icon`：粗体、`--primary-bg` 底 + 白字、圆角 `var(--radius-tile)`。尺寸默认 `padding: 8px 16px` + 14px，但**贪吃蛇 / 点击 / 数独 / 侦探 / 猎手 / 对对碰 / 下坠 这七个是 `padding: 8px 12px` + 13px**（按钮更窄，320 宽下三格操作区也放得下），其余游戏仍按默认值 —— 改尺寸时这两组要分别对待
+  - 主按钮 `.game-icon`：粗体、`--primary-bg` 底 + 白字、圆角 `--radius-tile`。**两个特例**（都写成
+    `.game-icon.xxx:not(:disabled)`，禁用时仍走各自 `&:disabled` 的灰，实测 `#aaa`）：**上帝模式按钮**
+    （点击游戏 / 雀圣）可点击时用 `--god-bg`（橙 `#c2410c`，白字 5.18:1）、**暂停按钮**（贪吃蛇 / Emoji 下坠）
+    可点击时用 `--pause-bg`（黄 `#ffc300`）**配深色字 `--pause-fg`（`#222`，9.89:1）** ——
+    **黄底不能配白字**（只有 1.61:1），所以这两个按钮的文字色也一起覆盖。这些变量在 `App.vue` 的两套主题里同值
+    （和 `--primary-bg` 一样），因为它们压在按钮自己的底色上、与页面主题无关；**挑这类颜色必须算对比度** ——
+    更亮的橙 `#ea580c` 只有 3.56:1、`#f59e0b` 只有 2.15:1，黄底白字 1.61:1，都不达标。
+    尺寸默认 `padding: 8px 16px` + 14px，但**贪吃蛇 / 点击 / 数独 / 侦探 / 猎手 / 对对碰 / 下坠 这七个是 `padding: 8px 12px` + 13px**（按钮更窄，320 宽下三格操作区也放得下），其余游戏仍按默认值 —— 改尺寸时这两组要分别对待
   - 操作区左侧那格「盘面信息 / 难度」文字（`difficulty-value` / `level-note` / `board-info`）统一 **14px + `--muted-color` + `font-weight: 400`**（10 个游戏一致：贪吃蛇 / 数独 / 侦探 / 猎手 / 滑行 / 消消乐 / 连连看 / 大师 / 对对碰 / 排序；浅色主题对白卡 5.43:1、深色对深卡 5.56:1）。唯一例外是大师结算浮层里那个同名 `.level-note`（`.result` 内、跟随浮层自己的 `--text-color` + 0.75 透明）
   - **「选对了」的反馈动画**（侦探 `revealed` / 猎手 `found`）：除高亮外再播 `pick-right-pop`（弹一下 1 → 1.18 → 0.96 → 1.04 → 1）+ `pick-right-ring`（绿色光环扩散淡出），关键帧在 `App.vue`。两个坑：**只能挂正面那层 `.face`**（外层 `.card-flip` / `.cand-flip` 的 `transform` 是翻面状态，动画会顶掉它、牌翻回背面）；**只能由「本次点击」的瞬时标记驱动**（侦探 `rightIdx` / 猎手 `justFound`，`clearTimers` 与还原存档时复位），挂在会存档的 `revealed` / `found` 上重进或切模式会重播
   - 计时 / 倒计时文字统一 **14px**：共用 `CountTimer` 的 `.timer`（数独 / 侦探 / 猎手 / 下坠显示它，连连看 / 滑行 `show=false` 不显示）与对对碰操作区里的 `.time-note`（观察倒计时 / 操作倒计时）

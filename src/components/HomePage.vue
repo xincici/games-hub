@@ -450,12 +450,16 @@ function onVisibility() {
     padding: 14% 0 10%;
     box-sizing: border-box;
     transition: background-color 0.15s ease;
+    // 图标与游戏名都按 --hex-w 等比缩放，这样每个尺寸下的「文字宽度 / 六边形宽度」比例一致，
+    // 中英文名字都不会被挤到省略号。锚点是最小支持尺寸 375×667（此时 --hex-w ≈ 64.6px）：
+    //  0.31  → 20px 图标（用户指定）；0.108 → 7px 游戏名（用户指定）
+    // 大屏同比例放大：390 宽 23.9/8.3px、480 宽 30/10.5px（--max-width 480 封顶，名字不会超过 11px）
     i {
-      font-size: 30px;
+      font-size: calc(var(--hex-w) * 0.31);
       color: var(--accent, var(--primary-bg));
     }
     .game-name {
-      font-size: 12px;
+      font-size: calc(var(--hex-w) * 0.108);
       font-weight: bold;
       white-space: nowrap;
       max-width: 94%;
