@@ -29,7 +29,7 @@
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
-        <button @click="togglePause" class="game-icon" :disabled="phase !== PLAY">
+        <button @click="togglePause" class="game-icon pause-btn" :disabled="phase !== PLAY">
           {{ paused ? i18n('resume') : i18n('pause') }}
         </button>
       </div>
@@ -503,6 +503,9 @@ function onScoreReset() {
       justify-content: center;
     }
   }
+  // 暂停 / 继续「可点击」时是黄色，和品牌绿的主按钮区分开（禁用时仍是灰）
+  // 黄底配深字：白字压 #ffc300 只有 1.65:1，深字有 9.9:1
+  .game-icon.pause-btn:not(:disabled) { background-color: var(--pause-bg); color: var(--pause-fg); }
   .game-icon {
     cursor: pointer;
     padding: 8px 12px;

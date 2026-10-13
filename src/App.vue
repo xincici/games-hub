@@ -215,6 +215,11 @@ body {
   --accent-card: #8f6419;
   // 主色：白字压在上面需 ≥4.5:1，#2ea464 只有 3.18:1，故压深一档（4.92:1）
   --primary-bg: #23804e;
+  // 上帝模式按钮可点击时的橙色：白字压它 5.18:1（更亮的橙 #ea580c 只有 3.56:1，不行）
+  --god-bg: #c2410c;
+  // 暂停按钮可点击时的黄色：**黄底必须配深色字**（白字压 #ffc300 只有 1.65:1，深字 #222 有 9.9:1）
+  --pause-bg: #ffc300;
+  --pause-fg: #222;
   // 结果色：浅色下压在近白遮罩上，胜利色同样要压深（#1b1 只有 2.58:1）
   --win-color: #12833f;
   --lose-color: #b11;
@@ -293,6 +298,9 @@ body {
     --accent-action: #e59356;
     --accent-card: #e0b158;
     --primary-bg: #23804e;
+    --god-bg: #c2410c;
+    --pause-bg: #ffc300;
+    --pause-fg: #222;
     --win-color: #4ec98a;
     --lose-color: #e57f79;
     --muted-color: #a3adba;

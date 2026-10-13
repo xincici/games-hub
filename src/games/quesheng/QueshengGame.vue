@@ -733,6 +733,8 @@ onUnmounted(() => {
     .start-wrapper { display: flex; align-items: center; justify-content: center; flex: 1.2; }
   }
 
+  // 上帝模式按钮「可点击」时是橙色（与点击游戏一致；禁用时仍是灰）
+  .game-icon.god-btn:not(:disabled) { background-color: var(--god-bg); }
   .game-icon {
     cursor: pointer;
     padding: 8px 16px;

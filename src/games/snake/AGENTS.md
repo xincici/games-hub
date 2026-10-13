@@ -21,3 +21,10 @@ SnakeGame.vue（canvas 渲染；**暂停**：操作区「难度 | 新游戏 | �
 
 - 转向手势走 **Pointer Events**（`pointerdown` / `pointerup` / `pointercancel`，阈值 20px，方向取 |dx| / |dy| 较大者），`.wrapper` 上加 `touch-action: none`（此页纵向不溢出，整页加安全）。原来只监听 touch 事件，PC 上鼠标拖动不转向。
 - 方向键同样可用；暂停时 `saveState()` 会把 `dir` / `nextDir` 一起落档（所以验证转向时可以先滑一下再暂停，读 `__snake_game__state` 里的 `nextDir`）。
+
+## 按钮配色（暂停 / 蓝色）
+
+「⏸ 暂停 / ▶️ 继续」按钮**可点击时是黄色** `var(--pause-bg)`（`#ffc300`）**配深色字**
+`var(--pause-fg)`（`#222`，9.89:1）—— 黄底配白字只有 1.61:1，所以文字色也要覆盖；和品牌绿的主按钮
+（`--primary-bg`）区分开，禁用时仍是灰（`#aaa`）+ 白字。
+规则写成 `.game-icon.pause-btn:not(:disabled)`，`:not(:disabled)` 保证禁用态不回落到蓝色。

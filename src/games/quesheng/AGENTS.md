@@ -283,3 +283,8 @@ const clearingTiles = computed(() => [...clearing.value.values()]);   // 存的�
 实测修好后浮影层的 opacity 是 `0.96 → 0.15 → 0.98 → 0.15 → 0.01`，
 即「暗→亮→暗→淡出」两下闪烁，与扑克炼金术 / 麻将英雄一致。
 
+## 按钮配色（上帝模式 / 橙色）
+
+「⚡ 上帝模式」按钮**可点击时是橙色** `var(--god-bg)`（`#c2410c`，白字 5.18:1），禁用时仍是灰
+（`#aaa`）：`.game-icon.god-btn:not(:disabled) { background-color: var(--god-bg); }`。
+与点击游戏同一套写法、同一个变量（见根 AGENTS 的「emoji 游戏统一视觉语言」）。

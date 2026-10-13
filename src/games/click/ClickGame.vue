@@ -30,7 +30,7 @@
       <div class="opt-item">
         <!-- 上帝模式：暂停 = 把操作权交回玩家；玩家的操作全部撤销回初始局（undoIndex === -1）
              才能再点一次（上帝模式自己点的也是可撤销的操作，所以暂停后能一路撤回去） -->
-        <button @click="autoplayGame" :disabled="!autoplaying && undoIndex !== -1" class="game-icon">
+        <button @click="autoplayGame" :disabled="!autoplaying && undoIndex !== -1" class="game-icon god-btn">
           {{ autoplaying ? i18n('godPause') : i18n('godMode') }}
         </button>
       </div>
@@ -344,6 +344,8 @@ function userRedo() {
       cursor: not-allowed;
     }
   }
+  // 上帝模式按钮「可点击」时是橙色（禁用时仍走 .game-icon:disabled 的灰）
+  .game-icon.god-btn:not(:disabled) { background-color: var(--god-bg); }
   .game-icon {
     cursor: pointer;
     display: inline-block;
