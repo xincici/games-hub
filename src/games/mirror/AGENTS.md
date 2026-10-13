@@ -8,6 +8,8 @@
 > - 共享组件：`TopHeader` / `CountTimer` / `confetti`；emoji 取自 `shared/emojis.js`
 > - 单局制（没有关卡），五档难度各自记一个最佳时间
 
+> 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
+
 ## 玩法
 
 展示区先亮出这一局的 n 个 emoji 让人看一眼，然后**逐张翻面**，再**打乱**：

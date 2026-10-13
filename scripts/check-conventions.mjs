@@ -39,6 +39,7 @@ for (const g of games) {
 }
 // ---------- ③ 目录 / 分册 / i18n ----------
 const rootAgents = read('AGENTS.md');
+const readmeSrc = read('README.md');
 const gamesDocRows = [];
 for (const g of games) {
   const dir = `src/games/${g.id}`;
@@ -46,6 +47,8 @@ for (const g of games) {
   const files = readdirSync(path.join(ROOT, dir));
   if (!files.includes('i18n.js')) err(`[${g.id}] 缺 i18n.js`);
   if (!files.includes('AGENTS.md')) { err(`[${g.id}] 缺分册 AGENTS.md`); continue; }
+  if (!files.includes('README.md')) err(`[${g.id}] 缺玩法 README.md（面向玩家的玩法简介）`);
+  else if (!readmeSrc.includes(`src/games/${g.id}/README.md`)) err(`[${g.id}] 根 README 的游戏表没有链到 src/games/${g.id}/README.md`);
   const note = read(`${dir}/AGENTS.md`);
   if (!note.includes(`/#${g.path}`)) warn(`[${g.id}] 分册里没有写自己的路由 /#${g.path}`);
   if (!rootAgents.includes(`src/games/${g.id}/`)) err(`[${g.id}] 根 AGENTS.md 的分册表格里没有它`);
@@ -79,7 +82,7 @@ for (const g of games) {
   }
 }
 // ---------- ④ README ----------
-const readme = read('README.md');
+const readme = readmeSrc;
 // README 的游戏列表用「emoji + 中文名 + 说明」，不写 /#/ 路由；显示名从根 AGENTS 的分册表格里取
 const displayName = id => (rootAgents.match(new RegExp('\\|\\s*([^|]+?)\\s*\\|\\s*`src/games/' + id + '/`')) || [])[1];
 for (const g of games) {

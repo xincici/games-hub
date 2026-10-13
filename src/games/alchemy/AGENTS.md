@@ -9,6 +9,8 @@
 > - 共享组件：`src/shared/`（`i18n.js` / `theme.js` / `confetti.js` / `ConfirmDialog.vue` / `ParticleBackground.vue` 等）；
 >   牌面复用 `src/games/poker/CardItem.vue`
 
+> 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
+
 ## 玩法
 
 4×4 棋盘（16 格）上的扑克炼金：手里一次只有一张牌（面板上还能看到接下来的两张），

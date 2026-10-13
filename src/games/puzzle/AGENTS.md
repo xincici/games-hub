@@ -8,6 +8,8 @@
 > - i18n key 前缀：`__number_puzzle__`
 > - 共享组件：`src/shared/`（`i18n.js` / `theme.js` / `confetti.js` / `CountTimer.vue` / `ConfirmDialog.vue` / `Hearts.vue` / `ParticleBackground.vue` 等）
 
+> 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
+
 ## 实现
 
 MainGame.vue + difficulty/rocker/i18n.js

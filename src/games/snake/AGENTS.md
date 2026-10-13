@@ -8,6 +8,8 @@
 > - i18n key 前缀：`__snake_game__`
 > - 共享组件：`src/shared/`（`i18n.js` / `theme.js` / `confetti.js` / `CountTimer.vue` / `ConfirmDialog.vue` / `Hearts.vue` / `ParticleBackground.vue` 等）
 
+> 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
+
 ## 实现
 
 SnakeGame.vue（canvas 渲染；**暂停**：操作区「难度 | 新游戏 | 暂停」三格的暂停按钮、或 `visibilitychange` 变隐藏时自动暂停 —— 暂停即 `stopTimer()` 并 `saveState()` 落档，`restore()` 还原后停在暂停态等玩家点「继续」；**继续前先数 3 2 1**（共用 `shared/resumeCountdown.js`，倒数期间 `paused` 仍为 true、`tick()` 直接返回，数完才重启定时器）+ wall.js（穿墙开关：**默认开启**，只有显式存过 `'0'` 才算关；两种状态都显式落档，否则「关掉」会变成删 key、下次进来又落回默认的开）+ i18n.js（route /snake，key 前缀 __snake_game__）

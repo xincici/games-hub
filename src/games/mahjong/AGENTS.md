@@ -9,6 +9,8 @@
 > - 共享组件：`src/shared/`（`i18n.js` / `confetti.js` / `ConfirmDialog.vue` 等）；
 >   牌面用与雀圣共用的雪碧图（`src/shared/mahjong-tiles.webp`，见下）
 
+> 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
+
 ## 玩法
 
 3×3 棋盘上的麻将消除：牌只有**一筒 ~ 九筒**这九种（点数 1~9），每种 4 张、共 36 张的牌墙 ——

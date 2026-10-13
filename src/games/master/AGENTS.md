@@ -8,6 +8,8 @@
 > - i18n key 前缀：`__emoji_master__`
 > - 共享组件：`src/shared/`（`i18n.js` / `theme.js` / `confetti.js` / `CountTimer.vue` / `ConfirmDialog.vue` / `Hearts.vue` / `ParticleBackground.vue` 等）
 
+> 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
+
 ## 实现
 
 MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（组数 8→32（24→96 张，已是布局容量上限）、种类 **7→18**、层数 2→8，第 50 关到顶，之后关数无限；同一种可出多组，张数恒为 3 的倍数）、无计时器、无洗牌道具、顶部统计条底部有进度条（已消卡片/本关总卡片）、操作区左侧显示「层数 · 种类」、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；游戏区本身是一张带底色的卡片（`--board-bg` + `--card-radius` + 8px 内边距，与连连看 / 消消乐同款——卡片坐标按 `layout` 的 `BOARD_PAD` 一起算，改内边距要同步改 `unit` 与 `--board-h`）；被压住的卡片**一律不透明**（depth-N 仅作样式钩子），只靠 `filter: brightness(0.5)` 变暗表示不可点；层数只影响视觉，能不能点仍由 `freeIds` 判定；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ buildTripleBag/dealAlongOrder 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）

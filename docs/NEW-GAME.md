@@ -7,13 +7,13 @@
 1. **看一个现成的同类游戏**：emoji 类抄 `src/games/match/`（+ `detective/` 看提示带、`master/` 看立体卡片）；
    数字类抄 `src/games/g2048/`；麻将类抄 `src/games/mahjong/`（雪碧图牌面）。**别从零写样式**。
 2. **建目录** `src/games/<id>/`：`<Name>Game.vue`（界面）+ `board.js`（纯逻辑、不碰 DOM，便于离线跑脚本验证）
-   + `i18n.js`（中英双语）+ `AGENTS.md`（照下面模板）。
+   + `i18n.js`（中英双语）+ **`README.md`（玩法，面向玩家）** + `AGENTS.md`（实现，照下面模板）。自检会要求这两份都在。
 3. **注册**：`src/shared/games.js` 表尾追加一条（字段见下），并把它的字典 `registerGame` 进去。
 4. **路由**：`src/router.js` 加 `{ path: '/<id>', component: XxxGame, meta: { game: '<id>' } }`。
 5. **首页图标**：把 `icon` 加进 `uno.config.ts` 的 `safelist`（运行时数据 UnoCSS 静态提取不到，**漏了就是空白方块**）。
 6. **首页格子**：`HomePage.vue` 的 `ROW_SIZES` 加一格（当前 `1/2/3/4/3/4/3/2` = 22）——
    加完要重新量首页有没有滚动条（宽度约束那条公式的分母是「最宽行格数」，通常不用改）。
-7. **文档**：根 `AGENTS.md` 的分册表格加一行；`README.md` 的游戏列表/数量同步；跑自检
+7. **文档**：根 `AGENTS.md` 的分册表格加一行；根 `README.md` 的游戏表加一行「emoji + 名字（链到 `src/games/<id>/README.md`）+ 一句话」；跑自检
    （它还会核对 `docs/GAMES.md`）。
 8. **验证**：`node scripts/check-conventions.mjs` 全绿 → `node scripts/smoke.mjs` 全绿 →
    再照 [`VERIFY.md`](VERIFY.md) 对自己这个游戏**做一次针对性的量测**（新动画/新尺寸/新状态一定量一遍）。

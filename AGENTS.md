@@ -5,6 +5,7 @@
 | 你要做的事 | 必读 |
 | --- | --- |
 | **任何改动之前** | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) —— 跨游戏硬约定（含「开工前逐条核对」清单） |
+| 了解某个游戏怎么玩 | `src/games/<id>/README.md` —— **面向玩家**的玩法简介（根 README 只留一句话 + 链接） |
 | 改某个游戏 | 上表里那个游戏的**分册** `src/games/<id>/AGENTS.md` |
 | 新增游戏 | [`docs/NEW-GAME.md`](docs/NEW-GAME.md) —— 分步清单 + 骨架；同时过一遍约定 |
 | 改共享组件 / 路由 / 注册表 / 主题 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
@@ -75,8 +76,14 @@ yarn preview   # 预览构建产物
 | Emoji 镜像 | `src/games/mirror/` | [`AGENTS.md`](src/games/mirror/AGENTS.md) | `/#/mirror` |
 
 读法：要看 / 改某个游戏，先打开上表里对应的分册；只改共享组件或全局约定时看本文件。
+每个游戏目录下有两份文档，**分工不要混**：`README.md` 讲**怎么玩**（面向玩家，规则、操作、胜负条件），
+`AGENTS.md` 讲**怎么改**（实现、存档 key、踩过的坑）。**玩法文案只写在 `src/games/<id>/README.md`**，
+根 `README.md` 只保留「游戏名 + 一句话 + 链接」。
 新增游戏时，除了在 `src/games/<id>/` 放组件与 `i18n.js`，也要按上面的格式补一份 `<id>/AGENTS.md`，
 并在上表里加一行。
+
+**新增游戏时**：`src/games/<id>/` 下要同时有 `README.md`（玩法）与 `AGENTS.md`（实现），
+自检脚本会检查这两份都在、且根 README 的那一行链到了 `README.md`。
 
 改完必须同步的还有：本文件（如果约定变了）、游戏自己的分册、`README.md`（用户可见的行为变了）、
 以及 `docs/GAMES.md`（它是生成的，跑一次自检脚本即可）。
