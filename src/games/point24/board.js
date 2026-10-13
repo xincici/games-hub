@@ -113,6 +113,40 @@ export function hardness(sols) {
 export const targetHardness = level => Math.min(MAX_HARDNESS, Math.floor((Math.max(1, level) - 1) / 3));
 
 /**
+ * 难度评分 **1~100**：完全按这道题的实际情况算 —— 加难度的加分、一眼能看出来的减分，最后截断。
+ *
+ * | 项 | 取值 | 理由 |
+ * | --- | --- | --- |
+ * | 基础分 | 30 | |
+ * | 解的个数 | 0~40（越多解越低） | 不同**算式**的个数，重复数字的题会把排列折叠掉，所以它单独用不可靠 |
+ * | 必须用分数 | 0 / 8 / 20 | 所有解都要经过非整数最烦人，`8 ÷ (3 − 8/3)` 那种 |
+ * | 每个解都要除法 | 0 / 12 | 一条不用除法就不加 |
+ * | 数字互不相同 | +8 / +3 / −6 / −14 | 四个都一样最省事，四个都不同最难凑 |
+ * | 纯加减就能成 | −25 | 一眼就看出来 |
+ * | 只有一次乘除 | −8 | 也很直白 |
+ * | 数字里有 1 | −8 | ×1 / ÷1 的凑法太多 |
+ *
+ * 例：`3 3 8 8`（唯一解 + 必须分数 + 必须除法）≈ 96；`6 6 6 6`（纯加减即可 + 四个一样）≈ 17。
+ * **减分项是故意做重的**：第一次实现只把「纯加减」扣 10 分，于是 `6 6 6 6` 拿到 40 分 ——
+ * 重复数字会把「不同算式数」压得很低，看起来像难题，实际一眼就会。
+ */
+export function scorePuzzle(nums, sols = solveAll(nums)) {
+  if (!sols.length) return 1;                       // 无解不该出现，真出现给最低分
+  const s = sols.length;
+  const solPts = s >= 30 ? 0 : s >= 20 ? 5 : s >= 10 ? 10 : s >= 5 ? 18 : s >= 3 ? 26 : s === 2 ? 34 : 40;
+  const fracPts = sols.every(x => x.usesFraction) ? 20 : sols.some(x => x.usesFraction) ? 8 : 0;
+  const divPts = sols.every(x => x.expr.includes('÷')) ? 12 : 0;
+  const distinct = new Set(nums).size;
+  const disPts = distinct === 4 ? 8 : distinct === 3 ? 3 : distinct === 2 ? -6 : -14;
+  const plain = sols.some(x => !/[×÷()]/.test(x.expr));                        // 纯加减就能成
+  const fewOps = sols.some(x => (x.expr.match(/[×÷]/g) || []).length <= 1);    // 只用一次乘除
+  const hasOne = nums.includes(1);
+  const raw = 30 + solPts + fracPts + divPts + disPts
+    - (plain ? 25 : 0) - (fewOps ? 8 : 0) - (hasOne ? 8 : 0);
+  return Math.max(1, Math.min(100, Math.round(raw)));
+}
+
+/**
  * 生成一道题：**保证有解**，并按关卡挑难度（找不到就逐步放宽，最后兜底只要有解）。
  * @returns {{nums:number[], answer:string, answerCount:number, hardness:number}}
  */
@@ -121,6 +155,7 @@ export function newPuzzle(level = 1, rand = Math.random, prev = null) {
   const pick = () => Array.from({ length: NUM_COUNT }, () => DIGIT_MIN + Math.floor(rand() * (DIGIT_MAX - DIGIT_MIN + 1)));
   const pack = (nums, sols) => ({
     nums, answer: sols[0].expr, answerCount: sols.length, hardness: hardness(sols),
+    score: scorePuzzle(nums, sols),
   });
   for (let attempt = 0; attempt < 600; attempt++) {
     const nums = pick();

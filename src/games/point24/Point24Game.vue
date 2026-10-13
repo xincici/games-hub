@@ -16,11 +16,24 @@
     </div>
 
     <!-- ② 按钮区：新游戏 / 查看答案 / 退格 -->
-    <div class="card opt-card">
-      <button class="game-icon" @click="startNewGame">{{ i18n('start') }}</button>
-      <button class="game-icon answer-btn" :disabled="phase !== PLAY" @click="revealAnswer">
-        {{ i18n('answer') }}
-      </button>
+    <div class="card opt-area">
+      <!-- 最左侧：这道题的难度评分（1~100） -->
+      <div class="opt-half">
+        <div class="score-cell">
+          <span class="score-label">{{ i18n('difficulty') }} ·</span>
+          <span class="score-value">{{ score }}</span>
+        </div>
+      </div>
+      <div class="divider" />
+      <div class="start-wrapper">
+        <button class="game-icon" @click="startNewGame">{{ i18n('start') }}</button>
+      </div>
+      <div class="divider" />
+      <div class="start-wrapper">
+        <button class="game-icon answer-btn" :disabled="phase !== PLAY" @click="revealAnswer">
+          {{ i18n('answer') }}
+        </button>
+      </div>
     </div>
 
     <div class="game-area">
@@ -81,13 +94,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
-  appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText, solveAll, NUM_COUNT,
+  appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText, solveAll, scorePuzzle,
+  NUM_COUNT,
 } from './board';
 
 const PLAY = 'play';
@@ -117,6 +131,10 @@ const tokens = ref([]);
 const phase = ref(PLAY);
 const streak = ref(readInt(KEYS.streak, 0));
 const best = ref(readInt(KEYS.best, 0));
+const score = ref(1);                // 当前这道题的难度评分（1~100），发牌 / 恢复时算
+const answer = ref('');              // 本题的一个正确答案（发牌时就算好，查看答案零延迟）
+// ↑ 必须声明在 restoreState() **之前**：它内部会给 answer.value 赋值，
+//   放到后面就是 TDZ，抛错再被下面的 try/catch 吞掉 —— 表现是「退出重进永远恢复不了，每次都在重发」。
 const revealed = ref('');            // 查看答案后展示的答案串
 const note = ref('');                // 算式下方的一行提示（=N / 答案 / 放弃提示）
 
@@ -129,6 +147,7 @@ function restoreState() {
     const sols = solveAll(s.nums);
     if (!sols.length) return false;
     answer.value = sols[0].expr;        // 存档里不存答案，恢复时重算（保证「查看答案」一定有内容）
+    score.value = scorePuzzle(s.nums, sols);   // 评分同理：不存，按数字重算
     level.value = Math.max(1, Math.floor(s.level) || 1);
     nums.value = s.nums.slice();
     tokens.value = Array.isArray(s.tokens) ? s.tokens : [];
@@ -136,7 +155,11 @@ function restoreState() {
     revealed.value = typeof s.revealed === 'string' ? s.revealed : '';
     note.value = typeof s.note === 'string' ? s.note : '';
     return true;
-  } catch { return false; }
+  } catch (e) {
+    // 不要静默吞掉：这里曾经因为 TDZ 抛错而被吞，表现为「退出重进永远恢复不了」
+    console.warn('[point24] 存档恢复失败，已按新局重开：', e);
+    return false;
+  }
 }
 const restored = restoreState();
 
@@ -151,12 +174,12 @@ const save = () => {
 
 // ---------- 发牌 ----------
 const prevNums = ref(null);
-const answer = ref('');              // 本题的一个正确答案（发牌时就算好，查看答案零延迟）
 function deal(levelNo) {
   const p = newPuzzle(levelNo, Math.random, prevNums.value);
   prevNums.value = p.nums;
   nums.value = p.nums;
   answer.value = p.answer;
+  score.value = p.score;
   tokens.value = [];
   revealed.value = '';
   note.value = '';
@@ -206,7 +229,7 @@ function win() {
   write(KEYS.streak, streak.value);
   note.value = '';
   save();
-  nextTick(() => confetti());
+  confetti();          // 只有真正打赢这一局才撒花；重进恢复不撒（见 onMounted）
 }
 
 function revealAnswer() {
@@ -233,8 +256,8 @@ const noteClass = computed(() => ({ bad: wrongResult.value }));
 
 onMounted(() => {
   if (!restored) deal(level.value);      // 没有存档才发新牌；有存档时上面已经恢复好了
-  // 恢复出来的局面如果本来就是赢的，重进时把烟花补一下（其它动画一律不播）
-  if (restored && phase.value === WON) nextTick(() => confetti());
+  // 恢复存档时**什么都不播**：胜利局面重进只把遮罩摆出来，不放烟花（用户明确要求）。
+  // 这也是本项目的老约定（见根 AGENTS 的「恢复界面时一律不放任何动画」）。
 });
 
 // 标题连点 5 次清记录：把连胜记录一起清掉（注册表里给的是 recordsPrefix，数字键不存在，所以这里自己清）
@@ -300,7 +323,7 @@ function onScoreReset() {
 
   .game-icon {
     cursor: pointer;
-    padding: 8px 12px;
+    padding: 8px 10px;
     font-size: 13px;
     font-weight: bold;
     background: var(--primary-bg);
@@ -348,16 +371,48 @@ function onScoreReset() {
     }
   }
 
-  .opt-card {
+  // 操作区比例**与 Emoji 下坠一致**：评分区 : 两个按钮区 = 3 : 3.5 : 3.5。
+  // 关键是按钮**不拉伸**（下面 .game-icon 不写 flex），像下坠那样取自然宽度、在格里居中 ——
+  // 第一版写成 `flex: 1` 撑满整格，按钮看起来就"太长"了。
+  .opt-area {
     display: flex;
     align-items: center;
-    gap: 8px;
     margin: var(--row-gap) 0;
-    padding: 8px 12px;
-    height: calc(var(--row-height) + 16px);
+    height: var(--row-height);
 
-    .game-icon {
-      flex: 1;
+    .opt-half {
+      flex: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .start-wrapper {
+      flex: 3.5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  // 最左侧那格里是当前题目的难度评分（1~100）。**一行显示**：「题目评分 · 80」/「Score · 80」
+  //（用户要求不换行；标签走 i18n，中间的「·」放在模板里）
+  .score-cell {
+    display: flex;
+    align-items: center;        // 两个 span 字号不同：用居中对齐让它们的视觉中心重合
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+
+    // line-height 都写 1：盒子紧贴文字，居中对齐之后不会再出现「一个偏上、一个偏下」
+    .score-label {
+      font-size: 12px;
+      line-height: 1;
+      color: var(--muted-color);
+    }
+    .score-value {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
     }
   }
 

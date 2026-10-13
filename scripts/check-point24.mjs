@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // 24 点出题器自检（纯逻辑，不开浏览器）：node scripts/check-point24.mjs [每关样本数]
 // 断言：每道题都**有解**、答案串能被**独立解析**回 24、数字都在 1~9、难度随关卡递增、生成不卡住。
-import { solveAll, newPuzzle, verifyAnswer, targetHardness, appendable, evalTokens, FALLBACK_NUMS } from '../src/games/point24/board.js';
+import {
+  solveAll, newPuzzle, verifyAnswer, targetHardness, appendable, evalTokens, FALLBACK_NUMS, scorePuzzle,
+} from '../src/games/point24/board.js';
 
 const PER_LEVEL = Number(process.argv[2]) || 200;
 const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 15, 20];
@@ -52,6 +54,33 @@ if (appendable([num(0, 3), op('+')], { t: 'rp' })) fail('「3 +」之后不该�
 if (evalTokens([{ t: 'lp' }, num(0, 3), op('+'), num(1, 3), { t: 'rp' }, op('×'), { t: 'lp' }, num(2, 5), op('-'), num(3, 1), { t: 'rp' }]).is24 !== true)
   fail('(3+3)×(5−1) 应判为 24');
 
+// 难度评分：区间必须是 1~100，极端牌组要落在两头，且大体随难度档递增
+const sEasy = scorePuzzle([6, 6, 6, 6]), sHard = scorePuzzle([3, 3, 8, 8]);
+if (!(sEasy >= 1 && sEasy <= 100)) fail(`6 6 6 6 的评分越界：${sEasy}`);
+if (!(sHard >= 1 && sHard <= 100)) fail(`3 3 8 8 的评分越界：${sHard}`);
+if (!(sHard > sEasy + 50)) fail(`难度评分没区分开：3 3 8 8 = ${sHard}，6 6 6 6 = ${sEasy}`);
+if (sEasy > 30) fail(`一眼就会的 6 6 6 6 评分过高：${sEasy}`);
+if (sHard < 85) fail(`唯一解又必须分数的 3 3 8 8 评分过低：${sHard}`);
+if (scorePuzzle([1, 2, 3, 4]) > 60) fail(`1 2 3 4 只是乘法，评分不该偏高：${scorePuzzle([1, 2, 3, 4])}`);
+if (scorePuzzle([1, 1, 1, 1]) !== 1) fail(`无解牌组应给最低分，实得 ${scorePuzzle([1, 1, 1, 1])}`);
+let scoreTotal = 0, scoreCount = 0, scoreMin = 101, scoreMax = 0;
+const byLevel = [];
+for (const level of LEVELS) {
+  let sum = 0, n = 0;
+  for (let i = 0; i < 40; i++) {
+    const p = newPuzzle(level, Math.random, null);
+    if (!(p.score >= 1 && p.score <= 100)) { fail(`关卡 ${level} 的评分越界：${p.score}`); }
+    if (p.score !== scorePuzzle(p.nums)) { fail(`关卡 ${level} 的评分与重算不一致：${p.score} vs ${scorePuzzle(p.nums)}`); }
+    sum += p.score; n++; scoreTotal += p.score; scoreCount++; scoreMin = Math.min(scoreMin, p.score); scoreMax = Math.max(scoreMax, p.score);
+  }
+  byLevel.push(`${level}:${Math.round(sum / n)}`);
+}
+if (scoreCount && !(scoreMin >= 1 && scoreMax <= 100)) fail(`评分区间异常：${scoreMin}~${scoreMax}`);
+const early = Number(byLevel[0].split(':')[1]), late = Number(byLevel[byLevel.length - 1].split(':')[1]);
+if (!(late > early)) fail(`评分没有随关卡递增：关卡 ${LEVELS[0]} 平均 ${early}，关卡 ${LEVELS[LEVELS.length - 1]} 平均 ${late}`);
+
+console.log(`\n难度评分：6 6 6 6 = ${sEasy}，3 3 8 8 = ${sHard}；${scoreCount} 题评分区间 ${scoreMin}~${scoreMax}（平均 ${(scoreTotal / scoreCount).toFixed(0)}）`);
+console.log(`  逐关平均：${byLevel.join('  ')}`);
 console.log(`\n共 ${total} 题，问题 ${problems.length} 条`);
 for (const p of problems.slice(0, 10)) console.log('  ✗ ' + p);
 if (problems.length) process.exit(1);
