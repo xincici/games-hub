@@ -8,7 +8,7 @@
         <span class="stat-value">{{ best ? fmtTime(best) : '--:--' }}</span>
       </div>
       <div class="divider" />
-      <!-- 隐藏彩蛋：在计时器这一格上长按 4 秒可以偷看展示区，松手翻回去（帮助文案里不写） -->
+      <!-- 隐藏彩蛋：在计时器这一格上长按 1.5 秒可以偷看展示区，松手翻回去（帮助文案里不写） -->
       <div
         class="stat time-stat"
         :class="{ peeking }"
@@ -47,7 +47,7 @@
           <div v-for="(row, ri) in rows" :key="`d${ri}`" class="card-row">
             <div
               v-for="i in row"
-              :key="`dc${i}`"
+              :key="`dc${dealSeq}-${i}`"
               class="mirror-card"
               :class="{ 'face-down': hidden[i] && !peeking, gather: gathering, silent: silent }"
               :style="displayStyle(i)"
@@ -79,7 +79,7 @@
           <div v-for="(row, ri) in rows" :key="`g${ri}`" class="card-row">
             <div
               v-for="i in row"
-              :key="`gc${i}`"
+              :key="`gc${dealSeq}-${i}`"
               class="mirror-card playable"
               :class="{
                 picked: pick === i,
@@ -140,6 +140,7 @@ const hidden = ref([]);         // 展示区某张是否背面朝上
 const gameHidden = ref([]);     // 游戏区每张是否背面朝上（只在开局的洗牌阶段为 true）
 const gathering = ref(false);   // 展示区是否正聚在中间
 const flyDelay = ref([]);       // 飞出时每张的 transition-delay
+const dealSeq = ref(0);         // 开局序号：拼进 :key，逼 Vue 每局重建卡片（见分册的「坑」）
 const matches = ref(0);
 const pick = ref(null);
 const swap = ref(null);         // { a, b, delta } —— 交换动画期间的两张牌
@@ -217,6 +218,7 @@ async function startRound(lv = difficulty.value) {
   isNewBest.value = false;
   showResult.value = false;
   phase.value = DEAL;
+  dealSeq.value += 1;         // 每局换一批 key：所有卡片都重建，入场翻面表现才一致
   peeking.value = false;      // 新一局开始时收掉偷看态
   loadBest();
   computeMetrics();
@@ -347,9 +349,9 @@ function finishWin() {
   save();
 }
 
-// ---------- 隐藏彩蛋：长按计时器 4s 偷看展示区 ----------
+// ---------- 隐藏彩蛋：长按计时器 1.5s 偷看展示区 ----------
 // 只改一个独立标记，**不动 hidden、也不写存档**，所以松手就恢复原状，游戏逻辑与进度都不受影响。
-const PEEK_MS = 4000;
+const PEEK_MS = 1500;
 function startPeek(e) {
   if (phase.value !== PLAY && phase.value !== CHECKING) return;
   if (peekTimer) clearTimeout(peekTimer);
