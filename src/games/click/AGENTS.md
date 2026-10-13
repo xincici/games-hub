@@ -50,3 +50,4 @@ ClickGame.vue + difficulty/i18n.js + assets/yzcw.mp3
 「⚡ 上帝模式」按钮**可点击时是橙色** `var(--god-bg)`（`#c2410c`，白字 5.18:1），禁用时仍是原有的灰
 （`#aaa`）——规则写成 `.game-icon.god-btn:not(:disabled)`，`:not(:disabled)` 保证禁用态不回落到橙色。
 挑色时要算白字对比度：更亮的橙（`#ea580c` 3.56:1、`#f59e0b` 2.15:1）都不达标。
+- 存档 key：`__easy_click_game__difficulty`（当前难度）、`__easy_click_game__state`（局面存档）、`__easy_click_game__best_*`（各难度最佳成绩）、`__easy_click_game__help_showed`（帮助弹窗是否已弹过）

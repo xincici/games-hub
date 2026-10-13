@@ -19,3 +19,4 @@ GuessNumber.vue + robot/i18n.js
 ## 界面约定
 
 - 顶栏「游戏特色按钮」：机器人（`TopHeader` 默认插槽）
+- 存档 key：`__guess_number__robot`（是否与机器人对战）、`__guess_number__state`（局面存档）、`__guess_number__best`（最佳成绩）

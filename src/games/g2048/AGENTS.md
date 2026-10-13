@@ -28,3 +28,4 @@ Game2048.vue + i18n.js（route /2048，key 前缀 __game_2048__；新开局与�
 - **合并**：合并牌是**新牌**（新 id，带 `merging: true` → 滑行期间 `opacity: 0`），被吃掉的两张各留一个**幽灵**（`ghosts` 数组）滑到目标格；`MOVE_MS` 后撤掉幽灵、摘掉 `merging`、给合并牌加 `popping`（`merge-pop`：0.5 → 1.16 → 1 且淡入）。**幽灵不能塞进 `tiles`** —— 那是局面状态，会被存档 watch 与 `emptyCells`/`checkLose` 读到，多出来的牌会让局面错乱。**幽灵必须走 FLIP 两步定位**：先按「自己原来在哪」渲染，`nextTick` + 强制重排之后再改到目标格；直接渲染在目标格的话，这一步 Vue 一旦重建节点就完全没有过渡起点，等于瞬移（实测过：第二张源牌会当场闪到目标格）。**`merging` 必须在弹出开始时摘掉**：它只是滑行期间的隐身标记，留着的话弹出动画一结束就回落到 `opacity: 0`，合并牌当场消失。
 - **新牌**：`spawnTile(true)` 打 `isNew` → `.tile.is-new { animation: 0.18s ease-out 0.13s backwards deal-in }`，靠 `animation-delay` 等滑行结束再缩放淡入。开局那两张走 `playDeal()` 的逐张入场，不传 `fresh`，否则两个 `animation` 会互相顶掉。
 - 动画中途再按方向键：`move()` 在确认这一步真的动了之后会先 `clearTimeout` + 清空 `ghosts`/`popping` 再重排（**必须在 `if (!moved) return` 之后**，否则往无效方向按一下会把正在进行的合并动画打断成「永远隐身」）。
+- 存档 key：`__game_2048__state`（局面存档）、`__game_2048__best`（最高分）、`__game_2048__help_showed`（帮助弹窗是否已弹过）

@@ -46,6 +46,16 @@
 - 🖐️ 首页卡片支持拖动排序，顺序记在本地；新增游戏自动接在已排序结果之后
 - 🥚 彩蛋：在有成绩记录的游戏（点击 / 迷宫 / 对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 数独 / 排序）中连点标题 5 次清除历史记录
 
+## 开发者看这里
+
+本仓库的开发规范**不在 README 里**，统一收在：
+
+- [`AGENTS.md`](./AGENTS.md) —— 短入口：先读什么、游戏分册索引、常用命令
+- [`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md) —— 跨游戏硬约定 + 「开工前逐条核对」清单
+- [`docs/NEW-GAME.md`](./docs/NEW-GAME.md)、[`ARCHITECTURE.md`](./docs/ARCHITECTURE.md)、[`VERIFY.md`](./docs/VERIFY.md)、[`PITFALLS.md`](./docs/PITFALLS.md)、[`EASTER-EGGS.md`](./docs/EASTER-EGGS.md)、[`GAMES.md`](./docs/GAMES.md)
+- 每个游戏自己的实现与存档说明：`src/games/<id>/AGENTS.md`
+- 两个脚本：`node scripts/check-conventions.mjs`（约定自检）/ `node scripts/smoke.mjs`（冒烟）
+
 ## 技术栈
 
 - Vue 3（Composition API + `<script setup>`）+ Vue Router
