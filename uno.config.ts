@@ -74,5 +74,6 @@ export default defineConfig({
     'i-mdi-redo-variant',
     'i-mdi-hammer-wrench',
     'i-mdi-mirror-variant',
+    'i-mdi-calculator',
   ],
 });

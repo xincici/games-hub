@@ -7,7 +7,7 @@
 
 - [ ] **图标**：attributify 写法 `<i i-carbon-sun />`；**首页图标必须同步加 `uno.config.ts` 的 `safelist`**（运行时数据 UnoCSS 提取不到）。
 - [ ] **颜色**：走 `App.vue` 的 CSS 变量，不硬编码需要随主题变的颜色；**按钮上文字的对比度要算**（项目要求 ≥4.5:1，白字压橙 5.18:1、深字压黄 9.89:1，黄底白字只有 1.61:1 不行）。
-- [ ] **布局**：最小兼容 **375×667**；首张卡片 `margin-top: 64px`（**镜像例外**：写成 `.wrapper` 的 `padding-top`，否则外边距塌陷出 `#app`、整页恒多 64px 可滚动）；判「能不能滚」只认 `window.scrollTo(0, 9999)` + `scrollY`。
+- [ ] **布局**：最小兼容 **375×667**；首张卡片 `margin-top: 64px`。**但如果页面第一个「在流内」的元素就是它**（顶栏是 fixed、不在流内，所以多数游戏都是这种情况），这个 margin 会**塌陷出 `#app`**、整页恒多 64px 可滚动 —— 此时写成 `.wrapper` 的 `padding-top`（**Emoji 镜像、24 点**都是这么办的）。判「能不能滚」只认 `window.scrollTo(0, 9999)` + `scrollY`。
 - [ ] **切页过渡**：`.app-open/close-enter-active` 必须 `box-sizing: border-box`（否则过渡期间整页宽 100%+32px）。
 - [ ] **emoji 游戏视觉语言**：`.card` / `.game-icon` / `.dot-board` / `.divider` / `.stat-*` / `.result` 的写法与尺寸（含 `.game-icon` 的两个配色特例、结算浮层必须 `box-sizing: border-box`）。
 - [ ] **共享逻辑**：`src/shared/` 已有的一律复用（`confetti` / `CountTimer` / `ConfirmDialog` / `Hearts` / `resumeCountdown` / `resultDelay`），不复制第二份。

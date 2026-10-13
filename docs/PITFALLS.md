@@ -8,7 +8,7 @@
 | 症状 | 原因 | 定位手段 |
 | --- | --- | --- |
 | 窄屏上文字被截成省略号 | 字号写死 + `nowrap/ellipsis`，容器缩放后装不下 | 逐个比 `scrollWidth > clientWidth`；字号应随容器尺寸 `calc()` 缩放 |
-| 整页恒多出 64px 能滚 | 首张卡的 `margin-top` 从没有上 padding 的容器**塌陷**出去（`#app` 有 `min-height: 100dvh`） | `window.scrollTo(0,9999)` 读 `scrollY`；改成容器的 `padding-top` |
+| 整页恒多出 64px 能滚 | 首张卡的 `margin-top` 从没有上 padding 的容器**塌陷**出去（`#app` 有 `min-height: 100dvh`）。**顶栏是 fixed 时，首张卡就是这个页面第一个在流内的元素，必然触发**（内容明明只有 480px 高，`scrollY` 却也有 64） | 量「内容总高 vs 视口」再看 `scrollY`：总高没超却仍能滚，就是塌陷；改成容器的 `padding-top` |
 | 切页时先横向超出、再缩回 | `.app-open/close-enter-active` 是 `position:absolute; width:100%`，缺 `box-sizing` → 100% + 32px 内边距 | 逐帧记 `documentElement.scrollWidth` vs `innerWidth`，把超宽元素连同 `offsetWidth` 打出来 |
 | 结算浮层比棋盘大一圈 | 浮层用 `width/height:100%` + 内边距却缺 `box-sizing: border-box` | 量浮层与父盒的 `getBoundingClientRect()` 差值 |
 | 行与行重叠、整块从容器底部溢出 | grid 的 `grid-auto-rows` 还按宽度算，竖向卡片（比例 >1）每行只占一部分 | 量「行高 vs 牌高」，写 `grid-auto-rows: var(--cell-h, var(--cell))` |
@@ -46,6 +46,7 @@
 | 症状 | 原因 | 做法 |
 | --- | --- | --- |
 | 「补丁脚本说改好了，文件却没变」 | 脚本把**写文件放在末尾**，中途 `assert` 失败 → 前面的编辑全丢 | **每次替换后立即落盘**；改完 `grep` 回读关键行 |
+| 按钮/元素**按下时位置跳一下**再归位 | 元素用 `transform` 做定位（`translate(-50%)` 之类），而 `App.vue` 有一条**全局**规则 `#app button:not(:disabled):active { transform: … }`，按下的瞬间把定位的 transform 顶掉了 | 量「按下 / 松开」两态的 `getBoundingClientRect()`；**定位不要用 transform**（用 `top/left` 或 flex） |
 | 「构建失败了」，但日志里明明写着 ✓ built | 一串 `&&` 里前面某个 `grep` 没命中就短路了，**后面的 `vite build` 根本没跑**，`$?` 读到的是那个 grep 的返回码 | 用 `;` 分隔、或每步单独看；**看日志内容，别只看 `$?`** |
 | 「测试说全坏了，其实是脚本错」 | 正则/选择器写错、监听器重复安装、用了会自欺的判据 | 打印**原始数据**再看；每场景用全新页面；判据按上表选 |
 | 「文档说的和代码不一致」 | 改了行为没同步分册/README | 跑 `node scripts/check-conventions.mjs` |

@@ -21,6 +21,7 @@ import mahjongDict from '@/games/mahjong/i18n';
 import queshengDict from '@/games/quesheng/i18n';
 import legendDict from '@/games/legend/i18n';
 import mirrorDict from '@/games/mirror/i18n';
+import point24Dict from '@/games/point24/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -240,6 +241,19 @@ export const games = [
     minDifficulty: 1,
     maxDifficulty: 5,
   },
+  {
+    id: 'point24',
+    path: '/point24',
+    icon: 'i-mdi-calculator',
+    accent: 'number',
+    helpKey: '__point24__help_showed',
+    // 没有难度分档，但成绩是「当前连胜 / 最长连胜」两个固定 key。
+    // 这里给 recordsPrefix 只是为了让标题连点 5 次能触发 emit —— 真正的清理在组件的 onScoreReset 里
+    //（TopHeader 只会按 `${recordsPrefix}${i}` 删，删不到这两个 key）。
+    recordsPrefix: '__point24__',
+    minDifficulty: 1,
+    maxDifficulty: 1,
+  },
 ];
 
 export const gameConfig = id => games.find(game => game.id === id);
@@ -265,6 +279,7 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['quesheng', queshengDict],
   ['legend', legendDict],
   ['mirror', mirrorDict],
+  ['point24', point24Dict],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

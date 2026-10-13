@@ -24,6 +24,7 @@ import MahjongGame from './games/mahjong/MahjongGame.vue';
 import QueshengGame from './games/quesheng/QueshengGame.vue';
 import MahjongLegendGame from './games/legend/MahjongLegendGame.vue';
 import MirrorGame from './games/mirror/MirrorGame.vue';
+import Point24Game from './games/point24/Point24Game.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -49,6 +50,7 @@ const routes = [
   { path: '/quesheng', component: QueshengGame, meta: { game: 'quesheng' } },
   { path: '/legend', component: MahjongLegendGame, meta: { game: 'legend' } },
   { path: '/mirror', component: MirrorGame, meta: { game: 'mirror' } },
+  { path: '/point24', component: Point24Game, meta: { game: 'point24' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

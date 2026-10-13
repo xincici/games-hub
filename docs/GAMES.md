@@ -28,5 +28,6 @@
 | 20 | 雀圣 | `quesheng` | `/#/quesheng` | `__quesheng__` | `__quesheng__mode`<br>`__quesheng__level_2`<br>`__quesheng__level`<br>`__quesheng__state_2`<br>`__quesheng__state` | 进度条 / 上帝模式 / 二次确认 / 撒花 | 3 |
 | 21 | 麻将传奇 | `legend` | `/#/legend` | `__mahjong_legend__` | `__mahjong_legend__state`<br>`__mahjong_legend__best_1` | 撒花 | 4 |
 | 22 | Emoji 镜像 | `mirror` | `/#/mirror` | `__emoji_mirror__` | `__emoji_mirror__state`<br>`__emoji_mirror__best_` | 计时 / 进度条 / 撒花 | 3 |
+| 23 | point24 | `point24` | `/#/point24` | `__point24__` | `__point24__state`<br>`__point24__streak`<br>`__point24__best_streak` | 撒花 | 3 |
 
-（共 22 个游戏。改完注册表/存档 key 记得跑一次本脚本刷新这张表。）
+（共 23 个游戏。改完注册表/存档 key 记得跑一次本脚本刷新这张表。）
