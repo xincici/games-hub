@@ -6,7 +6,7 @@
 > - 路由：`/#/mirror`
 > - i18n key 前缀：`__emoji_mirror__`
 > - 共享组件：`TopHeader` / `CountTimer` / `confetti`；emoji 取自 `shared/emojis.js`
-> - 单局制（没有关卡），五档难度各自记一个最佳时间
+> - 单局制（没有关卡），5 档难度各自记一个最佳时间
 
 > 玩法简介（面向玩家）见同目录的 [`README.md`](README.md)；本文档只讲实现、存档与踩过的坑。
 
@@ -25,7 +25,7 @@
 
 `board.js` 的纯逻辑：
 
-- `DIFFICULTIES = [4, 5, 6, 7, 8]` —— 五档难度对应的 emoji 个数，默认最低档。
+- `DIFFICULTIES = [4, 5, 6, 7, 8]` —— 5 档难度对应的 emoji 个数，默认最低档。
 - `rowsOf(n)`：4 单排；**5 = 2+3（上 2 下 3，用户指定）**；6 = 3+3；**7 = 3+4（上 3 下 4）**；8 = 4+4。两个区用同一套行数。
 - `sameCount(a, b)`：位置和值都相同才算一个。
 - `derange(target)`：拒绝采样洗到「没有一个位置相同」；兜底用整体循环移位（错排的经典构造，n ≥ 2 一定没有不动点）。
@@ -95,7 +95,7 @@ Vue 会**复用**那几张卡的 DOM：复用的卡不会重播入场翻面过�
 1. **首张卡片的 64px 间距必须写成 `.wrapper` 的 `padding-top`，不能写 `.score-area` 的 `margin-top`。**
    `.wrapper` 只有左右 padding、没有上 padding，于是那个外边距会**塌陷到 `#app` 之外**，而 `#app` 有
    `min-height: 100dvh` —— 结果 html 恒比视口高 64px，**整页真的能滚 64px**（用户报的「垂直方向还是有滚动条」）。
-   实测：改前 5 档视口下 `scrollY` 都能到 64；改成 padding 后 **5 档视口 × 4/5/8 三档难度共 15 种组合全部为 0**。
+   实测：改前 5 档视口下 `scrollY` 都能到 64；改成 padding 后 **5 档视口 × 4/5/8 3 档难度共 15 种组合全部为 0**。
 2. **判断「能不能滚」只能用 `window.scrollTo(0, 9999)` 再看 `scrollY`**，别用
    `document.body.scrollHeight`（body 恰好等于视口、看不出问题）也别用
    `document.documentElement.scrollHeight`（它会把塌陷出去的那 64px 也算进来，恒比视口大、会误导你一路缩卡片）。
@@ -106,13 +106,13 @@ Vue 会**复用**那几张卡的 DOM：复用的卡不会重播入场翻面过�
 `--card` 取宽度与高度两个约束的较小值（`CARD_MIN = 34 / CARD_MAX = 72`）。
 
 上面这些实测里含 320×568。按根目录的约定，**最小验收尺寸是 375×667（iPhone SE）**：
-375×667 与 390×844 下五档难度 + 首页的横向/纵向溢出实测都是 0（卡宽均 72px），320 的数据只作参考。
+375×667 与 390×844 下 5 档难度 + 首页的横向/纵向溢出实测都是 0（卡宽均 72px），320 的数据只作参考。
 
 ## 存档（localStorage）
 
 - `__emoji_mirror__state`：`{ difficulty, display, game, elapsed, phase }`（`phase` 只存 `play` / `won`；
   存的是**完整顺序**，恢复时校验两个数组长度都等于该难度的 emoji 数，不符就当没有存档、重开）
-- `__emoji_mirror__best_1` ~ `__emoji_mirror__best_5`：五档难度各自的**最佳用时（秒，越小越好）**
+- `__emoji_mirror__best_1` ~ `__emoji_mirror__best_5`：5 档难度各自的**最佳用时（秒，越小越好）**
   （注册表里 `recordsPrefix: '__emoji_mirror__best_'` + 1~5，正好被标题连点 5 次的清记录彩蛋命中）
 - `__emoji_mirror__help_showed`：帮助弹窗是否已弹过
 
@@ -125,7 +125,7 @@ Vue 会**复用**那几张卡的 DOM：复用的卡不会重播入场翻面过�
 `onMounted` 里只补计时器（`timerRef.restore(elapsed)`）与尺寸计算。另外 `silent` 标记在前两帧给
 所有卡片挂上 `transition: none`（`.silent`），放开后新开局的铺牌 / 翻面动画照常。
 
-开局不变式也实测过：五档难度连开 **16 局**，每局开局后立刻读存档算 `sameCount(game, display)`
+开局不变式也实测过：5 档难度连开 **16 局**，每局开局后立刻读存档算 `sameCount(game, display)`
 与提示区文字，**16/16 都是 0**（修前 n=4 约有 63% 的局会撞上至少一个位置）。
 
 实测（监听 `transitionstart`）：SPA 返回与整页重载恢复时**过渡事件 0 次**、

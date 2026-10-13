@@ -90,8 +90,23 @@ for (const g of games) {
   const name = (displayName(g.id) || '').replace(/（[^）]*）/g, '').trim();
   if (name && !readme.includes(name)) warn(`[${g.id}] README.md 的游戏列表里找不到「${name}」`);
 }
-const declared = (readme.match(/([一二三四五六七八九十]+)个游戏/) || [])[1];
-if (declared && !['二十', '二十一', '二十二', '二十三', '二十四'].some(() => true)) warn('README 的游戏数量描述解析失败（可忽略）');
+// README 里「N 个…游戏」这个数字必须和注册表一致。**计数一律用阿拉伯数字** ——
+// 以前这里要先把「二十二」这类汉字数字转成数值，既啰嗦又容易写错（上一轮那条检查还写成了恒 false 的死代码）。
+const declared = (readme.match(/([0-9]+)\s*个[^。\n]{0,8}游戏/) || [])[1];
+const cnCount = readme.match(/[一二三四五六七八九十]{1,3}\s*个[^。\n]{0,8}游戏/);
+if (cnCount) err(`README 里用汉字数字写游戏总数（「${cnCount[0].slice(0, 12)}…」）：计数请用阿拉伯数字，如「22 个游戏」`);
+if (!declared) warn('README 里没写「N 个…游戏」的总数（建议写一句，便于自检）');
+else if (Number(declared) !== games.length)
+  err(`README 说「${declared}个…游戏」，但注册表里是 ${games.length} 个`);
+
+// README 里「N 个…游戏（甲 / 乙 / 丙）」括号里的名单个数必须等于 N（同类风险：手写数字会腐烂）
+for (const m of readme.matchAll(/([0-9]+)\s*个[^。\n（]{0,8}游戏（([^）]+)）/g)) {
+  const want = Number(m[1]);
+  const listed = m[2].split(/[、/]|，/).map(s => s.replace(/[*`\s]/g, '')).filter(Boolean).length;
+  if (want !== listed)
+    err(`README 说「${m[1]}个…游戏」，括号里却列了 ${listed} 个：${m[2].slice(0, 40)}…`);
+}
+
 // ---------- ⑤ 彩蛋类按钮：禁用态必须仍是灰（不能被 :not(:disabled) 漏进来） ----------
 for (const g of games) {
   const dir = `src/games/${g.id}`;

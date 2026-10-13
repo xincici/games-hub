@@ -1,6 +1,6 @@
 # Games Hub · 游戏合集
 
-十五个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
+22 个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
 
 | 游戏 | 玩法简介 |
 | --- | --- |
@@ -40,9 +40,9 @@
 - 🎇 全站粒子连线动态背景：固定置底、跟随鼠标 / 触摸（粒子轻微被排斥），按浅 / 深主题自动换色
 - ✨ 开局与恢复存档时棋盘逐张入场：2048 / Threes / 消消乐逐张弹出、数独逐格浮现、Emoji 大师自下层向上堆叠、Emoji 排序按槽自下而上堆起来
 - 🎉 消消乐的即时庆祝：一轮消掉 4 个以上、或连成连锁（≥2 层）时棋盘外圈闪光、中央弹出「N 连消 / N 连锁」与本次得分（两者同时达成时分成上下两行）、并撒一把花，两者同时达成时浮字与光圈最大（`shared/confetti.js` 新增的 `burstConfetti`，与过关撒花同一套配色，只是原地炸一次）
-- 📊 八个闯关游戏（连连看 / 消消乐 / Emoji 大师 / Emoji 排序 / Emoji 滑行 / 扑克炼金术 / 麻将英雄 / 雀圣）顶部卡片底部有本关进度条，操作区另一半显示本关盘面信息（连连看 / 消消乐：尺寸 · 种类 · 墙数，Emoji 大师：层数 · 种类，Emoji 排序：槽位 · 每槽层数 · 种类），并且只放「新游戏」按钮（点开的是这几个游戏共用的同一个二次确认弹窗，弹窗里除了「确定重来」还有「重玩本关」——只重开当前这一关、保留闯关进度 `shared/ConfirmDialog.vue`，确认后清记录、从第 1 关重来），失败时在结算浮层上「重玩本关」
+- 📊 8 个闯关游戏（连连看 / 消消乐 / Emoji 大师 / Emoji 排序 / Emoji 滑行 / 扑克炼金术 / 麻将英雄 / 雀圣）顶部卡片底部有本关进度条，操作区另一半显示本关盘面信息（连连看 / 消消乐：尺寸 · 种类 · 墙数，Emoji 大师：层数 · 种类，Emoji 排序：槽位 · 每槽层数 · 种类），并且只放「新游戏」按钮（点开的是这几个游戏共用的同一个二次确认弹窗，弹窗里除了「确定重来」还有「重玩本关」——只重开当前这一关、保留闯关进度 `shared/ConfirmDialog.vue`，确认后清记录、从第 1 关重来），失败时在结算浮层上「重玩本关」
 - 🔹 各 emoji 游戏（对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 大师 / 排序）的游戏区都带一层很淡的点阵底纹，牌消掉后不至于一片空白
-- 🎨 这七个 emoji 游戏共用一套视觉参数：棋子/牌面圆角与描边、软阴影、牌背用各自在首页的图标、面板与统计条尺寸、按钮样式、结算浮层的间距与字号（浮层用 box-sizing: border-box，尺寸正好贴合棋盘）
+- 🎨 这 7个 emoji 游戏共用一套视觉参数：棋子/牌面圆角与描边、软阴影、牌背用各自在首页的图标、面板与统计条尺寸、按钮样式、结算浮层的间距与字号（浮层用 box-sizing: border-box，尺寸正好贴合棋盘）
 - 🖐️ 首页卡片支持拖动排序，顺序记在本地；新增游戏自动接在已排序结果之后
 - 🥚 彩蛋：在有成绩记录的游戏（点击 / 迷宫 / 对对碰 / 连连看 / 侦探 / 猎手 / 消消乐 / 数独 / 排序）中连点标题 5 次清除历史记录
 
@@ -84,14 +84,14 @@ src/
 ├── router.js        # hash 路由：/ /click /puzzle /guess /poker /three /2048 /snake /match /link /detective /hunter /crush /sudoku /master /sort /down /slide /alchemy /mahjong /quesheng
 ├── shared/          # 共享模块：i18n（多语言）、theme（主题）、games（游戏注册表）、emojis（emoji 池）
 ├── components/      # HomePage（首页）、TopHeader（标题栏）、HelpDialog（帮助弹窗）
-└── games/           # 二十二个游戏源码，每游戏一个目录
+└── games/           # 22个游戏源码，每游戏一个目录
     ├── click/  puzzle/  guess/  poker/  three/  g2048/  snake/
     └── match/  link/  detective/  hunter/  crush/  sudoku/  master/  sort/  down/  slide/  alchemy/  mahjong/  quesheng/
 scripts/             # 图标源文件（SVG + 512px PNG）
 public/              # favicon 与 PWA 图标
 ```
 
-各游戏的完整说明与实现细节见 [AGENTS.md](./AGENTS.md)；本合集由同级的四个独立游戏项目（`click-game/`、`guess-number/`、`poker/`、`puzzle-game/`）合并而来。
+各游戏的完整说明与实现细节见 [AGENTS.md](./AGENTS.md)；本合集由同级的 4 个独立游戏项目（`click-game/`、`guess-number/`、`poker/`、`puzzle-game/`）合并而来。
 
 ## 浏览器支持
 

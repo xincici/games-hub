@@ -19,7 +19,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将四个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 和 Emoji 镜像 (Emoji Mirror)，现共二十二个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**1/2/3/4/3/4/3/2 共 22 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将 4 个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 和 Emoji 镜像 (Emoji Mirror)，现共 22 个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**1/2/3/4/3/4/3/2 共 22 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -31,7 +31,7 @@
 - **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）。**`workbox.globPatterns` 必须显式带上图片类型**
   （现在是 `**/*.{js,css,html,webp,png,svg,ico,woff2}`）——插件默认只预缓存 `js/css/html`，
   图片（麻将牌雪碧图、各图标）不进预缓存，离线时牌面就是空白（实测默认下预缓存只有 9 个文件、
-  加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时三个用到雪碧图的游戏仍能画全牌面）
+  加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时 3 个用到雪碧图的游戏仍能画全牌面）
 - **依赖管理**：yarn 1.22.22（package.json `packageManager` 已固定；全局 yarn 已升级至 1.22.22，可直接 `yarn <cmd>`）
 
 ## 常用命令

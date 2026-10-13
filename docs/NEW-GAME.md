@@ -1,10 +1,10 @@
-# 新增一个游戏（`docs/NEW-GAME.md`）
+# 新增 1 个游戏（`docs/NEW-GAME.md`）
 
 按顺序做，每一步都能单独验证；**第 8 步的自检脚本会替你检查有没有漏**。
 
 ## 分步清单
 
-1. **看一个现成的同类游戏**：emoji 类抄 `src/games/match/`（+ `detective/` 看提示带、`master/` 看立体卡片）；
+1. **看 1 个现成的同类游戏**：emoji 类抄 `src/games/match/`（+ `detective/` 看提示带、`master/` 看立体卡片）；
    数字类抄 `src/games/g2048/`；麻将类抄 `src/games/mahjong/`（雪碧图牌面）。**别从零写样式**。
 2. **建目录** `src/games/<id>/`：`<Name>Game.vue`（界面）+ `board.js`（纯逻辑、不碰 DOM，便于离线跑脚本验证）
    + `i18n.js`（中英双语）+ **`README.md`（玩法，面向玩家）** + `AGENTS.md`（实现，照下面模板）。自检会要求这两份都在。
