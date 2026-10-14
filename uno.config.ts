@@ -43,6 +43,7 @@ export default defineConfig({
     'i-mdi-arrow-all',
     'i-mdi-flask-outline',
     'i-mdi-cards-playing-outline',
+    'i-mdi-cards',
     'i-mdi-cards-playing-club-multiple-outline',
     'i-mdi-cards-playing',
     'i-mdi-undo-variant',
@@ -75,5 +76,6 @@ export default defineConfig({
     'i-mdi-hammer-wrench',
     'i-mdi-mirror-variant',
     'i-mdi-calculator',
+    'i-mdi-cards-playing-outline',
   ],
 });

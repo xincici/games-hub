@@ -19,7 +19,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将 4 个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 、Emoji 镜像 (Emoji Mirror) 和 24 点 (24 Game)，现共 23 个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**2/3/4/3/4/3/4 共 23 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将 4 个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 、Emoji 镜像 (Emoji Mirror) 、24 点 (24 Game) 和单人麻将 (Solo Mahjong)，现共 24 个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**3/4/3/4/3/4/3 共 24 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -43,7 +43,7 @@ yarn build     # 构建到 dist/
 yarn preview   # 预览构建产物
 ```
 
-没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`、`/#/mirror`、`/#/point24`）做冒烟检查。**冒烟至少跑 375×667（最低支持尺寸）与 390×844 两档**。
+没有测试和 lint 配置。验证改动时用 `yarn build` + headless Chrome 打开各路由（`/`、`/#/click`、`/#/guess`、`/#/poker`、`/#/puzzle`、`/#/2048`、`/#/snake`、`/#/match`、`/#/link`、`/#/detective`、`/#/hunter`、`/#/three`、`/#/crush`、`/#/sudoku`、`/#/master`、`/#/sort`、`/#/down`、`/#/slide`、`/#/alchemy`、`/#/mahjong`、`/#/quesheng`、`/#/legend`、`/#/mirror`、`/#/point24`、`/#/solo`）做冒烟检查。**冒烟至少跑 375×667（最低支持尺寸）与 390×844 两档**。
 
 ## 各游戏分册（**改哪个游戏就先读哪个分册**）
 
@@ -75,6 +75,7 @@ yarn preview   # 预览构建产物
 | 麻将传奇 | `src/games/legend/` | [`AGENTS.md`](src/games/legend/AGENTS.md) | `/#/legend` |
 | Emoji 镜像 | `src/games/mirror/` | [`AGENTS.md`](src/games/mirror/AGENTS.md) | `/#/mirror` |
 | 24 点 | `src/games/point24/` | [`AGENTS.md`](src/games/point24/AGENTS.md) | `/#/point24` |
+| 单人麻将 | `src/games/solo/` | [`AGENTS.md`](src/games/solo/AGENTS.md) | `/#/solo` |
 
 读法：要看 / 改某个游戏，先打开上表里对应的分册；只改共享组件或全局约定时看本文件。
 每个游戏目录下有两份文档，**分工不要混**：`README.md` 讲**怎么玩**（面向玩家，规则、操作、胜负条件），
