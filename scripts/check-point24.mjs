@@ -2,7 +2,7 @@
 // 24 点出题器自检（纯逻辑，不开浏览器）：node scripts/check-point24.mjs [每关样本数]
 // 断言：每道题都**有解**、答案串能被**独立解析**回 24、数字都在 1~9、难度随关卡递增、生成不卡住。
 import {
-  solveAll, newPuzzle, verifyAnswer, targetHardness, appendable, evalTokens, FALLBACK_NUMS, scorePuzzle,
+  solveAll, newPuzzle, verifyAnswer, targetHardness, appendable, evalTokens, FALLBACK_NUMS, scorePuzzle, numsKey,
 } from '../src/games/point24/board.js';
 
 const PER_LEVEL = Number(process.argv[2]) || 200;
@@ -53,6 +53,26 @@ if (appendable([num(0, 3), num(1, 4)], num(1, 4))) fail('连着的两个数字�
 if (appendable([num(0, 3), op('+')], { t: 'rp' })) fail('「3 +」之后不该允许右括号');
 if (evalTokens([{ t: 'lp' }, num(0, 3), op('+'), num(1, 3), { t: 'rp' }, op('×'), { t: 'lp' }, num(2, 5), op('-'), num(3, 1), { t: 'rp' }]).is24 !== true)
   fail('(3+3)×(5−1) 应判为 24');
+
+// 近期去重：模拟一条连胜里的连续发牌 —— 最近 10 题不许重复（数字相同、顺序不同算同一题）
+{
+  const RECENT = 10;
+  let window10 = [];
+  let repeats = 0, dupWithinWindow = 0;
+  for (let i = 0; i < 400; i++) {
+    const level = 1 + (i % 20);                    // 关卡一路往上，和真实连胜一样
+    const p = newPuzzle(level, Math.random, window10);
+    const k = numsKey(p.nums);
+    if (window10.map(numsKey).includes(k)) dupWithinWindow++;
+    if (window10.length === RECENT) {              // 满窗之后统计整体重复率
+      const all = window10.map(numsKey);
+      if (all.includes(k)) repeats++;
+    }
+    window10 = [...window10, p.nums].slice(-RECENT);
+  }
+  if (dupWithinWindow) fail(`${dupWithinWindow} 次发出了「近 10 题里出现过」的题目`);
+  console.log(`\n近期去重：400 连发（窗口 10）重复 ${dupWithinWindow} 次、满窗后 ${repeats} 次`);
+}
 
 // 难度评分：区间必须是 1~100，极端牌组要落在两头，且大体随难度档递增
 const sEasy = scorePuzzle([6, 6, 6, 6]), sHard = scorePuzzle([3, 3, 8, 8]);

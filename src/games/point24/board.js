@@ -162,8 +162,15 @@ export function scorePuzzle(nums, sols = solveAll(nums)) {
  * 生成一道题：**保证有解**，并按关卡挑难度（找不到就逐步放宽，最后兜底只要有解）。
  * @returns {{nums:number[], answer:string, answerCount:number, hardness:number}}
  */
+/** 是不是「同一道题」的判据：数字相同、**顺序不同也算同一题**（排序后比较） */
+export const numsKey = nums => nums.slice().sort((a, b) => a - b).join(',');
+
 export function newPuzzle(level = 1, rand = Math.random, prev = null) {
   const want = targetHardness(level, rand);
+  // prev 既可以是「上一题的四个数字」，也可以是**一组**近期题目（同一连胜内最近 10 题）——
+  // 用户要求：一次连胜里最近 10 道题不能一模一样（数字一样、顺序不同也算一样）。
+  const recent = (Array.isArray(prev) && Array.isArray(prev[0])) ? prev : (prev ? [prev] : []);
+  const banned = new Set(recent.map(numsKey));
   const pick = () => Array.from({ length: NUM_COUNT }, () => DIGIT_MIN + Math.floor(rand() * (DIGIT_MAX - DIGIT_MIN + 1)));
   const pack = (nums, sols) => ({
     nums, answer: sols[0].expr, answerCount: sols.length, hardness: hardness(sols),
@@ -171,7 +178,7 @@ export function newPuzzle(level = 1, rand = Math.random, prev = null) {
   });
   for (let attempt = 0; attempt < 600; attempt++) {
     const nums = pick();
-    if (prev && prev.join(',') === nums.join(',')) continue;      // 别和上一题一模一样
+    if (banned.has(numsKey(nums))) continue;                      // 别和近 10 题里任何一题一样
     const sols = solveAll(nums);
     if (!sols.length) continue;
     const need = attempt < 300 ? want : Math.max(0, want - 1);    // 实在挑不到就放宽一档
@@ -183,7 +190,15 @@ export function newPuzzle(level = 1, rand = Math.random, prev = null) {
     if (attempt >= 300 && h > need + 1) continue;
     return pack(nums, sols);
   }
-  // 兜底：只要求有解。理论上随机牌组里可解的占多数（1~9 四张约有 78%），
+  // 第二段：**放宽难度，但仍然不重复近期题目**（去重是用户明确要求，优先级高于难度贴合）。
+  // 495 种数字组合里只排除近 10 种，随机试几次就能撞到，这一段基本用不上。
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const nums = pick();
+    if (banned.has(numsKey(nums))) continue;
+    const sols = solveAll(nums);
+    if (sols.length) return pack(nums, sols);
+  }
+  // 最后才彻底兜底：只要求有解。理论上随机牌组里可解的占多数（1~9 四张约有 78%），
   // 但不写死循环 —— 试够次数就直接用一道**已知可解**的固定牌组（6 6 6 6 → 6×6−6−6）。
   for (let attempt = 0; attempt < 200; attempt++) {
     const nums = pick();

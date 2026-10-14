@@ -113,7 +113,7 @@ import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
-  appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText, solveAll, scorePuzzle,
+  appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText, solveAll, scorePuzzle, numsKey,
   NUM_COUNT,
 } from './board';
 
@@ -144,6 +144,8 @@ const tokens = ref([]);
 const phase = ref(PLAY);
 const streak = ref(readInt(KEYS.streak, 0));
 const best = ref(readInt(KEYS.best, 0));
+const RECENT_MAX = 10;               // 一次连胜里最近 10 题不允许重复（数字相同、顺序不同算同一题）
+const recent = ref([]);              // 上面这 10 题（各存四个数字）；连胜清零时一并清空
 const score = ref(1);                // 当前这道题的难度评分（1~100），发牌 / 恢复时算
 const answer = ref('');              // 本题的一个正确答案（发牌时就算好，查看答案零延迟）
 // ↑ 必须声明在 restoreState() **之前**：它内部会给 answer.value 赋值，
@@ -162,6 +164,10 @@ function restoreState() {
     if (!sols.length) return false;
     answer.value = sols[0].expr;        // 存档里不存答案，恢复时重算（保证「查看答案」一定有内容）
     score.value = scorePuzzle(s.nums, sols);   // 评分同理：不存，按数字重算
+    // 近期题目列表（去重窗口）要跟着存档走，否则退出重进就忘了最近发过什么
+    recent.value = (Array.isArray(s.recent) ? s.recent : [])
+      .filter(a => Array.isArray(a) && a.length === NUM_COUNT && a.every(n => Number.isInteger(n) && n >= 1 && n <= 9))
+      .slice(-RECENT_MAX);
     level.value = Math.max(1, Math.floor(s.level) || 1);
     nums.value = s.nums.slice();
     tokens.value = Array.isArray(s.tokens) ? s.tokens : [];
@@ -181,7 +187,7 @@ const save = () => {
   try {
     localStorage.setItem(KEYS.state, JSON.stringify({
       level: level.value, nums: nums.value, tokens: tokens.value, phase: phase.value,
-      revealed: revealed.value, note: note.value,
+      revealed: revealed.value, note: note.value, recent: recent.value,
     }));
   } catch { /* 隐私模式忽略 */ }
 };
@@ -189,8 +195,9 @@ const save = () => {
 // ---------- 发牌 ----------
 const prevNums = ref(null);
 function deal(levelNo) {
-  const p = newPuzzle(levelNo, Math.random, prevNums.value);
+  const p = newPuzzle(levelNo, Math.random, recent.value);   // 近期 10 题都排除掉
   prevNums.value = p.nums;
+  recent.value = [...recent.value, p.nums].slice(-RECENT_MAX);
   nums.value = p.nums;
   answer.value = p.answer;
   score.value = p.score;
@@ -250,6 +257,7 @@ function revealAnswer() {
   if (phase.value !== PLAY) return;
   phase.value = GAVEUP;
   streak.value = 0;                                  // 查看答案 = 放弃：当前连胜清零（最长连胜保留）
+    recent.value = [];                                 // 连胜断了 → 去重窗口也重来
   write(KEYS.streak, 0);
   revealed.value = answer.value;
   note.value = '';
@@ -269,6 +277,7 @@ function onNewGameClick() {
 function startNewGame() {
   confirming.value = false;
   streak.value = 0;
+  recent.value = [];          // 连胜重新开始 → 去重窗口也重新开始
   write(KEYS.streak, 0);
   level.value = 1;
   deal(1);
@@ -288,7 +297,7 @@ onMounted(() => {
 // 标题连点 5 次清记录：把连胜记录一起清掉（注册表里给的是 recordsPrefix，数字键不存在，所以这里自己清）
 function onScoreReset() {
   for (const k of Object.values(KEYS)) { try { localStorage.removeItem(k); } catch { /* 忽略 */ } }
-  level.value = 1; streak.value = 0; best.value = 0;
+  level.value = 1; streak.value = 0; best.value = 0; recent.value = [];
   deal(1);
 }
 </script>
