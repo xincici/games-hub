@@ -89,6 +89,7 @@
             v-if="it.kind === 'kong'"
             class="kong-group"
             :class="{ drawn: it.tiles.some(t => t.id === drawnId), framing: !dealing }"
+            :style="slotStyle(i)"
           >
             <button
               v-for="t in it.tiles"
@@ -117,7 +118,7 @@
             v-else
             class="hand-tile"
             :class="{ drawn: it.tile.id === drawnId, celebrate: celebrating, deal: dealing, 'fly-hidden': it.tile.id === hiddenTileId }"
-            :style="{ '--i': i }"
+            :style="[{ '--i': i }, slotStyle(i)]"
             :data-tile="it.tile.id"
             :disabled="phase !== PLAY || busy"
             @click="playTileId(it.tile.id)"
@@ -273,6 +274,49 @@ const displayItems = computed(() => {
   return items;
 });
 
+// 手牌槽位（与 displayItems 同序）：grid 只有 7 列，而杠组是**整块 4 列** —— 它一旦落在行中间，
+// 行尾只剩 3 格就装不下，浏览器的自动布局会把它整体挪到下一行并**在上一行留下空洞**，
+// 于是 14 槽摊成 3 行（用户报的「杠牌换行又出现了」；我上一版只把 padding 去掉、又只测了
+// 「杠在最前 / 中段」两个位置，都没踩到）。
+// 现在显式排：**第 i 个杠组占第 i 行行首**，其余单牌按显示顺序逐行填空位 ——
+// 1 个杠 = 4+3 / 7、2 个杠 = 4+3 / 4+3，都恰好 7+7（3 个杠才需要 3 行，14 张里极罕见）。
+const COLS_PER_ROW = 7;
+const handSlots = computed(() => {
+  const items = displayItems.value;
+  const slots = items.map(() => null);
+  const used = [];                                   // used[row][col] = true（1 基）
+  const mark = (row, col, span) => {
+    used[row] = used[row] || [];
+    for (let c = col; c < col + span; c++) used[row][c] = true;
+  };
+  let kongNo = 0;
+  items.forEach((it, i) => {
+    if (it.kind !== 'kong') return;
+    kongNo += 1;
+    slots[i] = { row: kongNo, col: 1, span: 4 };
+    mark(kongNo, 1, 4);
+  });
+  let row = 1, col = 1;
+  items.forEach((it, i) => {
+    if (slots[i]) return;
+    for (;;) {
+      used[row] = used[row] || [];
+      if (col > COLS_PER_ROW) { row += 1; col = 1; continue; }
+      if (used[row][col]) { col += 1; continue; }
+      break;
+    }
+    slots[i] = { row, col, span: 1 };
+    mark(row, col, 1);
+    col += 1;
+  });
+  return slots;
+});
+const slotStyle = i => {
+  const s = handSlots.value[i];
+  if (!s) return {};
+  return { gridRow: String(s.row), gridColumn: s.span > 1 ? `${s.col} / span ${s.span}` : String(s.col) };
+};
+
 // tooltip 朝上还是朝下：杠组在手牌**下排**时翻到下方 —— 否则它会盖住上排的牌，容易误点
 //（用户要求「上排的杠牌 tooltip 出现在上方、下排的出现在下方」）。按杠组中心在手牌卡片的上/下半区判断。
 const kongTipBelow = ref(false);
@@ -367,16 +411,21 @@ const kongAnchor = () => document.querySelector('.kong-row') || document.querySe
 // 统一的 FLIP：量出**目标格子的真实位置**，藏起那格的实体，再让替身从源位置飞过去。
 // 尺寸交给关键帧从「源宽」渐变到「目标宽」（scale = 目标宽 / 源宽）——
 // 两端尺寸不一样时，替身不缩放就会在换回实体的一瞬间跳一下（摸牌实测：替身 28px、实体 42px）。
-async function flyToTile(tile, source, targetSelector, dur) {
+async function flyToTile(tile, source, targetSelector, dur, commit) {
   const from = source instanceof Element ? rectOf(source) : source;
-  if (!from) return;
+  if (!from) { commit(); return; }
+  // ⚠️ **先藏、再提交**：`hiddenTileId` 必须在 `commit()` 之前设好，目标格子渲染出来的
+  // **第一帧**就是隐形的。第一版是「先 commit → nextTick → 查元素 → 再藏」，中间会露出
+  // 1~2 帧真实牌：于是「飞过来的替身」和「手牌区先冒出来的那张」对不上 ——
+  // 用户报的「有明显时间差、不像同一张牌」就是这个。
+  hiddenTileId.value = tile.id;
+  commit();
   await nextTick();
   const el = document.querySelector(targetSelector);
-  if (!el) return;
-  const to = rectOf(el);
-  hiddenTileId.value = tile.id;
-  await nextTick();
-  await fly(tile, from, to, dur, to.w / (from.w || 40));
+  if (el) {
+    const to = rectOf(el);
+    await fly(tile, from, to, dur, to.w / (from.w || 40));
+  }
   hiddenTileId.value = null;
 }
 // 两种写法都支持：给元素（内部量中心）或直接给矩形（出牌用 FLIP，需要精确落点）
@@ -401,11 +450,13 @@ async function drawOne() {
   // 用 FLIP：替身尺寸从一张牌背（28px）渐变到手牌格（42px），实体在飞行期间藏起来 ——
   // 否则替身落地后换回更大的实体，看起来就是「闪一下才落位」。
   const fromBack = wallAnchor();
-  const next = wall.value.shift();
-  hand.value = [...hand.value, next];
-  drawnId.value = next.id;
-  save();
-  await flyToTile(next, fromBack, `.hand-card [data-tile="${next.id}"]`, 400);
+  const next = wall.value[0];
+  await flyToTile(next, fromBack, `.hand-card [data-tile="${next.id}"]`, 400, () => {
+    wall.value = wall.value.slice(1);
+    hand.value = [...hand.value, next];
+    drawnId.value = next.id;
+    save();
+  });
 
   if (isWin(hand.value, kongs.value.length)) {
     await celebrateWin();
@@ -439,6 +490,7 @@ async function celebrateWin() {
 
 /** 本局结束：当前连胜清零（最长连胜作为记录保留） */
 function lose() {
+  // 失败就停在 lost 状态并**存进存档**：退出重进还是这个失败局面，由玩家自己点「再来一局」开新局。
   phase.value = LOST;
   streak.value = 0;
   write(KEYS.streak, 0);
@@ -457,12 +509,14 @@ async function playTileId(id) {
   // 第一版是「飞到出牌区中心」，落位后实体在它自己的格子里 → 会看到明显跳一下。
   const from = elOfTile(tile.id);
   const fromRect = from ? rectOf(from) : null;
-  hand.value = hand.value.filter(t => t.id !== tile.id);
-  discards.value = [...discards.value, tile];
-  drawnId.value = null;
-  save();
-  await nextTick();
-  await flyToTile(tile, fromRect, `.discard-card [data-tile="${tile.id}"]`, 380);   // 逐步缩小落位
+  // 同样「先藏后提交」：手牌里那张（源）和被放进出牌区的那张（落点）都立刻隐形，
+  // 由替身顶着飞过去 —— 逐步缩小落位。
+  await flyToTile(tile, fromRect, `.discard-card [data-tile="${tile.id}"]`, 380, () => {
+    hand.value = hand.value.filter(t => t.id !== tile.id);
+    discards.value = [...discards.value, tile];
+    drawnId.value = null;
+    save();
+  });
   await drawOne();
   busy.value = false;
 }
@@ -556,8 +610,8 @@ function onScoreReset() {
   // 手牌 14 张两行、每行 7 张：宽度按容器算（手牌卡片左右各 8px 内边距、6 个间隙）
   --hand-gap: 5px;
   --hand-tile-w: calc((100% - 16px - 6 * var(--hand-gap)) / 7);
-  --small-tile-w: 26px;
-  --small-tile-h: 34px;       // 26 × 1.2824，出牌区按它算 3 行高度
+  --small-tile-w: 19px;
+  --small-tile-h: 24px;       // 19 × 1.2824；一行放得下 14 张（3 行 = 42 ≥ 牌堆 40 张）
   // 和其它游戏一致：左右各 16px（否则卡片贴到屏幕两边）、底部 24px。
   // 首屏那 64px 必须写在这里，不能写 .score-area 的 margin-top（会塌陷出 #app，见 24 点分册）。
   padding: 64px 16px 24px;
@@ -655,7 +709,9 @@ function onScoreReset() {
     flex: 0 0 auto;
   }
   // 牌堆波浪：牌背也是左→右依次入场
-  .tile-back.deal { animation: solo-deal 0.36s ease both; animation-delay: calc(var(--i) * 30ms); }
+  // 延迟**饱和**：牌堆可能有 40 张，`i * 30ms` 会拖到 1.5s 以上（冒烟在 1.4s 采样，量到过瞬时纵向溢出）。
+  // 用 min(i, 18) 把它压在 540ms 内，墙再大也约 0.9s 跑完，波浪观感不变。
+  .tile-back.deal { animation: solo-deal 0.36s ease both; animation-delay: calc(min(var(--i), 18) * 30ms); }
   .tile-back {
     position: absolute;
     width: 26px;
@@ -687,15 +743,17 @@ function onScoreReset() {
 
 // ④ 出牌区：正面朝上，固定高度内可滚动（一局最多 40 张）
 .discard-card {
-  // 出牌区一共 **3 行**：前两行放打出去的牌，第三行放杠牌（右对齐）
-  height: calc(var(--small-tile-h) * 3 + 22px);
+  // 出牌区一共 **4 行**：前三行放打出去的牌（一行 14 张 → 42 张容量 ≥ 牌堆 40 张），
+  // 最后一行放杠牌（右对齐）。
+  height: calc(var(--small-tile-h) * 4 + 32px);
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 
   .discard-row {
-    flex: 0 0 calc(var(--small-tile-h) * 2 + 3px);   // 正好两行
+    // 正好三行：3 × 牌高 + 2 × 行间距（行间距必须和下面 gap 一致，否则会有几像素的内部滚动）
+    flex: 0 0 calc(var(--small-tile-h) * 3 + 4px);
     overflow-y: auto;
     display: flex;
     flex-wrap: wrap;
@@ -703,7 +761,7 @@ function onScoreReset() {
     // **别用默认的 stretch**：flex 行会把牌纵向拉满整行高度（牌宽 26px 却被拉成 100px 高，
     // 截图里就是一根根竖条）。牌的高度交给 aspect-ratio。
     align-items: flex-start;
-    gap: 3px;
+    gap: 2px;      // 必须与 .discard-row 的高度一致（3 × 24 + 2 × 2 = 76）
   }
   .discard-tile { flex: 0 0 auto; }   // 尺寸由 --mj-w / --mj-h（像素）决定，不让 flex 拉伸
   .discard-tile.fly-hidden { visibility: hidden; }   // FLIP 期间让飞行牌顶替
@@ -729,8 +787,14 @@ function onScoreReset() {
 
 // ⑤ 手牌区：14 张两行，每行 7 张
 .hand-card {
-  display: flex;
-  flex-wrap: wrap;
+  // **用 grid 按「槽位」排**，不是 flex 按「项」排：杠组是 1 个元素但占 4 张牌宽，
+  // flex 换行是按项算的，于是「4 张 + 杠组」那一行放不下、杠组被挤到下一行 → 手牌变 3 行
+  //（用户报的「有杠的时候又换行了」）。grid 固定 7 列、杠组 `span 4`，14 张永远 7+7。
+  display: grid;
+  grid-template-columns: repeat(7, var(--hand-tile-w));
+  column-gap: var(--hand-gap);
+  row-gap: var(--hand-gap);
+  justify-content: start;
   // 手牌波浪：14 张按序号依次入场（--i 由模板给出）
   .hand-tile.deal { animation: solo-deal 0.36s ease both; animation-delay: calc(var(--i) * 45ms); }
   gap: var(--hand-gap);
@@ -738,6 +802,11 @@ function onScoreReset() {
 
   // 高度交给 aspect-ratio：--hand-tile-w 里含 %，用它算 height 时那个 % 会被当成
   // 「父元素高度的百分比」，整块手牌会塌成几十像素（实测 21px）。
+  // ⚠️ 这条规则**必须和模板里的 `fly-hidden` 绑定成对出现**：模板加了类名但这里没写样式，
+  // 实体就不会真的隐形 —— 摸牌时「替身还在飞、手牌里那张已经亮着」，看着就不是同一张牌。
+  // （出牌区那条一直有，所以只有摸牌出问题；验证时也别只查类名，要查 computedStyle。）
+  .hand-tile.fly-hidden { visibility: hidden; }
+
   .hand-tile {
     width: var(--hand-tile-w);
     aspect-ratio: 131 / 168;
@@ -767,6 +836,7 @@ function onScoreReset() {
 .hand-card .kong-group {
   position: relative;
   display: flex;
+  grid-column: span 4;          // 占 4 个槽位（不是 1 个「项」）
   // 组内间距与其它手牌一样，但**不能有 padding**：一行正好是「7 张牌 + 6 个间隙」顶满容器，
   // 多出 2px padding ×2 就会把后面的牌挤到下一行（用户报的「边框把牌挤换行了」）。
   // 所以框改用 outline 画 —— outline 不占布局空间，视觉上同样贴在四张牌外面。

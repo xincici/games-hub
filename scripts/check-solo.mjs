@@ -2,7 +2,7 @@
 // 断言：每种牌不超过 4 张、少花色的比例、手牌一定是「只差一步就听牌」、胡牌判断的正反例。
 const B = await import('../src/games/solo/board.js');
 const { isWin, waits, newRoundSafe, discardAt, sameTile, buildPool, sortTiles,
-  SUITS, HAND_SIZE, WALL_SIZE, COPIES, roundPlan } = B;
+  SUITS, HAND_SIZE, WALL_SIZE, COPIES, roundPlan, SPARES } = B;
 const N = Number(process.argv[2]) || 1000;
 const problems = [];
 const fail = m => problems.push(m);
@@ -23,29 +23,41 @@ for (const h of wins) if (!isWin(h)) fail('这副应当能胡：' + h.map(t => t
 for (const h of notWins) if (isWin(h)) fail('这副不该能胡：' + h.map(t => t.suit + t.value).join(' '));
 if (isWin(wins[0].slice(0, 13))) fail('13 张不该判胡');
 
-// ② 发牌：牌张、少花色、「打掉 odd 就听 need」
+// ② 发牌：牌张、少花色、「把 odds 换回 spares 就成胡」
 let omit = 0, maxCopy = 0, bad = 0, handWins = 0, wallBad = 0, needInWall = 0, needEarly = 0;
+let spareTotal = 0;
 for (let i = 0; i < N; i++) {
   const r = newRoundSafe();
   if (r.hand.length !== HAND_SIZE) fail(`手牌 ${r.hand.length} 张（应为 14）`);
   if (r.wall.length > WALL_SIZE) wallBad++;
   if (r.omitted) omit++;
+  spareTotal += r.spares.length;
   const c = new Map();
   for (const t of [...r.hand, ...r.wall]) { const k = t.suit + t.value; c.set(k, (c.get(k) || 0) + 1); maxCopy = Math.max(maxCopy, c.get(k)); }
   if (r.omitted) for (const t of [...r.hand, ...r.wall]) if (t.suit === r.omitted) fail(`少的花色 ${r.omitted} 仍出现`);
   if (isWin(r.hand)) handWins++;
-  if (r.wall.some(t => sameTile(t, r.need))) needInWall++;
-  if (r.wall.findIndex(t => sameTile(t, r.need)) > 7) needEarly++;
-  const oddIdx = r.hand.findIndex(t => sameTile(t, r.odd));
-  if (oddIdx < 0) { bad++; continue; }
-  if (!waits(discardAt(r.hand, oddIdx)).some(t => sameTile(t, r.need))) bad++;
+  // 新的保证：把起手那几张「多余」的（odds）换回从成胡牌里拿掉的（spares），正好是一副能胡的牌
+  let back = r.hand.slice();
+  for (const o of r.odds) {
+    const at = back.findIndex(t => sameTile(t, o));
+    if (at >= 0) back.splice(at, 1);
+  }
+  back = [...back, ...r.spares];
+  if (!isWin(back)) bad++;
+  // spares 必须都在牌墙里、且都埋在该档的 needBy 之内
+  for (const sp of r.spares) {
+    const at = r.wall.findIndex(t => sameTile(t, sp));
+    if (at < 0) { needInWall--; continue; }
+    if (at > r.plan.needBy) needEarly++;
+  }
+  needInWall += r.spares.length;
 }
 if (maxCopy > COPIES) fail(`出现了 ${maxCopy} 张相同的牌（应 ≤ 4）`);
 if (wallBad) fail(`${wallBad} 局的牌墙超过 ${WALL_SIZE} 张`);
 if (handWins) fail(`${handWins} 局发出来的手牌本身就是胡牌（应重发）`);
-if (bad) fail(`${bad} 局没有做到「打掉 odd 就听 need」`);
-if (needInWall !== N) fail(`${N - needInWall} 局的 need 不在牌墙里`);
-if (needEarly) fail(`${needEarly} 局的 need 不在前 8 张内（正确的打法会等太久）`);
+if (bad) fail(`${bad} 局「把 odds 换回 spares」之后不是胡牌`);
+if (needInWall !== spareTotal) fail(`${spareTotal - needInWall} 张 spares 不在牌墙里`);
+if (needEarly) fail(`${needEarly} 张 spares 埋得比该档的 needBy 还深（正确的打法会等太久）`);
 if (!(omit > N * 0.25 && omit < N * 0.65)) fail(`少花色的比例异常：${(omit / N * 100).toFixed(0)}%`);
 
 // ③ 整副张数与排序
@@ -65,19 +77,25 @@ for (let s = 0; s <= 15; s++) {
   for (let i = 0; i < 25; i++) {
     const r = newRoundSafe(Math.random, s);
     if (r.wall.length > plan.wallSize) fail(`连胜 ${s} 的牌墙 ${r.wall.length} 张 > 计划 ${plan.wallSize}`);
-    const at = r.wall.findIndex(t => sameTile(t, r.need));
-    if (at < 0) fail(`连胜 ${s}：need 不在牌墙里`);
-    else if (at > plan.needBy) fail(`连胜 ${s}：need 埋在第 ${at} 张，超出计划 ${plan.needBy}`);
-    const oddIdx = r.hand.findIndex(t => sameTile(t, r.odd));
-    if (oddIdx < 0 || !waits(discardAt(r.hand, oddIdx)).some(t => sameTile(t, r.need))) {
-      fail(`连胜 ${s}：没有做到「打掉 odd 就听 need」`);
-    }
+      if (r.spares.length !== SPARES) fail(`连胜 ${s}：spares ${r.spares.length} 张，应为 ${SPARES}`);
+      for (const sp of r.spares) {
+        const at = r.wall.findIndex(t => sameTile(t, sp));
+        if (at < 0) fail(`连胜 ${s}：spare 不在牌墙里`);
+        else if (at > plan.needBy) fail(`连胜 ${s}：spare 埋在第 ${at} 张，超出计划 ${plan.needBy}`);
+      }
+      let back = r.hand.slice();
+      for (const o of r.odds) {
+        const at = back.findIndex(t => sameTile(t, o));
+        if (at >= 0) back.splice(at, 1);
+      }
+      back = [...back, ...r.spares];
+      if (!isWin(back)) fail(`连胜 ${s}：把 odds 换回 spares 之后仍不是胡牌`);
   }
 }
 if (roundPlan(0).wallSize !== WALL_SIZE) fail(`连胜 0 应给满额 ${WALL_SIZE} 张牌墙，实为 ${roundPlan(0).wallSize}`);
-if (roundPlan(99).wallSize !== 18) fail(`高连胜应封顶在 18 张，实为 ${roundPlan(99).wallSize}`);
+if (roundPlan(99).wallSize !== 24) fail(`高连胜应封顶在 24 张，实为 ${roundPlan(99).wallSize}`);
 
 console.log(`${N} 局：每种牌最多 ${maxCopy} 张 · 少花色 ${(omit / N * 100).toFixed(0)}% · 牌墙 ${WALL_SIZE} 张以内 · 保证率 ${(100 - bad / N * 100).toFixed(1)}%`);
-console.log(problems.length ? `✗ 问题 ${problems.length} 条` : '✓ 每局都只差一步就听牌，胡牌判断正反例都对');
+console.log(problems.length ? `✗ 问题 ${problems.length} 条` : '✓ 把起手多余的换回被拿掉的就成胡，胡牌判断正反例都对');
 for (const p of problems.slice(0, 10)) console.log('  · ' + p);
 process.exit(problems.length ? 1 : 0);

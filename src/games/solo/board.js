@@ -10,8 +10,11 @@ export const HONOR_COUNT = 7;                // 東南西北中發白
 export const COPIES = 4;                     // 每种牌 4 张 —— 整副 136 张，一局里任何牌都不会超过 4 张
 export const HAND_SIZE = 14;                 // 手牌 14 张 = 4 组 + 1 将
 export const MELD_SIZE = 3;
-export const WALL_SIZE = 30;                 // 牌墙最多 30 张：牌堆 10 列 × 3 层，每张都画得出来
+export const WALL_SIZE = 40;                 // 牌墙最多 40 张：牌堆 10 列 × 4 层，每张都画得出来
 export const OMIT_CHANCE = 0.45;             // 有几率整局少一个花色（「每局可适当的缺少一个花色」）
+// 开局从「已经能胡的 14 张」里**换掉几张**：换 1 张 = 一步就听（太简单），换 2 张才有得打
+//（用户要求「初始的牌别那么整齐」）。换掉的那几张都会埋进牌墙，换回来就成胡。
+export const SPARES = 2;
 
 // 34 个位置统一编号：m1-9 = 0-8、s1-9 = 9-17、p1-9 = 18-26、z1-7 = 27-33
 export const indexOf = t => (t.suit === 'm' ? 0 : t.suit === 's' ? 9 : t.suit === 'p' ? 18 : 27) + t.value - 1;
@@ -168,31 +171,45 @@ export function newRound(rand = Math.random, streak = 0) {
   if (!winning) {                                 // 理论上不会发生，兜底给一副整副重来
     return newRound(() => 0.5);
   }
-  // 从这副能胡的牌里拿走一张（need），换成池子里另一张（odd）
-  const need = winning[Math.floor(rand() * winning.length)];
-  const hand = winning.filter(t => t !== need);                  // 先删掉一张（tileOf 造出来的对象互不相同）
-  // 池子里去掉这 13 张
-  const left = pool.slice();
+  // 从这副能胡的牌里拿走 SPARES 张（spares），各换一张池子里「不相干」的（odds）——
+  // 这样起手就不整齐了，玩家要把这几张多余的依次打掉，而 spares 都在牌墙里等着被摸回来。
+  const hand = winning.slice();
+  const spares = [];
+  for (let i = 0; i < SPARES && hand.length > 1; i++) {
+    spares.push(hand.splice(Math.floor(rand() * hand.length), 1)[0]);   // tileOf 造的对象互不相同
+  }
+  const left = pool.slice();                       // 池子里去掉手上这 12 张
   for (const t of hand) {
     const at = left.findIndex(x => sameTile(x, t));
     if (at >= 0) left.splice(at, 1);
   }
-  // 再挑一张「不相干」的当 odd（优先挑手牌里没有的，逼玩家必须打掉它）
-  const oddCands = left.filter(t => !hand.some(h => sameTile(h, t)));
-  const odd = (oddCands.length ? oddCands : left)[Math.floor(rand() * (oddCands.length || left.length))];
-  const atOdd = left.findIndex(x => sameTile(x, odd));
-  if (atOdd >= 0) left.splice(atOdd, 1);
-  hand.push(odd);
+  const odds = [];
+  for (let i = 0; i < spares.length; i++) {
+    // 优先挑手牌与已选 odds 里都没有的，逼玩家必须打掉它
+    const cands = left.filter(t => !hand.some(h => sameTile(h, t)) && !odds.some(o => sameTile(o, t)));
+    const pickFrom = cands.length ? cands : left;
+    if (!pickFrom.length) break;
+    const odd = pickFrom[Math.floor(rand() * pickFrom.length)];
+    odds.push(odd);
+    const at = left.findIndex(x => sameTile(x, odd));
+    if (at >= 0) left.splice(at, 1);
+  }
+  hand.push(...odds);
 
-  // 牌墙：把 need 放进去，再补到 WALL_SIZE 张
-  const wallPool = left.filter(t => !sameTile(t, need));
-  const wall = shuffle(wallPool, rand).slice(0, Math.max(0, plan.wallSize - 1));
-  // 埋在前 needBy 张之内：正确打法（摸到不需要的就打掉、守住听牌）几手之内就能摸到。
-  // 连胜越高 needBy 越大 = 埋得越深 = 越难。离线自检会断言「每档都在范围内」。
-  const atNeed = Math.min(1 + Math.floor(rand() * Math.max(1, plan.needBy - 1)), Math.max(1, wall.length));
-  wall.splice(Math.min(atNeed, wall.length), 0, need);
+  // 牌墙：把 spares 都埋进去（都在前 plan.needBy 张之内），再补到 plan.wallSize 张
+  const wallPool = left.filter(t => !spares.some(sp => sameTile(sp, t)));
+  const wall = shuffle(wallPool, rand).slice(0, Math.max(0, plan.wallSize - spares.length));
+  spares.forEach((sp, i) => {
+    // 埋在前 needBy 张之内：正确打法（摸到不需要的就打掉、守住听牌）几手之内就能摸到。
+    // 连胜越高 needBy 越大 = 埋得越深 = 越难。离线自检会断言「每档都在范围内」。
+    const at = Math.min(1 + Math.floor(rand() * Math.max(1, plan.needBy - 1)) + i, Math.max(1, wall.length));
+    wall.splice(Math.min(at, wall.length), 0, sp);
+  });
 
-  return { hand: sortTiles(hand), wall, wallCount: wall.length, omitted: omitSuit, need, odd, plan };
+  return {
+    hand: sortTiles(hand), wall, wallCount: wall.length, omitted: omitSuit,
+    need: spares[0], odd: odds[0], spares, odds, plan,
+  };
 }
 
 /** 发出来的手牌本身不能已经是胡牌（否则一开局就赢了）；真撞上就重发 */
@@ -211,11 +228,11 @@ export function newRoundSafe(rand = Math.random, streak = 0) {
  * 注意：无论哪一档，「打掉 odd 就听 need」这条保证都不变（见 newRound）。
  */
 export const RAMP = [
-  { streak: 0, wallSize: 30, needBy: 6 },
-  { streak: 2, wallSize: 27, needBy: 8 },
-  { streak: 4, wallSize: 24, needBy: 10 },
-  { streak: 7, wallSize: 21, needBy: 12 },
-  { streak: 10, wallSize: 18, needBy: 14 },
+  { streak: 0, wallSize: 40, needBy: 8 },
+  { streak: 2, wallSize: 36, needBy: 10 },
+  { streak: 4, wallSize: 32, needBy: 12 },
+  { streak: 7, wallSize: 28, needBy: 15 },
+  { streak: 10, wallSize: 24, needBy: 18 },
 ];
 export function roundPlan(streak = 0) {
   const s = Math.max(0, Math.floor(streak) || 0);
