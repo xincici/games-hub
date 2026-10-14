@@ -10,7 +10,7 @@ export const HONOR_COUNT = 7;                // 東南西北中發白
 export const COPIES = 4;                     // 每种牌 4 张 —— 整副 136 张，一局里任何牌都不会超过 4 张
 export const HAND_SIZE = 14;                 // 手牌 14 张 = 4 组 + 1 将
 export const MELD_SIZE = 3;
-export const WALL_SIZE = 20;                 // 牌墙最多 20 张：牌堆画得完整（20 张牌背 = 真实数量），也够打一整局
+export const WALL_SIZE = 30;                 // 牌墙最多 30 张：牌堆 10 列 × 3 层，每张都画得出来
 export const OMIT_CHANCE = 0.45;             // 有几率整局少一个花色（「每局可适当的缺少一个花色」）
 
 // 34 个位置统一编号：m1-9 = 0-8、s1-9 = 9-17、p1-9 = 18-26、z1-7 = 27-33
@@ -211,11 +211,11 @@ export function newRoundSafe(rand = Math.random, streak = 0) {
  * 注意：无论哪一档，「打掉 odd 就听 need」这条保证都不变（见 newRound）。
  */
 export const RAMP = [
-  { streak: 0, wallSize: 20, needBy: 6 },
-  { streak: 2, wallSize: 18, needBy: 8 },
-  { streak: 4, wallSize: 16, needBy: 10 },
-  { streak: 7, wallSize: 14, needBy: 12 },
-  { streak: 10, wallSize: 12, needBy: 14 },
+  { streak: 0, wallSize: 30, needBy: 6 },
+  { streak: 2, wallSize: 27, needBy: 8 },
+  { streak: 4, wallSize: 24, needBy: 10 },
+  { streak: 7, wallSize: 21, needBy: 12 },
+  { streak: 10, wallSize: 18, needBy: 14 },
 ];
 export function roundPlan(streak = 0) {
   const s = Math.max(0, Math.floor(streak) || 0);

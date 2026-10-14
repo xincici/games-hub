@@ -396,13 +396,7 @@ const rectOf = el => {
 
 // ---------- 摸一张（打牌后、杠牌后都走这里） ----------
 async function drawOne() {
-  if (!wall.value.length) {            // 牌摸完了 → 本局结束（连胜清零）
-    phase.value = LOST;
-    streak.value = 0;
-    write(KEYS.streak, 0);
-    save();
-    return;
-  }
+  if (!wall.value.length) { lose(); return; }   // 进函数时就没牌了（理论上抽不出牌）
   // 先从牌墙飞到「手牌最右侧」，落位后就停在那（先在最右，不参与排序）。
   // 用 FLIP：替身尺寸从一张牌背（28px）渐变到手牌格（42px），实体在飞行期间藏起来 ——
   // 否则替身落地后换回更大的实体，看起来就是「闪一下才落位」。
@@ -413,7 +407,19 @@ async function drawOne() {
   save();
   await flyToTile(next, fromBack, `.hand-card [data-tile="${next.id}"]`, 400);
 
-  if (!isWin(hand.value, kongs.value.length)) return;
+  if (isWin(hand.value, kongs.value.length)) {
+    await celebrateWin();
+    return;
+  }
+  // 摸完最后一张还没胡 → 稍等一下直接出失败提示（用户要求：不用等玩家再打出去）
+  if (!wall.value.length) {
+    await new Promise(r => setTimeout(r, 350));
+    lose();
+  }
+}
+
+/** 胡牌收尾：① 手牌排整齐 ② 每张挨个跳一下 ③ 再给胜利提示 */
+async function celebrateWin() {
   // 胡牌：① 先把手牌排整齐（清掉 drawnId，刚摸的那张归位）
   drawnId.value = null;
   await nextTick();
@@ -429,6 +435,14 @@ async function drawOne() {
   write(KEYS.best, best.value);
   save();
   confetti();
+}
+
+/** 本局结束：当前连胜清零（最长连胜作为记录保留） */
+function lose() {
+  phase.value = LOST;
+  streak.value = 0;
+  write(KEYS.streak, 0);
+  save();
 }
 
 // ---------- 打一张 → 自动摸一张 ----------
@@ -627,6 +641,11 @@ function onScoreReset() {
   align-items: center;
   justify-content: center;
   gap: 4px;
+  // 牌背用内联 z-index 排层（0..29，第三层是 10..29），这些值会**和胜利遮罩的 z-index:20 直接比大小**
+  // → 第三层的牌会画在遮罩上面（用户报的「第三层牌超出胜利遮罩、没被盖住」）。
+  // isolation 让牌堆自己成一个层叠上下文，里面的 z-index 只在牌堆内部生效。
+  position: relative;
+  isolation: isolate;
   height: 72px;          // 两层牌背 40px + 上下留白（缺门说明已移到按钮区左侧）
   overflow: hidden;
 
@@ -837,20 +856,26 @@ function onScoreReset() {
 .result {
   position: absolute;
   inset: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  // 注意：**没有 `--radius-card` 这个变量**（App.vue 只有 `--radius-tile` 与 `--card-radius`），
-  // 写错的话 var() 解析为空 = 直角 —— 用户报的「胜利遮罩缺少圆角」就是这个。
+  padding: 12px;
+  // 配色**与其它游戏一致**（2048 / 消消乐 / 连连看…）：遮罩用 --mask-color，
+  // 文字用 --win-color，输的时候挂 .lose 换成 --lose-color。
+  // 别自己写 rgba 黑底 + 白字：主题切换后会跟别的游戏不一样。
   border-radius: var(--card-radius);
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
+  background: var(--mask-color);
+  color: var(--win-color);
+  font-weight: bold;
   z-index: 20;
 
-  .result-title { font-size: 20px; font-weight: 700; color: #fff; }
-  .result-streak { font-size: 14px; color: #fff; opacity: 0.9; }
+  &.lose { color: var(--lose-color); }
+
+  .result-title { font-size: 20px; }
+  .result-streak { font-size: 14px; opacity: 0.85; }
   .game-icon { flex: 0 0 auto; }
 }
 </style>
