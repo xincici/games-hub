@@ -26,7 +26,7 @@
       </div>
       <div class="divider" />
       <div class="start-wrapper">
-        <button class="game-icon" @click="startNewGame">{{ i18n('start') }}</button>
+        <button class="game-icon" @click="onNewGameClick">{{ i18n('start') }}</button>
       </div>
       <div class="divider" />
       <div class="start-wrapper">
@@ -90,6 +90,18 @@
         <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
       </div>
     </div>
+
+    <!-- 新游戏要二次确认：它会清掉当前连胜、从最低难度重开 -->
+    <ConfirmDialog
+      :show="confirming"
+      :title="i18n('newGame')"
+      :message="i18n('newGameConfirm')"
+      :confirm-text="i18n('confirmOk')"
+      :cancel-text="i18n('cancel')"
+      :show-replay="false"
+      @confirm="startNewGame"
+      @cancel="confirming = false"
+    />
   </div>
 </template>
 
@@ -97,6 +109,7 @@
 import { ref, computed, onMounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import {
@@ -135,6 +148,7 @@ const score = ref(1);                // 当前这道题的难度评分（1~100�
 const answer = ref('');              // 本题的一个正确答案（发牌时就算好，查看答案零延迟）
 // ↑ 必须声明在 restoreState() **之前**：它内部会给 answer.value 赋值，
 //   放到后面就是 TDZ，抛错再被下面的 try/catch 吞掉 —— 表现是「退出重进永远恢复不了，每次都在重发」。
+const confirming = ref(false);       // 「新游戏」的二次确认
 const revealed = ref('');            // 查看答案后展示的答案串
 const note = ref('');                // 算式下方的一行提示（=N / 答案 / 放弃提示）
 
@@ -242,11 +256,22 @@ function revealAnswer() {
   save();
 }
 
-// 新游戏：上一局赢了就进下一关，否则同一关换一道题
+// 「新游戏」只在**当前连胜 > 0** 时才需要二次确认：连胜本来就是 0 时没什么可清的，直接开新局
+//（用户要求）。不清最长连胜，它一直是记录。
+function onNewGameClick() {
+  if (streak.value > 0) confirming.value = true;
+  else startNewGame();
+}
+
+// 「新游戏」= 从头开始：**当前连胜清零**、难度回到第 1 关（最长连胜作为记录保留）。
+// 它会先弹一次二次确认（用户要求：开启新游戏会清除当前连胜并重新开始，确认吗？）。
+// 想接着往上走、保留连胜，就用胜利浮层上的「下一关」（那里才 level + 1）。
 function startNewGame() {
-  const next = phase.value === WON ? level.value + 1 : level.value;
-  level.value = next;
-  deal(next);
+  confirming.value = false;
+  streak.value = 0;
+  write(KEYS.streak, 0);
+  level.value = 1;
+  deal(1);
 }
 const nextLevel = () => { level.value += 1; deal(level.value); };
 
@@ -461,7 +486,14 @@ function onScoreReset() {
     padding: 5px 2px;
   }
   .expr-note {
+    // **绝对定位**：提示出现 / 消失都不参与布局，算式（含 token）的位置一动不动。
+    // 之前它是普通流里的一个块，一出现就把 flex:1 的算式压小、整行 token 跟着上移（用户报的现象）。
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 4px;
     font-size: 12px;
+    line-height: 1.2;
     text-align: center;
     color: var(--muted-color);
 

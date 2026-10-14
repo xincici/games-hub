@@ -109,8 +109,20 @@ export function hardness(sols) {
   return h;
 }
 
-/** 该关要求的难度档 */
-export const targetHardness = level => Math.min(MAX_HARDNESS, Math.floor((Math.max(1, level) - 1) / 3));
+/**
+ * 该关要求的难度档（**趋势向上，不是逐关递增**）。
+ * 用户要求「难度不一定一直增加，有上升的趋势即可」：先按关卡算一条连续的水平线，
+ * 再在它附近随机取整 —— 多数落在 ±1 档内，于是相邻几关会有起伏，整体仍然往上走。
+ * 第 1 关固定 0 档（最简单），保证「点新游戏从简单的题开始」。
+ */
+export function targetHardness(level, rand = Math.random) {
+  const lv = Math.max(1, level);
+  if (lv <= 1) return 0;
+  const base = Math.min(MAX_HARDNESS, (lv - 1) / 4);      // 每 4 关抬一档左右
+  const roll = rand();
+  const jitter = roll < 0.30 ? -1 : roll < 0.45 ? 1 : 0;  // 30% 更简单、15% 更难、其余贴着水平线
+  return Math.max(0, Math.min(MAX_HARDNESS, Math.round(base + jitter)));
+}
 
 /**
  * 难度评分 **1~100**：完全按这道题的实际情况算 —— 加难度的加分、一眼能看出来的减分，最后截断。
@@ -151,7 +163,7 @@ export function scorePuzzle(nums, sols = solveAll(nums)) {
  * @returns {{nums:number[], answer:string, answerCount:number, hardness:number}}
  */
 export function newPuzzle(level = 1, rand = Math.random, prev = null) {
-  const want = targetHardness(level);
+  const want = targetHardness(level, rand);
   const pick = () => Array.from({ length: NUM_COUNT }, () => DIGIT_MIN + Math.floor(rand() * (DIGIT_MAX - DIGIT_MIN + 1)));
   const pack = (nums, sols) => ({
     nums, answer: sols[0].expr, answerCount: sols.length, hardness: hardness(sols),
@@ -163,7 +175,12 @@ export function newPuzzle(level = 1, rand = Math.random, prev = null) {
     const sols = solveAll(nums);
     if (!sols.length) continue;
     const need = attempt < 300 ? want : Math.max(0, want - 1);    // 实在挑不到就放宽一档
-    if (hardness(sols) < need) continue;
+    const h = hardness(sols);
+    if (h < need) continue;
+    // **也要挡住比目标难太多的题**：原来只有下界，于是 want=0 时第 1 关照样会发出 4 档的难题
+    //（用户报的「点新游戏不是从简单的题开始」）。前 300 次严格贴合，之后才放宽一档。
+    if (attempt < 300 && h > need) continue;
+    if (attempt >= 300 && h > need + 1) continue;
     return pack(nums, sols);
   }
   // 兜底：只要求有解。理论上随机牌组里可解的占多数（1~9 四张约有 78%），

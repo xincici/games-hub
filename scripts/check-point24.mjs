@@ -76,6 +76,13 @@ for (const level of LEVELS) {
   byLevel.push(`${level}:${Math.round(sum / n)}`);
 }
 if (scoreCount && !(scoreMin >= 1 && scoreMax <= 100)) fail(`评分区间异常：${scoreMin}~${scoreMax}`);
+// 第 1 关必须是「一眼就会」的题：难度档都是 0，评分也不该高（用户要求「点新游戏从简单的题开始」）
+let lv1Hard = 0, lv1Score = 0, lv1N = 0;
+for (let i = 0; i < 40; i++) { const p = newPuzzle(1); lv1Hard += p.hardness; lv1Score += p.score; lv1N++; }
+if (!(lv1Hard / lv1N <= 0.3)) fail(`第 1 关平均难度偏高：${(lv1Hard / lv1N).toFixed(2)}（应为 0 档附近）`);
+if (!(lv1Score / lv1N < 55)) fail(`第 1 关平均评分偏高：${Math.round(lv1Score / lv1N)}（应从简单的题开始）`);
+if (targetHardness(1) !== 0) fail(`第 1 关要求的难度档应为 0，实为 ${targetHardness(1)}`);
+// 难度是「趋势向上」：允许起伏，只要求两头拉开
 const early = Number(byLevel[0].split(':')[1]), late = Number(byLevel[byLevel.length - 1].split(':')[1]);
 if (!(late > early)) fail(`评分没有随关卡递增：关卡 ${LEVELS[0]} 平均 ${early}，关卡 ${LEVELS[LEVELS.length - 1]} 平均 ${late}`);
 
