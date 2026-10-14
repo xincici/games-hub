@@ -56,7 +56,7 @@
             :value="t.value"
             :suit="t.suit"
             class="discard-tile"
-            :class="{ 'fly-hidden': t.id === hiddenDiscardId }"
+            :class="{ 'fly-hidden': t.id === hiddenTileId }"
             :data-tile="t.id"
             :style="discardVars"
           />
@@ -85,12 +85,16 @@
            手里凑齐 4 张一样的牌时，这 4 张会被框成一个「杠组」，并在上方浮出 tooltip 让玩家选是否杠牌 -->
       <div ref="handCardEl" class="card hand-card" :style="{ '--hand-tile-w': handTileW }">
         <template v-for="(it, i) in displayItems" :key="it.kind === 'kong' ? 'kong-' + it.key : it.tile.id">
-          <div v-if="it.kind === 'kong'" class="kong-group" :class="{ drawn: it.tiles.some(t => t.id === drawnId) }">
+          <div
+            v-if="it.kind === 'kong'"
+            class="kong-group"
+            :class="{ drawn: it.tiles.some(t => t.id === drawnId), framing: !dealing }"
+          >
             <button
               v-for="t in it.tiles"
               :key="t.id"
               class="hand-tile"
-              :class="{ celebrate: celebrating, deal: dealing }"
+              :class="{ celebrate: celebrating, deal: dealing, 'fly-hidden': t.id === hiddenTileId }"
               :style="{ '--i': i }"
               :data-tile="t.id"
               :disabled="phase !== PLAY || busy"
@@ -99,8 +103,9 @@
               <MahjongTile :value="t.value" :suit="t.suit" :style="handVars" />
             </button>
             <!-- tooltip：浮在这 4 张上方，让玩家选「杠」（不想杠就点牌打出去，tooltip 随之消失） -->
+            <!-- tooltip 等发牌波浪走完再浮出来：否则牌还没显形，框和气泡就先摆在那儿了 -->
             <button
-              v-if="kongOpenKey === it.key && phase === PLAY && it.tiles.length === 4"
+              v-if="kongOpenKey === it.key && phase === PLAY && it.tiles.length === 4 && !dealing"
               class="kong-tip"
               :class="{ below: kongTipBelow }"
               @click="doKong(it)"
@@ -111,7 +116,7 @@
           <button
             v-else
             class="hand-tile"
-            :class="{ drawn: it.tile.id === drawnId, celebrate: celebrating, deal: dealing }"
+            :class="{ drawn: it.tile.id === drawnId, celebrate: celebrating, deal: dealing, 'fly-hidden': it.tile.id === hiddenTileId }"
             :style="{ '--i': i }"
             :data-tile="it.tile.id"
             :disabled="phase !== PLAY || busy"
@@ -205,7 +210,7 @@ const omitSuit = ref(null);      // 本局缺哪个花色（null = 三个花色�
 //   抛错被 catch 吞掉 → 判定「无存档」→ 现象是「有存档时重进反而重开一局、缺门提示消失」。
 const kongOpenKey = ref(null);   // 哪个杠组的 tooltip 正开着（tileKey）
 const flying = ref(null);        // { tile, x, y, dx, dy, dur, scale, w }
-const hiddenDiscardId = ref(null);   // 飞行中的那张出牌：它在出牌区的实体先藏起来（FLIP 不能露馅）
+const hiddenTileId = ref(null);  // 飞行中的那张牌：它在落点处的实体先藏起来（FLIP 不能露馅）
 const streak = ref(readInt(KEYS.streak, 0));
 const best = ref(readInt(KEYS.best, 0));
 
@@ -359,10 +364,21 @@ const elOfTile = id => document.querySelector(`[data-tile="${id}"]`);
 const wallAnchor = () => document.querySelector('.wall-card .tile-back') || document.querySelector('.wall-stack') || document.querySelector('.wall-card');
 const discardAnchor = () => document.querySelector('.discard-card');
 const kongAnchor = () => document.querySelector('.kong-row') || document.querySelector('.discard-card');
-const handAnchor = () => {
-  const els = document.querySelectorAll('.hand-card .hand-tile');
-  return els[els.length - 1] || document.querySelector('.hand-card');
-};
+// 统一的 FLIP：量出**目标格子的真实位置**，藏起那格的实体，再让替身从源位置飞过去。
+// 尺寸交给关键帧从「源宽」渐变到「目标宽」（scale = 目标宽 / 源宽）——
+// 两端尺寸不一样时，替身不缩放就会在换回实体的一瞬间跳一下（摸牌实测：替身 28px、实体 42px）。
+async function flyToTile(tile, source, targetSelector, dur) {
+  const from = source instanceof Element ? rectOf(source) : source;
+  if (!from) return;
+  await nextTick();
+  const el = document.querySelector(targetSelector);
+  if (!el) return;
+  const to = rectOf(el);
+  hiddenTileId.value = tile.id;
+  await nextTick();
+  await fly(tile, from, to, dur, to.w / (from.w || 40));
+  hiddenTileId.value = null;
+}
 // 两种写法都支持：给元素（内部量中心）或直接给矩形（出牌用 FLIP，需要精确落点）
 async function fly(tile, from, to, dur, scale) {
   if (!from || !to) return;
@@ -387,13 +403,15 @@ async function drawOne() {
     save();
     return;
   }
-  // 先从牌墙飞到「手牌最右侧」，落位后就停在那（先在最右，不参与排序）
+  // 先从牌墙飞到「手牌最右侧」，落位后就停在那（先在最右，不参与排序）。
+  // 用 FLIP：替身尺寸从一张牌背（28px）渐变到手牌格（42px），实体在飞行期间藏起来 ——
+  // 否则替身落地后换回更大的实体，看起来就是「闪一下才落位」。
+  const fromBack = wallAnchor();
   const next = wall.value.shift();
   hand.value = [...hand.value, next];
   drawnId.value = next.id;
   save();
-  await nextTick();
-  await fly(next, wallAnchor(), handAnchor(), 400, 1);
+  await flyToTile(next, fromBack, `.hand-card [data-tile="${next.id}"]`, 400);
 
   if (!isWin(hand.value, kongs.value.length)) return;
   // 胡牌：① 先把手牌排整齐（清掉 drawnId，刚摸的那张归位）
@@ -430,13 +448,7 @@ async function playTileId(id) {
   drawnId.value = null;
   save();
   await nextTick();
-  const toEl = document.querySelector(`.discard-card [data-tile="${tile.id}"]`);
-  if (fromRect && toEl) {
-    hiddenDiscardId.value = tile.id;                 // 实体先隐身，由飞行牌顶上
-    await nextTick();
-    await fly(tile, fromRect, rectOf(toEl), 380, 1);
-    hiddenDiscardId.value = null;
-  }
+  await flyToTile(tile, fromRect, `.discard-card [data-tile="${tile.id}"]`, 380);   // 逐步缩小落位
   await drawOne();
   busy.value = false;
 }
@@ -736,11 +748,18 @@ function onScoreReset() {
 .hand-card .kong-group {
   position: relative;
   display: flex;
-  gap: 1px;
-  padding: 2px;
+  // 组内间距与其它手牌一样，但**不能有 padding**：一行正好是「7 张牌 + 6 个间隙」顶满容器，
+  // 多出 2px padding ×2 就会把后面的牌挤到下一行（用户报的「边框把牌挤换行了」）。
+  // 所以框改用 outline 画 —— outline 不占布局空间，视觉上同样贴在四张牌外面。
+  gap: var(--hand-gap);
   border-radius: 8px;
-  box-shadow: inset 0 0 0 2px var(--god-bg);
-  background: rgba(194, 65, 12, 0.10);
+
+  // 橙框等发牌波浪结束再出现
+  &.framing {
+    outline: 2px solid var(--god-bg);
+    outline-offset: 2px;
+    background: rgba(194, 65, 12, 0.10);
+  }
 
   &.drawn { animation: solo-drawn 0.3s ease; }
 }
