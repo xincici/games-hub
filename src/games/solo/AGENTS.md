@@ -60,7 +60,20 @@
     只去掉 padding 治不了「杠组位置不同就换行」。
     所以"刚摸到第 4 张"也能立刻成组（抽牌时不要求相邻，靠 `tileKey` 找齐）；
   - 组上方浮出 **tooltip** `.kong-tip`（文案就是「杠牌」，**不带 emoji**），点它就杠；不想杠就照常点牌打出去，
-    4 张少了任何一张 tooltip 自然消失（`watch(kongOpts)` 负责开关）；
+    4 张少了任何一张 tooltip 自然消失（`watch(kongOpts)` 负责开关）。
+    **热区**：按钮本身 `padding: 9px 18px` + `font-size: 14px`（实测 **64×38**），再用 `::before`
+    往**上 12px / 左右 12px** 各扩一圈 —— **绝不往手牌那侧扩**（那会让「想点牌」误触发杠牌）；
+    实测中心、上 8/11px、左/右 10px 都命中 tooltip，超出 12px 才落到别处。朝手牌那侧的
+    `::after` 小三角设了 `pointer-events: none`（它是唯一伸向牌面的部分）。
+    ⚠️ **绝对不能用 `transform` 居中**：`App.vue` 有全局规则
+    `#app button:not(:disabled):active { transform: translateY(1px) }`，按下的瞬间会把
+    `translateX(-50%)` 顶掉 → tooltip 横跳半个宽度、指针跟丢、`:active` 结束又跳回来 ——
+    用户报的「点 tooltip 会出现晃动点不到」就是这个。改用**独立属性 `translate: -50% 0`**
+    （与 `transform` 是两个属性、会叠加，全局那条覆盖不到它；`.flying` 也是这个写法）。
+    实测：按下时**横向位移 0**、纵向 1px（就是全局的下沉反馈 ✓）、指针仍命中 tooltip；
+    松开后确实杠成功（手牌 14 → 11、杠组 1、杠行 4 张、牌墙补摸 1 张）。
+    （注：手牌改成显式槽位后杠组总在行首，`kongTipBelow` 实际恒为 false、气泡总在上方；
+    `.below` 那套保留着，布局若变仍然正确。）
   - **tooltip 会按杠组在第几排自动翻向**（用户要求，避免挡住另一排的牌造成误操作）：
     `measureTipSide()` 比较杠组中心与手牌卡片的中线，在下排就加 `.below` 类 → 气泡翻到**下方**、
     小三角朝上；上排仍在**上方**。手牌一变（`watch(displayItems)`）与量宽度后都会重量一次。

@@ -857,11 +857,18 @@ function onScoreReset() {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 6px);
-  transform: translateX(-50%);
+  // ⚠️ **绝对不能用 `transform` 居中**：App.vue 有一条全局规则
+  //   `#app button:not(:disabled):active { transform: translateY(1px) }`
+  // 按下的那一瞬间会把 `translateX(-50%)` 整个顶掉 —— tooltip 横跳半个宽度，指针跟丢、
+  // `:active` 立刻结束又跳回来，表现就是「一按就晃、怎么都点不到」。
+  // 这里用**独立属性 `translate`**：它和 `transform` 是两个属性、会叠加，全局那条覆盖不到它，
+  // 按下去只多 1px 的下沉反馈，居中始终成立（`.flying` 也是这个写法）。
+  translate: -50% 0;
   z-index: 40;
-  padding: 5px 12px;
+  // 热区：视觉上加大一圈，并再用 ::before 往「上 / 左右」扩，见下
+  padding: 9px 18px;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #fff;
   background: var(--god-bg);
@@ -869,8 +876,22 @@ function onScoreReset() {
   border-radius: 999px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   cursor: pointer;
+  touch-action: manipulation;
 
-  // 小三角，指明它是这 4 张牌的 tooltip
+  // 热区再扩一圈：**只往上和左右扩，不往手牌那侧扩** ——
+  // 往牌那边扩会让「想点牌」的手势误trigger 杠牌。
+  &::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    right: -12px;
+    top: -12px;
+    bottom: 0;
+  }
+
+  // 小三角，指明它是这 4 张牌的 tooltip。
+  // **它必须不吃点击**：三角是唯一朝向手牌那侧伸出去的部分（往下 10px、宽 10px），
+  // 可点的话「想点这张牌」会变成触发杠牌。
   &::after {
     content: '';
     position: absolute;
@@ -879,12 +900,16 @@ function onScoreReset() {
     margin-left: -5px;
     border: 5px solid transparent;
     border-top-color: var(--god-bg);
+    pointer-events: none;
   }
 
   // 杠组在**下排**时翻到下方（三角朝上），这样不会盖住上排的手牌
   &.below {
     top: calc(100% + 6px);
     bottom: auto;
+
+    // 翻到下方时方向相反：往下和左右扩，同样不往牌那侧扩
+    &::before { top: 0; bottom: -12px; }
 
     &::after {
       top: auto;
