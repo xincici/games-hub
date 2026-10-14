@@ -74,8 +74,8 @@ for (let s = 0; s <= 15; s++) {
     }
   }
 }
-if (roundPlan(0).wallSize !== 20) fail(`连胜 0 应给 20 张牌墙，实为 ${roundPlan(0).wallSize}`);
-if (roundPlan(99).wallSize !== 12) fail(`高连胜应封顶在 12 张，实为 ${roundPlan(99).wallSize}`);
+if (roundPlan(0).wallSize !== WALL_SIZE) fail(`连胜 0 应给满额 ${WALL_SIZE} 张牌墙，实为 ${roundPlan(0).wallSize}`);
+if (roundPlan(99).wallSize !== 18) fail(`高连胜应封顶在 18 张，实为 ${roundPlan(99).wallSize}`);
 
 console.log(`${N} 局：每种牌最多 ${maxCopy} 张 · 少花色 ${(omit / N * 100).toFixed(0)}% · 牌墙 ${WALL_SIZE} 张以内 · 保证率 ${(100 - bad / N * 100).toFixed(1)}%`);
 console.log(problems.length ? `✗ 问题 ${problems.length} 条` : '✓ 每局都只差一步就听牌，胡牌判断正反例都对');
