@@ -7,9 +7,13 @@
 
 - [ ] **图标**：attributify 写法 `<i i-carbon-sun />`；**首页图标必须同步加 `uno.config.ts` 的 `safelist`**（运行时数据 UnoCSS 提取不到）。
 - [ ] **颜色**：走 `App.vue` 的 CSS 变量，不硬编码需要随主题变的颜色；**按钮上文字的对比度要算**（项目要求 ≥4.5:1，白字压橙 5.18:1、深字压黄 9.89:1，黄底白字只有 1.61:1 不行）。
+- [ ] **尺寸写法**：**嵌套容器里不要用 `%` 算尺寸** —— 一个把 4 张牌包起来的 div，里面 `calc(100% / 7)` 的 `%` 是按**这个 div 自身宽度**解析的，会塌成几像素（单人麻将杠组实测 7px 宽）；要量出像素值写回去（`ResizeObserver`）或用 `aspect-ratio`。**本身就是 flex item 的元素别用 `--h: 100%`**（循环依赖 + 行默认 `stretch`，会被纵向拉满，实测 26px 宽被拉成 26×71）。
 - [ ] **布局**：最小兼容 **375×667**；首张卡片 `margin-top: 64px`。**但如果页面第一个「在流内」的元素就是它**（顶栏是 fixed、不在流内，所以多数游戏都是这种情况），这个 margin 会**塌陷出 `#app`**、整页恒多 64px 可滚动 —— 此时写成 `.wrapper` 的 `padding-top`（**Emoji 镜像、24 点**都是这么办的）。判「能不能滚」只认 `window.scrollTo(0, 9999)` + `scrollY`。
 - [ ] **切页过渡**：`.app-open/close-enter-active` 必须 `box-sizing: border-box`（否则过渡期间整页宽 100%+32px）。
 - [ ] **emoji 游戏视觉语言**：`.card` / `.game-icon` / `.dot-board` / `.divider` / `.stat-*` / `.result` 的写法与尺寸（含 `.game-icon` 的两个配色特例、结算浮层必须 `box-sizing: border-box`）。
+- [ ] **`.card` / `.divider` / `.game-icon` 必须在本游戏 scoped 块里各写一份**（全局只有变量、没有这三个类规则）。新游戏**直接抄 [`NEW-GAME.md`](NEW-GAME.md) 的样式骨架**，别凭记忆写；写完量一次 `getComputedStyle`：`.card` 的底色不能是 `rgba(0,0,0,0)`、`.game-icon` 应是 `rgb(35,128,78)`、`.divider` 应是 `1px × 24px`。漏写的表现是「分数区/按钮区像裸文本」「按钮是浏览器默认灰」「统计条上看不到分隔线」。
+- [ ] **`.wrapper` 的内边距写完整简写**（`padding: 64px 16px 24px`）：只写 `padding-top` 会把左右清零 → **所有卡片贴到屏幕两边**。容器同时要 `box-sizing: border-box` 与 `color: var(--text-color)`；**别写 `color: var(--card-color)`**（它是 `#fff`，浅色主题下就是白底白字，数字直接看不见）。
+- [ ] **用 `var(--x)` 之前确认这个变量真的存在**（`App.vue` 里 `grep` 一下）：写错名字 `var()` 解析为**空**，表现为「圆角/阴影/颜色没生效」而不是报错 —— 例如 `--radius-card` 根本不存在，圆角要用 `--card-radius`。
 - [ ] **共享逻辑**：`src/shared/` 已有的一律复用（`confetti` / `CountTimer` / `ConfirmDialog` / `Hearts` / `resumeCountdown` / `resultDelay`），不复制第二份。
 - [ ] **手势**：一律 Pointer Events + 手势区 `touch-action: none`（`touchstart` 只认触摸）；加之前先量这一页会不会溢出。
 - [ ] **存档**：沿用该游戏原有前缀；**每个 key 都要写进它自己的分册**；清记录彩蛋靠注册表的 `recordsPrefix` + 难度范围。

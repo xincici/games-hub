@@ -60,8 +60,59 @@
   下次才不会重复试错。）
 ```
 
+## 脚手架：直接抄这一段，别凭记忆写（最容易丢的就是样式）
+
+**全局只有 CSS 变量，没有 `.card` / `.divider` / `.game-icon` 这三个类规则** —— 它们散在每个游戏的
+scoped 块里各写一份。漏写不会报错，只会「看起来像没做样式」（单人麻将就是这么丢的）。所以新组件
+的 `<style scoped lang="scss">` **从下面这段开始抄**，再往里加自己的块：
+
+```scss
+.wrapper {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  // ⚠️ 必须写**完整简写**：只写 padding-top 会把左右内边距清零 → 所有卡片贴到屏幕两边
+  // （左右 16px / 底部 24px 与其它游戏一致）。首屏那 64px 也写在这里，不写 .score-area 的
+  // margin-top —— 顶栏是 fixed，首张卡的 margin 会塌陷出 #app（见 PITFALLS）。
+  padding: 64px 16px 24px;
+  box-sizing: border-box;
+  color: var(--text-color);        // ⚠️ 不要写 color: var(--card-color)，那个变量是 #fff（给深色卡用）
+
+  // 这三条每个游戏都要自己写一份（全局没有）
+  .card {
+    background: var(--card-bg-color);
+    border-radius: var(--card-radius);   // ⚠️ 没有 --radius-card 这个变量，写错 var() 解析为空 = 直角
+    box-shadow: var(--card-shadow);
+    box-sizing: border-box;
+  }
+  .divider {
+    width: 1px;
+    height: 24px;
+    align-self: center;
+    background: var(--border-color);
+    opacity: 0.6;
+    flex: 0 0 auto;
+  }
+  .game-icon {
+    cursor: pointer;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    background: var(--primary-bg);
+    color: #fff;
+    border: 0 none;
+    border-radius: var(--radius-tile);
+    &:disabled { background-color: #aaa; cursor: not-allowed; }
+  }
+}
+```
+
+**写完先做这一步**：在游戏页里量一下 `getComputedStyle(document.querySelector('.card')).backgroundColor`
+—— 是 `rgba(0, 0, 0, 0)` 就说明没命中；同理 `.game-icon` 应该是 `rgb(35, 128, 78)`，`.divider` 应该是
+`1px × 24px`。**这三行判定比肉眼看截图靠谱**（浅色主题下"没有卡片"和"白卡片"几乎一样）。
+
 ## 必须遵守
 
-开工前逐条过 [`CONVENTIONS.md`](CONVENTIONS.md) 顶部的清单。最容易漏的四条：
-**safelist**、**`.card`/`.game-icon` 这类 scoped 样式要自己写一份**、**每个 storage key 写进分册**、
+开工前逐条过 [`CONVENTIONS.md`](CONVENTIONS.md) 顶部的清单，动手前扫一遍 [`PITFALLS.md`](PITFALLS.md)。
+最容易漏的四条：**safelist**、**上面那段 scoped 样式**、**每个 storage key 写进分册**、
 **帮助文案只写玩法不写彩蛋**。
