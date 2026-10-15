@@ -280,7 +280,10 @@ const candCardVars = computed(() => cardVarsFor(metrics.value.candW, metrics.val
 // 格子本身已经是 131:168 的牌形，所以牌面**正好填满格子内框**（-2 是 .face 自己的 1px 描边），
 // 配合 .mahjong .face 把外框的底色/描边/阴影让开 —— 卡片本身就是一张麻将牌。
 function tileVarsFor(w, h) {
-  return { '--mj-w': `${Math.max(6, w - 2)}px`, '--mj-h': `${Math.max(8, h - 2)}px` };
+  // 高必须由宽按 131:168 反算（两边都减 2 会把长宽比拉偏，雪碧图背景被拉伸、取景跟着偏）
+  const ww = Math.max(6, w - 2);
+  const hh = Math.min(ww * TILE_RATIO, Math.max(8, h - 2));
+  return { '--mj-w': `${+(hh / TILE_RATIO).toFixed(2)}px`, '--mj-h': `${+hh.toFixed(2)}px` };
 }
 const stageTileVars = computed(() => tileVarsFor(metrics.value.stageW, metrics.value.stageH));
 const candTileVars = computed(() => tileVarsFor(metrics.value.candW, metrics.value.candH));

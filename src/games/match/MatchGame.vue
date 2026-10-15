@@ -221,9 +221,10 @@ const cardVars = computed(() => {
 // 交给 mahjong 的 MahjongTile 的尺寸变量（同 cardVars：内联传，别去改麻将那边的样式）。
 // -2 是 .face 外框自己的 1px 描边（border-box），牌面填满内框才不会溢出格子
 const mahjongVars = computed(() => {
-  const w = Math.max(8, metrics.value.w - 2);
-  const h = Math.max(8, metrics.value.h - 2);
-  return { '--mj-w': `${w}px`, '--mj-h': `${h}px` };
+  // 高按 131:168 由宽反算（两边都减 2 会把长宽比拉偏，雪碧图背景被拉伸、取景偏）
+  const ww = Math.max(8, metrics.value.w - 2);
+  const hh = Math.min(ww * TILE_RATIO, Math.max(8, metrics.value.h - 2));
+  return { '--mj-w': `${+(hh / TILE_RATIO).toFixed(2)}px`, '--mj-h': `${+hh.toFixed(2)}px` };
 });
 
 // 连击：两次消除之间没有翻错、且间隔在 COMBO_MS 内才算连上（与连连看同款规则）

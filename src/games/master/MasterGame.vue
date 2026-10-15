@@ -36,7 +36,7 @@
           v-for="tile in tiles"
           :key="`${gameId}-${tile.id}`"
           class="tile"
-          :class="[`depth-${coverDepth.get(tile.id) || 0}`, { covered: !freeSet.has(tile.id), poker: isPoker }]"
+          :class="[`depth-${coverDepth.get(tile.id) || 0}`, { covered: !freeSet.has(tile.id), poker: isPoker, mahjong: isMahjong }]"
           :style="tileStyle(tile)"
           @click="pick(tile, $event)"
         >
@@ -74,7 +74,7 @@
         v-for="(card, idx) in tray"
         :key="card.uid"
         class="tray-card"
-        :class="{ clearing: card.clearing, fresh: card.fresh, poker: isPoker }"
+        :class="{ clearing: card.clearing, fresh: card.fresh, poker: isPoker, mahjong: isMahjong }"
         :style="trayCardStyle(idx)"
       >
         <MahjongTile v-if="isMahjong" :suit="faceOf(card.emoji).suit" :value="faceOf(card.emoji).value" />
@@ -94,7 +94,7 @@
         :key="f.uid"
         :ref="el => setFlyEl(f.uid, el)"
         class="fly-card"
-        :class="{ poker: isPoker }"
+        :class="{ poker: isPoker, mahjong: isMahjong }"
         :style="flyStyleOf(f)"
       >
         <MahjongTile v-if="isMahjong" :suit="faceOf(f.emoji).suit" :value="faceOf(f.emoji).value" />
@@ -128,6 +128,7 @@ import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import { MAHJONG_FACES, faceOf } from '@/shared/mahjongFaces';
+import { TILE_RATIO } from '@/shared/mahjongTiles';
 import CardItem from '@/games/poker/CardItem.vue';
 import {
   TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig,
@@ -193,7 +194,12 @@ const pool = computed(() => {
 });
 // 麻将牌面的尺寸：**牌面直接填满卡片内框**（卡片本身就是牌形，不是「方底 + 小牌」）
 function faceVars(w, h) {
-  return { '--mj-w': `${+(w - 2).toFixed(2)}px`, '--mj-h': `${+(h - 2).toFixed(2)}px` };   // 减掉 1px 边框
+  // 牌面宽 = 盒子 − 2（左右各 1px 边框），**高必须由宽按 131:168 反算**：
+  // 两边都减 2 会把长宽比从 0.7798 拉到 0.759，雪碧图背景被拉伸、取景随之偏移
+  //（表现为「牌没在正中间、右侧留白、左上角漏出隔壁那张牌」）。
+  const ww = +(w - 2).toFixed(2);
+  const hh = +Math.min(ww * TILE_RATIO, h - 2).toFixed(2);
+  return { '--mj-w': `${ww}px`, '--mj-h': `${hh}px` };
 }
 // 扑克牌：CardItem 读 --width / --height 这组变量。**必须内联在 CardItem 自己身上** ——
 // 它的 .card-wrapper 自己声明了 `--width: 60px; --height: 90px`，挂在父元素上会被本地声明压掉
@@ -215,8 +221,10 @@ function pokerFlyVars(f) {
 function pokerVars(w, h) {
   const { w: ww, h: hh } = pokerSize(w, h);
   return {
-    '--width': `${ww}px`,
-    '--height': `${hh}px`,
+    // -2 是 CardItem 那张牌自己的 1px 描边（content-box）：wrapper 取「目标 − 2」，
+    // 配合样式里 :deep(.card) 的 -1px 偏移，可见的牌才正好等于 pokerSize() 的尺寸并居中
+    '--width': `${+(ww - 2).toFixed(2)}px`,
+    '--height': `${+(hh - 2).toFixed(2)}px`,
     '--margin': '0px',
     '--radius': `${Math.max(2, Math.round(ww * 0.07))}px`,
     '--pos': `${Math.max(1, Math.round(ww * 0.09))}px`,
@@ -290,7 +298,20 @@ const layout = computed(() => {
   // 扑克是 CardItem 那张牌（比盒子再内缩 12%）。不跟着缩的话，框和牌之间就会有一圈落差。
   const slotShape = isPoker.value
     ? pokerSize(slotW, slot)
-    : { w: +(slotW - (isMahjong.value ? 2 : 0)).toFixed(2), h: +(slot - (isMahjong.value ? 2 : 0)).toFixed(2) };
+    : isMahjong.value
+      // 麻将：宽 = 槽位宽 − 2，高按 131:168 反算（与牌面同一套算法，否则会差零点几像素）
+      ? (() => {
+        const hh = +Math.min((slotW - 2) * TILE_RATIO, slot - 2).toFixed(2);
+        return { w: +(hh / TILE_RATIO).toFixed(2), h: hh };
+      })()
+      : { w: slotW, h: slot };
+  // 底板圆角也要跟**牌**一致，否则框和牌圆角明显不同：
+  // 扑克 = CardItem 的 --radius（宽 × 0.07）、麻将 = 牌面的 --mj-w × 0.09、emoji = 全局 --radius-tile
+  const slotRadius = isPoker.value
+    ? `${Math.max(2, Math.round(pokerSize(slotW, slot).w * 0.07))}px`
+    : isMahjong.value
+      ? `${+(slotShape.w * 0.09).toFixed(2)}px`
+      : 'var(--radius-tile)';
   return {
     avail,
     unit,
@@ -308,6 +329,7 @@ const layout = computed(() => {
       '--slot': `${slot}px`,
       '--slot-shape-w': `${slotShape.w}px`,
       '--slot-shape-h': `${slotShape.h}px`,
+      '--slot-radius': slotRadius,
       '--slot-gap': `${gap}px`,
       '--tray-fs': `${Math.round(slot * 0.52)}px`,
       '--board-h': `${(unit * 14 + BOARD_PAD * 2).toFixed(2)}px`,
@@ -947,7 +969,7 @@ function restore() {
           content: '';
           width: var(--slot-shape-w, var(--slot));
           height: var(--slot-shape-h, var(--slot));
-          border-radius: var(--radius-tile);
+          border-radius: var(--slot-radius, var(--radius-tile));
           background: var(--cell-bg);
           box-shadow: inset 0 0 0 1px var(--border-color);
         }
@@ -1030,6 +1052,25 @@ function restore() {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+}
+
+
+// CardItem 的 .card 是 content-box + 1px 描边，绝对定位在 wrapper 的 0,0，而 wrapper 比它小 2px，
+// 于是可见的扑克牌会往右下各偏 1px（也会显得比槽位底板大一圈）。往左上挪 1px 就同心了
+//（wrapper 自己由卡片盒 flex 居中，见 .tile / .tray-card 的 align/justify）。
+.tile.poker :deep(.card),
+.tray-card.poker :deep(.card),
+.fly-card.poker :deep(.card) {
+  left: -1px;
+  top: -1px;
+}
+
+// 麻将模式：卡片盒的圆角跟牌面同一套式子（否则盒子的白角从牌面四角漏出来，看着像「没居中」）。
+// +1px 是盒子自己的 1px 描边。
+.tile.mahjong,
+.tray-card.mahjong,
+.fly-card.mahjong {
+  border-radius: calc(var(--mj-w, 32px) * 0.09 + 1px);
 }
 
 </style>

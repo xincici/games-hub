@@ -250,9 +250,16 @@ const cardVars = computed(() => {
 });
 // 交给 MahjongTile 的尺寸：它是靠父级继承的 --mj-w / --mj-h 定宽高的（131:168），
 // 牌面本身就画满这块矩形，所以在格子里留 1px 呼吸就够了
+// 牌面尺寸：宽 = 格子 − 2（左右各 1px 边框），**高按 131:168 反算**并受格子高约束 ——
+// 两边都减 2 会把长宽比拉偏，雪碧图被拉伸、取景跟着偏（看着就像牌没居中）。
+function mjSize() {
+  const ww = Math.max(8, metrics.value.cell - 2);
+  const hh = Math.min(ww * TILE_RATIO, Math.max(8, metrics.value.cellH - 2));
+  return { w: hh / TILE_RATIO, h: hh };
+}
 const mahjongVars = computed(() => ({
-  '--mj-w': `${Math.max(8, metrics.value.cell - 2)}px`,
-  '--mj-h': `${Math.max(8, metrics.value.cellH - 2)}px`,
+  '--mj-w': `${+(mjSize().w).toFixed(2)}px`,
+  '--mj-h': `${+(mjSize().h).toFixed(2)}px`,
 }));
 // 全程计时（观察/翻面/作答都在走），仅结算后暂停
 const timerRunning = computed(() => phase.value !== WON && phase.value !== LOST);
