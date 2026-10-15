@@ -8,7 +8,11 @@ export const FACE_RATIO = 131 / 168;   // 麻将牌面（竖牌）的宽高比
 // 卡片本身就是一块竖着的麻将牌（不是「正方形底 + 里面放一张小牌」），
 // 而遮挡判定用「|Δx| < 格距x 且 |Δy| < 格距y」，与牌面完全一致。
 export const MAHJONG_PITCH = { x: +(TILE_UNITS * FACE_RATIO).toFixed(3), y: TILE_UNITS };
-export const pitchOf = mode => (mode === MODE_MAHJONG ? MAHJONG_PITCH : { x: TILE_UNITS, y: TILE_UNITS });
+export const pitchOf = mode => {
+  if (mode === MODE_MAHJONG) return MAHJONG_PITCH;
+  if (mode === MODE_POKER) return POKER_PITCH;
+  return { x: TILE_UNITS, y: TILE_UNITS };
+};
 export const TRAY_SIZE = 7;    // 收集槽格数
 export const BLOCK_TILES = 9;  // 每 9 张一组发牌（3 组三消，保证按清盘顺序可解）
 
@@ -41,14 +45,17 @@ export const MAX_LEVEL = 50;
 
 // ---------- 模式：玩法完全一样，只有「牌面池」与「难度曲线」不同 ----------
 export const MODE_EMOJI = 'emoji';
+export const MODE_POKER = 'poker';
 export const MODE_MAHJONG = 'mahjong';
+// 切换顺序（用户要求：emoji → 扑克牌 → 麻将 → emoji）
+export const MODE_ORDER = [MODE_EMOJI, MODE_POKER, MODE_MAHJONG];
 
-// 麻将模式的牌面池：m/s/p 各 1~9 + 字牌 1~7 = **34 种**（key 形如 'm5' / 'z3'）
-export const MAHJONG_KEYS = [
-  ...['m', 's', 'p'].flatMap(suit => Array.from({ length: 9 }, (_, i) => `${suit}${i + 1}`)),
-  ...Array.from({ length: 7 }, (_, i) => `z${i + 1}`),
-];
+// 麻将模式的牌面池在 **src/shared/mahjongFaces.js**（几个游戏共用；本文件保持不 import）。
+// 这里只留「最多用多少种」：34 种牌面里给麻将模式留点余量。
 export const MAHJONG_MAX_KINDS = 26;     // 只有 34 种牌面，留点余量
+export const POKER_MAX_KINDS = 18;       // 扑克 52 张，但本作的种类曲线本来只到 18，够用
+// 扑克牌是 2:3 的竖牌：格距同样跟着牌走（emoji 是 2×2 单位）
+export const POKER_PITCH = { x: +(TILE_UNITS * 2 / 3).toFixed(3), y: TILE_UNITS };
 
 // 两种模式的难度调参：
 // - emoji：老曲线，种类顺着 50 关从 7 线性爬到 18
@@ -57,6 +64,8 @@ export const MAHJONG_MAX_KINDS = 26;     // 只有 34 种牌面，留点余量
 const MODE_TUNING = {
   [MODE_EMOJI]: { minKinds: MIN_KINDS, maxKinds: MAX_KINDS, kindRatio: null },
   [MODE_MAHJONG]: { minKinds: 10, maxKinds: MAHJONG_MAX_KINDS, kindRatio: 0.8 },
+  // 扑克模式沿用 emoji 那条曲线（用户只要求补齐这个模式，没要求改难度）
+  [MODE_POKER]: { minKinds: MIN_KINDS, maxKinds: POKER_MAX_KINDS, kindRatio: null },
 };
 export const modeTuning = mode => MODE_TUNING[mode] || MODE_TUNING[MODE_EMOJI];
 

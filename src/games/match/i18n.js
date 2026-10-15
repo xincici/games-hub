@@ -13,7 +13,7 @@ export default {
     help2: 'Each level reveals all cards for 4-14 seconds first (more cards, more time), then they flip down and the clock starts.',
     help3: 'Flip two cards: matching pairs clear, others flip back.',
     help4: 'Clear the whole board before time runs out; a wrong flip breaks your combo.',
-    help5: 'The button beside help switches emoji / poker faces. Same rules - poker uses tall 2:3 cards and caps with fewer of them. Level progress is kept per mode.',
+    help5: 'The button beside help cycles the faces: emoji / poker cards / mahjong tiles. Same rules - poker uses tall 2:3 cards and caps with fewer of them. Level progress is kept per mode.',
     comboTip: '{n} Combo!',
     levelDone: 'Level {n} cleared!',
     nextLevel: '➡️ Next Level',
@@ -21,7 +21,7 @@ export default {
     timeUp: 'Time Up',
     modeEmoji: 'emoji',
     modePoker: 'cards',
-    modeTip: 'Switch the card faces: emoji / poker cards (each keeps its own level progress)',
+    modeTip: 'Switch the card faces: emoji / poker cards / mahjong tiles - tap again to cycle (each keeps its own level progress)',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -39,7 +39,7 @@ export default {
     help2: '每关先亮牌观察 4~14 秒（牌越多越久），观察结束翻面并开始计时。',
     help3: '每次翻两张：同款两张一起消除，不同自动翻回。',
     help4: '限时内清空全部牌即过关；途中翻错会中断连击。',
-    help5: '帮助旁的按钮切换 emoji / 扑克牌面：玩法相同，扑克是 2:3 长方形牌、封顶张数略少；两种牌面的关卡进度分开保存。',
+    help5: '帮助旁的按钮切换 emoji / 扑克牌 / 麻将牌面：玩法相同，扑克是 2:3 长方形牌、封顶张数略少，麻将沿用 emoji 的关卡曲线、只换牌面；三种牌面的关卡进度分开保存。',
     comboTip: '{n} 连击!',
     levelDone: '第 {n} 关完成!',
     nextLevel: '➡️ 下一关',
@@ -47,7 +47,7 @@ export default {
     timeUp: '时间到',
     modeEmoji: 'emoji',
     modePoker: '扑克',
-    modeTip: '切换牌面：emoji / 扑克牌（两种牌面的关卡进度各自独立保存）',
+    modeTip: '切换牌面：emoji / 扑克牌 / 麻将牌（再点一次循环，三种牌面的关卡进度各自独立保存）',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }

@@ -990,6 +990,13 @@
   dependencies:
     "@iconify/types" "*"
 
+"@iconify-json/dinkie-icons@^1.2.0":
+  version "1.2.0"
+  resolved "https://registry.npmjs.org/@iconify-json/dinkie-icons/-/dinkie-icons-1.2.0.tgz#b6eabf8e422c4c72ab368988d6c0530251dd35ae"
+  integrity sha512-/RSAjK6twyEOKfW9FddZDP+EPMeSIocb4Y4Zq2Y2IbqUxYmNHqXtxidVioBzpv+a3JeiQ61ARlRKtCQ0BqSGpA==
+  dependencies:
+    "@iconify/types" "*"
+
 "@iconify-json/mdi@^1.0.12":
   version "1.2.3"
   resolved "https://registry.npmjs.org/@iconify-json/mdi/-/mdi-1.2.3.tgz#5e4ee9d8c8aaad04381c8cc6c6edbe3327f031b5"

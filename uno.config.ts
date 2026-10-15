@@ -19,11 +19,15 @@ export default defineConfig({
       collections: {
         carbon: () => import('@iconify-json/carbon/icons.json').then(i => i.default),
         mdi: () => import('@iconify-json/mdi/icons.json').then(i => i.default),
+        // 麻将模式图标的来源（dinkie-icons 的 three-of-circles-mahjong）
+        'dinkie-icons': () => import('@iconify-json/dinkie-icons/icons.json').then(i => i.default),
       }
     }),
   ],
   // 首页图标 class 来自 games.js 的运行时数据，静态提取不到，需 safelist
   safelist: [
+    // 模式切换图标（三个游戏的麻将模式都用它）
+    'i-dinkie-icons-three-of-circles-mahjong',
     'i-carbon-touch-1',
     'i-mdi-counter',
     'i-mdi-cards-playing-spade-multiple-outline',

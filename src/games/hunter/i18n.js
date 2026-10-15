@@ -20,8 +20,8 @@ export default {
     help4: 'Find all to win; new games start at level 1.',
     modeEmoji: 'emoji',
     modePoker: 'cards',
-    modeTip: 'Switch the card faces: emoji / poker cards (levels and progress are kept separately)',
-    help6: 'Button by Help switches emoji / poker faces; poker has more targets and a wider grid, and progress is saved apart.',
+    modeTip: 'Switch the card faces: emoji / poker cards / mahjong tiles (each keeps its own levels and progress)',
+    help6: 'The button by Help cycles the faces: emoji / poker cards / mahjong tiles. Same rules; poker has more targets and a wider grid, mahjong keeps the emoji levels. Each face saves its own progress.',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -46,8 +46,8 @@ export default {
     help4: '全找出即胜；新游戏总是从第 1 关开始。',
     modeEmoji: 'emoji',
     modePoker: '扑克',
-    modeTip: '切换牌面：emoji / 扑克牌（两种牌面的关卡与进度各自独立保存）',
-    help6: '帮助旁的按钮切换 emoji / 扑克牌面：玩法相同，扑克目标更多、候选区更宽；两种牌面的关卡与进度分开保存。',
+    modeTip: '切换牌面：emoji / 扑克牌 / 麻将牌（三种牌面的关卡与进度各自独立保存）',
+    help6: '帮助旁的按钮切换牌面：emoji / 扑克牌 / 麻将牌。玩法相同；扑克目标更多、候选区更宽，麻将沿用 emoji 的关卡曲线。三种牌面的关卡与进度分开保存。',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }

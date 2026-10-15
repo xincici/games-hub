@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@iconify-json/carbon": "^1.1.17",
+    "@iconify-json/dinkie-icons": "^1.2.0",
     "@iconify-json/mdi": "^1.0.12",
     "canvas-confetti": "^1.9.2",
     "lodash.samplesize": "^4.2.0",

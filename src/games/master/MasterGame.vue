@@ -3,8 +3,9 @@
     <!-- 模式开关：emoji ⇄ 麻将牌（放在帮助图标旁边，照 Emoji 猎手的「emoji ↔ 扑克牌」写法） -->
     <TopHeader>
       <span class="item-wrapper" :title="i18n('modeTip')" @click="switchMode">
-        <i v-if="!isMahjong" i-mdi-emoticon-happy-outline />
-        <i v-else i-mdi-cards-playing-outline />
+        <i v-if="mode === 'emoji'" i-mdi-emoticon-happy-outline />
+        <i v-else-if="mode === 'poker'" i-mdi-cards-playing-outline />
+        <i v-else i-dinkie-icons-three-of-circles-mahjong />
       </span>
     </TopHeader>
     <div class="card score-area">
@@ -35,11 +36,18 @@
           v-for="tile in tiles"
           :key="`${gameId}-${tile.id}`"
           class="tile"
-          :class="[`depth-${coverDepth.get(tile.id) || 0}`, { covered: !freeSet.has(tile.id) }]"
+          :class="[`depth-${coverDepth.get(tile.id) || 0}`, { covered: !freeSet.has(tile.id), poker: isPoker }]"
           :style="tileStyle(tile)"
           @click="pick(tile, $event)"
         >
           <MahjongTile v-if="isMahjong" :suit="faceOf(tile.emoji).suit" :value="faceOf(tile.emoji).value" />
+          <CardItem
+            v-else-if="isPoker"
+            mini
+            :num="pokerFaceOf(tile.emoji).num"
+            :type="pokerFaceOf(tile.emoji).type"
+            :style="pokerTileVars"
+          />
           <template v-else>{{ tile.emoji }}</template>
         </div>
       </div>
@@ -66,10 +74,17 @@
         v-for="(card, idx) in tray"
         :key="card.uid"
         class="tray-card"
-        :class="{ clearing: card.clearing, fresh: card.fresh }"
+        :class="{ clearing: card.clearing, fresh: card.fresh, poker: isPoker }"
         :style="trayCardStyle(idx)"
       >
         <MahjongTile v-if="isMahjong" :suit="faceOf(card.emoji).suit" :value="faceOf(card.emoji).value" />
+        <CardItem
+          v-else-if="isPoker"
+          mini
+          :num="pokerFaceOf(card.emoji).num"
+          :type="pokerFaceOf(card.emoji).type"
+          :style="pokerTrayVars"
+        />
         <template v-else>{{ card.emoji }}</template>
       </div>
     </div>
@@ -79,9 +94,17 @@
         :key="f.uid"
         :ref="el => setFlyEl(f.uid, el)"
         class="fly-card"
+        :class="{ poker: isPoker }"
         :style="flyStyleOf(f)"
       >
         <MahjongTile v-if="isMahjong" :suit="faceOf(f.emoji).suit" :value="faceOf(f.emoji).value" />
+        <CardItem
+          v-else-if="isPoker"
+          mini
+          :num="pokerFaceOf(f.emoji).num"
+          :type="pokerFaceOf(f.emoji).type"
+          :style="pokerFlyVars(f)"
+        />
         <template v-else>{{ f.emoji }}</template>
       </div>
     </Teleport>
@@ -104,9 +127,11 @@ import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
+import { MAHJONG_FACES, faceOf } from '@/shared/mahjongFaces';
+import CardItem from '@/games/poker/CardItem.vue';
 import {
   TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig,
-  MODE_EMOJI, MODE_MAHJONG, MAHJONG_KEYS, FACE_RATIO,
+  MODE_EMOJI, MODE_POKER, MODE_MAHJONG, MODE_ORDER, FACE_RATIO,
 } from './board';
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
@@ -116,8 +141,16 @@ const MODE_KEY = `${KEY_PREFIX}mode`;     // 上次用的牌面模式（两种�
 // 于是切模式 = 换一整套进度 / 盘面 / 收集槽，互不干扰。
 const MODE_KEYS = {
   [MODE_EMOJI]: { level: `${KEY_PREFIX}level`, state: `${KEY_PREFIX}state` },
+  [MODE_POKER]: { level: `${KEY_PREFIX}poker_level`, state: `${KEY_PREFIX}poker_state` },
   [MODE_MAHJONG]: { level: `${KEY_PREFIX}mahjong_level`, state: `${KEY_PREFIX}mahjong_state` },
 };
+// 扑克牌面的池子：52 张（'h7' = 红桃 7；h 红桃 / d 方块 / s 黑桃 / c 梅花），
+// key 里不带花色英文全名，渲染时用 pokerFaceOf() 拆成 CardItem 要的 num / type。
+const POKER_SUITS = { h: 'heart', d: 'diamond', s: 'spade', c: 'club' };
+const POKER_FACES = Object.keys(POKER_SUITS).flatMap(t => Array.from({ length: 13 }, (_, i) => `${t}${i + 1}`));
+function pokerFaceOf(key) {
+  return { type: POKER_SUITS[String(key)[0]], num: +String(key).slice(1) };
+}
 const FLY_MS = 260;      // 卡片从原位飞入暂存区
 const CLEAR_MS = 560;    // 三消卡片：先闪烁再消失
 const WIN_DELAY = 620;   // 最后一组三消闪烁完再弹结算层
@@ -126,17 +159,15 @@ const WIN_DELAY = 620;   // 最后一组三消闪烁完再弹结算层
 // 反过来就是 TDZ（solo 分册里记过这个坑，这里会直接把 setup 打挂）。
 function loadMode() {
   try {
-    return localStorage.getItem(MODE_KEY) === MODE_MAHJONG ? MODE_MAHJONG : MODE_EMOJI;
+    const m = localStorage.getItem(MODE_KEY);
+    return MODE_ORDER.includes(m) ? m : MODE_EMOJI;
   } catch { return MODE_EMOJI; }
 }
 const mode = ref(loadMode());
 const isMahjong = computed(() => mode.value === MODE_MAHJONG);
+const isPoker = computed(() => mode.value === MODE_POKER);
 const levelKey = () => MODE_KEYS[mode.value].level;
 const stateKey = () => MODE_KEYS[mode.value].state;
-// 麻将牌面的 key（'m5' / 'z3'）→ MahjongTile 的 suit / value
-function faceOf(key) {
-  return { suit: key[0], value: +key.slice(1) };
-}
 
 const level = ref(loadLevel());
 const tiles = ref([]);
@@ -155,10 +186,48 @@ let revealTimer = null;
 let winTimer = null;
 
 // 牌面池：emoji 用共享的 emoji 表，麻将用 34 种牌面（m/s/p 1~9 + 字牌 1~7）
-const pool = computed(() => (isMahjong.value ? MAHJONG_KEYS : EMOJIS));
+const pool = computed(() => {
+  if (isMahjong.value) return MAHJONG_FACES;
+  if (isPoker.value) return POKER_FACES;
+  return EMOJIS;
+});
 // 麻将牌面的尺寸：**牌面直接填满卡片内框**（卡片本身就是牌形，不是「方底 + 小牌」）
 function faceVars(w, h) {
   return { '--mj-w': `${+(w - 2).toFixed(2)}px`, '--mj-h': `${+(h - 2).toFixed(2)}px` };   // 减掉 1px 边框
+}
+// 扑克牌：CardItem 读 --width / --height 这组变量。**必须内联在 CardItem 自己身上** ——
+// 它的 .card-wrapper 自己声明了 `--width: 60px; --height: 90px`，挂在父元素上会被本地声明压掉
+//（麻将模式能靠继承是因为 MahjongTile 用的是 `var(--mj-w, 44px)` 这种**回退值**、不是声明）。
+// 牌比格子小一圈（用户要求「扑克牌适当小一点」）：高度取格子高的 0.88，宽度按 2:3 反算，
+// 并且同时受格子的 0.88 宽约束。飞行落点与托盘卡用的是同一个公式，交接仍然像素级对齐。
+const POKER_INSET = 0.88;
+// 扑克牌在给定格子里**实际占多大**（托盘槽位底板也要按这个尺寸画，否则框比牌大一圈）
+function pokerSize(w, h) {
+  const hh = +Math.max(8, Math.min(h * POKER_INSET, (w * POKER_INSET) * 1.5)).toFixed(2);
+  const ww = +Math.max(6, hh * 2 / 3).toFixed(2);
+  return { w: ww, h: hh };
+}
+const pokerTileVars = computed(() => pokerVars(layout.value.tileW, layout.value.tileH));
+const pokerTrayVars = computed(() => pokerVars(layout.value.slotW, layout.value.slot));
+function pokerFlyVars(f) {
+  return pokerVars(f.w, f.h);
+}
+function pokerVars(w, h) {
+  const { w: ww, h: hh } = pokerSize(w, h);
+  return {
+    '--width': `${ww}px`,
+    '--height': `${hh}px`,
+    '--margin': '0px',
+    '--radius': `${Math.max(2, Math.round(ww * 0.07))}px`,
+    '--pos': `${Math.max(1, Math.round(ww * 0.09))}px`,
+    '--text-size': `${Math.max(6, Math.round(ww * 0.3))}px`,
+    '--icon-size': `${Math.max(8, Math.round(ww * 0.62))}px`,
+    '--back-size': `${Math.max(10, Math.round(ww * 0.72))}px`,
+  };
+}
+// 卡片盒上的牌面变量（只有麻将需要：牌面靠继承填满盒子；扑克是内联给 CardItem 自己的）
+function cardFaceVars(w, h) {
+  return isMahjong.value ? faceVars(w, h) : null;
 }
 
 // 当前可点击（亮色）的卡片
@@ -201,16 +270,12 @@ const progress = computed(() => {
 // 盘面 7×7 格（坐标半格制），卡片与收集槽尺寸都按视口收缩
 // 游戏区做成一张带底色的卡片（和连连看 / 消消乐的棋盘一样），内缩 BOARD_PAD 留出边框
 const BOARD_PAD = 8;
-// 牌底部那条厚度占牌宽的比例（与样式里 card-3d 的用法一致：改一处要两处一起改）
-const LIP_RATIO = 0.07;
 const layout = computed(() => {
   const avail = Math.min(window.innerWidth || 420, 440) - 32;
-  // 牌是立体的：底部还有一条厚度（见样式里的 card-3d，厚度 = LIP_RATIO × 牌宽），它画在元素外面，
-  // 所以要把它算进盘面的底部内边距；同时把 unit 反解小一点，让「14 格 + 内边距 + 厚度」的总高
-  // 与加立体之前**完全一致**（格子只小约 1%，肉眼无感，但页面不会因此变高、多出滚动条）。
-  // 厚度 = r(2u − 2)，要求 14u + 2p + 厚度 = 14u₀ + 2p  →  u = (14u₀ + 2r) / (14 + 2r)
+  // 卡片是**平的**（玩家要求去掉立体感）：没有那条厚度，所以「14 格 + 上下内边距」就是盘面总高，
+  // unit 直接用可用宽度除出来（以前为了把厚度算进去，反解救过一个小 1% 的 unit，现已不需要）。
   const u0 = (avail - BOARD_PAD * 2) / 14;
-  const unit = +(((14 * u0 + LIP_RATIO * 2) / (14 + LIP_RATIO * 2)).toFixed(2));
+  const unit = +u0.toFixed(2);
   const tile = +(unit * 2).toFixed(2);
   const gap = 6;
   const slot = +(((avail - 16) - gap * (TRAY_SIZE - 1)) / TRAY_SIZE).toFixed(2);
@@ -219,8 +284,13 @@ const layout = computed(() => {
   const { pitch } = conf.value;
   const tileW = +((pitch.x * unit) - 2).toFixed(2);
   const tileH = +((pitch.y * unit) - 2).toFixed(2);
-  const lip = +(tileW * LIP_RATIO).toFixed(2);
-  const slotW = +(slot * (isMahjong.value ? FACE_RATIO : 1)).toFixed(2);
+  // 托盘槽位形状跟着牌走：麻将 131:168、扑克 2:3、emoji 方牌
+  const slotW = +(slot * (isMahjong.value ? FACE_RATIO : isPoker.value ? 2 / 3 : 1)).toFixed(2);
+  // 槽位底板必须跟**真正显示出来的那张牌**一样大：emoji 是字符填满卡片盒、麻将牌面是「盒 − 2」、
+  // 扑克是 CardItem 那张牌（比盒子再内缩 12%）。不跟着缩的话，框和牌之间就会有一圈落差。
+  const slotShape = isPoker.value
+    ? pokerSize(slotW, slot)
+    : { w: +(slotW - (isMahjong.value ? 2 : 0)).toFixed(2), h: +(slot - (isMahjong.value ? 2 : 0)).toFixed(2) };
   return {
     avail,
     unit,
@@ -234,17 +304,15 @@ const layout = computed(() => {
       '--tile': `${tile}px`,
       '--tile-w': `${tileW}px`,
       '--tile-h': `${tileH}px`,
-      '--tile-lip': `${lip}px`,
       '--tile-fs': `${Math.round(tile * 0.5)}px`,
-      '--lip': `${lip}px`,
       '--slot': `${slot}px`,
-      '--slot-shape-w': `${slotW}px`,
-      '--slot-shape-h': `${slot}px`,
+      '--slot-shape-w': `${slotShape.w}px`,
+      '--slot-shape-h': `${slotShape.h}px`,
       '--slot-gap': `${gap}px`,
       '--tray-fs': `${Math.round(slot * 0.52)}px`,
-      '--board-h': `${(unit * 14 + BOARD_PAD * 2 + lip).toFixed(2)}px`,
+      '--board-h': `${(unit * 14 + BOARD_PAD * 2).toFixed(2)}px`,
       '--board-pad': `${BOARD_PAD}px`,
-      '--board-pad-b': `${(BOARD_PAD + lip).toFixed(2)}px`,
+      '--board-pad-b': `${BOARD_PAD}px`,
     },
   };
 });
@@ -258,8 +326,7 @@ function flyStyleOf(f) {
     width: `${f.w}px`,
     height: `${f.h}px`,
     fontSize: `${Math.round(f.h * 0.5)}px`,
-    '--lip': `${(f.w * LIP_RATIO).toFixed(2)}px`,
-    ...(isMahjong.value ? faceVars(f.w, f.h) : null),
+    ...cardFaceVars(f.w, f.h),
   };
 }
 
@@ -307,7 +374,7 @@ function tileStyle(tile) {
     width: `${tileW}px`,
     height: `${tileH}px`,
     zIndex: tile.layer + 1,
-    ...(isMahjong.value ? faceVars(tileW, tileH) : null),
+    ...cardFaceVars(tileW, tileH),
     ...(revealing.value ? { animationDelay: `${revealDelay(tile)}ms` } : null),
   };
 }
@@ -320,8 +387,7 @@ function trayCardStyle(idx) {
     top: '8px',
     width: `${slotW}px`,
     height: `${slot}px`,
-    '--tray-lip': `${+(slotW * LIP_RATIO).toFixed(2)}px`,
-    ...(isMahjong.value ? faceVars(slotW, slot) : null),
+    ...cardFaceVars(slotW, slot),
   };
 }
 
@@ -369,7 +435,8 @@ function nextLevel() {
 // 切过去时：该模式有存档就接着打，没有就从第 1 关开新盘；另一个模式的存档一个字都不动。
 function switchMode() {
   if (phase.value === PLAY) saveState();          // 当前局面落盘（其实平时也是实时的）
-  const next = mode.value === MODE_MAHJONG ? MODE_EMOJI : MODE_MAHJONG;
+  const at = MODE_ORDER.indexOf(mode.value);
+  const next = MODE_ORDER[(at + 1) % MODE_ORDER.length];   // emoji → 扑克牌 → 麻将 → emoji
   mode.value = next;
   try { localStorage.setItem(MODE_KEY, next); } catch { /* 忽略 */ }
   clearTimeout(winTimer);
@@ -437,8 +504,10 @@ async function fly(flight) {
   if (el) {
     const dx = to.left + to.width / 2 - (from.left + from.width / 2);
     const dy = to.top + to.height / 2 - (from.top + from.height / 2);
-    // 麻将模式下托盘卡比槽位窄（竖牌），落点宽度要按牌面形状算，交接才不跳
-    const scale = (isMahjong.value ? to.width * FACE_RATIO : to.width) / from.width;
+    // 托盘卡通常比槽位窄（麻将 131:168、扑克 2:3、emoji 一样宽），落点宽度要按牌面形状算，
+    // 否则落到托盘时会横着跳一下。比例直接取「托盘卡宽 / 槽位宽」，三种模式通用。
+    const { slot: slotPx, slotW: slotCardW } = layout.value;
+    const scale = (to.width * (slotCardW / slotPx)) / from.width;
     try {
       await el.animate(
         [
@@ -625,20 +694,9 @@ function restore() {
 </script>
 
 <style scoped lang="scss">
-// 立体卡片：正面 + 底部一条实心厚度 + 落地阴影，像从正面偏下方斜着看过去
+// 扁平卡片：底色 + 1px 描边 + 一层柔和阴影（玩家要求去掉立体感，三个牌面模式都一样）
 // （和麻将英雄的牌同一套做法；区别是这里的卡面跟着主题走，所以侧面色用 color-mix
 //  从 --card-bg-color 压暗得到，浅色偏灰、深色更深）
-// $lip 传「厚度」的尺寸表达式，例如 calc(var(--tile) * 0.07)
-@mixin card-3d($lip) {
-  box-shadow:
-    // 面上一层高光 + 底部一道内阴影，让正面自己也有点起伏
-    inset 0 1px 0 rgb(255 255 255 / 45%),
-    inset 0 -1px 2px rgb(0 0 0 / 8%),
-    // 露出来的侧面（实心、不模糊）
-    0 #{$lip} 0 color-mix(in srgb, var(--card-bg-color) 74%, #000),
-    // 落在盘面上的阴影
-    0 calc(#{$lip} * 1.6) calc(#{$lip} * 2.2) rgb(0 0 0 / 22%);
-}
 // 「新游戏」二次确认弹窗（Teleport 到 body，层级要盖住帮助弹窗与飞行卡片）
 
 @keyframes tile-in {
@@ -693,6 +751,7 @@ function restore() {
 
 // 飞行中的卡片被 Teleport 到 body，样式需定义在顶层（scoped 会带上 data-v）
 // 位移/缩放由 Web Animations API 驱动，这里不再声明 transition
+
 .fly-card {
   position: fixed;
   z-index: 60;
@@ -706,10 +765,8 @@ function restore() {
   line-height: 1;
   pointer-events: none;
   will-change: transform;
-  // 与盘面 / 托盘的卡一致：也带厚度（--lip 由 flyStyleOf 按飞行尺寸写进行内样式）。
-  // 这里只需要 card-3d 这一份阴影：飞行卡在动画末尾会被缩放到与托盘卡同尺寸，
-  // 厚度与阴影也跟着等比缩放，所以交接那一刻两张卡是像素级对齐的
-  @include card-3d(var(--lip, 3px));
+  // 与盘面 / 托盘的卡一致：同一档扁平阴影（三个卡面都去掉了立体厚度）
+  box-shadow: var(--card-shadow);
 }
 
 .wrapper {
@@ -825,7 +882,6 @@ function restore() {
     box-sizing: border-box;
     // 游戏区本身是一张带底色的卡片（和连连看 / 消消乐的棋盘同色），
     // 浅色主题下卡片才有依托，不然白底白牌糊成一片
-    // 底部多留一条厚度
     padding: var(--board-pad) var(--board-pad) var(--board-pad-b);
     border-radius: var(--card-radius);
     // 卡片带 z-index（层数），用 isolation 把它们的层叠限制在本区域内，
@@ -847,7 +903,7 @@ function restore() {
     border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     border: 1px solid var(--tile-border-color);
-    @include card-3d(var(--tile-lip, calc(var(--tile) * 0.07)));
+    box-shadow: var(--card-shadow);
     font-size: var(--tile-fs);
     line-height: 1;
     cursor: pointer;
@@ -860,7 +916,7 @@ function restore() {
       transform: scale(0.93);
     }
     // 被上层卡片遮挡：变暗且不可点击。
-    // 厚度保留（filter 会连阴影一起压暗），这样叠起来的牌仍然是一摞有厚度的牌
+    // 被压住的牌保留阴影（filter 会连阴影一起压暗），叠起来仍然有层次
     &.covered {
       filter: brightness(0.5) saturate(0.45);
       cursor: default;
@@ -905,7 +961,7 @@ function restore() {
       border-radius: var(--radius-tile);
       background: var(--card-bg-color);
       border: 1px solid var(--tile-border-color);
-      @include card-3d(var(--tray-lip, calc(var(--slot) * 0.07)));
+      box-shadow: var(--card-shadow);
       font-size: var(--tray-fs);
       line-height: 1;
       z-index: 2;
@@ -963,4 +1019,17 @@ function restore() {
     opacity: 0;
   }
 }
+// 扑克模式：卡片盒让开（底色 / 描边 / 立体厚度 / 阴影全部不要），整张牌交给 CardItem 自己画。
+// 根因：CardItem 的 .card-wrapper 自己声明了 --width: 60px / --height: 90px，把变量挂在父元素上
+// 会被本地声明压掉（麻将能靠继承是因为 MahjongTile 用的是 var(--mj-w, 44px) 这种**回退值**），
+// 于是牌渲染成 60×90、溢出 29×44 的格子，看起来就是「背景不按扑克牌宽高比渲染」。
+// 托盘卡的 clearing 状态要保留，所以用 :not(.clearing) 避开。
+.tile.poker,
+.tray-card.poker:not(.clearing),
+.fly-card.poker {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 </style>

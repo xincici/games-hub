@@ -1,10 +1,11 @@
 <template>
   <div class="wrapper">
     <TopHeader @onScoreReset="onScoreReset">
-      <!-- 模式开关：emoji ↔ 扑克牌（玩法不变，只换牌面与排列；两种牌面的关卡进度各自独立） -->
+      <!-- 模式开关：emoji → 扑克牌 → 麻将 → emoji（玩法不变，只换牌面；三种牌面的关卡进度各自独立） -->
       <span class="item-wrapper" :title="i18n('modeTip')" @click="toggleMode">
         <i v-if="mode === 1" i-mdi-emoticon-happy-outline />
-        <i v-else i-mdi-cards-playing-outline />
+        <i v-else-if="mode === 2" i-mdi-cards-playing-outline />
+        <i v-else i-dinkie-icons-three-of-circles-mahjong />
       </span>
     </TopHeader>
     <div class="card score-area">
@@ -42,7 +43,7 @@
       <CountTimer ref="timerRef" :enable="phase === PLAY && !finished" :on-tick="onTimerTick" :show="false" />
     </div>
     <div class="game-area">
-      <div class="board dot-board" :class="{ poker: mode === 2, instant }" :style="boardStyle">
+      <div class="board dot-board" :class="{ poker: mode === 2, mahjong: mode === 3, instant }" :style="boardStyle">
         <div
           v-for="(card, idx) in cards"
           :key="card.id"
@@ -52,14 +53,27 @@
           @click="onCardClick(card)"
         >
           <div class="card-inner">
-            <!-- 牌背 / 牌面：emoji 模式用游戏图标与 emoji，扑克模式整个交给 CardItem -->
+            <!-- 牌背 / 牌面：emoji 用游戏图标、麻将用共享的绿色纹理牌背，只有扑克模式整个交给 CardItem -->
             <div class="face back-face">
               <i v-if="mode === 1" :class="BACK_ICON" />
-              <CardItem v-else mini :style="cardVars" />
+              <CardItem v-else-if="mode === 2" mini :style="cardVars" />
+              <MahjongBack v-else :style="mahjongVars" />
             </div>
             <div class="face front-face">
               <template v-if="mode === 1">{{ card.item }}</template>
-              <CardItem v-else mini :num="card.item.num" :type="card.item.type" :style="cardVars" />
+              <CardItem
+                v-else-if="mode === 2"
+                mini
+                :num="card.item.num"
+                :type="card.item.type"
+                :style="cardVars"
+              />
+              <MahjongTile
+                v-else
+                :suit="faceOf(card.item).suit"
+                :value="faceOf(card.item).value"
+                :style="mahjongVars"
+              />
             </div>
           </div>
         </div>
@@ -104,6 +118,11 @@ import { gameConfig } from '@/shared/games';
 import { EMOJIS } from '@/shared/emojis';
 // 扑克牌面直接复用扑克游戏的 CardItem（纯展示组件，没有扑克那边的状态依赖）
 import CardItem from '@/games/poker/CardItem.vue';
+import MahjongBack from '@/shared/MahjongBack.vue';
+// 麻将牌面复用麻将英雄的 MahjongTile（尺寸走父级的 --mj-w / --mj-h，见 mahjongVars）
+import MahjongTile from '@/games/mahjong/MahjongTile.vue';
+import { MAHJONG_FACES, faceOf } from '@/shared/mahjongFaces';
+import { TILE_RATIO, preloadTiles } from '@/shared/mahjongTiles';
 import { levelConfig } from './board';
 
 // 牌背用的是本游戏在首页的图标（同一个 id 在 games.js 里注册，改图标两处一起变）
@@ -113,19 +132,26 @@ const BACK_ICON = gameConfig('match').icon;
 // 第 11 关封顶、关数无限。一关分两段：PREVIEW 全体正面朝上供观察（不计时），
 // 观察结束翻面进入 PLAY，开始限时倒计时；限时内清空全部牌即过关
 const [PREVIEW, PLAY, WON, OVER] = ['preview', 'play', 'won', 'over'];
+// 三种牌面：1 emoji / 2 扑克牌 / 3 麻将牌（切换顺序固定 1 → 2 → 3 → 1）
+const MODE_EMOJI = 1;
+const MODE_POKER = 2;
+const MODE_MAHJONG = 3;
 const KEY_PREFIX = '__emoji_match__';
-const LEVEL_KEY = `${KEY_PREFIX}level`;   // 当前关卡（两种牌面各存一份）
+const LEVEL_KEY = `${KEY_PREFIX}level`;   // 当前关卡（三种牌面各存一份，麻将 _3）
 const BEST_KEY = `${KEY_PREFIX}best_1`;   // 历史最高关卡（沿用「前缀+数字」以便连点标题清记录）
 const MODE_KEY = `${KEY_PREFIX}mode`;
-const STATE_KEY = `${KEY_PREFIX}state`;   // 局面 + 用时 + 胜负结算（两种牌面各存一份，_2 后缀）
+const STATE_KEY = `${KEY_PREFIX}state`;   // 局面 + 用时 + 胜负结算（三种牌面各存一份，_2 / _3 后缀）
 
 const CARD_RATIO = 1.5;   // 与 CardItem 的 60×90 一致
 const CARD_MAX_W = 64;    // 扑克牌再大就失真了
 const EMOJI_MAX_W = 96;   // 2×3 这种小盘面别把牌撑得太夸张
 const CARD_TYPES = ['spade', 'club', 'heart', 'diamond'];
 
-const mode = ref(+(localStorage.getItem(MODE_KEY) || 1) === 2 ? 2 : 1);
-const modeSuffix = (m) => (m === 2 ? '_2' : '');
+// 存档 key 的后缀：emoji 用无后缀的老 key，扑克 _2、麻将 _3
+const modeSuffix = (m) => (m === MODE_POKER ? '_2' : m === MODE_MAHJONG ? '_3' : '');
+// 读到的值只接受 1/2/3，其它（含旧存档里的脏值）一律当 emoji
+const savedMode = +(localStorage.getItem(MODE_KEY));
+const mode = ref([MODE_EMOJI, MODE_POKER, MODE_MAHJONG].includes(savedMode) ? savedMode : MODE_EMOJI);
 const levelKeyFor = (m) => `${LEVEL_KEY}${modeSuffix(m)}`;
 const bestKeyFor = (m) => `${BEST_KEY}${modeSuffix(m)}`;
 const stateKeyFor = (m) => `${STATE_KEY}${modeSuffix(m)}`;
@@ -156,15 +182,16 @@ const timeLeft = computed(() => Math.max(0, conf.value.time - elapsed.value));
 const progress = computed(() => Math.min(100, Math.round(((pairs.value - leftPairs.value) / pairs.value) * 100)));
 const boardLabel = computed(() => `${rows.value}×${cols.value} · ${i18n('pairsLabel').replace('{n}', pairs.value)}`);
 
-// 格子尺寸：emoji 模式是正方形，只受宽度限制；扑克模式是 2:3 的长方形，
-// 还要把 rows 行塞进可用高度，所以再按高度反推一次宽度
+// 格子尺寸：emoji 模式是正方形，只受宽度限制；扑克与麻将模式是竖牌（扑克 2:3、麻将 1.282），
+// 还要把 rows 行塞进可用高度，所以再按高度反推一次宽度。
+// 麻将的关卡曲线沿用 emoji 那一套，只是牌面换成更瘦的竖牌，所以宽度上限也用 emoji 的 96px
 const metrics = computed(() => {
   const boardW = Math.min(window.innerWidth || 420, 440) - 32;   // game-area 宽
   const availH = Math.max(200, (window.innerHeight || 700) - 262);
-  const ratio = mode.value === 2 ? CARD_RATIO : 1;
+  const ratio = mode.value === MODE_POKER ? CARD_RATIO : mode.value === MODE_MAHJONG ? TILE_RATIO : 1;
   const byW = Math.floor((boardW - 12 - (cols.value - 1) * gap.value) / cols.value);
   const byH = Math.floor(((availH - 12 - (rows.value - 1) * gap.value) / rows.value) / ratio);
-  const cap = mode.value === 2 ? CARD_MAX_W : EMOJI_MAX_W;
+  const cap = mode.value === MODE_POKER ? CARD_MAX_W : EMOJI_MAX_W;
   const w = Math.max(12, Math.min(cap, byW, byH));
   return { w, h: Math.round(w * ratio) };
 });
@@ -191,6 +218,13 @@ const cardVars = computed(() => {
     '--back-size': `${Math.max(12, Math.round(w * 0.68))}px`,
   };
 });
+// 交给 mahjong 的 MahjongTile 的尺寸变量（同 cardVars：内联传，别去改麻将那边的样式）。
+// -2 是 .face 外框自己的 1px 描边（border-box），牌面填满内框才不会溢出格子
+const mahjongVars = computed(() => {
+  const w = Math.max(8, metrics.value.w - 2);
+  const h = Math.max(8, metrics.value.h - 2);
+  return { '--mj-w': `${w}px`, '--mj-h': `${h}px` };
+});
 
 // 连击：两次消除之间没有翻错、且间隔在 COMBO_MS 内才算连上（与连连看同款规则）
 const COMBO_MS = 2500;        // 连击窗口
@@ -212,7 +246,9 @@ let previewTick = null;
 let mismatchTimer = null;
 let winTimer = null;
 
-onMounted(() => {
+onMounted(async () => {
+  // 麻将模式先把雪碧图读进缓存：不然牌元素先渲染出来、图却要等下载完才出现（冷启动会白一下）
+  if (mode.value === MODE_MAHJONG) await preloadTiles();
   // 先看有没有退出前的局面：局中接着打、胜负结算就停在浮层上等玩家点按钮
   const saved = restore();
   if (saved) initLevel(saved.level, saved);
@@ -224,10 +260,11 @@ function fmt(sec) {
   return ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
 }
 
-// 牌池：emoji 模式取 pairs 个不同 emoji；扑克模式取 pairs 张不同的牌
-//（一副 52 张，最高关 24 对也够），再各复制一份凑成对
+// 牌池：emoji 取 pairs 个不同 emoji；扑克取 pairs 张不同的牌（一副 52 张，最高关 24 对也够）；
+// 麻将从 34 种牌面里取 pairs 个 key（'m5' / 'z1'），再各复制一份凑成对
 function drawPool(pairs) {
-  if (mode.value === 1) return shuffle(EMOJIS).slice(0, pairs);
+  if (mode.value === MODE_EMOJI) return shuffle(EMOJIS).slice(0, pairs);
+  if (mode.value === MODE_MAHJONG) return shuffle(MAHJONG_FACES).slice(0, pairs);
   const deck = [];
   CARD_TYPES.forEach(type => {
     for (let num = 1; num <= 13; num++) deck.push({ num, type });
@@ -402,19 +439,28 @@ function startNewGame() {
   initLevel(1);
 }
 
-// 连点标题清记录：两种牌面的最高关卡一起清
+// 连点标题清记录：三种牌面的最高关卡一起清
 function onScoreReset() {
-  localStorage.removeItem(bestKeyFor(1));
-  localStorage.removeItem(bestKeyFor(2));
+  localStorage.removeItem(bestKeyFor(MODE_EMOJI));
+  localStorage.removeItem(bestKeyFor(MODE_POKER));
+  localStorage.removeItem(bestKeyFor(MODE_MAHJONG));
   bestLevel.value = Math.max(1, level.value);
 }
 
-// 切换牌面：接着另一种牌面自己的进度 —— 有存档就先还原（局中接着打 / 停在胜负结算），
-// 没有才重新发它自己那一关。存档是按牌面分开的，所以切走再切回来不会丢
-function toggleMode() {
+// 切换牌面（emoji → 扑克牌 → 麻将 → emoji）：接着另一种牌面自己的进度 ——
+// 有存档就先还原（停在胜负结算），没有才重新发它自己那一关。
+// 存档是按牌面分开的（_2 / _3），所以切走再切回来不会丢
+async function toggleMode() {
   clearTransient();
-  mode.value = mode.value === 1 ? 2 : 1;
+  mode.value = mode.value === MODE_EMOJI ? MODE_POKER : mode.value === MODE_POKER ? MODE_MAHJONG : MODE_EMOJI;
   localStorage.setItem(MODE_KEY, String(mode.value));
+  const target = mode.value;
+  // 切进麻将：等雪碧图就绪再发牌（图是共享缓存，第二次切进来就是瞬间完成）。
+  // 等图期间玩家又点了一下模式开关 → 这次切换作废，别把旧模式的关卡发到新模式上
+  if (target === MODE_MAHJONG) {
+    await preloadTiles();
+    if (mode.value !== target) return;
+  }
   const lv = loadLevel(mode.value);
   level.value = lv;
   bestLevel.value = Math.max(lv, Math.floor(+(localStorage.getItem(bestKeyFor(mode.value)) || 1)) || 1);
@@ -423,7 +469,7 @@ function toggleMode() {
   else initLevel(lv);
 }
 
-// 牌面内容的键：emoji 就是它自己，扑克是「点数-花色」
+// 牌面内容的键：emoji / 麻将就是字符串本身（'🍎' / 'm5'），扑克是「点数-花色」
 const keyOf = item => (typeof item === 'string' ? item : `${item.num}-${item.type}`);
 
 function onCardClick(card) {
@@ -697,7 +743,7 @@ function breakCombo() {
     box-sizing: border-box;
   }
   // 轨道与格子尺寸都由 JS 算好（--tile-w / --tile-h / --gap）：
-  // emoji 模式是正方形，扑克模式是 2:3 的长方形，没法再用 1fr + aspect-ratio: 1
+  // emoji 模式是正方形，扑克 / 麻将模式是竖牌（2:3 与 1.282），没法再用 1fr + aspect-ratio: 1
   .board {
     display: grid;
     grid-template-columns: repeat(var(--n), var(--tile-w));
@@ -728,6 +774,13 @@ function breakCombo() {
       position: absolute;
       left: 0;
       top: 0;
+    }
+    // 麻将模式：牌面是雪碧图里裁出来的一整张牌（自带底色与圆角），
+    // 尺寸由 mahjongVars 给的 --mj-w / --mj-h 决定（= 格子 - 2，正好填满外框的 content box）。
+    // 外框的底色 / 阴影要让开，否则牌面四周会多出一圈浅底
+    &.mahjong .face {
+      background: transparent;
+      box-shadow: none;
     }
   }
   // 棋盘卡片用 .tile 而非 .card：避免命中上方 .wrapper .card 的

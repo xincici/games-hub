@@ -42,7 +42,9 @@
             class="tile-back"
             :class="{ deal: dealing }"
             :style="backStyle(i)"
-          />
+          >
+            <MahjongBack fill />
+          </span>
         </div>
       </div>
 
@@ -180,6 +182,7 @@ import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
+import MahjongBack from '@/shared/MahjongBack.vue';
 import { isWin, kongOptions, newRoundSafe, sameTile, sortTiles, tileKey, HAND_SIZE } from './board';
 
 const PLAY = 'play';
@@ -777,15 +780,10 @@ function onScoreReset() {
     width: 26px;
     height: 33px;
     border-radius: 4px;
-    // 纯色 + 斜条纹，不带任何图标
-    background-color: var(--primary-bg);
-    background-image: repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.20) 0 3px,
-      rgba(255, 255, 255, 0) 3px 7px
-    );
+    // 底色 / 斜纹 / 内圈压边都交给共享组件 shared/MahjongBack.vue（`fill` 模式铺满这张小牌背），
+    // 这样它与侦探 / 猎手 / 对对碰 / 大师的麻将牌背是**同一套纹理**（玩家要求统一）。
+    // 这里只留一圈外描边，以及下面那条「厚度」。
     border: 1px solid rgba(0, 0, 0, 0.20);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
     // 每张牌背下缘的「厚度」：从正面偏下看过去能看到的那一圈
     &::after {
       content: '';
