@@ -1,5 +1,5 @@
 // 单人麻将的离线自检（纯逻辑、不开浏览器）：node scripts/check-solo.mjs [局数]
-// 断言：每种牌不超过 4 张、少花色的比例、手牌一定是「只差一步就听牌」、胡牌判断的正反例。
+// 断言：每种牌不超过 4 张、每局都缺一门、手牌「把多余的换回来就成胡」、胡牌判断的正反例。
 const B = await import('../src/games/solo/board.js');
 const { isWin, waits, newRoundSafe, discardAt, sameTile, buildPool, sortTiles,
   SUITS, HAND_SIZE, WALL_SIZE, COPIES, roundPlan, SPARES } = B;
@@ -58,7 +58,7 @@ if (handWins) fail(`${handWins} 局发出来的手牌本身就是胡牌（应重
 if (bad) fail(`${bad} 局「把 odds 换回 spares」之后不是胡牌`);
 if (needInWall !== spareTotal) fail(`${spareTotal - needInWall} 张 spares 不在牌墙里`);
 if (needEarly) fail(`${needEarly} 张 spares 埋得比该档的 needBy 还深（正确的打法会等太久）`);
-if (!(omit > N * 0.25 && omit < N * 0.65)) fail(`少花色的比例异常：${(omit / N * 100).toFixed(0)}%`);
+if (omit !== N) fail(`每局都该缺一门，实际只有 ${omit}/${N} 局缺（${(omit / N * 100).toFixed(0)}%）`);
 
 // ③ 整副张数与排序
 if (buildPool().length !== 136) fail(`整副应为 136 张，实为 ${buildPool().length}`);
@@ -95,7 +95,7 @@ for (let s = 0; s <= 15; s++) {
 if (roundPlan(0).wallSize !== WALL_SIZE) fail(`连胜 0 应给满额 ${WALL_SIZE} 张牌墙，实为 ${roundPlan(0).wallSize}`);
 if (roundPlan(99).wallSize !== 24) fail(`高连胜应封顶在 24 张，实为 ${roundPlan(99).wallSize}`);
 
-console.log(`${N} 局：每种牌最多 ${maxCopy} 张 · 少花色 ${(omit / N * 100).toFixed(0)}% · 牌墙 ${WALL_SIZE} 张以内 · 保证率 ${(100 - bad / N * 100).toFixed(1)}%`);
+console.log(`${N} 局：每种牌最多 ${maxCopy} 张 · 缺一门 ${(omit / N * 100).toFixed(0)}% · 牌墙 ${WALL_SIZE} 张以内 · 保证率 ${(100 - bad / N * 100).toFixed(1)}%`);
 console.log(problems.length ? `✗ 问题 ${problems.length} 条` : '✓ 把起手多余的换回被拿掉的就成胡，胡牌判断正反例都对');
 for (const p of problems.slice(0, 10)) console.log('  · ' + p);
 process.exit(problems.length ? 1 : 0);

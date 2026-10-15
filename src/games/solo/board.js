@@ -11,7 +11,8 @@ export const COPIES = 4;                     // 每种牌 4 张 —— 整副 13
 export const HAND_SIZE = 14;                 // 手牌 14 张 = 4 组 + 1 将
 export const MELD_SIZE = 3;
 export const WALL_SIZE = 40;                 // 牌墙最多 40 张：牌堆 10 列 × 4 层，每张都画得出来
-export const OMIT_CHANCE = 0.45;             // 有几率整局少一个花色（「每局可适当的缺少一个花色」）
+// 每局**必然**缺一门（用户要求）：整局（手牌 + 牌墙）都不会出现这个花色，字牌照旧。
+// 三个花色随机挑一个去掉，于是整副牌从 136 张变成 100 张。
 // 开局从「已经能胡的 14 张」里**换掉几张**：换 1 张 = 一步就听（太简单），换 2 张才有得打
 //（用户要求「初始的牌别那么整齐」）。换掉的那几张都会埋进牌墙，换回来就成胡。
 export const SPARES = 2;
@@ -163,8 +164,8 @@ function makeWinningHand(pool, rand) {
 export function newRound(rand = Math.random, streak = 0) {
   const plan = roundPlan(streak);
   // 有几率少一个花色（整局都没有那个花色，包括字牌仍在）
-  const omitSuit = rand() < OMIT_CHANCE ? SUITS[Math.floor(rand() * SUITS.length)] : null;
-  const suits = omitSuit ? SUITS.filter(s => s !== omitSuit) : SUITS;
+  const omitSuit = SUITS[Math.floor(rand() * SUITS.length)];   // 每局必然缺一个花色
+  const suits = SUITS.filter(s => s !== omitSuit);
   const pool = buildPool(suits);
 
   const winning = makeWinningHand(pool, rand);

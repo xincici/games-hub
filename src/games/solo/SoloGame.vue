@@ -68,6 +68,7 @@
             v-for="(k, ki) in kongs"
             :key="ki"
             class="kong-set"
+            :class="{ 'fly-hidden': ki === hiddenKongIndex }"
           >
             <MahjongTile
               v-for="n in 4"
@@ -88,7 +89,7 @@
           <div
             v-if="it.kind === 'kong'"
             class="kong-group"
-            :class="{ drawn: it.tiles.some(t => t.id === drawnId), framing: !dealing }"
+            :class="{ drawn: it.tiles.some(t => t.id === drawnId), framing: canFrame }"
             :style="slotStyle(i)"
           >
             <button
@@ -106,7 +107,7 @@
             <!-- tooltip：浮在这 4 张上方，让玩家选「杠」（不想杠就点牌打出去，tooltip 随之消失） -->
             <!-- tooltip 等发牌波浪走完再浮出来：否则牌还没显形，框和气泡就先摆在那儿了 -->
             <button
-              v-if="kongOpenKey === it.key && phase === PLAY && it.tiles.length === 4 && !dealing"
+              v-if="kongOpenKey === it.key && phase === PLAY && it.tiles.length === 4 && canFrame"
               class="kong-tip"
               :class="{ below: kongTipBelow }"
               @click="doKong(it)"
@@ -150,8 +151,18 @@
     />
 
     <!-- 飞牌动画用的临时元素（摸牌 / 打牌各一段） -->
+    <!-- 飞行替身：摸牌 / 出牌是一张；**杠牌是一整组 4 张一起飞**（不是一个替身飞到地方再变 4 张） -->
+    <div v-if="flying && flying.tiles" class="flying flying-kong" :style="flyingVars">
+      <MahjongTile
+        v-for="(t, i) in flying.tiles"
+        :key="i"
+        :value="t.value"
+        :suit="t.suit"
+        :style="flyTileVars"
+      />
+    </div>
     <MahjongTile
-      v-if="flying"
+      v-else-if="flying"
       :value="flying.tile.value"
       :suit="flying.tile.suit"
       class="flying"
@@ -212,6 +223,7 @@ const omitSuit = ref(null);      // 本局缺哪个花色（null = 三个花色�
 const kongOpenKey = ref(null);   // 哪个杠组的 tooltip 正开着（tileKey）
 const flying = ref(null);        // { tile, x, y, dx, dy, dur, scale, w }
 const hiddenTileId = ref(null);  // 飞行中的那张牌：它在落点处的实体先藏起来（FLIP 不能露馅）
+const hiddenKongIndex = ref(null);   // 杠牌飞行时，杠行里即将出现的那一组也先藏起来（同一个 FLIP 套路）
 const streak = ref(readInt(KEYS.streak, 0));
 const best = ref(readInt(KEYS.best, 0));
 
@@ -319,6 +331,11 @@ const slotStyle = i => {
 
 // tooltip 朝上还是朝下：杠组在手牌**下排**时翻到下方 —— 否则它会盖住上排的牌，容易误点
 //（用户要求「上排的杠牌 tooltip 出现在上方、下排的出现在下方」）。按杠组中心在手牌卡片的上/下半区判断。
+// 什么时候可以把 4 张「框起来」（并浮出 tooltip）：
+// **发牌波浪结束** 且 **没有飞行中的牌** —— 摸到第 4 张是「先提交再飞」的，
+// 只判 !dealing 的话，牌还在空中、它就已经被抽成杠组并画上橙框了
+//（用户报的「牌没入位之前框已经展示了」）。等飞行结束（= 替身落位、实体显形）再框。
+const canFrame = computed(() => !dealing.value && !flying.value);
 const kongTipBelow = ref(false);
 function measureTipSide() {
   const g = document.querySelector('.kong-group');
@@ -383,6 +400,12 @@ const handVars = { '--mj-w': '100%', '--mj-h': '100%' };       // 尺寸由 .han
 // 出牌区/杠区的牌**本身就是 flex item**：给它 `--mj-h: 100%` 是循环依赖，会被 flex 行拉满高度
 //（实测 26px 宽被拉成 71px 高）。这里直接用像素，不走 aspect-ratio。
 const discardVars = { '--mj-w': 'var(--small-tile-w)', '--mj-h': 'var(--small-tile-h)' };
+// 组内单张的尺寸（只在「一组」时有意义）：容器整体缩放，所以这里给出发时的像素尺寸
+const flyTileVars = computed(() => {
+  const f = flying.value;
+  if (!f || !f.tiles) return {};
+  return { '--mj-w': `${f.tileW}px`, '--mj-h': `${f.tileH}px` };
+});
 const flyingVars = computed(() => {
   const f = flying.value;
   if (!f) return {};
@@ -395,6 +418,8 @@ const flyingVars = computed(() => {
     '--dy': `${f.dy}px`,
     '--dur': `${f.dur}ms`,
     '--scale': f.scale,
+    // 一组（杠牌）时容器自己的尺寸与组内间距：整体缩放，所以这里写出发时的像素值
+    ...(f.tiles ? { '--gw': `${f.w}px`, '--gh': `${f.tileH}px`, '--gap': `${f.gap}px` } : {}),
   };
 });
 
@@ -407,7 +432,35 @@ const elOfTile = id => document.querySelector(`[data-tile="${id}"]`);
 // 摸牌要从**一张牌背**起飞：量整个 .wall-stack 会得到一个 200px 宽的元素，飞出来像一张巨牌（用户反馈「放大的效果」）
 const wallAnchor = () => document.querySelector('.wall-card .tile-back') || document.querySelector('.wall-stack') || document.querySelector('.wall-card');
 const discardAnchor = () => document.querySelector('.discard-card');
-const kongAnchor = () => document.querySelector('.kong-row') || document.querySelector('.discard-card');
+// 量一个「杠组」的出发口径：外层矩形 + 组内单张尺寸 + 组内间距
+const groupShape = el => {
+  if (!el) return null;
+  const rect = rectOf(el);
+  const first = el.querySelector('.hand-tile');
+  const fr = first ? first.getBoundingClientRect() : null;
+  const cs = getComputedStyle(el);
+  const gap = parseFloat(cs.columnGap || cs.gap || '0') || 0;
+  const tileW = fr ? fr.width : Math.max(8, (rect.w - 3 * gap) / 4);
+  const tileH = fr ? fr.height : tileW * TILE_RATIO;
+  return { rect, tileW, tileH, gap };
+};
+
+// 杠牌：**4 张作为一个整体飞过去**。替身是一个 flex 容器（尺寸 = 出发时那一组的实测尺寸），
+// 整体按关键帧缩放到落点（杠行那一组）的**单张牌高** —— 用牌高算缩放比，两端的牌看起来一样大。
+async function flyGroup(tiles, shape, toEl, dur) {
+  const inner = toEl.querySelector('.discard-tile');
+  const to = rectOf(toEl);
+  const toTileH = inner ? inner.getBoundingClientRect().height : to.w * TILE_RATIO / 4;
+  const from = shape.rect;
+  flying.value = {
+    tiles,
+    x: from.x, y: from.y, dx: to.x - from.x, dy: to.y - from.y,
+    dur, scale: toTileH / shape.tileH, w: from.w,
+    tileW: shape.tileW, tileH: shape.tileH, gap: shape.gap,
+  };
+  await new Promise(r => setTimeout(r, dur));
+  flying.value = null;
+}
 // 统一的 FLIP：量出**目标格子的真实位置**，藏起那格的实体，再让替身从源位置飞过去。
 // 尺寸交给关键帧从「源宽」渐变到「目标宽」（scale = 目标宽 / 源宽）——
 // 两端尺寸不一样时，替身不缩放就会在换回实体的一瞬间跳一下（摸牌实测：替身 28px、实体 42px）。
@@ -528,12 +581,19 @@ async function doKong(item) {
   if (four.length < 4) return;
   busy.value = true;
   kongOpenKey.value = null;
-  await fly(four[0], elOfTile(four[0].id), kongAnchor(), 380, 0.7);
-
+  // 出发口径 = 手牌里那个被框住的杠组（4 张 + 3 个间隙）
+  const shape = groupShape(document.querySelector('.kong-group'));
+  // 先藏「杠行里即将出现的那一组」，再提交 —— 和摸牌 / 出牌同一个套路：落点第一帧就隐形
+  const newIndex = kongs.value.length;
+  hiddenKongIndex.value = newIndex;
   hand.value = hand.value.filter(t => tileKey(t) !== item.key);
   kongs.value = [...kongs.value, { suit: item.suit, value: item.value, count: 4 }];
   drawnId.value = null;
   save();
+  await nextTick();
+  const toEl = document.querySelectorAll('.kong-row .kong-set')[newIndex];
+  if (shape && toEl) await flyGroup(four, shape, toEl, 380);   // 4 张一起飞、一起缩小落位
+  hiddenKongIndex.value = null;
   await drawOne();                     // 杠完补摸一张
   busy.value = false;
 }
@@ -778,6 +838,8 @@ function onScoreReset() {
   .kong-set {
     display: flex;
     gap: 1px;
+    // 杠牌飞行期间这一组先隐形（由飞行替身顶着）
+    &.fly-hidden { visibility: hidden; }
     padding: 2px;
     border-radius: 6px;
     background: rgba(35, 128, 78, 0.14);
@@ -929,6 +991,15 @@ function onScoreReset() {
   z-index: 30;
   pointer-events: none;
   animation: solo-fly var(--dur) cubic-bezier(0.3, 0.9, 0.4, 1) forwards;
+
+  // 杠牌：4 张作为一个整体（容器整体缩放，所以组内间距也要按出发时的像素值写死）
+  &.flying-kong {
+    display: flex;
+    align-items: center;
+    width: var(--gw);
+    height: var(--gh);
+    gap: var(--gap);
+  }
 }
 
 @keyframes solo-fly {
