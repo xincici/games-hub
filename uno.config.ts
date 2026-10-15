@@ -28,6 +28,10 @@ export default defineConfig({
   safelist: [
     // 模式切换图标（三个游戏的麻将模式都用它）
     'i-dinkie-icons-three-of-circles-mahjong',
+    'i-dinkie-icons-five-of-circles-mahjong',
+    'i-dinkie-icons-white-dragon-mahjong',
+    'i-dinkie-icons-seven-of-bamboos-mahjong',
+    'i-dinkie-icons-red-dragon-mahjong',
     'i-carbon-touch-1',
     'i-mdi-counter',
     'i-mdi-cards-playing-spade-multiple-outline',
@@ -48,7 +52,6 @@ export default defineConfig({
     'i-mdi-flask-outline',
     'i-mdi-cards-playing-outline',
     'i-mdi-cards',
-    'i-mdi-cards-playing-club-multiple-outline',
     'i-mdi-cards-playing',
     'i-mdi-undo-variant',
     'i-mdi-redo-variant',

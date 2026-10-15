@@ -202,7 +202,7 @@ export const games = [
   {
     id: 'mahjong',
     path: '/mahjong',
-    icon: 'i-mdi-cards-playing-outline',
+    icon: 'i-dinkie-icons-five-of-circles-mahjong',
     accent: 'card',
     helpKey: '__mahjong_hero__help_showed',
     // 两种模式各记一份：1 = 闯关（记最高关卡）、2 = 无尽（记最高分）
@@ -213,7 +213,7 @@ export const games = [
   {
     id: 'quesheng',
     path: '/quesheng',
-    icon: 'i-mdi-cards-playing',
+    icon: 'i-dinkie-icons-white-dragon-mahjong',
     accent: 'card',
     helpKey: '__quesheng__help_showed',
     recordsPrefix: '__quesheng__level',
@@ -223,7 +223,7 @@ export const games = [
   {
     id: 'legend',
     path: '/legend',
-    icon: 'i-mdi-cards-playing-club-multiple-outline',
+    icon: 'i-dinkie-icons-seven-of-bamboos-mahjong',
     accent: 'card',
     helpKey: '__mahjong_legend__help_showed',
     // 单局制：只记最高分（清记录彩蛋按 min..max 拼 key）
@@ -258,7 +258,7 @@ export const games = [
   {
     id: 'solo',
     path: '/solo',
-    icon: 'i-mdi-cards',
+    icon: 'i-dinkie-icons-red-dragon-mahjong',
     accent: 'card',
     helpKey: '__solo__help_showed',
     // 没有难度分档，但成绩是「当前连胜 / 最长连胜」两个固定 key。
