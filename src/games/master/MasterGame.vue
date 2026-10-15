@@ -1,6 +1,12 @@
 <template>
   <div class="wrapper" :style="layout.vars">
-    <TopHeader />
+    <!-- 模式开关：emoji ⇄ 麻将牌（放在帮助图标旁边，照 Emoji 猎手的「emoji ↔ 扑克牌」写法） -->
+    <TopHeader>
+      <span class="item-wrapper" :title="i18n('modeTip')" @click="switchMode">
+        <i v-if="!isMahjong" i-mdi-emoticon-happy-outline />
+        <i v-else i-mdi-cards-playing-outline />
+      </span>
+    </TopHeader>
     <div class="card score-area">
       <div class="stat">
         <span class="stat-label">{{ i18n('level') }}</span>
@@ -32,7 +38,10 @@
           :class="[`depth-${coverDepth.get(tile.id) || 0}`, { covered: !freeSet.has(tile.id) }]"
           :style="tileStyle(tile)"
           @click="pick(tile, $event)"
-        >{{ tile.emoji }}</div>
+        >
+          <MahjongTile v-if="isMahjong" :suit="faceOf(tile.emoji).suit" :value="faceOf(tile.emoji).value" />
+          <template v-else>{{ tile.emoji }}</template>
+        </div>
       </div>
       <Transition name="win-pop">
         <div v-if="phase === WON || phase === OVER" class="result" :class="phase === WON ? 'win' : 'lose'">
@@ -59,7 +68,10 @@
         class="tray-card"
         :class="{ clearing: card.clearing, fresh: card.fresh }"
         :style="trayCardStyle(idx)"
-      >{{ card.emoji }}</div>
+      >
+        <MahjongTile v-if="isMahjong" :suit="faceOf(card.emoji).suit" :value="faceOf(card.emoji).value" />
+        <template v-else>{{ card.emoji }}</template>
+      </div>
     </div>
     <Teleport to="body">
       <div
@@ -68,7 +80,10 @@
         :ref="el => setFlyEl(f.uid, el)"
         class="fly-card"
         :style="flyStyleOf(f)"
-      >{{ f.emoji }}</div>
+      >
+        <MahjongTile v-if="isMahjong" :suit="faceOf(f.emoji).suit" :value="faceOf(f.emoji).value" />
+        <template v-else>{{ f.emoji }}</template>
+      </div>
     </Teleport>
     <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->
     <ConfirmDialog
@@ -88,15 +103,40 @@ import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
-import { TILE_UNITS, TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig } from './board';
+import MahjongTile from '@/games/mahjong/MahjongTile.vue';
+import {
+  TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig,
+  MODE_EMOJI, MODE_MAHJONG, MAHJONG_KEYS, FACE_RATIO,
+} from './board';
 
 const [PLAY, WON, OVER] = ['play', 'won', 'over'];
 const KEY_PREFIX = '__emoji_master__';
-const LEVEL_KEY = `${KEY_PREFIX}level`;   // 闯关记录：当前第几关
-const STATE_KEY = `${KEY_PREFIX}state`;
+const MODE_KEY = `${KEY_PREFIX}mode`;     // 上次用的牌面模式（两种模式共享这一个偏好）
+// **两种模式的进度与局面各存一套**：emoji 模式沿用老 key（老存档无缝），麻将模式另开一套。
+// 于是切模式 = 换一整套进度 / 盘面 / 收集槽，互不干扰。
+const MODE_KEYS = {
+  [MODE_EMOJI]: { level: `${KEY_PREFIX}level`, state: `${KEY_PREFIX}state` },
+  [MODE_MAHJONG]: { level: `${KEY_PREFIX}mahjong_level`, state: `${KEY_PREFIX}mahjong_state` },
+};
 const FLY_MS = 260;      // 卡片从原位飞入暂存区
 const CLEAR_MS = 560;    // 三消卡片：先闪烁再消失
 const WIN_DELAY = 620;   // 最后一组三消闪烁完再弹结算层
+
+// 牌面模式。⚠️ `mode` 必须声明在 `level` **之前**：`loadLevel()` 要按当前模式选 key，
+// 反过来就是 TDZ（solo 分册里记过这个坑，这里会直接把 setup 打挂）。
+function loadMode() {
+  try {
+    return localStorage.getItem(MODE_KEY) === MODE_MAHJONG ? MODE_MAHJONG : MODE_EMOJI;
+  } catch { return MODE_EMOJI; }
+}
+const mode = ref(loadMode());
+const isMahjong = computed(() => mode.value === MODE_MAHJONG);
+const levelKey = () => MODE_KEYS[mode.value].level;
+const stateKey = () => MODE_KEYS[mode.value].state;
+// 麻将牌面的 key（'m5' / 'z3'）→ MahjongTile 的 suit / value
+function faceOf(key) {
+  return { suit: key[0], value: +key.slice(1) };
+}
 
 const level = ref(loadLevel());
 const tiles = ref([]);
@@ -114,9 +154,23 @@ const revealRank = new Map();   // 卡片 id -> 同层内的出场顺序
 let revealTimer = null;
 let winTimer = null;
 
+// 牌面池：emoji 用共享的 emoji 表，麻将用 34 种牌面（m/s/p 1~9 + 字牌 1~7）
+const pool = computed(() => (isMahjong.value ? MAHJONG_KEYS : EMOJIS));
+// 麻将牌面的尺寸：**牌面直接填满卡片内框**（卡片本身就是牌形，不是「方底 + 小牌」）
+function faceVars(w, h) {
+  return { '--mj-w': `${+(w - 2).toFixed(2)}px`, '--mj-h': `${+(h - 2).toFixed(2)}px` };   // 减掉 1px 边框
+}
+
 // 当前可点击（亮色）的卡片
-const freeSet = computed(() => freeIds(tiles.value));
+const freeSet = computed(() => freeIds(tiles.value, conf.value.pitch));
 const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
+
+// 本关的层级、种类与**格距**（格距随模式变：麻将牌更窄，卡片本身就是一块竖着的牌）
+const conf = computed(() => levelConfig(level.value, mode.value));
+const boardLabel = computed(() => {
+  const c = conf.value;
+  return `${i18n('layersLabel').replace('{n}', c.layers)} · ${i18n('kindsLabel').replace('{n}', c.kinds)}`;
+});
 
 // 覆盖层级：压在这张牌上面的卡片数（0 张 = 亮色可点）。只用于视觉——
 // 被压住的牌整张**不透明**（压得再深也不透光，只有从上层牌边缘漏出来的那一部分看得见，
@@ -124,23 +178,17 @@ const activeTray = computed(() => tray.value.filter(c => !c.clearing).length);
 const MAX_COVER_DEPTH = 4;   // 更深的一律按最深一档算（层级只影响视觉）
 const coverDepth = computed(() => {
   const list = tiles.value;
+  const pitch = conf.value.pitch;
   const map = new Map();
   for (const tile of list) {
     let n = 0;
     for (const other of list) {
       if (other.layer <= tile.layer) continue;
-      if (Math.abs(other.x - tile.x) < TILE_UNITS && Math.abs(other.y - tile.y) < TILE_UNITS) n++;
+      if (Math.abs(other.x - tile.x) < pitch.x && Math.abs(other.y - tile.y) < pitch.y) n++;
     }
     map.set(tile.id, Math.min(n, MAX_COVER_DEPTH));
   }
   return map;
-});
-
-// 本关的层级与 emoji 种类（写在操作区，和连连看 / 消消乐的盘面信息一致）
-const conf = computed(() => levelConfig(level.value));
-const boardLabel = computed(() => {
-  const c = conf.value;
-  return `${i18n('layersLabel').replace('{n}', c.layers)} · ${i18n('kindsLabel').replace('{n}', c.kinds)}`;
 });
 
 // 本关进度：已消除的卡片占本关总卡片的比例（入场动画期间按满盘算 0%）
@@ -164,20 +212,34 @@ const layout = computed(() => {
   const u0 = (avail - BOARD_PAD * 2) / 14;
   const unit = +(((14 * u0 + LIP_RATIO * 2) / (14 + LIP_RATIO * 2)).toFixed(2));
   const tile = +(unit * 2).toFixed(2);
-  const lip = +(tile * LIP_RATIO).toFixed(2);
   const gap = 6;
   const slot = +(((avail - 16) - gap * (TRAY_SIZE - 1)) / TRAY_SIZE).toFixed(2);
+  // 牌面**尺寸 = 格距**：emoji 模式是 2u−2 的方牌；麻将模式横向 1.56u−2、纵向 2u−2 ——
+  // 卡片本身就是一块竖着的麻将牌，牌面直接填满它（不再是「正方形底 + 里面一张小牌」）。
+  const { pitch } = conf.value;
+  const tileW = +((pitch.x * unit) - 2).toFixed(2);
+  const tileH = +((pitch.y * unit) - 2).toFixed(2);
+  const lip = +(tileW * LIP_RATIO).toFixed(2);
+  const slotW = +(slot * (isMahjong.value ? FACE_RATIO : 1)).toFixed(2);
   return {
     avail,
     unit,
     tile,
+    tileW,
+    tileH,
+    slotW,
     slot,
     gap,
     vars: {
       '--tile': `${tile}px`,
+      '--tile-w': `${tileW}px`,
+      '--tile-h': `${tileH}px`,
+      '--tile-lip': `${lip}px`,
       '--tile-fs': `${Math.round(tile * 0.5)}px`,
       '--lip': `${lip}px`,
       '--slot': `${slot}px`,
+      '--slot-shape-w': `${slotW}px`,
+      '--slot-shape-h': `${slot}px`,
       '--slot-gap': `${gap}px`,
       '--tray-fs': `${Math.round(slot * 0.52)}px`,
       '--board-h': `${(unit * 14 + BOARD_PAD * 2 + lip).toFixed(2)}px`,
@@ -197,6 +259,7 @@ function flyStyleOf(f) {
     height: `${f.h}px`,
     fontSize: `${Math.round(f.h * 0.5)}px`,
     '--lip': `${(f.w * LIP_RATIO).toFixed(2)}px`,
+    ...(isMahjong.value ? faceVars(f.w, f.h) : null),
   };
 }
 
@@ -237,36 +300,40 @@ watch([tiles, tray], saveState, { deep: true });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function tileStyle(tile) {
-  const { unit, tile: size } = layout.value;
+  const { unit, tileW, tileH } = layout.value;
   return {
     left: `${(tile.x * unit + 1).toFixed(2)}px`,
     top: `${(tile.y * unit + 1).toFixed(2)}px`,
-    width: `${(size - 2).toFixed(2)}px`,
-    height: `${(size - 2).toFixed(2)}px`,
+    width: `${tileW}px`,
+    height: `${tileH}px`,
     zIndex: tile.layer + 1,
+    ...(isMahjong.value ? faceVars(tileW, tileH) : null),
     ...(revealing.value ? { animationDelay: `${revealDelay(tile)}ms` } : null),
   };
 }
 
 function trayCardStyle(idx) {
-  const { slot, gap } = layout.value;
+  const { slot, gap, slotW } = layout.value;
+  // 麻将模式的托盘卡也是竖牌（与盘面 / 飞行卡同一比例），在方形格距里水平居中
   return {
-    left: `${8 + idx * (slot + gap)}px`,
+    left: `${(8 + idx * (slot + gap) + (slot - slotW) / 2).toFixed(2)}px`,
     top: '8px',
-    width: `${slot}px`,
+    width: `${slotW}px`,
     height: `${slot}px`,
+    '--tray-lip': `${+(slotW * LIP_RATIO).toFixed(2)}px`,
+    ...(isMahjong.value ? faceVars(slotW, slot) : null),
   };
 }
 
 // ---------- 关卡 / 新游戏 ----------
 
 function loadLevel() {
-  const saved = +(localStorage.getItem(LEVEL_KEY) || 1);
+  const saved = +(localStorage.getItem(levelKey()) || 1);
   return saved >= 1 ? saved : 1;
 }
 
 function persistLevel(lv) {
-  try { localStorage.setItem(LEVEL_KEY, lv); } catch { /* 忽略 */ }
+  try { localStorage.setItem(levelKey(), lv); } catch { /* 忽略 */ }
 }
 
 // 开始第 lv 关：重新生成盘面并清空收集槽
@@ -275,7 +342,7 @@ function initLevel(lv) {
   winTimer = null;
   level.value = Math.max(1, lv);
   persistLevel(level.value);
-  const { tiles: list } = generateTiles(EMOJIS, level.value);
+  const { tiles: list } = generateTiles(pool.value, level.value, mode.value);
   tiles.value = list;
   tray.value = [];
   phase.value = PLAY;
@@ -290,12 +357,30 @@ function initLevel(lv) {
 // 「新游戏」= 清除闯关记录，回到第 1 关（需二次确认）
 function startNewGame() {
   confirming.value = false;
-  try { localStorage.removeItem(LEVEL_KEY); } catch { /* 忽略 */ }
+  try { localStorage.removeItem(levelKey()); } catch { /* 忽略 */ }
   initLevel(1);
 }
 
 function nextLevel() {
   initLevel(level.value + 1);
+}
+
+// 切换牌面模式：**两种模式的进度、盘面、收集槽各自独立**（key 分开），
+// 切过去时：该模式有存档就接着打，没有就从第 1 关开新盘；另一个模式的存档一个字都不动。
+function switchMode() {
+  if (phase.value === PLAY) saveState();          // 当前局面落盘（其实平时也是实时的）
+  const next = mode.value === MODE_MAHJONG ? MODE_EMOJI : MODE_MAHJONG;
+  mode.value = next;
+  try { localStorage.setItem(MODE_KEY, next); } catch { /* 忽略 */ }
+  clearTimeout(winTimer);
+  winTimer = null;
+  tiles.value = [];
+  tray.value = [];
+  flights.value = [];
+  flyEls.clear();
+  phase.value = PLAY;
+  level.value = loadLevel();
+  if (!restore()) initLevel(level.value);         // 没有该模式的存档 → 第 1 关新盘
 }
 
 function replayLevel() {
@@ -352,7 +437,8 @@ async function fly(flight) {
   if (el) {
     const dx = to.left + to.width / 2 - (from.left + from.width / 2);
     const dy = to.top + to.height / 2 - (from.top + from.height / 2);
-    const scale = to.width / from.width;
+    // 麻将模式下托盘卡比槽位窄（竖牌），落点宽度要按牌面形状算，交接才不跳
+    const scale = (isMahjong.value ? to.width * FACE_RATIO : to.width) / from.width;
     try {
       await el.animate(
         [
@@ -461,7 +547,7 @@ function lose() {
 // ---------- 存档（退出回主页后恢复） ----------
 
 function removeState() {
-  try { localStorage.removeItem(STATE_KEY); } catch { /* 忽略 */ }
+  try { localStorage.removeItem(stateKey()); } catch { /* 忽略 */ }
 }
 
 function saveState() {
@@ -472,7 +558,7 @@ function saveState() {
     return;
   }
   try {
-    localStorage.setItem(STATE_KEY, JSON.stringify({
+    localStorage.setItem(stateKey(), JSON.stringify({
       level: level.value,
       // 卡片：[id, emoji, 层, x, y]
       tiles: tiles.value.map(t => [t.id, t.emoji, t.layer, t.x, t.y]),
@@ -486,7 +572,7 @@ function saveState() {
 function saveWinState() {
   if (phase.value !== WON) return;
   try {
-    localStorage.setItem(STATE_KEY, JSON.stringify({
+    localStorage.setItem(stateKey(), JSON.stringify({
       level: level.value,
       phase: WON,
       tiles: [],
@@ -497,7 +583,7 @@ function saveWinState() {
 
 function restore() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STATE_KEY));
+    const saved = JSON.parse(localStorage.getItem(stateKey()));
     if (!saved || !Array.isArray(saved.tiles) || !Array.isArray(saved.tray)) return false;
     // 胜利结算局面：盘面与槽都是空的，恢复关卡与结算层即可，
     // 由玩家自己决定点「下一关」还是回主页
@@ -761,7 +847,7 @@ function restore() {
     border-radius: var(--radius-tile);
     background: var(--card-bg-color);
     border: 1px solid var(--tile-border-color);
-    @include card-3d(calc(var(--tile) * 0.07));
+    @include card-3d(var(--tile-lip, calc(var(--tile) * 0.07)));
     font-size: var(--tile-fs);
     line-height: 1;
     cursor: pointer;
@@ -792,14 +878,24 @@ function restore() {
       display: flex;
       gap: var(--slot-gap);
     }
-    .slot {
-      width: var(--slot);
-      height: var(--slot);
-      box-sizing: border-box;
-      border-radius: var(--radius-tile);
-      background: var(--cell-bg);
-      box-shadow: inset 0 0 0 1px var(--border-color);
-    }
+      // 槽位的**底板形状**跟着牌面走：emoji 模式是方牌、麻将模式是竖牌
+      //（否则又变成「正方形底 + 里面一张小牌」）。槽位盒子仍是方形格距，形状交给 ::after 画。
+      .slot {
+        width: var(--slot);
+        height: var(--slot);
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        &::after {
+          content: '';
+          width: var(--slot-shape-w, var(--slot));
+          height: var(--slot-shape-h, var(--slot));
+          border-radius: var(--radius-tile);
+          background: var(--cell-bg);
+          box-shadow: inset 0 0 0 1px var(--border-color);
+        }
+      }
     .tray-card {
       position: absolute;
       box-sizing: border-box;
@@ -809,7 +905,7 @@ function restore() {
       border-radius: var(--radius-tile);
       background: var(--card-bg-color);
       border: 1px solid var(--tile-border-color);
-      @include card-3d(calc(var(--slot) * 0.07));
+      @include card-3d(var(--tray-lip, calc(var(--slot) * 0.07)));
       font-size: var(--tray-fs);
       line-height: 1;
       z-index: 2;
