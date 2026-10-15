@@ -23,6 +23,7 @@ import legendDict from '@/games/legend/i18n';
 import mirrorDict from '@/games/mirror/i18n';
 import point24Dict from '@/games/point24/i18n';
 import soloDict from '@/games/solo/i18n';
+import gamblerDict from '@/games/gambler/i18n';
 
 // 各游戏入口组件与字典的注册表
 // recordsPrefix / minDifficulty / maxDifficulty 用于「连点标题 5 次清除记录」
@@ -256,6 +257,17 @@ export const games = [
     maxDifficulty: 1,
   },
   {
+    id: 'gambler',
+    path: '/gambler',
+    icon: 'i-dinkie-icons-eight-of-bamboos-mahjong',
+    accent: 'card',
+    helpKey: '__gambler__help_showed',
+    // 连点标题清记录：关卡 / 最高关卡 / 连胜 / 局面都挂在这个前缀下
+    recordsPrefix: '__gambler__',
+    minDifficulty: 1,
+    maxDifficulty: 1,
+  },
+  {
     id: 'solo',
     path: '/solo',
     icon: 'i-dinkie-icons-red-dragon-mahjong',
@@ -295,6 +307,7 @@ export const gameConfig = id => games.find(game => game.id === id);
   ['mirror', mirrorDict],
   ['point24', point24Dict],
   ['solo', soloDict],
+  ['gambler', gamblerDict],
   ['down', downDict],
   ['slide', slideDict],
 ].forEach(([id, dict]) => registerGame(id, dict));

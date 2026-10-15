@@ -26,6 +26,7 @@ import MahjongLegendGame from './games/legend/MahjongLegendGame.vue';
 import MirrorGame from './games/mirror/MirrorGame.vue';
 import Point24Game from './games/point24/Point24Game.vue';
 import SoloGame from './games/solo/SoloGame.vue';
+import GamblerGame from './games/gambler/GamblerGame.vue';
 
 const routes = [
   { path: '/', component: HomePage, meta: { game: 'home' } },
@@ -53,6 +54,7 @@ const routes = [
   { path: '/mirror', component: MirrorGame, meta: { game: 'mirror' } },
   { path: '/point24', component: Point24Game, meta: { game: 'point24' } },
   { path: '/solo', component: SoloGame, meta: { game: 'solo' } },
+  { path: '/gambler', component: GamblerGame, meta: { game: 'gambler' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

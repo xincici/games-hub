@@ -52,6 +52,8 @@ export default defineConfig({
     'i-mdi-flask-outline',
     'i-mdi-cards-playing-outline',
     'i-mdi-cards',
+    // 赌神的首页图标
+    'i-dinkie-icons-eight-of-bamboos-mahjong',
     'i-mdi-cards-playing',
     'i-mdi-undo-variant',
     'i-mdi-redo-variant',

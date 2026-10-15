@@ -1,6 +1,6 @@
 # Games Hub · 游戏合集
 
-24 个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
+25 个休闲小游戏的合集单页应用：首页选择游戏，游戏内点 🏠 随时返回。
 
 | 游戏 | 玩法简介 |
 | --- | --- |
@@ -28,6 +28,7 @@
 | 🪞 [Emoji 镜像](src/games/mirror/README.md) | 猜出被打乱后藏起来的 emoji 顺序 |
 | 🧮 [24 点](src/games/point24/README.md) | 用 4 个数字和加减乘除凑出 24 |
 | 🀄 [单人麻将](src/games/solo/README.md) | 摸一张打一张，把手牌凑成能胡的牌型 |
+| 🎴 [赌神](src/games/gambler/README.md) | 从全牌面里找出所有能让手牌胡的牌，一张都不能漏 |
 
 ## 功能特性
 
@@ -86,7 +87,7 @@ src/
 ├── router.js        # hash 路由：/ /click /puzzle /guess /poker /three /2048 /snake /match /link /detective /hunter /crush /sudoku /master /sort /down /slide /alchemy /mahjong /quesheng
 ├── shared/          # 共享模块：i18n（多语言）、theme（主题）、games（游戏注册表）、emojis（emoji 池）
 ├── components/      # HomePage（首页）、TopHeader（标题栏）、HelpDialog（帮助弹窗）
-└── games/           # 24 个游戏源码，每游戏一个目录
+└── games/           # 25 个游戏源码，每游戏一个目录
     ├── click/  puzzle/  guess/  poker/  three/  g2048/  snake/
     └── match/  link/  detective/  hunter/  crush/  sudoku/  master/  sort/  down/  slide/  alchemy/  mahjong/  quesheng/
 scripts/             # 图标源文件（SVG + 512px PNG）

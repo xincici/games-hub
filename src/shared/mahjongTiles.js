@@ -25,10 +25,14 @@ export function preloadTiles() {
 // （k = ZOOM、n = 列/行数；k = 1 时退化成 i/(n−1)，也就是常见写法）。
 // 与元素实际尺寸无关，所以牌随视口缩放都不用改样式。
 export const COLS = 7;
-export const ROWS = 5;
+// 第 1~5 行是 34 张牌面（与原图逐像素一致），第 6~7 行是 8 张花牌（赌神用的万能牌）
+export const ROWS = 7;
 
-// 裁切时每格四周带了 1px 原图的列/行间隙，不放大的话牌贴着的那条边会出现一条白线
-// （条牌最明显）。放大 5% 等于把牌画小一点，把这圈边缘推出元素之外；两轴同比，长宽比不变。
+// ⚠️ 必须 ≥ 1.05：雪碧图**每格四周都带了 1px 原图相邻行列的像素**（当年裁图时留下的），
+// 这个放大等于把牌画大 5%、把那圈邻居边缘推到元素之外；不放大就会在牌贴着的那条边
+// 看到一条毛边/白线（玩家反馈「新版本的麻将牌似乎有边框毛边」，回退 ZOOM 后视觉立刻正常）。
+// 代价是每边裁掉约 2.4%（≈3px 的原图边缘），这是这套雪碧图既定的取舍。
+// 两轴同比，长宽比不变；这里写 1.05 时 --bg-w/--bg-h 都是 735%（7 列 / 7 行 × 1.05）。
 export const ZOOM = 1.05;
 export const BG_W = COLS * ZOOM;
 export const BG_H = ROWS * ZOOM;
@@ -38,7 +42,13 @@ export const SLOT_ORDER = [
   ...Array.from({ length: 9 }, (_, i) => `s${i + 1}`),
   ...Array.from({ length: 9 }, (_, i) => `p${i + 1}`),
   'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7',
+  // 花牌：f1 將 / f2 兰 / f3 菊 / f4 竹 / f5 春 / f6 夏 / f7 秋 / f8 冬
+  ...Array.from({ length: 8 }, (_, i) => `f${i + 1}`),
 ];
+
+// 花牌 = 万能牌（赌神用）。'f1'..'f8' 都是花牌，牌面 key 见 SLOT_ORDER。
+export const FLOWER_KEYS = SLOT_ORDER.slice(SLOT_ORDER.indexOf('f1'));
+export const isFlower = key => typeof key === 'string' && key[0] === 'f';
 export const TILE_SLOT = Object.fromEntries(SLOT_ORDER.map((k, i) => [k, [Math.floor(i / COLS), i % COLS]]));
 
 // 牌的长宽比（131 : 168）

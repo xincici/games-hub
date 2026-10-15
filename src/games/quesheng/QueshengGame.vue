@@ -893,7 +893,7 @@ onUnmounted(() => {
           display: block;
           background-image: var(--sheet);
           background-repeat: no-repeat;
-          background-size: var(--bg-w, 700%) var(--bg-h, 500%);
+          background-size: var(--bg-w, 735%) var(--bg-h, 735%);
           background-position: var(--bg-x, 0%) var(--bg-y, 0%);
           user-select: none;
           // 原图每张牌自己是圆角的（约 5.3% 牌宽），而裁出来的是直角矩形 ——

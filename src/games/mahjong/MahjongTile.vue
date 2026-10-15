@@ -28,7 +28,7 @@ const vars = computed(() => ({
   width: var(--mj-w, 44px);
   height: var(--mj-h, 59px);
   background-repeat: no-repeat;
-  background-size: var(--bg-w, 735%) var(--bg-h, 525%);
+  background-size: var(--bg-w, 735%) var(--bg-h, 735%);
   background-position: var(--bg-x, 0%) var(--bg-y, 0%);
   // 原图每张牌自己是圆角的，而雪碧图裁出来是直角矩形 —— 不给圆角四角会露出浅底
   border-radius: calc(var(--mj-w, 44px) * 0.09);
