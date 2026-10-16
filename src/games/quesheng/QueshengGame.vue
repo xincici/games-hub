@@ -338,7 +338,11 @@ function ringStyle(g) {
 
 // ---------- 点击 ----------
 function onTileClick(t) {
-  if (phase.value !== PLAY || clearing.value.size || godPlaying.value) return;
+  // ⚠️ 这里**不能**再判 `clearing.value.size`：clearGroup() 是**同步**把格子置 null 并
+  // refreshGroups() 的，那 520ms 的 `clearing` 只是浮影层（闪烁消失的牌已经不在盘面上了）。
+  // 用它挡输入会让「点掉一组之后紧接着点另一组」整整丢掉半秒的操作（用户报过）。
+  // 已经消掉的格子是 null，重复点它 hit.length === 0，天然是空操作，不会重复消。
+  if (phase.value !== PLAY || godPlaying.value) return;
   const cell = t.cell;
   const hit = groups.value.filter(g => g.cells.includes(cell));
   if (!hit.length) { selected.value = []; return; }
@@ -374,7 +378,7 @@ function onTileClick(t) {
 // 与旁边第三张凑成刻子的情形）。顺子点两张没有对子可消，就完全不弹提示（用户要求）；
 // 刻子那张也只给「消除这一对」一条路，不再提醒「再点第三张」——想消刻子直接点第三张即可。
 const hint = computed(() => {
-  if (phase.value !== PLAY || selected.value.length !== 2 || clearing.value.size) return null;
+  if (phase.value !== PLAY || selected.value.length !== 2) return null;
   const sel = selected.value;
   const inBoth = groups.value.filter(g => sel.every(c => g.cells.includes(c)));
   const pair = inBoth.find(g => g.cells.length === 2) || null;
@@ -475,7 +479,10 @@ async function godPlay() {
 
 // ---------- 滑动 ----------
 function applySlide(dir) {
-  if (phase.value !== PLAY || clearing.value.size) return;
+  if (phase.value !== PLAY || godPlaying.value) return;
+  // 浮影层是按消除当时的格子绝对定位的，滑动会让剩下的牌移动、浮影留在原地 —— 先收掉它
+  //（原本那 520ms 的 checkEnd 定时器仍会照常跑，不影响胜负判定）
+  if (clearing.value.size) clearing.value = new Map();
   const next = slideBy(board.value, dir, mode.value);
   if (sameBoard(board.value, next)) return;
   pushHistory();
