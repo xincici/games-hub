@@ -110,6 +110,19 @@ for (const id of gameDirs) {
     }
   }
 
+  // 4.5 结算层里出现两颗以上按钮时，必须包在按钮行里
+  //    （裸放的话会被 .result 的纵向 flex 竖排 —— 对对碰/消消乐/连连看/排序/雀圣/大师 都踩过：
+  //     本来是单按钮，补齐「重玩本关 + 下一关」后两颗就上下换行了）
+  for (const m of src.matchAll(/<div[^>]*class="[^"]*(?:\bwin\b|\blose\b|pick-mask)[^"]*"[^>]*>/g)) {
+    const seg = src.slice(m.index, m.index + 2200);
+    const cut = seg.search(/<\/div>\s*\n\s*<div[^>]*class="result-actions/);
+    const block = cut > 0 ? seg.slice(0, cut) : seg;
+    const btns = [...block.matchAll(/<button[^>]*class="[^"]*game-icon/g)].length;
+    if (btns >= 2 && !/class="result-(actions|btns)"/.test(block)) {
+      problems.push(`${id}: 结算层里有 ${btns} 颗按钮但没有包在 .result-actions 里（.result 是纵向 flex，会上下换行）`);
+    }
+  }
+
   // 5. 提示：获胜层缺「重玩本关」
   const winStart = src.search(/<div[^>]*class="[^"]*\bwin\b[^"]*"/);
   if (winStart >= 0) {

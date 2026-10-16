@@ -85,8 +85,10 @@
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-score">{{ score }}</div>
-        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
-        <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+        <div class="result-actions">
+          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+        </div>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
         <div>👻👻 {{ i18n('gameover') }} 👻👻</div>
@@ -1216,6 +1218,15 @@ function onScoreReset() {
       }
     }
   }
+  // 结算层/遮罩里的按钮行：横排、居中、12px 间隔（规范见 docs/CONVENTIONS.md）
+  .result-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
   .result {
     position: absolute;
     width: 100%;
