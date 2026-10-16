@@ -24,6 +24,34 @@ const LINE_ALPHA = 0.2;
 const MOUSE_LINE_ALPHA = 0.26;
 const REPEL = 0.32;             // 指针附近粒子的排斥强度（每帧最多位移的像素量）
 
+// ---- 底部过山车 ----
+// 一条闭合回路：4 个高低不同的山坡 + 一个竖直回环 + 两端半圆回转 + 底边回程。
+// 小车按**能量守恒**跑：v = √(2g·落差 + vMin²)，爬坡自然减速、俯冲加速，到最高处最慢；
+// 颜色沿用上面那套 --particle-line（低透明度），只做背景，不抢内容。
+const COASTER = {
+  g: 980,            // 重力加速度（px/s²），决定俯冲加速的快慢
+  vMin: 44,          // 最低速（相当于链式提升段），保证回环顶部不会停住
+  vMax: 430,         // 最高速上限，避免在底部嗖一下过去
+  cars: 3,           // 车厢数
+  carGap: 13,        // 车厢间距（沿轨道弧长）
+  carW: 11,          // 车厢长
+  carH: 6,           // 车厢高
+  trail: 62,         // 车头拖尾长度（越是下坡越快、拖尾越长）
+  trackAlpha: 0.23,   // 再浅一点：这是背景装饰，压过内容就不好了
+  strutAlpha: 0.1,
+  carAlpha: 0.38,
+};
+// 山坡：位置 c / 宽度 w / 高度 a（都按回路横向归一化）；最高那座在最左边，之后一座比一座矮
+const HILLS = [
+  { c: 0.145, w: 0.115, a: 1.0 },
+  { c: 0.40, w: 0.085, a: 0.62 },
+  { c: 0.585, w: 0.068, a: 0.44 },
+  { c: 0.80, w: 0.10, a: 0.74 },
+];
+const LOOP_U = 0.285;   // 回环位置：正好落在第一、二座山之间的谷地，不和坡道交叠
+let track = null;       // { pts, cum, total, topRef, bandTop, bandBottom }
+let coasterS = 0;       // 车头沿轨道的弧长位置
+
 const canvasRef = ref(null);
 
 let ctx = null;
@@ -81,6 +109,201 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   readThemeColors();
   buildParticles();   // 尺寸变化时重建粒子
+  buildCoaster();     // 过山车轨道的尺寸跟着视口走
+}
+
+// ---------- 过山车 ----------
+
+// 归一化位置 u → 山坡高度（0~1，几个高斯峰叠加）
+function hillAt(u) {
+  let h = 0;
+  for (const b of HILLS) {
+    const t = (u - b.c) / b.w;
+    h += b.a * Math.exp(-t * t);
+  }
+  return Math.min(1.06, h);
+}
+
+// 生成闭合轨道：山坡（含回环）→ 右端回转 → 底边回程 → 左端回转，并算好弧长表
+function buildCoaster() {
+  const bandH = Math.min(178, Math.max(92, height * 0.17));
+  if (bandH < 70 || width < 260) { track = null; return; }
+
+  const hillH = bandH * 0.56;                     // 山坡相对基线的高度
+  const dropD = bandH * 0.44;                     // 回程线在基线下方多少
+  const bottomY = height - Math.max(16, bandH * 0.1);
+  const baseY = bottomY - dropD;
+  const topY = baseY - hillH;
+  const padX = Math.max(16, Math.min(72, width * 0.05));
+  const yOf = u => baseY - hillAt(u) * hillH;
+  // 两端的回转半圆要往里让出半径，否则 xL - rL / xR + rR 会跑到画布外被裁掉
+  const rR = Math.max(10, (bottomY - yOf(1)) / 2);
+  const rL = Math.max(10, (bottomY - yOf(0)) / 2);
+  const xL = padX + rL, xR = width - padX - rR;
+  const span = Math.max(160, xR - xL);
+
+  const pts = [];
+  const push = (x, y) => {
+    const last = pts[pts.length - 1];
+    if (last && Math.hypot(x - last.x, y - last.y) < 0.5) return;
+    pts.push({ x, y });
+  };
+
+  // ① 山坡段；在 LOOP_U 处插一个竖直回环（从最低点进、右侧上去、翻过头顶、左侧下来）
+  const loopX = xL + span * LOOP_U;
+  const loopBottomY = yOf(LOOP_U);
+  const loopR = Math.min(hillH * 0.26, (loopBottomY - topY) / 2 - 5, span * 0.05);
+  const N = 200;
+  const stepX = span / N;
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    const x = xL + span * u;
+    if (loopR > 8 && Math.abs(x - loopX) <= stepX * 0.5) {
+      const cy = loopBottomY - loopR;
+      const M = 40;
+      for (let k = 0; k <= M; k++) {
+        const th = (k / M) * Math.PI * 2;
+        push(loopX + Math.sin(th) * loopR, cy + Math.cos(th) * loopR);
+      }
+      continue;
+    }
+    push(x, yOf(u));
+  }
+
+  // ② 右端回转：从山坡右端绕到底边（半圆鼓向右侧）
+  for (let k = 1; k <= 20; k++) {
+    const th = (k / 20) * Math.PI;
+    push(xR + Math.sin(th) * rR, yOf(1) + (1 - Math.cos(th)) * rR);
+  }
+  // ③ 底边回程（右 → 左）
+  push(xL, bottomY);
+  // ④ 左端回转：从底边绕回山坡左端（半圆鼓向左侧）
+  for (let k = 1; k <= 20; k++) {
+    const th = (k / 20) * Math.PI;
+    push(xL - Math.sin(th) * rL, bottomY - (1 - Math.cos(th)) * rL);
+  }
+
+  // 弧长表（闭合：最后一段接回起点）
+  const cum = [0];
+  let total = 0;
+  for (let i = 1; i <= pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i % pts.length];
+    total += Math.hypot(b.x - a.x, b.y - a.y);
+    cum.push(total);
+  }
+  let topRef = Infinity;
+  for (const p of pts) topRef = Math.min(topRef, p.y);
+  track = { pts, cum, total, topRef, baseY, bottomY };
+}
+
+// 弧长 → 位置 + 切线方向（二分找段，线性插值）
+function posAt(s) {
+  const { pts, cum, total } = track;
+  let d = s % total;
+  if (d < 0) d += total;
+  let lo = 0;
+  let hi = pts.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= d) lo = mid + 1;
+    else hi = mid;
+  }
+  const i = Math.max(1, lo);
+  const a = pts[(i - 1) % pts.length];
+  const b = pts[i % pts.length];
+  const segLen = cum[i] - cum[i - 1] || 1;
+  const t = (d - cum[i - 1]) / segLen;
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    a: Math.atan2(b.y - a.y, b.x - a.x),
+  };
+}
+
+function roundRectPath(c, x, y, w, h, r) {
+  if (c.roundRect) {
+    c.beginPath();
+    c.roundRect(x, y, w, h, r);
+    return;
+  }
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function drawCoaster(line, dt) {
+  if (!track) return;
+  const { pts, total, topRef } = track;
+
+  // 物理：能量守恒（爬坡减速、俯冲加速），加最低速兜底与最高速封顶
+  const here = posAt(coasterS);
+  const drop = Math.max(0, here.y - topRef);
+  const v = Math.min(COASTER.vMax, Math.sqrt(2 * COASTER.g * drop + COASTER.vMin * COASTER.vMin));
+  coasterS = (coasterS + (v * dt) / 1000) % total;
+
+  // 支撑柱：沿山坡每隔一段往回落一根（先画，压在轨道下面）
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = `rgba(${line}, ${COASTER.strutAlpha})`;
+  let nextStrut = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p.y > track.baseY + 3) continue;
+    if (cum(i) < nextStrut) continue;
+    nextStrut = cum(i) + 30;
+    ctx.beginPath();
+    ctx.moveTo(p.x + 0.5, p.y + 1);
+    ctx.lineTo(p.x + 0.5, track.bottomY - 2);
+    ctx.stroke();
+  }
+
+  // 轨道
+  ctx.lineWidth = 1.4;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = `rgba(${line}, ${COASTER.trackAlpha})`;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.stroke();
+
+  // 拖尾：沿轨道回退一段，越靠车头越亮（下坡越快、拖尾拉得越长）
+  const speedK = Math.min(1, v / COASTER.vMax);
+  const trailLen = COASTER.trail * (0.45 + 0.75 * speedK);
+  const SEG = 7;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  for (let k = 0; k < SEG; k++) {
+    const a = posAt(coasterS - (trailLen * (k + 1)) / SEG);
+    const b = posAt(coasterS - (trailLen * k) / SEG);
+    ctx.strokeStyle = `rgba(${line}, ${(0.15 * ((SEG - k) / SEG) ** 2).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+
+  // 车厢（3 节，沿轨道依次后退）
+  ctx.fillStyle = `rgba(${line}, ${COASTER.carAlpha})`;
+  for (let i = 0; i < COASTER.cars; i++) {
+    const c = posAt(coasterS - i * COASTER.carGap);
+    ctx.save();
+    ctx.translate(c.x, c.y - 1.2);
+    ctx.rotate(c.a);
+    roundRectPath(ctx, -COASTER.carW / 2, -COASTER.carH / 2, COASTER.carW, COASTER.carH, 2.2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// cum 的取值助手（越界回绕），给支撑柱用
+function cum(i) {
+  return track.cum[Math.min(i, track.cum.length - 1)];
 }
 
 function easeChannel(current, target, k) {
@@ -112,6 +335,9 @@ function draw(now) {
 
   const dot = `${Math.round(dotColor.r)}, ${Math.round(dotColor.g)}, ${Math.round(dotColor.b)}`;
   const line = `${Math.round(lineColor.r)}, ${Math.round(lineColor.g)}, ${Math.round(lineColor.b)}`;
+
+  // 底部过山车先画：它在所有元素之下，粒子连线叠在它上面
+  drawCoaster(line, dt);
 
   // 运动、边界回弹、指针附近的轻微排斥
   for (const p of particles) {
