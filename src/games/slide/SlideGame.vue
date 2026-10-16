@@ -255,9 +255,13 @@ function startLevel(lv, restored = null) {
     }
     elapsed.value = 0;
   }
-  phase.value = PLAY;
+  // ⚠️ 还原「胜利 / 失败」的局面时，阶段必须**跟着一起落地**：下面紧跟着一次 save()，
+  //    如果这里先写死 PLAY，就会把胜利结算的存档冲成 PLAY —— 玩家重进一次看到浮层、
+  //    再重进一次就掉回第 1 关（正是「退出重进由玩家自行决定进入下一关」要的效果的反面）。
+  phase.value = restored && (restored.phase === WON || restored.phase === OVER) ? restored.phase : PLAY;
   timerRef.value?.reset();
   if (elapsed.value) timerRef.value?.restore(elapsed.value);
+  if (phase.value !== PLAY) timerRef.value?.stop();   // reset() 会顺带 start，结算局面要停表
   save();
   playDeal();
   if (!restored) return;
@@ -534,26 +538,26 @@ function save() {
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY));
-    if (!saved || !Array.isArray(saved.tiles) || !saved.tiles.length) return false;
+    if (!saved || !Array.isArray(saved.tiles)) return false;
     if (saved.phase !== PLAY && saved.phase !== WON && saved.phase !== OVER) return false;
+    // ⚠️ 胜利时棋盘是**空的**（全消完），所以不能拿「牌数非空」当门槛 ——
+    //    否则胜利结算的存档会被判无效，onMounted 兜底 startLevel(1)，玩家直接掉回第 1 关。
+    //    空盘只对 WON 合法（失败时盘上还剩着牌，照旧要校验）。
+    if (!saved.tiles.length && saved.phase !== WON) return false;
     const lv = Math.max(1, +saved.level || 1);
     const cfg = levelConfig(lv);
     if (saved.tiles.length > cfg.rows * cfg.cols) return false;
-    // 只还原「本关还没打完」的局面；已过关的存档直接推进到下一关重开
-    if (saved.phase === WON) {
-      level.value = lv;
-      startLevel(lv + 1);
-      return true;
-    }
     startLevel(lv, {
       // 老存档里可能混进过 kind = 0 的空位牌（上面的 bug），这里一并丢掉
       tiles: saved.tiles
         .map(([kind, r, c]) => ({ id: ++tileId, kind, r, c, popping: false }))
         .filter(t => t.kind > 0),
       elapsed: Math.max(0, +saved.elapsed || 0),
+      // 阶段也交给 startLevel 一起落地（胜利 / 失败都**停在结算层**，由玩家自己决定
+      // 「➡️ 下一关」还是「🔄 重玩本关」；用户要求：胜利之后记录胜利状态，退出重进由玩家自行决定进入下一关。
+      // 原来这里对 WON 直接 startLevel(lv + 1) 自动推进，玩家没有选择的机会）
+      phase: saved.phase,
     });
-    phase.value = saved.phase === OVER ? OVER : PLAY;
-    if (phase.value === OVER) timerRef.value?.stop();
     return true;
   } catch {
     return false;
