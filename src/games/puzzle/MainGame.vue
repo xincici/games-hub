@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper" :class="`${rocker? 'rocker' : '' }`" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerUp">
-    <TopHeader @onScoreReset="bestScore = null">
+    <TopHeader @onScoreReset="onScoreReset">
       <span class="item-wrapper" @click="toggleRocker">
         <i i-mdi-power-socket-fr v-if="rocker" />
         <i i-mdi-cursor-move v-else />
@@ -98,6 +98,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import confetti from '@/shared/confetti';
 import { rocker, toggle as toggleRocker } from './rocker';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
+import { clearGameStorage } from '@/shared/storage';
 
 const [GAMING, WIN, NB] = [0, 1, 2];
 
@@ -317,6 +318,13 @@ function onPointerUp(e) {
     else if (dy < 0 && !rockerDisable.value[0]) rockerClick(1, 0);
   }
 }
+// 连点标题清记录：清掉各难度的最佳纪录与局面，再开一局
+function onScoreReset() {
+  clearGameStorage('__number_puzzle__');
+  bestScore.value = null;
+  initGame();
+}
+
 </script>
 
 <style scoped lang="scss">

@@ -85,6 +85,7 @@
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-score">{{ score }}</div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
         <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
@@ -111,6 +112,7 @@ import { i18n } from '@/shared/i18n';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
 import { EMOJIS } from '@/shared/emojis';
+import { clearGameStorage } from '@/shared/storage';
 import {
   WALL, BOMB, WILD, isWall, isFrozen, frozenKind, thawTargets, applyThaw,
   levelConfig, generateBoard, findMatches, explode,
@@ -760,6 +762,7 @@ function restore() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__emoji_crush__');
   localStorage.removeItem(BEST_KEY);
   bestLevel.value = level.value;
 }
@@ -982,11 +985,6 @@ function onScoreReset() {
     color: #fff;
     border: 0 none;
     border-radius: var(--radius-tile);
-    &.ghost {
-      background: var(--card-bg-color);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-    }
   }
   .game-area {
     position: relative;
@@ -1244,13 +1242,6 @@ function onScoreReset() {
     .final-score {
       font-size: 28px;
       margin-top: 4px;
-    }
-    .result-btns {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-top: 6px;
     }
   }
 }

@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper">
-    <TopHeader>
+    <TopHeader @onScoreReset="onScoreReset">
       <span class="item-wrapper" @click="toggleDice">
         <i i-mdi-dice-5 v-if="dice" />
         <i i-mdi-dice-5-outline v-else />
@@ -263,7 +263,7 @@ async function onPlayClick() {
   game.animating = true;
   if (game.stage === WAIT) {
     if (game.total <= 0) {
-      alert('破产了请重新来过!');
+      alert(i18n('bankrupt'));
       game.total = DEFAULT_TOTAL;
     }
     if (game.total >= bet.value) {
@@ -383,6 +383,13 @@ function getResult(cardsNum) {
     default:
       return 0;
   }
+}
+
+// 连点标题清记录：资产回到初始值（其余偏好保留）
+function onScoreReset() {
+  clearGameStorage(TOTAL_KEY.replace(/total$/, ''));   // 前缀取存档 key 去掉 'total' 那一段
+  game.total = DEFAULT_TOTAL;
+  localStorage.setItem(TOTAL_KEY, game.total);
 }
 
 </script>
@@ -546,7 +553,7 @@ function getResult(cardsNum) {
         color: var(--lose-color);
       }
       .result-guess-lose {
-        color: #d4691e;
+        color: var(--god-bg);
       }
     }
     .guess-area {

@@ -42,7 +42,7 @@
       <div v-if="gameResult === WIN" class="result win">
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
         <span v-if="newBest">{{ i18n('newBest') }}</span>
-        <button class="game-icon keep" @click="keepGoing">{{ i18n('keepGoing') }}</button>
+        <button class="game-icon" @click="keepGoing">{{ i18n('keepGoing') }}</button>
       </div>
       <div v-else-if="gameResult === LOSE" class="result lose">👻👻 {{ i18n('tipLost') }} 👻👻</div>
     </div>
@@ -55,6 +55,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
+import { clearGameStorage } from '@/shared/storage';
 
 const SIZE = 4;
 const WIN_VAL = 2048;
@@ -154,6 +155,7 @@ function onKeyUp(e) {
 }
 
 function onScoreReset() {
+  clearGameStorage('__game_2048__');
   bestScore.value = 0;
 }
 

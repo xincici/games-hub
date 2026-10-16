@@ -3,6 +3,27 @@
 按**症状**查。每条给「原因 → 定位手段」。这些坑在不同游戏里反复出现过，
 所以在动手之前先扫一眼：**它很可能已经有一个固定的解法了**。
 
+## 宽屏上打开游戏「先出现在屏幕左侧，然后跳到中间」
+
+- **症状**：屏幕上（≥ 900px 宽）明显，手机上看不出来。页面在切页动画那 0.3s 里贴左边，动画一结束才归位。
+- **原因**：这些游戏的**根元素就是 `.wrapper` 本身**，而 `App.vue` 的 `.app-open-enter-active` 会给过渡元素
+  加 `position: absolute; left: 0; width: 100%` —— 绝对定位 + `left` 不是 auto 时，`margin: 0 auto`
+  **不会**居中；动画结束类名移除、恢复静态定位后才居中。
+- **修法（已采用）**：给过渡元素套一层**中立容器** —— `App.vue` 里改成
+  `<Transition><div class="page-root" :key="…"><component :is="…" /></div></Transition>`。
+  这样游戏的 `.wrapper` 回到**静态定位**，它自己的 `max-width + margin: 0 auto` 就正常生效了；
+  而 `.page-root` 仍在 (0,0) 铺满视口，所以 `transform-origin` 用的那组**视口像素坐标**语义不变。
+  实测：四个根元素带 `max-width` 的游戏（24 点 / 单人麻将 / 赌神 / 镜像）从**第 0 帧**起就是
+  `480@400`（居中）；`width: 100%` 的其余 21 个游戏仍是 `1280@0`，不受影响。
+- **⚠️ 别这么修（我试过，把它修坏了）**：给过渡规则自己加 `max-width: var(--max-width)`
+  —— 那会让**所有**页面的过渡元素都变成「最宽 480、钉在左边」（因为绝对定位 + `left: 0` 时
+  auto margin 不居中，加了 `max-width` 只是把它卡窄），于是原本正常的游戏也一起开始跳。
+  同理也别用 `left: 50%` 去居中：`transform-origin` 存的是**视口**像素坐标，
+  元素一挪，入场动画的放大原点就偏了（会从屏幕右侧飞出来）。
+- **怎么量**：宽屏下 `Page.navigate` 后每 60ms 记 `.wrapper` 的 **`offsetWidth`/`offsetLeft`**
+  （不要用 `getBoundingClientRect` —— 它含 transform，会把入场缩放当成布局变化）。
+  同时注意过渡期间**新旧两个页面都在 DOM 里**，`querySelector('.wrapper')` 可能拿到正在离开的那一个。
+
 ## 布局 / CSS
 
 | 症状 | 原因 | 定位手段 |

@@ -10,13 +10,13 @@
     </TopHeader>
     <div class="card score-area">
       <div class="stat">
-        <span class="stat-label">{{ i18n('levelLabel') }}</span>
-        <span class="stat-value">{{ level }}</span>
+        <span class="stat-label">{{ i18n('bestLevel') }}</span>
+        <span class="stat-value">{{ bestLevel }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
-        <span class="stat-label">{{ i18n('bestLevel') }}</span>
-        <span class="stat-value">{{ bestLevel }}</span>
+        <span class="stat-label">{{ i18n('levelLabel') }}</span>
+        <span class="stat-value">{{ level }}</span>
       </div>
       <div class="divider"></div>
       <div class="stat">
@@ -88,6 +88,7 @@
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-time">{{ fmt(usedTime) }}</div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
         <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
@@ -124,6 +125,7 @@ import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import { MAHJONG_FACES, faceOf } from '@/shared/mahjongFaces';
 import { TILE_RATIO, preloadTiles } from '@/shared/mahjongTiles';
 import { levelConfig } from './board';
+import { clearGameStorage } from '@/shared/storage';
 
 // 牌背用的是本游戏在首页的图标（同一个 id 在 games.js 里注册，改图标两处一起变）
 const BACK_ICON = gameConfig('match').icon;
@@ -442,6 +444,7 @@ function startNewGame() {
 
 // 连点标题清记录：三种牌面的最高关卡一起清
 function onScoreReset() {
+  clearGameStorage('__emoji_match__');
   localStorage.removeItem(bestKeyFor(MODE_EMOJI));
   localStorage.removeItem(bestKeyFor(MODE_POKER));
   localStorage.removeItem(bestKeyFor(MODE_MAHJONG));

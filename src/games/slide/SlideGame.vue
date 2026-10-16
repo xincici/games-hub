@@ -1,7 +1,7 @@
 <template>
   <div class="wrapper">
     <!-- 本游戏不记「最高关卡」，所以连点标题的彩蛋不接（与 Emoji 大师一致） -->
-    <TopHeader />
+    <TopHeader @onScoreReset="onScoreReset" />
     <!-- 隐藏的计时器：只用来驱动倒计时与每秒落档，数字显示在统计条里 -->
     <CountTimer
       ref="timerRef"
@@ -63,14 +63,14 @@
         <div class="result-title">🎉 {{ i18n('tipWin') }} 🎉</div>
         <div class="result-line">{{ i18n('time') }} {{ clock }}</div>
         <div class="result-actions">
-          <button class="game-icon" @click="startLevel(level)">{{ i18n('retry') }}</button>
-          <button class="game-icon primary" @click="startLevel(level + 1)">{{ i18n('next') }}</button>
+          <button class="game-icon" @click="startLevel(level)">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon" @click="startLevel(level + 1)">{{ i18n('nextLevel') }}</button>
         </div>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
         <div class="result-title">⏰ {{ i18n('tipOver') }} ⏰</div>
         <div class="result-line">{{ i18n('left') }} {{ pairsLeft }}</div>
-        <button class="game-icon primary" @click="startLevel(level)">{{ i18n('retry') }}</button>
+        <button class="game-icon" @click="startLevel(level)">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <ConfirmDialog
@@ -90,6 +90,7 @@ import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { clearGameStorage } from '@/shared/storage';
 import {
   levelConfig, makeBoard, clone, findPartner, slideParams, shiftGroup,
   hasAnyMove, reshuffleBoard,
@@ -557,6 +558,12 @@ function restore() {
   } catch {
     return false;
   }
+}
+
+// 连点标题清记录：清掉纪录与局面，然后重开
+function onScoreReset() {
+  clearGameStorage('__emoji_slide__');
+  startNewGame();
 }
 
 </script>

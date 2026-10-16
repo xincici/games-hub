@@ -69,6 +69,7 @@
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-time">{{ fmt(elapsed) }}</div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
         <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
@@ -97,6 +98,7 @@ import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, generateLevelBoard, hasMove, shuffleBoard, levelConfig } from './board';
+import { clearGameStorage } from '@/shared/storage';
 
 // 闯关制：难度由「棋盘大小 + emoji 种类 + 牌数 + 墙数 + 限时」共同决定，
 // 前 11 关逐关变难，第 11 关起全部封顶（关数无限，难度不再上升）
@@ -467,6 +469,7 @@ function startNewGame() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__emoji_link__');
   localStorage.removeItem(BEST_KEY);
   bestLevel.value = level.value;
 }
@@ -821,11 +824,6 @@ function loseLevel() {
     color: #fff;
     border: 0 none;
     border-radius: var(--radius-tile);
-    &.ghost {
-      background: var(--card-bg-color);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-    }
   }
   .game-area {
     position: relative;
@@ -1004,13 +1002,6 @@ function loseLevel() {
     }
     .final-time {
       font-size: 28px;
-    }
-    .result-btns {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-top: 6px;
     }
   }
 }

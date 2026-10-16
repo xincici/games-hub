@@ -68,6 +68,7 @@
       <div v-if="phase === WON" class="result win">
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-time">{{ i18n('movesDone').replace('{n}', moves) }}</div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
         <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
@@ -95,6 +96,7 @@ import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { gameConfig } from '@/shared/games';
+import { clearGameStorage } from '@/shared/storage';
 import {
   levelConfig, generateSolvable, topRun, moveCount, moveTargets, isWon, isDeadEnd,
   countDone, progressPct,
@@ -463,6 +465,7 @@ function startNewGame() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__emoji_sort__');
   localStorage.removeItem(bestKey());
   bestLevel.value = level.value;
 }

@@ -96,8 +96,8 @@
           <span v-if="phase === WON">🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
           <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
           <div class="result-actions">
-            <button class="game-icon" @click="retryLevel">{{ i18n('retry') }}</button>
-            <button v-if="phase === WON" class="game-icon primary" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+            <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+            <button v-if="phase === WON" class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
           </div>
         </div>
       </div>
@@ -134,6 +134,7 @@ import MahjongBack from '@/shared/MahjongBack.vue';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import { MAHJONG_FACES, faceOf } from '@/shared/mahjongFaces';
 import { TILE_RATIO, preloadTiles } from '@/shared/mahjongTiles';
+import { clearGameStorage } from '@/shared/storage';
 
 // 6 关：展示 3~8 个 emoji；候选区依次 3×3 / 3×4 / 3×4 / 4×4 / 4×4 / 4×5
 // 牌背用的是本游戏在首页的图标（与 games.js 里注册的是同一个，改图标两处一起变）
@@ -543,6 +544,7 @@ function restore() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__emoji_hunter__');
   // 连点标题清记录时，三种牌面的最高关卡一起清
   localStorage.removeItem(BEST_KEY);
   localStorage.removeItem(`${BEST_KEY}_2`);

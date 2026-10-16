@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerUp">
-    <TopHeader @onScoreReset="bestScore = 0">
+    <TopHeader @onScoreReset="onScoreReset">
       <span class="item-wrapper" @click="toggleWall">
         <i i-mdi-wall-fire v-if="throughWall" />
         <i i-mdi-wall v-else />
@@ -60,6 +60,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { throughWall, toggle as toggleWall } from './wall';
+import { clearGameStorage } from '@/shared/storage';
 
 const GRID = 20;                 // 20x20 格
 const [GAMING, LOSE] = [0, 1];
@@ -360,6 +361,13 @@ function onPointerUp(e) {
   if (Math.abs(dx) > Math.abs(dy)) turn([0, dx > 0 ? 1 : -1]);
   else turn([dy > 0 ? 1 : -1, 0]);
 }
+// 连点标题清记录：清掉最高分与局面（难度偏好保留）
+function onScoreReset() {
+  clearGameStorage('__snake_game__');
+  bestScore.value = 0;
+  initGame();
+}
+
 </script>
 
 <style scoped lang="scss">
@@ -487,7 +495,7 @@ function onPointerUp(e) {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
     &:disabled {
       background-color: #aaa;
       cursor: not-allowed;

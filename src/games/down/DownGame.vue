@@ -85,6 +85,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { i18n } from '@/shared/i18n';
+import { clearGameStorage } from '@/shared/storage';
 import {
   ROWS, COLS, START_TOP, START_ROWS, SPEED_BASE,
   speedFor, makeRow, changeChance,
@@ -411,6 +412,7 @@ function restore() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__emoji_down__');
   localStorage.removeItem(BEST_KEY);
   best.value = 0;
 }

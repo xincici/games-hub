@@ -136,7 +136,7 @@
         <div class="result-streak">🔥 {{ i18n('streak') }} {{ streak }}</div>
       <!-- 保留连胜继续打：走 dealRound（按当前连胜给更难的档，见 board.js 的 RAMP），
            不走会清连胜的 startNewGame（那只是「新游戏」二次确认后的动作） -->
-      <button class="game-icon" @click="dealRound">{{ i18n('nextGame') }}</button>
+      <button class="game-icon" @click="dealRound">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
 
@@ -184,6 +184,7 @@ import { i18n } from '@/shared/i18n';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import MahjongBack from '@/shared/MahjongBack.vue';
 import { isWin, kongOptions, newRoundSafe, sameTile, sortTiles, tileKey, HAND_SIZE } from './board';
+import { clearGameStorage } from '@/shared/storage';
 
 const PLAY = 'play';
 const WON = 'won';
@@ -660,6 +661,7 @@ onMounted(() => {
 });
 
 function onScoreReset() {
+  clearGameStorage('__solo__');
   for (const k of Object.values(KEYS)) { try { localStorage.removeItem(k); } catch { /* 忽略 */ } }
   streak.value = 0; best.value = 0;
   dealRound();
@@ -695,9 +697,20 @@ function onScoreReset() {
 
   // 分隔线要在 .wrapper 层级：评分区/操作区共用同一个类（嵌进 .score-area 里会没有样式）
   .divider {
+
     width: 1px;
+
     height: 24px;
-    background: var(--card-border-color);
+
+    // 与全站一致：--border-color + opacity 0.6 + align-self: center
+
+    //（原来用 --card-border-color 且缺后两条：分隔线比别人更黑、也不居中）
+
+    align-self: center;
+
+    background: var(--border-color);
+
+    opacity: 0.6;
     flex: 0 0 auto;
   }
 

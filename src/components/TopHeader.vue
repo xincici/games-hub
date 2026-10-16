@@ -58,14 +58,20 @@ const titleClicks = ref(0);
 
 function onTitleClick() {
   const { recordsPrefix, minDifficulty, maxDifficulty } = config.value;
-  if (!recordsPrefix) return;
+  // ⚠️ 这里**不能**因为「注册表没有 recordsPrefix」就 return：好些游戏的存档 key 不按难度索引
+  //（three / 2048 / 贪吃蛇 / 大师 / 麻将传奇 就是），一旦提前 return，它们的连点清记录永远不触发。
+  // 现在统一：五连点一律 emit，让各游戏自己的 onScoreReset 去清；注册表给了 prefix + 难度范围时
+  // 再顺带把 `${prefix}${i}` 这类按难度索引的记录扫一遍（老机制，保留）。
   titleClicks.value++;
-  if (titleClicks.value === 5) {
-    for (let i = minDifficulty; i <= maxDifficulty; i++) {
+  if (titleClicks.value !== 5) return;
+  titleClicks.value = 0;
+  if (recordsPrefix) {
+    const lo = minDifficulty ?? 0;
+    for (let i = lo; i <= (maxDifficulty ?? lo); i++) {
       localStorage.removeItem(`${recordsPrefix}${i}`);
     }
-    emit('onScoreReset');
   }
+  emit('onScoreReset');
 }
 
 function onBodyClick() {

@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="() => {}" />
+    <TopHeader @onScoreReset="onScoreReset" />
 
     <div class="card score-area">
       <div class="stat">
@@ -117,6 +117,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { clearGameStorage } from '@/shared/storage';
 import {
   MIN_DIFFICULTY, MAX_DIFFICULTY, emojiCount, rowsOf, sameCount, newRound, derange, swapAt, fmtTime,
 } from './board';
@@ -452,14 +453,26 @@ onUnmounted(() => {
   clearTimers();
   window.removeEventListener('resize', computeMetrics);
 });
+// 连点标题清记录：清掉各难度的最佳用时与局面（难度偏好保留）
+function onScoreReset() {
+  clearGameStorage('__emoji_mirror__');
+  best.value = 0;
+  startRound();
+}
+
 </script>
 
 <style lang="scss" scoped>
 .wrapper {
+    box-sizing: border-box;   // max-width 限的是边框盒，否则再加左右 16px 内边距会变成 512
   // 顶部这 64px 必须用 padding：写成 .score-area 的 margin-top 会从 .wrapper 顶部
   // 塌陷到 #app 之外，而 #app 有 min-height: 100dvh —— 结果 html 恒比视口高 64px、
   // 整页能滚 64px（用户报的「垂直方向还是有滚动条」）。padding 把它留在文档流里。
   padding: 64px 16px 0;
+  // ⚠️ 别的 24 个游戏都有这两行，只有这里漏了：宽屏上整页会被拉满
+  //（用户报的「所有区域长度都拉长了，没有最大宽度约束」）
+  max-width: var(--max-width);
+  margin: 0 auto;
   color: var(--text-color);
 }
 

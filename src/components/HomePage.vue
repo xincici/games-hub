@@ -31,7 +31,14 @@
       <div
         v-if="ghost"
         class="hex ghost"
-        :style="{ left: `${ghost.left}px`, top: `${ghost.top}px`, width: `${ghost.w}px`, height: `${ghost.h}px`, ...(ghost.card.accent ? { '--accent': `var(--accent-${ghost.card.accent})` } : null) }"
+        :style="{
+          left: `${ghost.left}px`, top: `${ghost.top}px`, width: `${ghost.w}px`, height: `${ghost.h}px`,
+          // ⚠️ 替身是 Teleport 到 body 的，拿不到 honeycomb 上的 --hex-w/--hex-h ——
+          //    图标与游戏名的字号是 calc(var(--hex-w) * 0.31 / 0.108)，变量丢了就退化成继承字号
+          //    （玩家看到的「图标缩小、文字变大」）。这里把量到的尺寸一起传下去。
+          '--hex-w': `${ghost.w}px`, '--hex-h': `${ghost.h}px`,
+          ...(ghost.card.accent ? { '--accent': `var(--accent-${ghost.card.accent})` } : null),
+        }"
       >
         <span class="hex-body">
           <i :class="ghost.card.icon" :style="ghost.card.iconScale ? { transform: `scale(${ghost.card.iconScale})` } : null" />
@@ -400,13 +407,26 @@ function onVisibility() {
   // 触摸端允许页面纵向滚动；横向手势留给拖动排序
   touch-action: pan-y;
   // 正在被拖动的卡片：原位压暗（跟随指针的是下面 .hex.ghost 浮层）
+  // 正在被拖动的卡片：原位压淡当作「空位」（跟随指针的是下面 .hex.ghost 浮层）
+
+  // ⚠️ 只压淡、**不要**把 .hex-body 换成 --enter-bg：绿色图标压在浅绿底上再乘 0.3
+
+  //    就彻底看不见了（玩家反馈「留在原位占位的卡片图标没有了」）
+
   &.dragging {
+
     animation: none !important;
+
     pointer-events: none;
-    opacity: 0.3;
+
+    opacity: 0.45;
+
     .hex-body {
-      background: var(--enter-bg);
+
+      background: var(--card-bg-color);
+
     }
+
   }
   &:active {
     background: var(--accent, var(--primary-bg));

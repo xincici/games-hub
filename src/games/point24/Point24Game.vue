@@ -2,7 +2,7 @@
   <div class="wrapper">
     <TopHeader @onScoreReset="onScoreReset" />
 
-    <!-- ① 分数区：关卡 / 当前连胜 / 最长连胜 -->
+    <!-- ① 分数区：🏆最长连胜 / 🔥当前连胜（记录在前、当前在后，与全站一致；本游戏无关卡项） -->
     <div class="card score-area">
       <div class="stat">
         <span class="stat-label">{{ i18n('bestStreak') }}</span>
@@ -31,7 +31,7 @@
       <div class="divider" />
       <div class="start-wrapper">
         <button class="game-icon answer-btn" :disabled="phase !== PLAY" @click="revealAnswer">
-          {{ i18n('answer') }}
+          {{ i18n('reveal') }}
         </button>
       </div>
     </div>
@@ -112,6 +112,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { clearGameStorage } from '@/shared/storage';
 import {
   appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText, solveAll, scorePuzzle, numsKey,
   NUM_COUNT,
@@ -296,6 +297,7 @@ onMounted(() => {
 
 // 标题连点 5 次清记录：把连胜记录一起清掉（注册表里给的是 recordsPrefix，数字键不存在，所以这里自己清）
 function onScoreReset() {
+  clearGameStorage('__point24__');
   for (const k of Object.values(KEYS)) { try { localStorage.removeItem(k); } catch { /* 忽略 */ } }
   level.value = 1; streak.value = 0; best.value = 0; recent.value = [];
   deal(1);

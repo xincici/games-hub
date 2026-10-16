@@ -6,7 +6,7 @@
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
   >
-    <TopHeader @onScoreReset="() => {}">
+    <TopHeader @onScoreReset="onScoreReset">
       <!-- 模式切换：老模式「一路滑到底」/ 新模式「一次一格」（图标按用户指定） -->
       <span class="item-wrapper mode-btn" @click="toggleMode" :title="i18n('modeTip')">
         <i i-mdi-arrow-right-bold v-if="mode === 1" />
@@ -99,6 +99,7 @@
         <template v-if="phase === WON">
           <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
           <span class="level-note">{{ i18n('levelDone').replace('{n}', level) }}</span>
+          <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
           <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </template>
         <template v-else>
@@ -149,6 +150,7 @@ import {
 
 // 牌面是参考图裁出来的 34 张牌拼成的雪碧图（与麻将英雄共用，见 src/shared/mahjongTiles.js）
 import { TILE_SHEET, spriteVars, preloadTiles } from '@/shared/mahjongTiles';
+import { clearGameStorage } from '@/shared/storage';
 
 // 两种模式各自独立的记录：老模式沿用原来的 key，新模式加 _2 后缀（与麻将英雄同一套约定）
 const MODE_KEY = '__quesheng__mode';           // 1 = 老模式（滑到底）/ 2 = 新模式（一次一格）
@@ -631,6 +633,12 @@ onUnmounted(() => {
   clearTimers();
   save();
 });
+// 连点标题清记录：两张关卡的进度与局面一起清，然后重开（模式偏好保留）
+function onScoreReset() {
+  clearGameStorage('__quesheng__');
+  startNewGame();
+}
+
 </script>
 
 <style scoped lang="scss">

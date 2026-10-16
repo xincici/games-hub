@@ -352,6 +352,7 @@ function toggleMode() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__mahjong_hero__');
   localStorage.removeItem(BEST_KEY + 1);
   localStorage.removeItem(BEST_KEY + 2);
   bestScore.value = mode.value === 1 ? level.value : score.value;
@@ -911,7 +912,7 @@ onUnmounted(() => {
       color: var(--win-color);
       &.lose { color: var(--lose-color); }
       .level-note { font-size: 14px; color: var(--text-color); opacity: 0.75; font-weight: 400; }
-      .result-btns { display: flex; gap: 10px; }
+      .result-btns { display: flex; gap: 12px; }
     }
   }
 

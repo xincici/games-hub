@@ -60,6 +60,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import { i18n } from '@/shared/i18n';
+import { clearGameStorage } from '@/shared/storage';
 
 // 经典 Threes：4×4；1+2=3，3 起相同数字翻倍合成；
 // 得分 = 盘面各牌分值之和（1/2 记 0 分，3·2^k 记 3^(k+1)）
@@ -409,6 +410,7 @@ function onTimerTick() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__threes_game__');
   localStorage.removeItem(BEST_KEY);
   bestScore.value = 0;
 }
@@ -589,7 +591,7 @@ function finishDrag(forced) {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
+    border-radius: var(--radius-tile);
   }
   .game-area {
     position: relative;

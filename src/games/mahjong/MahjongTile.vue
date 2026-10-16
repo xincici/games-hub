@@ -3,6 +3,7 @@
 // --mj-w / --mj-h 仍由父级给（牌是 131:168 的竖牌），组件本身不再画厚度。
 import { computed } from 'vue';
 import { TILE_SHEET, spriteVars } from '@/shared/mahjongTiles';
+import { clearGameStorage } from '@/shared/storage';
 
 const props = defineProps({
   // 1 = 一筒 … 9 = 九筒（默认筒）
@@ -15,6 +16,8 @@ const vars = computed(() => ({
   backgroundImage: `url(${TILE_SHEET})`,
   ...spriteVars(`${props.suit}${props.value}`),
 }));
+
+
 </script>
 
 <template>

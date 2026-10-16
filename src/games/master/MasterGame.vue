@@ -1,7 +1,7 @@
 <template>
   <div class="wrapper" :style="layout.vars">
     <!-- 模式开关：emoji ⇄ 麻将牌（放在帮助图标旁边，照 Emoji 猎手的「emoji ↔ 扑克牌」写法） -->
-    <TopHeader>
+    <TopHeader @onScoreReset="onScoreReset">
       <span class="item-wrapper" :title="i18n('modeTip')" @click="switchMode">
         <i v-if="mode === 'emoji'" i-mdi-emoticon-happy-outline />
         <i v-else-if="mode === 'poker'" i-mdi-cards-playing-outline />
@@ -56,12 +56,13 @@
           <template v-if="phase === WON">
             <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
             <span class="level-note">{{ i18n('levelDone').replace('{n}', level) }}</span>
-            <button @click="nextLevel" class="game-icon again">{{ i18n('nextLevel') }}</button>
+            <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+            <button @click="nextLevel" class="game-icon">{{ i18n('nextLevel') }}</button>
           </template>
           <template v-else>
             <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
             <span class="level-note">{{ i18n('level') }} {{ level }}</span>
-            <button @click="replayLevel" class="game-icon again">{{ i18n('replayLevel') }}</button>
+            <button @click="replayLevel" class="game-icon">{{ i18n('replayLevel') }}</button>
           </template>
         </div>
       </Transition>
@@ -130,6 +131,7 @@ import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import { MAHJONG_FACES, faceOf } from '@/shared/mahjongFaces';
 import { TILE_RATIO } from '@/shared/mahjongTiles';
 import CardItem from '@/games/poker/CardItem.vue';
+import { clearGameStorage } from '@/shared/storage';
 import {
   TRAY_SIZE, freeIds, generateTiles, insertIndex, levelConfig,
   MODE_EMOJI, MODE_POKER, MODE_MAHJONG, MODE_ORDER, FACE_RATIO,
@@ -713,6 +715,12 @@ function restore() {
     return false;
   }
 }
+// 连点标题清记录：三种牌面的关卡/局面一起清，然后从第 1 关重开（模式偏好保留）
+function onScoreReset() {
+  clearGameStorage('__emoji_master__');
+  startNewGame();
+}
+
 </script>
 
 <style scoped lang="scss">

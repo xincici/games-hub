@@ -109,8 +109,8 @@
         <div v-if="pickFailed" class="pick-mask">
           <span class="mask-text">👻 {{ i18n('revealFailed') }}</span>
           <div class="result-actions">
-            <button class="game-icon" @click="retryLevel">{{ i18n('retry') }}</button>
-            <button class="game-icon" @click="startNewGame">{{ i18n('start') }}</button>
+            <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+            <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
           </div>
         </div>
       </div>
@@ -120,7 +120,7 @@
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
         <span class="result-note">{{ i18n('winNote').replace('{n}', level) }} · {{ i18n('streakNow').replace('{n}', streak) }}</span>
         <div class="result-actions">
-          <button class="game-icon" @click="retryLevel">{{ i18n('retry') }}</button>
+          <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
           <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </div>
       </div>
@@ -142,10 +142,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import Hearts from '@/shared/Hearts.vue';
+import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { useResultDelay } from '@/shared/resultDelay';
 import { TILE_RATIO } from '@/shared/mahjongTiles';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
+import { clearGameStorage } from '@/shared/storage';
 import {
   HAND_SIZE, KIND_KEYS, MAX_PER_KIND,
   faceOf, handCounts, isBlocked, newRound, winningPicks,
@@ -293,7 +295,10 @@ function restore() {
     revealed.value = st.reason === 'reveal';
     missedKeys.value = [...new Set((Array.isArray(st.missed) ? st.missed : []).filter(k => KIND_KEYS.includes(k)))];
     pickFailed.value = phase.value === 'lost';
+
     roundId.value += 1;
+
+      playDealAnimation();          // 恢复局面同样播一次入场动画
     return true;
   } catch { return false; }
 }
@@ -324,10 +329,17 @@ function deal(lv) {
   wrongKey.value = null;
   best.value = Math.max(best.value, round.level);
   roundId.value += 1;
+  playDealAnimation();
+  save();
+}
+
+// 发牌动画：手牌与选择区错峰入场，0.9s 后收尾。
+// ⚠️ 换关（deal）与**恢复存档**（restore）都要调 —— 玩家反馈「退出重进恢复游戏没有动画效果」，
+// 就是因为 restore 只加了 roundId、没开这个开关。
+function playDealAnimation() {
   dealing.value = true;
   clearTimeout(dealTimer);
   dealTimer = setTimeout(() => { dealing.value = false; }, 900);
-  save();
 }
 
 // 把一张牌从选择区飞进答案区：**复制一张**飞出去，原位那张立刻置灰留在原地
@@ -426,6 +438,7 @@ async function revealAnswers() {
 }
 
 function win() {
+  confetti();                    // 获胜撒花（用户反馈「胜利缺少烟花效果」）
   phase.value = 'won';
   streak.value += 1;
   best.value = Math.max(best.value, level.value + 1);      // 解锁下一关
@@ -444,6 +457,7 @@ function startNewGame() {
 
 // 连点标题 5 次：清记录（TopHeader 只会按 recordsPrefix 删 key，这里由组件自己清）
 function onScoreReset() {
+  clearGameStorage('__gambler__');
   try {
     [LEVEL_KEY, BEST_KEY, STREAK_KEY, STATE_KEY].forEach(k => localStorage.removeItem(k));
   } catch { /* 忽略 */ }
@@ -520,8 +534,6 @@ onUnmounted(() => {
   }
   .stat-label { font-size: 12px; opacity: 0.75; }
   .stat-value { font-size: 20px; font-weight: bold; }
-  // 生命格：里面是 Hearts 组件，别被 20px 的字号撑开
-  .stat-hearts .hearts-row { font-size: 15px; line-height: 1.2; }
   // 查看答案 = 放弃（会清当前连胜），用橙色和「新游戏」区分开
   //（与 24 点的 .answer-btn 同一套：全局变量 --god-bg = #c2410c，白字 5.18:1）
   .game-icon.answer-btn:not(:disabled) {

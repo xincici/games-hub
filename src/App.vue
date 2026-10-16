@@ -4,7 +4,16 @@
   <div class="app-content">
     <router-view v-slot="{ Component, route }">
       <Transition :name="route.meta.game === 'home' ? 'app-close' : 'app-open'">
-        <component :is="Component" :key="route.meta.game" />
+        <!-- ⚠️ 过渡元素**必须**是这一层中立容器，不能直接是页面组件：
+             很多游戏的根元素就是 .wrapper 本身，而它们靠 .wrapper 的 max-width + margin: 0 auto 居中；
+             `.app-open-enter-active` 会给过渡元素加 position: absolute + left: 0 + width: 100%，
+             绝对定位下 left 不是 auto 时 auto margin 不居中 —— 于是过渡那 0.32s 里页面贴在左边、
+             动画结束才归位（24 点 / 单人麻将 / 赌神 / 镜像四个游戏，宽屏上很明显）。
+             套一层普通 div 后，游戏的 .wrapper 回到静态定位，居中照旧生效；
+             同时这层容器仍在 (0,0) 铺满视口，transform-origin 用的那组视口像素坐标语义不变。 -->
+        <div class="page-root" :key="route.meta.game">
+          <component :is="Component" />
+        </div>
       </Transition>
     </router-view>
   </div>

@@ -73,6 +73,7 @@ import { ref, reactive, computed, watch, watchEffect, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import confetti from '@/shared/confetti';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
+import { clearGameStorage } from '@/shared/storage';
 
 const BIG_VAL = 3;
 const VIRTUAL_CLICK_EFFECT_DURATION = 220;
@@ -188,6 +189,7 @@ function toggleMask(idx) {
   }
 }
 function onScoreReset() {
+  clearGameStorage('__easy_click_game__');
   bestScore.value = null;
 }
 function updateBestScore() {

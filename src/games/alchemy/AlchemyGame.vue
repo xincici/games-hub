@@ -148,6 +148,7 @@ import CardItem from '@/games/poker/CardItem.vue';
 import { RESULT_DELAY_MS } from '@/shared/resultDelay';
 import confetti, { burstConfetti } from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { clearGameStorage } from '@/shared/storage';
 import {
   SIZE, CELLS, PREVIEW,
   JOKER, BLACK, RED, JOKER_SUIT,
@@ -369,6 +370,7 @@ function toggleMode() {
 }
 
 function onScoreReset() {
+  clearGameStorage('__poker_alchemy__');
   localStorage.removeItem(BEST_KEY + 1);
   localStorage.removeItem(BEST_KEY + 2);
   bestScore.value = score.value;
@@ -940,7 +942,7 @@ onUnmounted(() => {
       color: var(--win-color);
       &.lose { color: var(--lose-color); }
       .level-note { font-size: 14px; color: var(--text-color); opacity: 0.75; font-weight: 400; }
-      .result-btns { display: flex; gap: 10px; }
+      .result-btns { display: flex; gap: 12px; }
     }
   }
   // 消除：先闪两下（每下暗下去一半）再整体消失 —— 「闪烁然后消除」

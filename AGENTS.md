@@ -4,7 +4,7 @@
 
 | 你要做的事 | 必读 |
 | --- | --- |
-| **任何改动之前** | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) —— 跨游戏硬约定（含「开工前逐条核对」清单） |
+| **任何改动之前** | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) —— 跨游戏硬约定（含「开工前逐条核对」清单）<br>其中 **「交互与结算的统一规范」**（按钮文案/配色/位置、统计条顺序、结算层内容、二次确认、清记录）是 25 个游戏普查后的**唯一标准**，改交互前必须先看，别照抄隔壁游戏 |
 | 了解某个游戏怎么玩 | `src/games/<id>/README.md` —— **面向玩家**的玩法简介（根 README 只留一句话 + 链接） |
 | 改某个游戏 | 上表里那个游戏的**分册** `src/games/<id>/AGENTS.md` |
 | 新增游戏 | [`docs/NEW-GAME.md`](docs/NEW-GAME.md) —— 分步清单 + 骨架；同时过一遍约定 |
@@ -16,6 +16,10 @@
 
 开工前跑一次 `node scripts/check-conventions.mjs`：它会检查注册表 ↔ safelist ↔ README ↔ 分册 ↔ 存档 key
 是否对得上（改动完成后**再跑一次**，仍要全绿）。
+
+**改到按钮 / 统计条 / 结算层 / 二次确认 / 清记录**时，另外跑一次 `node scripts/check-ui.mjs`：
+它按上面那份「交互与结算的统一规范」检查 25 个游戏（历史别名的 i18n key、`.game-icon` 空类、
+按钮文案的 emoji 前缀、连点清记录是否真的接上并清扫了存档前缀），必须全绿。
 
 ## 项目概述
 

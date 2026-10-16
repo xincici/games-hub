@@ -68,7 +68,7 @@
             <span v-if="newBest" class="new-best">🏅 {{ i18n('newBest') }}</span>
           </template>
           <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
-          <button @click="initGame" class="game-icon again">{{ i18n('playAgain') }}</button>
+          <button @click="initGame" class="game-icon">{{ i18n('replayLevel') }}</button>
         </div>
       </Transition>
     </div>
@@ -109,6 +109,7 @@ import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import { generatePuzzle } from './sudoku';
+import { clearGameStorage } from '@/shared/storage';
 
 const NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // 笔记用 1 << d 当位掩码（d = 1..9），所以数字 9 落在 bit 9 = 512 上：
@@ -313,6 +314,7 @@ function changeDifficulty(dir) {
 }
 
 function onScoreReset() {
+  clearGameStorage('__sudoku_game__');
   bestTime.value = 0;
 }
 
@@ -718,10 +720,9 @@ function win() {
     background: var(--primary-bg);
     color: #fff;
     border: 0 none;
-    border-radius: 8px;
-    &.again {
-      margin-top: 6px;
-    }
+    border-radius: var(--radius-tile);
+      // 结算层那颗「再来一局」和上面的内容留一点距离
+      .result .game-icon { margin-top: 6px; }
   }
   .game-area {
     position: relative;
