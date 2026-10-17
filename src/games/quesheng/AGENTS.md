@@ -125,12 +125,20 @@
 快照连牌 id 都存了，所以缓存的最优解对同一副初始局仍然成立）。
 **这里踩过一次**：第一版还额外要求 `future` 为空 —— 而玩家撤销回初始局时，`future` 里正留着
 刚撤销掉的那些步骤，于是按钮一直是灰的（用户报的）。
-- 滑动：真调 `applySlide(dir)`（0.17s 过渡）+ 停 `GOD_SLIDE_MS = 620ms`；
+- 滑动：真调 `applySlide(dir, true)`（0.17s 过渡）+ 停 `GOD_SLIDE_MS = 620ms`；
 - 消除：先把 `selected` 设成这一组（牌抬起 + 橙色外框，让玩家看清消的是哪组）停 360ms，
   再 `clearGroup`（闪烁 520ms）+ 停 600ms；
 - 播放中再点一下按钮 = 停止（`stopGod()` 立刻唤醒所有等待），换关 / 卸载也会停。
 - **播放期间彻底不接受输入**：`.automask` 盖在牌上面（实测 `elementFromPoint` 打到的是它、
   强行滑一次步数保持不变），`onTileClick` / `onBoardDown` / `onPointerUp` 里也都判 `godPlaying`。
+- **回归：`applySlide` 的输入拦截把上帝模式自己也挡住了**（用户报「不会移动牌了」）。
+  commit `926eb47` 去掉 `clearing` 判断时，顺手给 `applySlide` 加了 `godPlaying` 判断（本意是
+  播放期间挡住键盘 / 手势），但 `godPlay` 自己也要调 `applySlide` —— 于是每一次滑动都被自己挡掉，
+  表现成「只清得掉开局就摆好的组、牌一步都不动」。修法是给它一个显式的放行位：
+  `applySlide(dir, fromGod = false)`，拦截条件写 `phase !== PLAY || (godPlaying && !fromGod)`，
+  `godPlay` 里传 `true`，键盘 / 手势走默认值。**别再给 applySlide 加无条件的 `godPlaying` 拦截。**
+  实测（第 5 关，390 宽）：老模式滑 7 步（30→23）、新模式滑 6 步（50→44），
+  都打到 `result win`、14 张清空、遮罩播放中存在 / 结束后撤掉、按钮回到「⚡ 上帝模式」并禁用。
 
 **一个值得记的样式层级坑**：`.automask` 一开始被我跟着 `.opt-area` 一起嵌套（因为替换的是
 `.opt-area` 里那行说明文案），编译成 `.opt-area .automask` —— 而它实际渲染在 `.board` 里，

@@ -462,7 +462,9 @@ async function godPlay() {
   for (const step of solution) {
     if (!godPlaying.value || phase.value !== PLAY) break;
     if (step.type === 'slide') {
-      applySlide(step.dir);
+      // 播放中 `godPlaying` 是 true，而 applySlide 默认会拦截输入 —— 这里必须显式放行，
+      // 否则上帝模式只清得掉现成的组、一步也滑不动（用户报过「不会移动牌了」）。
+      applySlide(step.dir, true);
       await godSleep(GOD_SLIDE_MS);
     } else {
       selected.value = [...step.cells];      // 先点亮这一组（抬起 + 外框），让玩家看清消的是哪组
@@ -478,8 +480,10 @@ async function godPlay() {
 }
 
 // ---------- 滑动 ----------
-function applySlide(dir) {
-  if (phase.value !== PLAY || godPlaying.value) return;
+// `fromGod` 只给上帝模式自己用：播放期间 godPlaying 为 true，而键盘 / 滑动手势必须被挡住，
+// 所以拦截条件不能去掉，只能由 godPlay 显式放行（别再写成「godPlaying 时一律 return」）。
+function applySlide(dir, fromGod = false) {
+  if (phase.value !== PLAY || (godPlaying.value && !fromGod)) return;
   // 浮影层是按消除当时的格子绝对定位的，滑动会让剩下的牌移动、浮影留在原地 —— 先收掉它
   //（原本那 520ms 的 checkEnd 定时器仍会照常跑，不影响胜负判定）
   if (clearing.value.size) clearing.value = new Map();
