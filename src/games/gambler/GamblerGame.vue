@@ -4,7 +4,7 @@
       <!-- 模式切换：即时判断 / 最终判断（提交后统一判卷）。两种模式的记录各自独立 -->
       <span
         class="item-wrapper"
-        :class="{ 'mode-busy': revealing || flying || pending }"
+        :class="{ 'mode-busy': revealing || flyingCount > 0 || pending }"
         :title="i18n('modeTip')"
         @click="toggleMode"
       >
@@ -84,7 +84,7 @@
               :key="`${roundId}-a-${key}`"
               :ref="el => setAnswerEl(key, el)"
               class="answer-tile"
-              :class="{ landing: landingKey === key, removable: mode === 2 }"
+              :class="{ landing: landingKeys.has(key), removable: mode === 2 }"
               :data-key="key"
               :title="mode === 2 ? i18n('unpickTip') : ''"
               @click="unpick(key)"
@@ -222,8 +222,10 @@ const pickedKeys = ref([]);
 const phase = ref('play');          // play | won | lost
 const revealed = ref(false);        // 是否已经「查看答案」
 const revealing = ref(false);       // 正在一张张放答案（期间锁输入）
-const flying = ref(false);          // 有一张正在飞
-const landingKey = ref(null);       // 目标槽位先隐身，等飞到了再现身
+// 最终判断模式允许**多张牌同时飞**：用计数而不是布尔值，每个目标槽位单独隐身。
+// 牌一开飞就写进 pickedKeys（认定已选择），所以飞行中也能点别的牌、点提交。
+const flyingCount = ref(0);
+const landingKeys = ref(new Set());  // 正在飞的目标槽位 key（每张单独隐身，落地才现身）
 const pickFailed = ref(false);      // 选择区失败遮罩（失败后）
 const missedKeys = ref([]);         // 点错过的牌：标红、不能再选
 const reason = ref('');             // '' | 'wrong'（扣完心）| 'reveal'（查看答案）
@@ -246,10 +248,10 @@ const setAnswerEl = (key, el) => { if (el) answerEls.set(key, el); else answerEl
 const blockedSet = computed(() => new Set(blocked.value));
 const pickedSet = computed(() => new Set(pickedKeys.value));
 const missedSet = computed(() => new Set(missedKeys.value));
-// 最终判断模式的提交按钮：选中的牌不即时判对错，点它才整组判卷
+// 最终判断模式的提交按钮：只要答案区有牌就能点 —— 飞行中的牌已经算进 pickedKeys，
+// 所以不再因为「有张牌还在飞」或「刚答错在抖」而置灰（用户要求）。
 const canSubmit = computed(() => mode.value === 2 && phase.value === 'play'
-  && !dealing.value && !pending.value && !revealing.value && !flying.value
-  && !answerShake.value && pickedKeys.value.length > 0);
+  && !pending.value && !revealing.value && pickedKeys.value.length > 0);
 
 // ---------- 尺寸 ----------
 // 手牌 13 张排一行（像真的一手牌）；选择区每行 9 张（字牌 7 张）。
@@ -368,8 +370,8 @@ function deal(lv) {
   phase.value = 'play';
   revealed.value = false;
   revealing.value = false;
-  flying.value = false;
-  landingKey.value = null;
+  flyingCount.value = 0;
+  landingKeys.value = new Set();
   pickFailed.value = false;
   missedKeys.value = [];
   reason.value = '';
@@ -393,63 +395,76 @@ function playDealAnimation() {
 
 // 把一张牌从选择区飞进答案区：**复制一张**飞出去，原位那张立刻置灰留在原地
 //（玩家要求「所在位置不要空白」），目标槽位飞行期间先隐身，落地那一刻才现身。
+const setLanding = (key, on) => {
+  const next = new Set(landingKeys.value);
+  if (on) next.add(key); else next.delete(key);
+  landingKeys.value = next;
+};
+
 async function flyToAnswer(key) {
   const fromEl = pickEls.get(key);
   pickedKeys.value = [...pickedKeys.value, key];   // → 原位立刻变 .used（置灰、不可点）
-  landingKey.value = key;
-  await nextTick();
-  const toEl = answerEls.get(key);
-  if (fromEl && toEl) {
-    const a = fromEl.getBoundingClientRect();
-    const b = toEl.getBoundingClientRect();
-    const dx = b.left - a.left;
-    const dy = b.top - a.top;
-    const sc = a.width ? b.width / a.width : 1;
-    // 克隆节点：内联的 --bg-x/--bg-y 与 data-v 属性一起带走，所以牌面一致；
-    // 自己加 filter:none 抵消原位那张的置灰，看起来就是「一张干净的牌飞过去」。
-    const ghost = fromEl.cloneNode(true);
-    Object.assign(ghost.style, {
-      position: 'fixed',
-      left: `${a.left}px`,
-      top: `${a.top}px`,
-      width: `${a.width}px`,
-      height: `${a.height}px`,
-      margin: '0',
-      zIndex: '60',
-      pointerEvents: 'none',
-      filter: 'none',
-      opacity: '1',
-    });
-    document.body.appendChild(ghost);
-    try {
-      await ghost.animate(
-        [{ transform: 'none' }, { transform: `translate(${dx}px, ${dy}px) scale(${sc})` }],
-        { duration: FLY_MS, easing: 'cubic-bezier(0.3, 0.7, 0.35, 1)' },
-      ).finished;
-    } catch { await sleep(FLY_MS); }
-    ghost.remove();
-  } else {
-    await sleep(FLY_MS);
+  setLanding(key, true);                           // 只藏这一张的目标槽位，别的飞行互不影响
+  try {
+    await nextTick();
+    const toEl = answerEls.get(key);
+    if (fromEl && toEl) {
+      const a = fromEl.getBoundingClientRect();
+      const b = toEl.getBoundingClientRect();
+      const dx = b.left - a.left;
+      const dy = b.top - a.top;
+      const sc = a.width ? b.width / a.width : 1;
+      // 克隆节点：内联的 --bg-x/--bg-y 与 data-v 属性一起带走，所以牌面一致；
+      // 自己加 filter:none 抵消原位那张的置灰，看起来就是「一张干净的牌飞过去」。
+      const ghost = fromEl.cloneNode(true);
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: `${a.left}px`,
+        top: `${a.top}px`,
+        width: `${a.width}px`,
+        height: `${a.height}px`,
+        margin: '0',
+        // 压在胜利浮层（z-index 20）下面，飞行中提交成功时替身不会盖在结算层上
+        zIndex: '19',
+        pointerEvents: 'none',
+        filter: 'none',
+        opacity: '1',
+      });
+      document.body.appendChild(ghost);
+      try {
+        await ghost.animate(
+          [{ transform: 'none' }, { transform: `translate(${dx}px, ${dy}px) scale(${sc})` }],
+          { duration: FLY_MS, easing: 'cubic-bezier(0.3, 0.7, 0.35, 1)' },
+        ).finished;
+      } catch { await sleep(FLY_MS); }
+      ghost.remove();
+    } else {
+      await sleep(FLY_MS);
+    }
+  } finally {
+    setLanding(key, false);
   }
-  landingKey.value = null;
 }
 
 async function pick(key) {
-  if (phase.value !== 'play' || pending.value || revealing.value || flying.value) return;
+  // 飞行不再阻塞输入；只有「即时判断」保持原来的一次一张（避免连续点错时扣心节奏失控）。
+  // 最终判断模式允许边飞边点，因为牌一开飞就已经写进 pickedKeys（认定已选择）。
+  if (phase.value !== 'play' || pending.value || revealing.value) return;
+  if (mode.value === 1 && flyingCount.value > 0) return;
   // 已选过 / 已标红（点错过）的都不能再选，选择区里它们也已置灰不可点
   if (blockedSet.value.has(key) || pickedSet.value.has(key) || missedSet.value.has(key)) return;
   if (mode.value === 2) {
     // 最终判断模式：选哪张都先飞进答案区，**不即时判对错**，等玩家点提交再整组判卷
-    flying.value = true;
-    await flyToAnswer(key);
-    flying.value = false;
+    const flight = flyToAnswer(key);
+    save();                                        // 一开飞就落档：飞行中退出也算已选
+    flyingCount.value += 1;
+    try { await flight; } finally { flyingCount.value = Math.max(0, flyingCount.value - 1); }
     save();
     return;
   }
   if (picks.value.includes(key)) {
-    flying.value = true;
-    await flyToAnswer(key);
-    flying.value = false;
+    flyingCount.value += 1;
+    try { await flyToAnswer(key); } finally { flyingCount.value = Math.max(0, flyingCount.value - 1); }
     save();
     // 胜利遮罩不等待：最后一张牌落位后立刻铺结算层（用户要求）
     if (pickedKeys.value.length === picks.value.length) win();
@@ -468,7 +483,7 @@ async function pick(key) {
 
 // 最终判断模式：点答案区的牌把它退回选择区（可以反复调整，提交前不判对错）
 function unpick(key) {
-  if (mode.value !== 2 || phase.value !== 'play' || pending.value || revealing.value || flying.value) return;
+  if (mode.value !== 2 || phase.value !== 'play' || pending.value || revealing.value) return;
   if (!pickedSet.value.has(key)) return;
   pickedKeys.value = pickedKeys.value.filter(k => k !== key);
   save();
@@ -508,6 +523,9 @@ async function finishRound(kind) {
     await flyToAnswer(key);
     await sleep(120);
   }
+  // 最终判断模式允许提交时还有牌在飞：等这些替身也落完再盖失败遮罩，
+  // 否则遮罩会先出现、飞行中的牌从它上面穿过去。
+  while (flyingCount.value > 0) await sleep(30);
   revealing.value = false;
   pickFailed.value = true;
   phase.value = 'lost';
@@ -543,7 +561,7 @@ function retryLevel() {
 // 切换模式：先落档当前模式，再切到另一种模式自己的关卡 / 最高关卡 / 连胜 / 局面。
 // 飞行、查看答案、结算延迟期间不允许切，否则上一模式的异步收尾会改到新模式的数据。
 function toggleMode() {
-  if (revealing.value || flying.value || pending.value) return;
+  if (revealing.value || flyingCount.value > 0 || pending.value) return;
   save();
   cancel();
   clearTimeout(dealTimer);
@@ -554,8 +572,8 @@ function toggleMode() {
   answerShake.value = false;
   wrongKey.value = null;
   revealing.value = false;
-  flying.value = false;
-  landingKey.value = null;
+  flyingCount.value = 0;
+  landingKeys.value = new Set();
   pickFailed.value = false;
   level.value = Math.max(1, readNum(levelKey(), 1));
   best.value = readNum(bestKey(), 0);

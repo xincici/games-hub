@@ -44,13 +44,13 @@
 - **选择区**：`groups` 只有万/条/筒三行、**没有行首文字**（原先的 `.row-label` 已删），
   `board.js` 的 `SELECT_KEYS` 也收敛成三门 27 张（字牌既不进手牌也不进选择区）。
 - **答案区**（`.answer-card`，夹在手牌与选择区之间）：玩家选中的牌会**从选择区飞进来**。
-  飞行用**克隆**：`fromEl.cloneNode(true)` 贴到 `document.body`（fixed 定位到原位、`zIndex: 60`、
-  自带 `filter: none` 抵消原位的置灰），量出来源与目标槽位的 rect 后用 `element.animate`
+  飞行用**克隆**：`fromEl.cloneNode(true)` 贴到 `document.body`（fixed 定位到原位、`zIndex: 19`、
+  自带 `filter: none` 抵消原位的置灰；压在胜利浮层 `z-index: 20` 下面），量出来源与目标槽位的 rect 后用 `element.animate`
   把它 `translate + scale` 到目标（420ms，不 fill），落地后 `ghost.remove()`。
   ⚠️ **不要让来源元素自己飞**：那样原位在飞行期间会空出来（玩家反馈「所在位置不要空白」）——
   原位那张要立刻变 `.used` 留在原地，只有克隆在飞。
-  目标槽位在飞行期间挂 `.landing { visibility: hidden }`，落地那一刻才现身
-  （visibility 不影响布局，量位置照样准），所以也不会出现「两张同时在场」的闪。
+  目标槽位在飞行期间挂 `.landing { visibility: hidden }`（`landingKeys` 按 key 记录，多张同时飞各藏各的），
+  落地那一刻才现身（visibility 不影响布局，量位置照样准），所以也不会出现「两张同时在场」的闪。
   ⚠️ 恢复存档时，已选的是**答案**（手牌之外的牌），所以只能按 `KIND_KEYS` 校验 + 去重，
   早先写成 `filter(k => st.hand.includes(k))` → 刷新后答案区会被清掉大半。
   **答案区文案常驻在卡片上部居中**（`.answer-tip`，不是原来那个 `v-if="!pickedKeys.length"` 的空态提示）：
@@ -65,13 +65,20 @@
 - **最终判断模式（mode 2）的交互**：
   - `pick()` 在 mode 2 里**不查答案**：任何没被占用的牌都直接 `flyToAnswer()`，不扣心、不标红、不弹提示。
   - 点答案区的牌走 `unpick()`：把它从 `pickedKeys` 里删掉（回到选择区），不扣心。
-  - 提交按钮只在 `mode === 2 && phase === 'play'` 时渲染，`canSubmit = 播放/飞行/结算中不提交 &&
-    至少选了一张`。
+  - **多张牌可以同时飞**：`flyToAnswer()` 一开飞就把 key 写进 `pickedKeys`（认定已选择），
+    每张牌的目标槽位用 `landingKeys` 单独隐身（不再是单个 `landingKey`）；`flyingCount` 只控制
+    「模式切换暂时禁用」，**不挡 `pick()` / `submitPicks()`**。所以飞行中还能继续点别的牌，
+    点提交时正在飞的那张也会参与判卷（用户要求）。
+  - **飞牌一开飞就 `save()`**（不等动画结束），中途退出也记得这张已经被选中。
+  - 提交按钮只在 `mode === 2 && phase === 'play'` 时渲染；**只要 `pickedKeys` 里有牌就可用**，
+    不因飞行 / 发牌波浪 / 刚答错的抖动而置灰（用户要求）。仍然不可用的是结算延迟与失败补答案期间
+    （`pending` / `revealing`），因为那两段本来就在收尾。
   - `submitPicks()` 用**集合完全相等**判卷：长度相同且每个选中项都在 `picks` 里。相等就
     **直接 `win()`**（用户要求胜利遮罩不等待）；否则扣一颗心、给整块 `.answer-card` 挂 `.shake`（`tile-shake` 0.5s），
     **不写 `missed` / 不标 `revealed` / 不指出任何一张**，保留下来的答案由玩家自己删改。
-  - **错误提交后的 0.52s 内拒绝再次提交**（`answerShake` 就是锁）：否则手快连点两下会在同一版
-    错误答案上把两颗心一次扣光。`canSubmit` 也把 `pickedKeys.length > 0` 作为门槛。
+  - **错误提交后的 0.52s 内拒绝再次提交**（`answerShake` 在 `submitPicks()` 里当锁，**不从
+    `canSubmit` 里扣**，所以按钮不会因此变灰）：否则手快连点两下会在同一版错误答案上把两颗心一次扣光。
+    `canSubmit` 仍把 `pickedKeys.length > 0` 作为门槛。
 - **失败统一走 `finishRound(kind)`**（异步，`kind = 'wrong' | 'reveal'`）：把玩家还没选出来的答案
   **一张一张 `await flyToAnswer()`**（每张之间 120ms，看得清）→ 全部落地后才
   `pickFailed = true`、`phase = 'lost'`、`streak = 0` 再 `save()`。
@@ -139,6 +146,10 @@
 - 顶栏两个模式图标（`i-mdi-lightning-bolt` / `i-mdi-check-all`）都正常渲染，`title` 为 `modeTip`。
 - **胜利遮罩不等待**：即时判断模式下最后一张飞入后约 **487ms** 出现（只等 420ms 飞牌，不再加
   `resultDelay` 的 500ms）；提交判断模式点「提交」后约 **4ms** 就出现。之前两种模式都要多等 0.5s。
+- **飞行中可继续操作**（提交判断）：第一张起飞 40ms 后点第二张仍被接受（`pickedKeys` 立刻是两张），
+  答案区目标槽位两张都在 `.landing`；此时提交按钮**不灰**，点提交直接把两张一起判卷并 `won`。
+  已落位一张 + 另一张还在飞时提交，同样两张都参与。飞行中连续点三张都接受；错误提交仍扣一颗心、
+  不标错牌，且按钮在抖动期间也不置灰；退回错牌再补齐后能正常过关。
 
 ## 坑
 
