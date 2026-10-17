@@ -183,12 +183,15 @@ import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
 import MahjongBack from '@/shared/MahjongBack.vue';
-import { isWin, kongOptions, newRoundSafe, sameTile, sortTiles, tileKey, HAND_SIZE } from './board';
+import {
+  isWin, kongOptions, newRoundSafe, sameTile, sortTiles, tileKey, HAND_SIZE, MELD_SIZE,
+} from './board';
 import { clearGameStorage } from '@/shared/storage';
 
 const PLAY = 'play';
 const WON = 'won';
 const LOST = 'lost';
+const DEAL_WAVE_MS = 30 * 20 + 380;   // 发牌 / 恢复时的波浪总时长（手牌 14 × 45ms 与牌堆都为它让路）
 
 const KEYS = {
   state: '__solo__state',
@@ -209,6 +212,10 @@ const validTile = t => t && typeof t === 'object'
   && ['m', 's', 'p', 'z'].includes(t.suit)
   && Number.isInteger(t.value) && t.value >= 1 && t.value <= (t.suit === 'z' ? 7 : 9)
   && Number.isInteger(t.id) && t.id > 0;
+// 杠只存牌面（4 张同牌、没有 id）；点数值范围按字牌 1~7、数牌 1~9 校验
+const validKong = k => k && typeof k === 'object'
+  && ['m', 's', 'p', 'z'].includes(k.suit)
+  && Number.isInteger(k.value) && k.value >= 1 && k.value <= (k.suit === 'z' ? 7 : 9);
 
 // ---------- 状态（**在 setup 里就恢复**，首帧即最终样子；所有恢复要用到的 ref 都声明在 restoreState 之前） ----------
 const hand = ref([]);
@@ -234,13 +241,21 @@ const best = ref(readInt(KEYS.best, 0));
 function restoreState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEYS.state) || 'null');
-    if (!s || !Array.isArray(s.hand) || s.hand.length !== HAND_SIZE) return false;
-    if (!Array.isArray(s.wall)) return false;
+    if (!s || !Array.isArray(s.hand) || !Array.isArray(s.wall)) return false;
+    const savedKongs = Array.isArray(s.kongs) ? s.kongs : [];
+    if (!savedKongs.every(validKong)) return false;
+    // 同一张牌不可能杠两次（每张最多 4 张）
+    if (new Set(savedKongs.map(tileKey)).size !== savedKongs.length) return false;
+    // ⚠️ 有杠之后手牌不再是 14 张，而是 14 − 3 × 杠数（杠出去的 4 张不再留在手里）。
+    // 判据必须和 isWin() 一样按「等效张数」算：这里原来写死 `hand.length !== HAND_SIZE`，
+    // 于是「有 1 个杠、手上 11 张」的存档一律被当成坏档 → 退出重进直接开新局（用户报过）。
+    // 等效 13 张是「刚打出 / 刚杠完、自动补摸还没落盘」的那一瞬间（save() 在 commit 时就写了），
+    // 恢复后要补上那次摸牌，见 onMounted 里的 pendingDraw。
+    const effective = s.hand.length + MELD_SIZE * savedKongs.length;
+    if (effective !== HAND_SIZE && effective !== HAND_SIZE - 1) return false;
     if (![...s.hand, ...s.wall].every(validTile)) return false;
     hand.value = s.hand.map(t => ({ suit: t.suit, value: t.value, id: t.id }));
-    kongs.value = Array.isArray(s.kongs)
-      ? s.kongs.filter(k => k && ['m', 's', 'p', 'z'].includes(k.suit) && Number.isInteger(k.value)).map(k => ({ suit: k.suit, value: k.value, count: 4 }))
-      : [];
+    kongs.value = savedKongs.map(k => ({ suit: k.suit, value: k.value, count: 4 }));
     wall.value = s.wall.map(t => ({ suit: t.suit, value: t.value, id: t.id }));
     discards.value = Array.isArray(s.discards) ? s.discards.filter(validTile).map(t => ({ suit: t.suit, value: t.value, id: t.id })) : [];
     drawnId.value = Number.isInteger(s.drawnId) ? s.drawnId : null;
@@ -255,6 +270,10 @@ function restoreState() {
   }
 }
 const restored = restoreState();
+// 存档可能落在「刚打出一张 / 刚杠完、补摸还没落地」的那一瞬间：等效 13 张。
+// 恢复后要补上那次摸牌，否则玩家重进就少一张、再打一张等于把牌打丢了。
+const pendingDraw = restored && phase.value === PLAY
+  && hand.value.length + MELD_SIZE * kongs.value.length === HAND_SIZE - 1;
 
 const save = () => {
   try {
@@ -635,7 +654,9 @@ function dealRound() {
 function playDealWave() {
   dealing.value = true;
   busy.value = true;
-  setTimeout(() => { dealing.value = false; busy.value = false; }, 30 * 20 + 380);
+  return new Promise(resolve => {
+    setTimeout(() => { dealing.value = false; busy.value = false; resolve(); }, DEAL_WAVE_MS);
+  });
 }
 
 // 「新游戏」确认之后：**当前连胜清零**（最长连胜作为记录保留），再从头发一局
@@ -647,7 +668,7 @@ function startNewGame() {
   dealRound();
 }
 
-onMounted(() => {
+onMounted(async () => {
   measureHand();
   if (typeof ResizeObserver !== 'undefined' && handCardEl.value) {
     const ro = new ResizeObserver(measureHand);
@@ -655,9 +676,18 @@ onMounted(() => {
   }
   // 没有存档时发一局 —— **这里绝不能清连胜**：首次进入也走这条路，
   // 清了就等于每次打开游戏连胜都没了（实测踩过：种下 streak=8 进游戏显示 0）。
-  if (!restored) dealRound();
-  else playDealWave();     // 恢复存档也播一次发牌波浪（用户要求）；烟花仍然只在真胡牌时放
-  // 恢复时什么都不播（老约定：恢复界面不放动画，胜利局面也只摆浮层）
+  if (!restored) { dealRound(); return; }
+  await playDealWave();    // 恢复存档也播一次发牌波浪（用户要求）；烟花仍然只在真胡牌时放
+  if (!pendingDraw) return;
+  // 波浪期间用户可能点了「新游戏」/ 重开（那个按钮没禁用）：只有手牌仍是那副
+  // 「等效 13 张」的恢复局面时才补摸，别把一张牌摸进新局里。
+  const stillPending = phase.value === PLAY
+    && hand.value.length + MELD_SIZE * kongs.value.length === HAND_SIZE - 1;
+  if (!stillPending) return;
+  if (!wall.value.length) { lose(); return; }
+  busy.value = true;
+  await drawOne();
+  busy.value = false;
 });
 
 function onScoreReset() {
