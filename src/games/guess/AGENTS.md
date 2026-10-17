@@ -22,3 +22,15 @@ GuessNumber.vue + robot/i18n.js
 
 - 顶栏「游戏特色按钮」：机器人（`TopHeader` 默认插槽）
 - 存档 key：`__guess_number__robot`（是否与机器人对战）、`__guess_number__state`（局面存档）、`__guess_number__best`（最佳成绩）
+
+## 布局（底部数字输入区）
+
+- `.input-area` 是 `position: fixed` 的底部数字键盘，宽度必须和顶部 `TopHeader` 用同一口径：
+  `width: 100%; max-width: var(--max-width)` + `left: 50%; transform: translateX(-50%)`。
+  原来宽屏写死 `width: 600px`，比标题栏（480）和上面的卡片（440）都宽出一截（用户报过
+  「宽屏上输入区比其他的宽」）。
+- **不要再用**原来的 `@media (max-width: 720px) { .input-area { max-width: inherit } }`：
+  那会在 480~720 宽的屏上把 max-width 清掉、又拉回整屏宽；现在基础规则在手机上本来就是整屏宽，
+  只有超过 480 才封顶，和标题栏逐档一致。
+- 实测（2026-10-17）：1280 / 800 / 600 宽下标题栏与输入区都是 **480**；390 / 375 下都是整屏宽。
+  键盘仍是 3 行（8 个数字两行 + 退格/提交一行）、最右按钮不超出输入区、横向/纵向滚动都是 0。

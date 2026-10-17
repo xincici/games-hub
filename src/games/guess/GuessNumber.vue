@@ -298,7 +298,10 @@ function guessOnce() {
     }
   }
   .input-area {
-    width: 600px;
+    // 和顶部标题栏用同一套宽度口径（width 100% + max-width: var(--max-width)，再居中）：
+    // 原来宽屏写死 600px，比标题栏（480）和上面的卡片（440）都宽出一截（用户报过）。
+    width: 100%;
+    max-width: var(--max-width);
     height: auto;
     box-sizing: border-box;
     padding: 12px 12px calc(22px + env(safe-area-inset-bottom));
@@ -353,15 +356,6 @@ function guessOnce() {
           opacity: 0.8;
         }
       }
-    }
-  }
-}
-@media only screen and (max-width: 720px) {
-  .wrapper {
-    .input-area {
-      width: 100%;
-      max-width: inherit;
-      border-radius: var(--card-radius) var(--card-radius) 0 0;
     }
   }
 }
