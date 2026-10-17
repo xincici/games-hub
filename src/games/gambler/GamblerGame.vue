@@ -1,6 +1,17 @@
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <TopHeader @onScoreReset="onScoreReset">
+      <!-- 模式切换：即时判断 / 最终判断（提交后统一判卷）。两种模式的记录各自独立 -->
+      <span
+        class="item-wrapper"
+        :class="{ 'mode-busy': revealing || flying || pending }"
+        :title="i18n('modeTip')"
+        @click="toggleMode"
+      >
+        <i v-if="mode === 1" i-mdi-lightning-bolt />
+        <i v-else i-mdi-check-all />
+      </span>
+    </TopHeader>
 
     <!-- 统计条：最高关卡 / 关卡 / 连胜 / 生命（生命在最右） -->
     <div class="card score-area">
@@ -63,19 +74,31 @@
         </div>
       </div>
 
-      <!-- 答案区：玩家选中的牌会从下面的选择区**飞进来** -->
-      <div class="card answer-card">
-        <div class="answer-row" :style="pickRowVars">
-          <div
-            v-for="key in pickedKeys"
-            :key="`${roundId}-a-${key}`"
-            :ref="el => setAnswerEl(key, el)"
-            class="answer-tile"
-            :class="{ landing: landingKey === key }"
-          >
-            <MahjongTile :suit="faceOf(key).suit" :value="faceOf(key).value" />
+      <!-- 答案区：玩家选中的牌会从下面的选择区**飞进来**；提示文案常驻在答案区上部居中 -->
+      <div class="card answer-card" :class="{ shake: answerShake }">
+        <div class="answer-tip">{{ i18n(mode === 2 ? 'answerTipSubmit' : 'answerTip') }}</div>
+        <div class="answer-body">
+          <div class="answer-row" :style="pickRowVars">
+            <div
+              v-for="key in pickedKeys"
+              :key="`${roundId}-a-${key}`"
+              :ref="el => setAnswerEl(key, el)"
+              class="answer-tile"
+              :class="{ landing: landingKey === key, removable: mode === 2 }"
+              :data-key="key"
+              :title="mode === 2 ? i18n('unpickTip') : ''"
+              @click="unpick(key)"
+            >
+              <MahjongTile :suit="faceOf(key).suit" :value="faceOf(key).value" />
+            </div>
           </div>
-          <span v-if="!pickedKeys.length" class="answer-hint">{{ i18n('answerTip') }}</span>
+          <!-- 最终判断模式：答案区右侧的提交按钮。选中的牌不即时判对错，点它才整组判卷 -->
+          <button
+            v-if="mode === 2 && phase === 'play'"
+            class="game-icon"
+            :disabled="!canSubmit"
+            @click="submitPicks"
+          >{{ i18n('submit') }}</button>
         </div>
       </div>
 
@@ -90,13 +113,15 @@
               :class="{
                 dealing,
                 blocked: blockedSet.has(key),
-                picked: pickedSet.has(key),
+                // 即时判断模式才用绿圈表示「选对了」；最终判断模式在提交前不能暗示对错
+                picked: mode === 1 && pickedSet.has(key),
                 used: pickedSet.has(key),
                 revealed: revealed && picks.includes(key),
                 missed: missedSet.has(key),
                 wrong: wrongKey === key,
               }"
               :style="{ '--i': g.offset + i }"
+              :data-key="key"
               :ref="el => setPickEl(key, el)"
               :title="blockedSet.has(key) ? i18n('blocked') : ''"
               @click="pick(key)"
@@ -110,7 +135,8 @@
           <span class="mask-text">👻 {{ i18n('revealFailed') }}</span>
           <div class="result-actions">
             <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
-            <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
+            <!-- 失败遮罩上的「新游戏」是用户指定的例外：不弹二次确认，直接清当前连胜、回第 1 关 -->
+            <button class="game-icon" @click="startNewGame">{{ i18n('start') }}</button>
           </div>
         </div>
       </div>
@@ -155,12 +181,25 @@ import {
 
 // ---------- 存档 ----------
 // ⚠️ 答案集合（picks）**不写进存档**：恢复时按手牌重算，免得手改存档就能看到答案。
+// 两个模式（1 即时判断 / 2 最终判断）的关卡、最高关卡、连胜、局面各自一份：老模式沿用原 key，
+// 新模式加 _2 后缀（与麻将英雄 / 雀圣同一套约定）。mode 本身是偏好，清记录时保留。
 const KEY_PREFIX = '__gambler__';
-const LEVEL_KEY = `${KEY_PREFIX}level`;
-const BEST_KEY = `${KEY_PREFIX}best`;
-const STREAK_KEY = `${KEY_PREFIX}streak`;
-const STATE_KEY = `${KEY_PREFIX}state`;
+const KEYS = {
+  mode: '__gambler__mode',
+  level: ['__gambler__level', '__gambler__level_2'],
+  best: ['__gambler__best', '__gambler__best_2'],
+  streak: ['__gambler__streak', '__gambler__streak_2'],
+  state: ['__gambler__state', '__gambler__state_2'],
+};
 const HEARTS_MAX = 2;
+
+const storedMode = Math.floor(+(localStorage.getItem(KEYS.mode) || 1));
+const mode = ref(storedMode === 2 ? 2 : 1);         // 1 即时判断 / 2 最终判断（提交后判卷）
+const modeIndex = () => (mode.value === 2 ? 1 : 0);
+const levelKey = () => KEYS.level[modeIndex()];
+const bestKey = () => KEYS.best[modeIndex()];
+const streakKey = () => KEYS.streak[modeIndex()];
+const stateKey = () => KEYS.state[modeIndex()];
 
 const readNum = (key, dflt) => {
   try {
@@ -170,9 +209,9 @@ const readNum = (key, dflt) => {
 };
 
 // ---------- 状态（全部先声明，restore() 要用到） ----------
-const level = ref(Math.max(1, readNum(LEVEL_KEY, 1)));
-const best = ref(readNum(BEST_KEY, 0));
-const streak = ref(readNum(STREAK_KEY, 0));
+const level = ref(Math.max(1, readNum(levelKey(), 1)));
+const best = ref(readNum(bestKey(), 0));
+const streak = ref(readNum(streakKey(), 0));
 const hearts = ref(HEARTS_MAX);
 const hand = ref([]);
 const counts = ref({});
@@ -192,6 +231,7 @@ const roundId = ref(0);
 const dealing = ref(false);
 const confirming = ref(false);
 const wrongKey = ref(null);
+const answerShake = ref(false);     // 最终判断模式提交错误时抖一下答案区（不指出是哪张）
 const vwTick = ref(0);              // 只为了让尺寸在转屏/缩放后重算
 
 const { pending, later, cancel } = useResultDelay();
@@ -206,6 +246,10 @@ const setAnswerEl = (key, el) => { if (el) answerEls.set(key, el); else answerEl
 const blockedSet = computed(() => new Set(blocked.value));
 const pickedSet = computed(() => new Set(pickedKeys.value));
 const missedSet = computed(() => new Set(missedKeys.value));
+// 最终判断模式的提交按钮：选中的牌不即时判对错，点它才整组判卷
+const canSubmit = computed(() => mode.value === 2 && phase.value === 'play'
+  && !dealing.value && !pending.value && !revealing.value && !flying.value
+  && !answerShake.value && pickedKeys.value.length > 0);
 
 // ---------- 尺寸 ----------
 // 手牌 13 张排一行（像真的一手牌）；选择区每行 9 张（字牌 7 张）。
@@ -249,11 +293,12 @@ const groups = computed(() => [
 // ---------- 存档读写 ----------
 function save() {
   try {
-    localStorage.setItem(LEVEL_KEY, String(level.value));
-    localStorage.setItem(BEST_KEY, String(best.value));
-    localStorage.setItem(STREAK_KEY, String(streak.value));
+    localStorage.setItem(levelKey(), String(level.value));
+    localStorage.setItem(bestKey(), String(best.value));
+    localStorage.setItem(streakKey(), String(streak.value));
     if (phase.value === 'play' && !hand.value.length) return;
-    localStorage.setItem(STATE_KEY, JSON.stringify({
+    localStorage.setItem(stateKey(), JSON.stringify({
+      mode: mode.value,
       level: level.value,
       hand: hand.value,
       picked: pickedKeys.value,
@@ -268,10 +313,11 @@ function save() {
 
 function restore() {
   try {
-    const raw = localStorage.getItem(STATE_KEY);
+    const raw = localStorage.getItem(stateKey());
     if (!raw) return false;
     const st = JSON.parse(raw);
     if (!st || !Array.isArray(st.hand) || st.hand.length !== HAND_SIZE) return false;
+    if (st.mode !== undefined && st.mode !== mode.value) return false;
     const hc = handCounts(st.hand);
     level.value = Math.max(1, Math.floor(st.level) || 1);
     hand.value = st.hand.slice();
@@ -306,6 +352,7 @@ function restore() {
 // ---------- 流程 ----------
 let dealTimer = 0;
 let flashTimer = 0;
+let wrongSubmitTimer = 0;
 
 function deal(lv) {
   cancel();
@@ -327,6 +374,8 @@ function deal(lv) {
   missedKeys.value = [];
   reason.value = '';
   wrongKey.value = null;
+  answerShake.value = false;
+  clearTimeout(wrongSubmitTimer);
   best.value = Math.max(best.value, round.level);
   roundId.value += 1;
   playDealAnimation();
@@ -389,12 +438,21 @@ async function pick(key) {
   if (phase.value !== 'play' || pending.value || revealing.value || flying.value) return;
   // 已选过 / 已标红（点错过）的都不能再选，选择区里它们也已置灰不可点
   if (blockedSet.value.has(key) || pickedSet.value.has(key) || missedSet.value.has(key)) return;
+  if (mode.value === 2) {
+    // 最终判断模式：选哪张都先飞进答案区，**不即时判对错**，等玩家点提交再整组判卷
+    flying.value = true;
+    await flyToAnswer(key);
+    flying.value = false;
+    save();
+    return;
+  }
   if (picks.value.includes(key)) {
     flying.value = true;
     await flyToAnswer(key);
     flying.value = false;
     save();
-    if (pickedKeys.value.length === picks.value.length) later(win);
+    // 胜利遮罩不等待：最后一张牌落位后立刻铺结算层（用户要求）
+    if (pickedKeys.value.length === picks.value.length) win();
     return;
   }
   // 点错：标红 + 抖一下 + 扣一颗心（标红后这张不能再选）
@@ -408,11 +466,40 @@ async function pick(key) {
   else save();
 }
 
+// 最终判断模式：点答案区的牌把它退回选择区（可以反复调整，提交前不判对错）
+function unpick(key) {
+  if (mode.value !== 2 || phase.value !== 'play' || pending.value || revealing.value || flying.value) return;
+  if (!pickedSet.value.has(key)) return;
+  pickedKeys.value = pickedKeys.value.filter(k => k !== key);
+  save();
+}
+
+// 最终判断模式的提交：少选 / 多选 / 错选都算错，只扣一颗心，不指出具体是哪张错了
+function submitPicks() {
+  // 错误提交后 0.52s 内不接受再次提交：避免手快连点两下把两颗心一次扣光
+  if (!canSubmit.value || answerShake.value) return;
+  const exact = pickedKeys.value.length === picks.value.length
+    && pickedKeys.value.every(k => picks.value.includes(k));
+  // 胜利遮罩不等待：判卷正确立即铺结算层（用户要求）
+  if (exact) { win(); return; }
+  hearts.value = Math.max(0, hearts.value - 1);
+  // 抖一下整块答案区（不是某一张），玩家只知道「这一版答案不对」，要自己纠正
+  answerShake.value = true;
+  clearTimeout(wrongSubmitTimer);
+  wrongSubmitTimer = setTimeout(() => { answerShake.value = false; }, 520);
+  // 扣完心：走和「查看答案」同一套收尾（先把答案补全再盖失败遮罩）
+  if (hearts.value <= 0) later(() => finishRound('wrong'));
+  else save();
+}
+
 // 一局结束（失败）：把玩家还没选出来的正确答案**挨个从选择区飞进答案区**，全部落地后
 // 才在选择区盖失败遮罩。kind: 'wrong'（扣完心）| 'reveal'（查看答案）
 async function finishRound(kind) {
   if (revealing.value || phase.value !== 'play') return;
   revealing.value = true;
+  // 最终判断模式里答案区可能还躺着玩家选错的牌：先清掉，再把正确答案补齐，
+  // 失败复盘时答案区就只会剩下真正的答案（不然「已把全部答案标出来」里会混着错牌）
+  if (mode.value === 2) pickedKeys.value = pickedKeys.value.filter(k => picks.value.includes(k));
   revealed.value = kind === 'reveal';
   reason.value = kind;
   save();
@@ -447,7 +534,34 @@ function win() {
 }
 
 function nextLevel() { deal(level.value + 1); }
-function retryLevel() { deal(level.value); }
+function retryLevel() {
+  // 从「新游戏」的 ConfirmDialog 里点进来时，必须先把弹窗收掉（用户报过：点了重玩本关弹窗不关）
+  confirming.value = false;
+  deal(level.value);
+}
+
+// 切换模式：先落档当前模式，再切到另一种模式自己的关卡 / 最高关卡 / 连胜 / 局面。
+// 飞行、查看答案、结算延迟期间不允许切，否则上一模式的异步收尾会改到新模式的数据。
+function toggleMode() {
+  if (revealing.value || flying.value || pending.value) return;
+  save();
+  cancel();
+  clearTimeout(dealTimer);
+  clearTimeout(flashTimer);
+  clearTimeout(wrongSubmitTimer);
+  mode.value = mode.value === 1 ? 2 : 1;
+  try { localStorage.setItem(KEYS.mode, String(mode.value)); } catch { /* 隐私模式忽略 */ }
+  answerShake.value = false;
+  wrongKey.value = null;
+  revealing.value = false;
+  flying.value = false;
+  landingKey.value = null;
+  pickFailed.value = false;
+  level.value = Math.max(1, readNum(levelKey(), 1));
+  best.value = readNum(bestKey(), 0);
+  streak.value = readNum(streakKey(), 0);
+  if (!restore()) deal(level.value);
+}
 
 function startNewGame() {
   confirming.value = false;
@@ -455,12 +569,10 @@ function startNewGame() {
   deal(1);
 }
 
-// 连点标题 5 次：清记录（TopHeader 只会按 recordsPrefix 删 key，这里由组件自己清）
+// 连点标题 5 次：清记录（TopHeader 只会按 recordsPrefix 删 key，这里由组件自己清）。
+// clearGameStorage 会清掉两种模式各自的关卡 / 最高关卡 / 连胜 / 局面，只保留 mode 偏好。
 function onScoreReset() {
-  clearGameStorage('__gambler__');
-  try {
-    [LEVEL_KEY, BEST_KEY, STREAK_KEY, STATE_KEY].forEach(k => localStorage.removeItem(k));
-  } catch { /* 忽略 */ }
+  clearGameStorage(KEY_PREFIX);
   streak.value = 0;
   best.value = 0;
   deal(1);
@@ -477,6 +589,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onResize);
   clearTimeout(dealTimer);
   clearTimeout(flashTimer);
+  clearTimeout(wrongSubmitTimer);
 });
 </script>
 
@@ -503,6 +616,11 @@ onUnmounted(() => {
     background: var(--border-color);
     opacity: 0.6;
     flex: 0 0 auto;
+  }
+  // 切模式在飞行 / 查看答案 / 结算延迟期间不可用（与 toggleMode 的 guard 对应）
+  .mode-busy {
+    opacity: 0.35;
+    pointer-events: none;
   }
   .game-icon {
     cursor: pointer;
@@ -579,31 +697,52 @@ onUnmounted(() => {
     .tip-sub { font-size: 12px; opacity: 0.7; }
   }
 
-  // ---- 答案区：玩家选中的牌从下面飞进来 ----
+  // ---- 答案区：玩家选中的牌从下面飞进来；提示语常驻在卡片上部居中 ----
   .answer-card {
     padding: 8px;
-    // 高度按「一张牌 + 内边距」固定住，飞行途中布局不跳
-    min-height: calc(var(--mj-h, 42px) + 16px);
+    // 提示语 + 一张牌的高度；飞行途中布局不跳
+    min-height: calc(var(--mj-h, 42px) + 34px);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    // 提交错误时只抖整块答案区，不指出具体哪张错
+    &.shake { animation: tile-shake 0.5s ease; }
+  }
+  .answer-tip {
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.35;
+    opacity: 0.6;
+  }
+  .answer-body {
     display: flex;
     align-items: center;
+    gap: 8px;
+    width: 100%;
+    // 最终判断模式的提交按钮固定在答案区右侧
+    > .game-icon { flex: 0 0 auto; }
   }
   .answer-row {
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
-    // 左对齐（玩家要求）：选中的牌从左边开始排
+    // 左对齐（玩家要求）：选中的牌从左边开始排；选得多就换行，最多两行后内部滚动
     justify-content: flex-start;
+    flex-wrap: wrap;
+    align-content: flex-start;
     gap: 3px;
-    width: 100%;
     min-height: var(--mj-h, 42px);
+    max-height: calc(var(--mj-h, 42px) * 2 + 6px);
+    overflow-x: hidden;
+    overflow-y: auto;
   }
   .answer-tile {
     flex: 0 0 auto;
     // 目标槽位在飞行期间隐身（visibility 不影响布局，所以量位置照样准）
     &.landing { visibility: hidden; }
-  }
-  .answer-hint {
-    font-size: 12px;
-    opacity: 0.45;
+    // 最终判断模式：点答案区的牌退回到选择区
+    &.removable { cursor: pointer; }
   }
 
   // ---- 答案选择区 ----
