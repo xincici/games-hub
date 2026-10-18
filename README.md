@@ -21,7 +21,7 @@
 | 🧩 [Emoji 滑行](src/games/slide/README.md) | 棋盘腾挪消除，计时结束前清盘 |
 | 🔬 [Emoji 排序](src/games/sort/README.md) | 水排序：把每个槽理成同一种水果 |
 | 🧱 [Emoji 大师](src/games/master/README.md) | 羊了个羊式堆叠消除 |
-| 🧪 [扑克炼金术](src/games/alchemy/README.md) | 4×4 扑克炼金，凑牌型消线得分 |
+| 🧪 [扑克炼金术](src/games/alchemy/README.md) | 4×4 扑克炼金 / 3×3 炸金花，凑牌型消线得分 |
 | 🀄 [麻将英雄](src/games/mahjong/README.md) | 3×3 麻将消除，凑顺子 / 刻子 |
 | 🀄 [雀圣](src/games/quesheng/README.md) | 5×5 麻将滑牌，消完整副可赢的牌 |
 | 🀄 [麻将传奇](src/games/legend/README.md) | 条牌 + 少量字牌，升行顶出即结束 |

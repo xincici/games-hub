@@ -198,7 +198,7 @@ export function scoringLines(board) {
   return out;
 }
 
-// 局面是否已经走投无路：16 格全满、再也放不下任何牌（无尽模式的结束条件）
+// 局面是否 16 格全满。炼金模式不再用它判负（没有替换机制，但牌堆有限），保留给自检 / 分析用。
 export function isStuck(board) {
   return board.every(Boolean);
 }
@@ -217,5 +217,101 @@ export function levelConfig(level) {
     level: lv,
     deck: DECK_BASE + (lv - 1),
     target: TARGET_BASE + (lv - 1) * TARGET_STEP + Math.floor(lv / 10) * TENS_BONUS,
+  };
+}
+
+
+// ---------- 炸金花（3×3、3 张牌） ----------
+// 第二个模式：3×3 棋盘、8 条线（3 行 + 3 列 + 2 条对角线），每线 3 张牌。
+// 只用标准 52 张牌（无 Joker），点已有牌的格子可以替换。
+export const SIZE3 = 3;
+export const CELLS3 = SIZE3 * SIZE3;   // 9 格
+
+// 三张牌的牌型：**按分值从高到低**排列，评估时取第一条成立的。
+export const ZJH_COMBOS = [
+  { id: 'baozi', score: 1000, fx: 3 },          // 豹子：三张同点数
+  { id: 'straightFlush', score: 800, fx: 3 },  // 同花顺
+  { id: 'flush', score: 500, fx: 2 },           // 同花
+  { id: 'straight', score: 400, fx: 2 },        // 顺子
+  { id: 'pair', score: 200, fx: 1 },            // 一对
+];
+
+export const ZJH_COMBO_BONUS = 200;   // 一次消多组：从第 2 组起每组再加 200
+export const ZJH_CHAIN_STEP = 100;    // 连击：从第 2 连起每连一次多 100
+export const zjhComboBonus = groups => Math.max(0, groups - 1) * ZJH_COMBO_BONUS;
+export const zjhChainBonus = chain => Math.max(0, chain - 1) * ZJH_CHAIN_STEP;
+
+const isPlainCard = c => !!c && c.kind === 'card' && Number.isInteger(c.rank) && SUITS.includes(c.suit);
+
+// 三张牌的三张牌型判定。A 可以当 1（A23）也可以接在 K 后面（QKA）。
+export function evaluateTrio(cards) {
+  if (!Array.isArray(cards) || cards.length !== SIZE3 || cards.some(c => !isPlainCard(c))) return null;
+  const ranks = cards.map(c => c.rank).sort((a, b) => a - b);
+  const suits = cards.map(c => c.suit);
+  const counts = new Map();
+  for (const r of ranks) counts.set(r, (counts.get(r) || 0) + 1);
+  const maxSame = Math.max(...counts.values());
+  const flush = suits.every(s => s === suits[0]);
+  const uniq = [...counts.keys()];
+  let straight = false;
+  if (uniq.length === 3) {
+    if (ranks[1] === ranks[0] + 1 && ranks[2] === ranks[1] + 1) straight = true;
+    // Q K A：点数记成 12 / 13 / 1
+    if (ranks[0] === 1 && ranks[1] === 12 && ranks[2] === 13) straight = true;
+  }
+  const hit = [];
+  if (maxSame === 3) hit.push('baozi');
+  if (flush && straight) hit.push('straightFlush');
+  if (flush) hit.push('flush');
+  if (straight) hit.push('straight');
+  if (maxSame === 2) hit.push('pair');
+  for (const combo of ZJH_COMBOS) if (hit.includes(combo.id)) return { ...combo };
+  return null;
+}
+
+// 8 条线：3 行 + 3 列 + 2 条对角线，每条 3 格
+export function lineIndices3() {
+  const lines = [];
+  for (let r = 0; r < SIZE3; r++) lines.push(Array.from({ length: SIZE3 }, (_, c) => r * SIZE3 + c));
+  for (let c = 0; c < SIZE3; c++) lines.push(Array.from({ length: SIZE3 }, (_, r) => r * SIZE3 + c));
+  lines.push(Array.from({ length: SIZE3 }, (_, i) => i * SIZE3 + i));
+  lines.push(Array.from({ length: SIZE3 }, (_, i) => i * SIZE3 + (SIZE3 - 1 - i)));
+  return lines;
+}
+
+export const LINES3 = lineIndices3();
+
+export function scoringLines3(board) {
+  const out = [];
+  LINES3.forEach((line, i) => {
+    const cards = line.map(idx => board[idx]);
+    if (cards.some(c => !c)) return;
+    const combo = evaluateTrio(cards);
+    if (combo) out.push({ line: i, indices: [...line], combo });
+  });
+  return out;
+}
+
+// 一副标准 52 张牌（无 Joker），洗好后给炸金花模式发牌用
+export function createZjhDeck(rand = Math.random) {
+  const deck = [];
+  for (const suit of SUITS) {
+    for (let rank = 1; rank <= RANKS; rank++) deck.push({ id: ++uid, kind: 'card', rank, suit });
+  }
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+// 炸金花关卡：第 1 关 18 张、每关 +1，逢 5 的整数关 +2；过关分 1200 起、每关 +100。
+// 牌数封顶 52（一副牌），之后只涨目标分。
+export function zjhLevelConfig(level) {
+  const lv = Math.max(1, Math.floor(level) || 1);
+  return {
+    level: lv,
+    deck: Math.min(52, 18 + (lv - 1) + Math.floor(lv / 5)),
+    target: 1200 + (lv - 1) * 100,
   };
 }
