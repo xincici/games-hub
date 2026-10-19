@@ -21,17 +21,25 @@
           <span class="title">{{ i18n('bet') }}</span>
           <div class="bet-line">
             <button
-              @click="changeBet(-1)"
               class="btn btn-bet"
               :disabled="bet === MIN_BET || game.stage !== WAIT || game.animating"
+              @pointerdown="startBetPress(-1, $event)"
+              @pointerup="stopBetPress"
+              @pointercancel="stopBetPress"
+              @pointerleave="stopBetPress"
+              @lostpointercapture="stopBetPress"
             >
               <i i-carbon-subtract-alt />
             </button>
             <span class="money">{{ bet }}</span>
             <button
-              @click="changeBet(1)"
               class="btn btn-bet"
               :disabled="bet === MAX_BET || game.stage !== WAIT || game.animating"
+              @pointerdown="startBetPress(1, $event)"
+              @pointerup="stopBetPress"
+              @pointercancel="stopBetPress"
+              @pointerleave="stopBetPress"
+              @lostpointercapture="stopBetPress"
             >
               <i i-carbon-add-alt />
             </button>
@@ -96,16 +104,16 @@
       </div>
       <div class="opt-area uptop5 card">
         <template v-if="dice && game.stage === GUESS">
-          <button class="btn" @click="guessBigOrSmall(true)">
+          <button class="btn btn-big" @click="guessBigOrSmall(true)">
             {{ i18n('big') }}
           </button>
-          <button class="btn" @click="guessBigOrSmall(false)">
+          <button class="btn btn-small" @click="guessBigOrSmall(false)">
             {{ i18n('small') }}
           </button>
         </template>
         <button
           v-if="game.stage >= LOSE"
-          class="btn"
+          class="btn btn-settle"
           :disabled="game.animating"
           @click="onResetClick"
         >
@@ -125,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, watchEffect } from 'vue';
+import { ref, reactive, computed, watch, watchEffect, onUnmounted } from 'vue';
 import sampleSize from 'lodash.samplesize';
 
 import TopHeader from '@/components/TopHeader.vue';
@@ -136,6 +144,37 @@ import { bet, changeBet, MIN_BET, MAX_BET } from './bet.js';
 import { dice, toggle as toggleDice } from './dice.js';
 
 import { TOTAL_KEY } from './constants.js';
+// 赌注区 ±：按住连续加减 —— 按下先走一步，停 0.32s（避免手抖连跳）后开始连发，每 60ms 一步（约 16 步/秒）。
+// 注意：这两个按钮**不能**再挂 @click —— 长按松手时浏览器还会补一次 click，会多走一步。
+const betPress = { timer: 0, delay: 320 };
+const BET_REPEAT_MS = 60;
+
+function canStepBet(dir) {
+  if (game.stage !== WAIT || game.animating) return false;
+  return dir > 0 ? bet.value < MAX_BET : bet.value > MIN_BET;
+}
+
+function stopBetPress() {
+  clearTimeout(betPress.timer);
+  betPress.timer = 0;
+}
+
+function startBetPress(dir, e) {
+  if (e && e.pointerType === 'mouse' && e.button !== 0) return;   // 只认左键
+  if (!canStepBet(dir)) return;
+  stopBetPress();
+  try { e?.currentTarget?.setPointerCapture?.(e.pointerId); } catch { /* 老浏览器忽略 */ }
+  changeBet(dir);
+  const repeat = () => {
+    if (!canStepBet(dir)) { stopBetPress(); return; }   // 到上下限 / 阶段变了就停
+    changeBet(dir);
+    betPress.timer = setTimeout(repeat, BET_REPEAT_MS);
+  };
+  betPress.timer = setTimeout(repeat, betPress.delay);
+}
+
+onUnmounted(stopBetPress);
+
 const LEN = 5; // 一组牌 5 张
 const CARDS_COUNT = 13 * 4; // 总共可用 52 张牌
 const JOKER_1 = CARDS_COUNT + 1; // 小王 53
@@ -425,6 +464,16 @@ function onScoreReset() {
 .uptop0 {
   animation-delay: 0s;
 }
+// 三颗操作按钮各一种颜色（用户指定）：猜大蓝 / 猜小紫 / 结算琥珀。
+
+// 都写成 :not(:disabled)，禁用时仍走 .btn 里那条灰。
+
+.btn-big:not(:disabled) { background: var(--poker-big-bg); }
+
+.btn-small:not(:disabled) { background: var(--poker-small-bg); }
+
+.btn-settle:not(:disabled) { background: var(--poker-settle-bg); }
+
 .btn {
   text-align: center;
   border: 1px solid var(--border-color);

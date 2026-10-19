@@ -229,6 +229,11 @@ body {
   // 暂停按钮可点击时的黄色：**黄底必须配深色字**（白字压 #ffc300 只有 1.65:1，深字 #222 有 9.9:1）
   --pause-bg: #ffc300;
   --pause-fg: #222;
+
+  // 德州扑克三颗操作按钮各自的颜色（白字，对比度：蓝 5.51:1 / 紫 6.06:1 / 琥珀 7.08:1）
+  --poker-big-bg: #2c6aad;      // 猜大
+  --poker-small-bg: #7550ad;    // 猜小
+  --poker-settle-bg: #b45309;   // 结算 / 重来
   // 结果色：浅色下压在近白遮罩上，胜利色同样要压深（#1b1 只有 2.58:1）
   --win-color: #12833f;
   --lose-color: #b11;
@@ -310,6 +315,11 @@ body {
     --god-bg: #c2410c;
     --pause-bg: #ffc300;
     --pause-fg: #222;
+
+    // 同上：按钮自己的底色，深浅主题同值
+    --poker-big-bg: #2c6aad;
+    --poker-small-bg: #7550ad;
+    --poker-settle-bg: #b45309;
     --win-color: #4ec98a;
     --lose-color: #e57f79;
     --muted-color: #a3adba;

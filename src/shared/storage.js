@@ -13,7 +13,7 @@
 // 雀圣的处理器还是个空箭头），清扫前缀是唯一不容易漏的写法。
 
 // 前缀之后跟着这些词的 key 视为「偏好」，不清
-const KEEP_SUFFIXES = ['mode', 'difficulty', 'theme', 'speed', 'lang', 'help_showed'];
+const KEEP_SUFFIXES = ['mode', 'difficulty', 'theme', 'speed', 'lang', 'help_showed', 'dice', 'bet'];
 
 export function clearGameStorage(prefix, { keep = KEEP_SUFFIXES } = {}) {
   if (!prefix) return;
