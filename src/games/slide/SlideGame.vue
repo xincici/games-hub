@@ -89,6 +89,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { clearGameStorage } from '@/shared/storage';
 import {
@@ -298,6 +299,7 @@ function win() {
 function lose() {
   if (phase.value !== PLAY) return;
   phase.value = OVER;
+  playLose();
   timerRef.value?.stop();
   save();
 }

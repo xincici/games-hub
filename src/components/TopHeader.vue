@@ -10,15 +10,10 @@
     <img v-if="isHome" class="logo" :src="logoUrl" :alt="i18n('gameTitle')" draggable="false" />
     <span v-else class="title" @click.stop="onTitleClick">{{ i18n('gameTitle') }}</span>
     <div class="side right">
-      <template v-if="isHome">
-        <span class="item-wrapper" @click="toggleTheme">
-          <i i-carbon-moon v-if="isDark" />
-          <i i-carbon-sun v-else />
+        <!-- 首页右上角：设置（主题 / 语言 / 音乐 / 音效都收进这个浮层里） -->
+        <span v-if="isHome" class="item-wrapper" :aria-label="i18n('settings')" @click="onOpenSettings">
+          <i i-mdi-cogs />
         </span>
-        <span class="item-wrapper" @click="toggleLanguage">
-          <i i-carbon-ibm-watson-language-translator />
-        </span>
-      </template>
       <slot />
       <span v-if="showHelp" class="item-wrapper">
         <HelpDialog :help-key="config.helpKey" />
@@ -36,8 +31,7 @@ import HelpDialog from './HelpDialog.vue';
 // 深色模式下即使裁圆角也会在标题栏中间残留白边
 import logoUrl from '../../scripts/make-icon.svg';
 
-import { toggle as toggleLanguage } from '@/shared/i18n';
-import { isDark, toggle as toggleTheme } from '@/shared/theme';
+import { openSettings } from '@/shared/ui';
 import { activeGame } from '@/shared/i18n';
 import { gameConfig } from '@/shared/games';
 
@@ -55,6 +49,11 @@ const emit = defineEmits(['onScoreReset']);
 const config = computed(() => gameConfig(activeGame.value) || {});
 
 const titleClicks = ref(0);
+
+// 设置浮层：把点击位置传进去，圆形扩张的圆心就是这颗图标
+function onOpenSettings(ev) {
+  openSettings(ev.currentTarget);
+}
 
 function onTitleClick() {
   const { recordsPrefix, minDifficulty, maxDifficulty } = config.value;

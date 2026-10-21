@@ -1,18 +1,11 @@
-import { ref, computed, watchEffect } from 'vue';
+// 主题的**唯一真相**在 shared/settings.js（支持 system / light / dark 三档）。
+// 这里保留 isDark 与 toggle 两个老接口，免得各处 import 全部改一遍。
+import { computed } from 'vue';
 
-const THEME_KEY = '__games_hub__theme';
+import { resolvedTheme, setThemeMode } from './settings';
 
-export const isDark = ref(Boolean(localStorage.getItem(THEME_KEY)));
-
-const color = computed(() => isDark.value ? '#262626' : '#f0f2f5');
+export const isDark = computed(() => resolvedTheme.value === 'dark');
 
 export const toggle = () => {
-  isDark.value = !isDark.value;
+  setThemeMode(resolvedTheme.value === 'dark' ? 'light' : 'dark');
 };
-
-watchEffect(() => {
-  if (isDark.value) localStorage.setItem(THEME_KEY, 1);
-  else localStorage.removeItem(THEME_KEY);
-  document.body.classList[isDark.value ? 'add' : 'remove']('dark');
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color.value);
-});

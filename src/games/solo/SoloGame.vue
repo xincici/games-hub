@@ -177,6 +177,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 
+import { playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
@@ -568,6 +569,7 @@ async function celebrateWin() {
 function lose() {
   // 失败就停在 lost 状态并**存进存档**：退出重进还是这个失败局面，由玩家自己点「再来一局」开新局。
   phase.value = LOST;
+  playLose();
   streak.value = 0;
   write(KEYS.streak, 0);
   save();

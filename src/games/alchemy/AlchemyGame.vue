@@ -136,6 +136,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import CardItem from '@/games/poker/CardItem.vue';
 import { RESULT_DELAY_MS } from '@/shared/resultDelay';
@@ -584,7 +585,7 @@ function checkEnd(silent = false) {
     return;
   }
   // 两种模式都是关卡模式：牌用完了分数还不够就失败（棋盘满可以靠替换继续玩）
-  if (cursor.value >= pile.value.length) phase.value = OVER;
+  if (cursor.value >= pile.value.length) { phase.value = OVER; playLose(); }
 }
 
 // ---------- 拖拽 ----------

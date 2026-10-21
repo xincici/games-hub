@@ -95,6 +95,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { gameConfig } from '@/shared/games';
@@ -715,6 +716,7 @@ async function failSequence() {
   failing.value = false;
   if (phase.value !== PLAY) return;
   phase.value = OVER;
+  playLose();
   save();
 }
 </script>

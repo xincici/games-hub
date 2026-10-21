@@ -31,6 +31,16 @@
 
 ---
 
+## 设置浮层与音频（全局）
+
+- 主题 / 语言 / 音乐 / 音效**只从首页顶栏那颗 `i-mdi-cogs` 进**，别在游戏页再放第二套开关。
+- 主题与语言的默认值是**跟随系统**；语言在系统首选既非中文也非英文时**降级英文**。
+- 音频**必须走 Web Audio**（`shared/audio.js`），不要 `<audio>` / `new Audio()` —— 那会抢音频焦点、
+  打断用户正在听的音乐。首次用户手势里 `resume()` 解锁（iOS 硬性要求），页面不可见时 `suspend()`。
+- 新增游戏若要「失败音效」，在置失败 phase 的地方 `import { playLose } from '@/shared/audio'` 并调用；
+  胜利音效不需要各自接，`confetti()` 会统一 `playWin()`。
+- 新增音频素材放 `public/audio/`：音乐进 `music/`（不预缓存，走 CacheFirst）、音效进 `sfx/`（预缓存）。
+
 ## 约定
 
 - 图标用 attributify 写法：`<i i-carbon-sun />`（不是 class）。首页图标来自运行时数据，UnoCSS 静态提取不到，已列入 `uno.config.ts` 的 `safelist`——**新增首页图标必须同步加 safelist**。

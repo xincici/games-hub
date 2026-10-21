@@ -116,6 +116,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { gameConfig } from '@/shared/games';
 import { EMOJIS } from '@/shared/emojis';
@@ -521,6 +522,7 @@ function win() {
 function loseLevel() {
   if (phase.value !== PLAY) return;
   phase.value = OVER;
+  playLose();
   timerRef.value?.stop();
   breakCombo();
   // 时间到：把没消掉的牌全部翻到正面（摊牌），并落档，重进也保持这个画面

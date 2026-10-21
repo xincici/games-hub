@@ -4,6 +4,7 @@
 import { ref, computed, reactive, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { burstConfetti } from '@/shared/confetti';
 import { preloadTiles, TILE_RATIO } from '@/shared/mahjongTiles';
@@ -223,6 +224,7 @@ watch(score, v => {
 
 function gameOver() {
   phase.value = OVER;
+  playLose();
   isNewBest.value = beatBest.value;
   save();
 }

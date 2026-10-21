@@ -107,6 +107,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { generatePuzzle } from './sudoku';
 import { clearGameStorage } from '@/shared/storage';
@@ -552,6 +553,7 @@ function lose() {
   timerRef.value?.stop();
   removeState(); // 失败的对局不再恢复，下次进入开新局
   phase.value = OVER;
+  playLose();
 }
 
 function win() {

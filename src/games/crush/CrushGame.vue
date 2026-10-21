@@ -110,6 +110,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
@@ -719,6 +720,7 @@ function winLevel() {
 function loseLevel() {
   if (phase.value !== PLAY) return;
   phase.value = OVER;
+  playLose();
   // 失败局面同样落盘：退出重进还是这个结算层，
   // 由玩家自己决定点「重玩本关」（只有「新游戏」才清记录）
   save();

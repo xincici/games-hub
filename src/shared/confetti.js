@@ -1,6 +1,8 @@
 // 各游戏共用的撒花动画：左右两侧持续喷洒 1.2 秒（canvas-confetti 封装）
 import confetti from 'canvas-confetti';
 
+import { playWin } from './audio';
+
 const COLORS = [
   '#5D8C7B',
   '#F2D091',
@@ -12,6 +14,9 @@ const DURATION = 1200;
 const FRAME_MS = 40;
 
 export default function celebrate() {
+  // 胜利遮罩撒花的同一时刻播 success.mp3（音效开关在 audio.js 里判断；
+  // 19 个有胜利烟花的游戏都走这里，单局制没有胜利遮罩的不受影响）
+  playWin();
   const end = Date.now() + DURATION;
   (function frame() {
     confetti({

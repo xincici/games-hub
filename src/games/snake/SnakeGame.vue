@@ -58,6 +58,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { throughWall, toggle as toggleWall } from './wall';
 import { clearGameStorage } from '@/shared/storage';
@@ -157,6 +158,7 @@ function restore() {
     // 等玩家自己点「新游戏」；进行中的局面仍照旧暂停 + 数 3 2 1
     if (saved.result === 'lose') {
       gameResult.value = LOSE;
+      playLose();
       paused.value = false;
       stopTimer();
       draw();
@@ -263,6 +265,7 @@ function tick() {
   if (head[0] < 0 || head[0] >= GRID || head[1] < 0 || head[1] >= GRID
     || snake.some(([r, c]) => r === head[0] && c === head[1])) {
     gameResult.value = LOSE;
+    playLose();
     stopTimer();
     saveState();          // 失败也落档（见 saveState 的注释）
     draw();

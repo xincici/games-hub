@@ -97,6 +97,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, generateLevelBoard, hasMove, shuffleBoard, levelConfig } from './board';
@@ -342,6 +343,7 @@ function restore() {
       phase.value = WON;
     } else if (saved.phase === OVER && remaining) {
       phase.value = OVER;
+      playLose();
     } else if (remaining) {
       phase.value = PLAY;
       // 存档时正处于死局重排的间隙：恢复后立即重排（同样带发牌动画）
@@ -661,6 +663,7 @@ function loseLevel() {
   elapsed.value = timerRef.value?.seconds() || 0;
   timerRef.value?.stop();
   phase.value = OVER;
+  playLose();
   clearTimeout(idleTimer);
   clearTimeout(hintTimer);
   hintPair.value = null;

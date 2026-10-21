@@ -84,6 +84,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import { useResumeCountdown } from '@/shared/resumeCountdown';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { clearGameStorage } from '@/shared/storage';
 import {
@@ -290,6 +291,7 @@ function clearTopRow() {
 function lose() {
   if (phase.value !== PLAY) return;
   phase.value = OVER;
+  playLose();
   stopLoop();
   timerRef.value?.stop();
   save();

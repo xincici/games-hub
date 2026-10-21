@@ -71,6 +71,7 @@
 import { ref, reactive, computed, watch, watchEffect, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import confetti from '@/shared/confetti';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
 import { clearGameStorage } from '@/shared/storage';
@@ -220,6 +221,7 @@ function onCellClick(row, col, isRandom) {
   checkResult();
   if (clickCount.value === maxClick.value && gameResult.value !== WIN) {
     gameResult.value = LOSE;
+    playLose();
   }
 }
 function checkResult() {

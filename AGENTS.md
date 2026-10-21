@@ -27,13 +27,35 @@
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
+## 全局设置（主题 / 语言 / 音乐 / 音效）
+
+首页顶栏右上角的 ⚙️（`i-mdi-cogs`）打开 `shared/SettingsSheet.vue`：从点击处**圆形扩张**铺满全屏，
+图标变成 ✕。四项设置都存在 `__games_hub__*`：
+
+| 设置 | key | 取值 | 默认 |
+| --- | --- | --- | --- |
+| 主题 | `__games_hub__theme_mode` | `system` / `light` / `dark` | **system** |
+| 语言 | `__games_hub__lang_mode` | `system` / `cn` / `en` | **system**（系统语言非中英文 → en） |
+| 背景音乐 | `__games_hub__music` | `'1'` / `'0'` | 关 |
+| 游戏音效 | `__games_hub__sfx` | `'1'` / `'0'` | 开 |
+
+- 状态的**唯一真相**在 `shared/settings.js`；`theme.js` / `i18n.js` 只保留 `isDark` / `language` / `toggle`
+  这些老接口做派生（别再往它们里面加状态）。旧 key `__games_hub__theme` / `__games_hub__language` 会自动迁移。
+- 音频全部走 **Web Audio API**（`shared/audio.js`）：`AudioBufferSourceNode` + `GainNode`，
+  **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
+  首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。
+- 12 首背景音乐在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）；
+  两个音效在 `public/audio/sfx/`（进预缓存，25~32KB）。
+- 音效接入点：**胜利**在 `shared/confetti.js` 的 `celebrate()` 里统一 `playWin()`（19 个有胜利烟花的游戏都走这里）；
+  **失败**在各游戏把 phase 置为 `OVER`/`LOSE`/`LOST` 的地方调 `playLose()`（18 个游戏已接）。
+
 ## 技术栈
 
 - **框架**：Vue 3（Composition API + `<script setup>`）+ Vue Router（hash 模式，懒加载/静态导入各游戏路由）
 - **构建**：Vite 5（`@` 别名指向 `src/`）
 - **样式**：SCSS + UnoCSS（presetUno / presetAttributify / presetIcons，图标用 carbon 和 mdi 集合）
 - **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）。**`workbox.globPatterns` 必须显式带上图片类型**
-  （现在是 `**/*.{js,css,html,webp,png,svg,ico,woff2}`）——插件默认只预缓存 `js/css/html`，
+  （现在是 `**/*.{js,css,html,webp,png,svg,ico,woff2,mp3}`，其中 `**/audio/music/**` 用 `globIgnores` 排除）——插件默认只预缓存 `js/css/html`，
   图片（麻将牌雪碧图、各图标）不进预缓存，离线时牌面就是空白（实测默认下预缓存只有 9 个文件、
   加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时 3 个用到雪碧图的游戏仍能画全牌面）
 - **依赖管理**：yarn 1.22.22（package.json `packageManager` 已固定；全局 yarn 已升级至 1.22.22，可直接 `yarn <cmd>`）

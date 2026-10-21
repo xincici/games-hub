@@ -142,6 +142,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
@@ -574,7 +575,7 @@ function checkEnd() {
     confetti();
     return;
   }
-  if (movesLeft.value <= 0) phase.value = OVER;
+  if (movesLeft.value <= 0) { phase.value = OVER; playLose(); }
 }
 
 function save() {

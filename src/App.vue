@@ -21,11 +21,18 @@
     <span>📱</span>
     <span>{{ i18n('rotateTip') }}</span>
   </div>
+  <!-- 设置浮层：自己 teleport 到 body，放这里保证全局只有一份 -->
+  <SettingsSheet />
 </template>
 
 <script setup>
 import ParticleBackground from '@/shared/ParticleBackground.vue';
+import SettingsSheet from '@/shared/SettingsSheet.vue';
 import { i18n } from '@/shared/i18n';
+import { initAudio } from '@/shared/audio';
+
+// 音频引擎在挂载时初始化：只建 AudioContext（suspended），第一次手势时才真正解锁开播
+initAudio();
 </script>
 
 <style lang="scss">

@@ -137,6 +137,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { playLose } from '@/shared/audio';
 import { preloadTiles } from '@/shared/mahjongTiles';
 
 import TopHeader from '@/components/TopHeader.vue';
@@ -580,7 +581,7 @@ function checkEnd(silent = false) {
       return;
     }
     // 棋盘满不再是死局（点已有牌的格子可以替换），所以只有「牌用完还没达标」才算输
-    if (cursor.value >= pile.value.length) { loseReason.value = 'deck'; phase.value = OVER; }
+    if (cursor.value >= pile.value.length) { loseReason.value = 'deck'; phase.value = OVER; playLose(); }
     return;
   }
   // 无尽模式牌墙无限、又能替换，因此没有判负条件，一直玩到玩家自己点「新游戏」

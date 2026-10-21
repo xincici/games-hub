@@ -136,6 +136,7 @@
 import { ref, reactive, computed, watch, watchEffect, onUnmounted } from 'vue';
 import sampleSize from 'lodash.samplesize';
 
+import { playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import RuleArea from './RuleArea.vue';
 import CardItem from './CardItem.vue';
@@ -332,7 +333,7 @@ async function onPlayClick() {
   game.stage++;
   if (game.stage === SECOND) {
     const res = judgeResult();
-    if (!res) return game.stage = LOSE;
+    if (!res) { game.stage = LOSE; playLose(); return; }
     game.stage = GUESS;
     game.result = res;
     game.bonus = bet.value * res;
@@ -368,6 +369,7 @@ function guessBigOrSmall(isBig) {
     isWin = 1;
   } else if (num !== 7) {
     game.stage = GUESS_LOSE;
+    playLose();
     isWin = -1;
   }
   game.guesses.push([num, type, isBig, isWin]);

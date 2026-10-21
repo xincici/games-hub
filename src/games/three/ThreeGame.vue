@@ -59,6 +59,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
+import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { clearGameStorage } from '@/shared/storage';
 
@@ -295,6 +296,7 @@ function move(dir) {
     busy = false;
     if (!canMove()) {
       phase.value = LOSE;
+      playLose();
       timerRef.value?.stop();
     }
     save();
@@ -391,7 +393,7 @@ function restore() {
     // 恢复的若是失败局面，计时器停在最终用时（CountTimer.restore 会重新启动计时）
     if (phase.value === LOSE) timerRef.value?.stop();
     // 恢复即是死局（例如存档于结算前一步）→ 直接判负
-    if (!wasLost && !canMove()) phase.value = LOSE;
+    if (!wasLost && !canMove()) { phase.value = LOSE; playLose(); }
     // 恢复出来的牌同样逐张入场（死局被结算浮层盖住，就不做了）
     if (phase.value !== LOSE) playDeal();
     return true;

@@ -76,6 +76,7 @@ import { ref, watch, onMounted, onUnmounted } from 'vue';
 import sampleSize from 'lodash.samplesize';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import CountTimer from '@/shared/CountTimer.vue';
 import { robot, toggle as toggleRobot } from './robot.js';
 import confetti from '@/shared/confetti';
@@ -176,6 +177,7 @@ function guessOnce() {
   }
   if (guessHistory.value.length >= MAX_GUESS) {
     gameResult.value = LOSE;
+    playLose();
   }
   currentGuess.value = '';
 }
