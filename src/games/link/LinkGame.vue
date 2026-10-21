@@ -93,12 +93,11 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
-import { playElimination } from '@/shared/audio';
+import { playElimination, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti, { burstConfetti } from '@/shared/confetti';
-import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { EMOJIS } from '@/shared/emojis';
 import { findPath, generateBoard, generateLevelBoard, hasMove, shuffleBoard, levelConfig } from './board';

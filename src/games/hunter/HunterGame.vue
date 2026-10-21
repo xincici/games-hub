@@ -118,6 +118,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination, playFail, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -420,6 +421,7 @@ function pick(idx) {
   if (foundSet.value.has(key) || wrongSet.value.has(key)) return;
   if (stageKeySet.value.has(key)) {
     foundSet.value = new Set([...foundSet.value, key]);
+    playElimination();   // 选对一张
     justFound.value = key;                       // 只有这一张播动画
     if (foundSet.value.size === stage.value.length) {
       // 先让最后找回的那张亮 0.5s，再弹结算浮层
@@ -438,10 +440,12 @@ function pick(idx) {
     wrongSet.value = new Set([...wrongSet.value, key]);
     shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
+    playFail();   // 扣❤️
     if (hearts.value <= 0) {
       // 生命耗尽：先留住 0.5s 让玩家看清标红的那张，再失败结算（计时器随之停止）
       settleThen(() => {
         phase.value = LOST;
+        playLose();
         timerRef.value?.stop();
         save();
       });

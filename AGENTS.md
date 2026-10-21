@@ -49,11 +49,16 @@
   **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
   首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。
 - 12 首背景音乐在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）；
-  三个音效在 `public/audio/sfx/`（进预缓存，25~32KB）：`success.mp3` / `lose.mp3` / `elimination.mp3`。
-- 音效接入点：**胜利**在 `shared/confetti.js` 的 `celebrate()` 里统一 `playWin()`（19 个有胜利烟花的游戏都走这里）；
-  **失败**在各游戏把 phase 置为 `OVER`/`LOSE`/`LOST` 的地方调 `playLose()`（18 个游戏已接）；
-  **消除一次**在消除类游戏的「消掉」落点调 `playElimination()`（7 个：crush 的 `resolveCascades`、link / match / slide
-  的 `registerClear()` 之后、quesheng 的 `clearGroup()`、mahjong / alchemy 的 `score += gained` 之后）。
+  四个音效在 `public/audio/sfx/`（进预缓存，6~32KB）：`success.mp3`（5.07s）/ `lose.mp3`（4.08s）/
+  `elimination.mp3`（0.76s）/ `fail.mp3`（1.02s）—— 时长各不相同，实测时可以直接靠 `AudioBuffer.duration` 分辨。
+- 音效接入点（**语义**优先，不要只看游戏分类）：
+  - **胜利**：`shared/confetti.js` 的 `celebrate()` 统一 `playWin()`（19 个有胜利烟花的游戏都走这里）；
+  - **失败 / 放弃**：各游戏把 phase 置为 `OVER`/`LOSE`/`LOST` 处 `playLose()`（18 个游戏）；
+    `playLose()` 也用于「查看答案」这种等于认输的操作 —— 赌神的 `finishRound()`、24 点的 `revealAnswer()`；
+  - **消除一次**：消除类游戏的「消掉」落点 `playElimination()`（crush 的 `resolveCascades`、link / match / slide
+    的 `registerClear()`、quesheng 的 `clearGroup()`、mahjong / alchemy 的 `score += gained`、
+    legend 的 `clearedCount += groups.length`）；猎手 / 侦探「选对」时也算一次消除，同样播它；
+  - **扣❤️**：猎手 / 侦探选错、数独填错、赌神点错或提交错 —— 一律 `playFail()`（`hearts` 减少的那一行）。
 
 ## 技术栈
 

@@ -101,6 +101,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
+import { playElimination, playFail, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -396,6 +397,7 @@ function onCellClick(idx) {
   if (wrongIdxs.value.includes(idx)) return;   // 已经标错的牌不再响应
   if (idx === swappedIdx.value) {
     rightIdx.value = idx;                      // 立刻亮绿，停留期间玩家看得到「选对了」
+    playElimination();   // 选对
     // 高亮亮 0.5s 之后再弹结算浮层
     settleThen(() => {
       phase.value = WON;
@@ -411,6 +413,7 @@ function onCellClick(idx) {
     wrongIdxs.value = [...wrongIdxs.value, idx];
     shakeIdx.value = idx;
     hearts.value = Math.max(0, hearts.value - 1);
+    playFail();   // 扣❤️
     if (hearts.value <= 0) {
       // 生命耗尽：**不要立刻出失败遮罩**。先等点错这张的抖动放完，再在正确答案上盖一个「✓」章、
       // 让它震一下，最后才铺失败效果与遮罩 —— 玩家因此能看清答案是哪张。
@@ -418,7 +421,7 @@ function onCellClick(idx) {
       timerRef.value?.stop();
       stampThen(() => {
         stampShown.value = true;                       // 盖章（stamp-in）+ 这张牌震一下（stamp-shake）
-        loseThen(() => { phase.value = LOST; save(); });
+        loseThen(() => { phase.value = LOST; playLose(); save(); });
       });
     }
     setTimeout(() => {

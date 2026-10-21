@@ -165,6 +165,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
+import { playFail, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import Hearts from '@/shared/Hearts.vue';
@@ -476,6 +477,7 @@ async function pick(key) {
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => { if (wrongKey.value === key) wrongKey.value = null; }, 620);
   hearts.value -= 1;
+  playFail();   // 点错，扣❤️
   // 扣完心：先把正确答案挨个飞进答案区，飞完再盖失败遮罩
   if (hearts.value <= 0) later(() => finishRound('wrong'));
   else save();
@@ -498,6 +500,7 @@ function submitPicks() {
   // 胜利遮罩不等待：判卷正确立即铺结算层（用户要求）
   if (exact) { win(); return; }
   hearts.value = Math.max(0, hearts.value - 1);
+  playFail();   // 提交错，扣❤️
   // 抖一下整块答案区（不是某一张），玩家只知道「这一版答案不对」，要自己纠正
   answerShake.value = true;
   clearTimeout(wrongSubmitTimer);
@@ -528,6 +531,7 @@ async function finishRound(kind) {
   while (flyingCount.value > 0) await sleep(30);
   revealing.value = false;
   pickFailed.value = true;
+  playLose();   // 等答案全部飞进答案区、失败遮罩出现的这一刻才播
   phase.value = 'lost';
   streak.value = 0;
   save();

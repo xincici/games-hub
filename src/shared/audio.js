@@ -29,7 +29,12 @@ const TRACKS = [
   'xianjian-yu-man-tang.mp3',
   'yu-zhou-chang-wan.mp3',
 ];
-const SFX_FILES = { success: 'sfx/success.mp3', lose: 'sfx/lose.mp3', elimination: 'sfx/elimination.mp3' };
+const SFX_FILES = {
+  success: 'sfx/success.mp3',
+  lose: 'sfx/lose.mp3',
+  elimination: 'sfx/elimination.mp3',
+  fail: 'sfx/fail.mp3',
+};
 
 const MUSIC_GAIN = 0.3;
 const SFX_GAIN = 0.9;
@@ -202,6 +207,7 @@ export async function playSfx(name) {
 export const playWin = () => playSfx('success');
 export const playLose = () => playSfx('lose');
 export const playElimination = () => playSfx('elimination');
+export const playFail = () => playSfx('fail');   // 扣❤️（选错 / 填错 / 提交错）
 
 // ---------- 启动 ----------
 

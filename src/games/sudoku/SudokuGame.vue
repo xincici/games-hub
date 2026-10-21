@@ -107,7 +107,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import Hearts from '@/shared/Hearts.vue';
 import confetti from '@/shared/confetti';
-import { playLose } from '@/shared/audio';
+import { playFail, playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { generatePuzzle } from './sudoku';
 import { clearGameStorage } from '@/shared/storage';
@@ -545,6 +545,7 @@ function afterEdit() {
 function checkMistake(i) {
   if (!isWrong(i)) return;
   hearts.value = Math.max(0, hearts.value - 1);
+  playFail();   // 填错，扣❤️
   if (hearts.value <= 0) lose();
 }
 

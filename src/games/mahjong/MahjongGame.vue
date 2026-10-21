@@ -137,8 +137,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
-import { playElimination } from '@/shared/audio';
-import { playLose } from '@/shared/audio';
+import { playElimination, playLose } from '@/shared/audio';
 import { preloadTiles } from '@/shared/mahjongTiles';
 
 import TopHeader from '@/components/TopHeader.vue';

@@ -53,6 +53,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { playLose } from '@/shared/audio';
 import CountTimer from '@/shared/CountTimer.vue';
 import confetti from '@/shared/confetti';
 import { clearGameStorage } from '@/shared/storage';
@@ -351,6 +352,7 @@ function checkLose() {
     }
   }
   gameResult.value = LOSE;
+  playLose();   // 无路可走：失败
 }
 
 function keepGoing() {

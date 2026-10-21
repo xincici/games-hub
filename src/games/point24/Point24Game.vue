@@ -112,6 +112,7 @@ import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
+import { playLose } from '@/shared/audio';
 import { clearGameStorage } from '@/shared/storage';
 import {
   appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText, solveAll, scorePuzzle, numsKey,
@@ -257,6 +258,7 @@ function win() {
 function revealAnswer() {
   if (phase.value !== PLAY) return;
   phase.value = GAVEUP;
+  playLose();   // 查看答案 = 放弃这一局
   streak.value = 0;                                  // 查看答案 = 放弃：当前连胜清零（最长连胜保留）
     recent.value = [];                                 // 连胜断了 → 去重窗口也重来
   write(KEYS.streak, 0);

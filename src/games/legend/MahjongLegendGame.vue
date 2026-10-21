@@ -4,7 +4,7 @@
 import { ref, computed, reactive, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import TopHeader from '@/components/TopHeader.vue';
 import MahjongTile from '@/games/mahjong/MahjongTile.vue';
-import { playLose } from '@/shared/audio';
+import { playElimination, playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { burstConfetti } from '@/shared/confetti';
 import { preloadTiles, TILE_RATIO } from '@/shared/mahjongTiles';
@@ -182,6 +182,7 @@ async function cascade(chain) {
     const gain = base + multiBonus(groups.length) + chainBonus(chain);
     score.value += gain;
     clearedCount.value += groups.length;
+    playElimination();
     // 消除的牌立刻从 grid 里拿掉，单独渲染一层浮影播闪烁
     const map = new Map();
     for (const g of groups) {

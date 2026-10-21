@@ -141,9 +141,8 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
-import { playElimination } from '@/shared/audio';
+import { playElimination, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
-import { playLose } from '@/shared/audio';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
 import { i18n } from '@/shared/i18n';
