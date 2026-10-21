@@ -137,6 +137,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { playElimination } from '@/shared/audio';
 import { playLose } from '@/shared/audio';
 import { preloadTiles } from '@/shared/mahjongTiles';
 
@@ -519,6 +520,7 @@ function settle() {
       + comboBonus(hits.length) + chainBonus(combo.value);
     const best = hits.reduce((a, b) => (b.trio.score > a.trio.score ? b : a));
     score.value += gained;
+    playElimination();   // 落子凑成一组
     const cleared = new Set(hits.flatMap(h => h.indices));
     const gone = new Map();
     cleared.forEach(i => { if (board.value[i]) gone.set(i, board.value[i]); });

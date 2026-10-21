@@ -45,9 +45,11 @@
   **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
   首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。
 - 12 首背景音乐在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）；
-  两个音效在 `public/audio/sfx/`（进预缓存，25~32KB）。
+  三个音效在 `public/audio/sfx/`（进预缓存，25~32KB）：`success.mp3` / `lose.mp3` / `elimination.mp3`。
 - 音效接入点：**胜利**在 `shared/confetti.js` 的 `celebrate()` 里统一 `playWin()`（19 个有胜利烟花的游戏都走这里）；
-  **失败**在各游戏把 phase 置为 `OVER`/`LOSE`/`LOST` 的地方调 `playLose()`（18 个游戏已接）。
+  **失败**在各游戏把 phase 置为 `OVER`/`LOSE`/`LOST` 的地方调 `playLose()`（18 个游戏已接）；
+  **消除一次**在消除类游戏的「消掉」落点调 `playElimination()`（7 个：crush 的 `resolveCascades`、link / match / slide
+  的 `registerClear()` 之后、quesheng 的 `clearGroup()`、mahjong / alchemy 的 `score += gained` 之后）。
 
 ## 技术栈
 

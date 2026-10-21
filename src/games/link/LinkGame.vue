@@ -93,6 +93,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -595,6 +596,7 @@ function removePair(path, a, b) {
   board.value[br][bc] = null;
   selected.value = null;
   registerClear();          // 消掉一对了：结算连击
+  playElimination();
 
   clearTimeout(linkTimer);
   linkKey.value++;

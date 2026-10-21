@@ -39,6 +39,8 @@
   打断用户正在听的音乐。首次用户手势里 `resume()` 解锁（iOS 硬性要求），页面不可见时 `suspend()`。
 - 新增游戏若要「失败音效」，在置失败 phase 的地方 `import { playLose } from '@/shared/audio'` 并调用；
   胜利音效不需要各自接，`confetti()` 会统一 `playWin()`。
+- 消除类游戏在「每完成一次消除」的地方调 `playElimination()`（`import { playElimination } from '@/shared/audio'`），
+  连锁消除的每一轮也算一次。
 - 新增音频素材放 `public/audio/`：音乐进 `music/`（不预缓存，走 CacheFirst）、音效进 `sfx/`（预缓存）。
 
 ## 约定

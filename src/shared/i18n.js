@@ -20,8 +20,6 @@ const home = {
     dark: 'Dark',
     chinese: '中文',
     english: 'English',
-    musicHint: 'Random, easy-listening background music',
-    sfxHint: 'Win and lose sounds',
   },
   cn: {
     gameTitle: '游戏合集',
@@ -39,8 +37,6 @@ const home = {
     dark: '深色',
     chinese: '中文',
     english: 'English',
-    musicHint: '随机播放好听的背景音乐',
-    sfxHint: '过关与失败音效',
   },
 };
 

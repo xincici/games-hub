@@ -81,6 +81,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import { useResumeCountdown } from '@/shared/resumeCountdown';
@@ -261,6 +262,7 @@ function clearTopRow() {
     playerLag = -1;              // 玩家往下掉一格（渲染上先从上一格开始，逐帧落到位）
     score.value += 1;
     cleared += 1;
+    playElimination();
     clearedShown.value = cleared;
     if (score.value > best.value) {
       best.value = score.value;

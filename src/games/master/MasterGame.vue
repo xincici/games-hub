@@ -124,6 +124,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import confetti from '@/shared/confetti';
@@ -606,6 +607,7 @@ async function settlePass() {
     const emoji = hit[0];
     const picked = tray.value.filter(c => c.emoji === emoji && !c.clearing).slice(0, 3);
     picked.forEach(c => { c.clearing = true; });
+    playElimination();
     await sleep(CLEAR_MS);
     const uids = new Set(picked.map(c => c.uid));
     tray.value = tray.value.filter(c => !uids.has(c.uid));

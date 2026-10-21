@@ -85,6 +85,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -368,6 +369,9 @@ function eliminate(a, b) {
   const list = [tileAt(a[0], a[1]), tileAt(b[0], b[1])];
   if (list.some(t => !t)) return;
   registerClear();
+
+  playElimination();
+
   const g = generation;
   list.forEach(t => { t.popping = true; });
   setTimeout(() => {

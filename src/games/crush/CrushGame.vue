@@ -1,3 +1,4 @@
+
 <template>
   <div class="wrapper">
     <TopHeader @onScoreReset="onScoreReset" />
@@ -109,6 +110,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import { playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
@@ -626,6 +628,7 @@ function resolveCascades(chain) {
   hugeClear.value = matched.size > 3;
   blastSet.value = blast;
   announceCelebration(matched.size, chain, gained);
+  playElimination();   // 完成一次（连锁也算一次）消除
   // 这一轮要消除的牌先摘掉「掉落中 / 刚落格」标记：
   // 连锁时它们往往是上一轮刚落地（甚至刚生成）的牌，带着 fresh/falling 时
   // 浏览器只会沿用 drop-in / land-bounce，pop-out 与 blast-out 根本播不出来

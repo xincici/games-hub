@@ -29,7 +29,7 @@ const TRACKS = [
   'xianjian-yu-man-tang.mp3',
   'yu-zhou-chang-wan.mp3',
 ];
-const SFX_FILES = { success: 'sfx/success.mp3', lose: 'sfx/lose.mp3' };
+const SFX_FILES = { success: 'sfx/success.mp3', lose: 'sfx/lose.mp3', elimination: 'sfx/elimination.mp3' };
 
 const MUSIC_GAIN = 0.3;
 const SFX_GAIN = 0.9;
@@ -198,9 +198,10 @@ export async function playSfx(name) {
   src.start();
 }
 
-// 胜利 / 失败：与按钮文案同义，界面层只关心这两个
+// 三个语义化入口：胜利 / 失败 / 消除一次
 export const playWin = () => playSfx('success');
 export const playLose = () => playSfx('lose');
+export const playElimination = () => playSfx('elimination');
 
 // ---------- 启动 ----------
 

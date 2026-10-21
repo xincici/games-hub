@@ -1,82 +1,86 @@
 <template>
   <Teleport to="body">
-    <div
-      class="settings-layer"
-      :class="{ open: settingsOpen }"
-      :style="layerStyle"
-      role="dialog"
-      aria-modal="true"
-      @click.self="close"
-    >
-      <div class="sheet" @click.stop>
-        <div class="hero">
-          <span class="hero-badge"><i i-mdi-cogs /></span>
-          <h2>{{ i18n('settingsTitle') }}</h2>
-        </div>
-
-        <section class="block">
-          <h3>{{ i18n('theme') }}</h3>
-          <div class="seg">
-            <button
-              v-for="opt in themeOptions"
-              :key="opt.value"
-              class="seg-item"
-              :class="{ on: themeMode === opt.value }"
-              @click="setThemeMode(opt.value)"
-            >
-              <i :class="opt.icon" />
-              <span>{{ opt.label }}</span>
-            </button>
-          </div>
-        </section>
-
-        <section class="block">
-          <h3>{{ i18n('language') }}</h3>
-          <div class="seg">
-            <button
-              v-for="opt in langOptions"
-              :key="opt.value"
-              class="seg-item"
-              :class="{ on: langMode === opt.value }"
-              @click="setLangMode(opt.value)"
-            >
-              <i v-if="opt.icon" :class="opt.icon" />
-              <span>{{ opt.label }}</span>
-            </button>
-          </div>
-        </section>
-
-        <section class="block switches">
-          <button class="switch-row" :class="{ on: musicOn }" @click="toggleMusic">
-            <span class="switch-icon"><i i-mdi-music-note /></span>
-            <span class="switch-text">
-              <strong>{{ i18n('music') }}</strong>
-              <small>{{ i18n('musicHint') }}</small>
-            </span>
-            <span class="switch" :class="{ on: musicOn }" aria-hidden="true"><span class="knob" /></span>
-          </button>
-
-          <button class="switch-row" :class="{ on: sfxOn }" @click="toggleSfx">
-            <span class="switch-icon"><i i-mdi-volume-high /></span>
-            <span class="switch-text">
-              <strong>{{ i18n('sfx') }}</strong>
-              <small>{{ i18n('sfxHint') }}</small>
-            </span>
-            <span class="switch" :class="{ on: sfxOn }" aria-hidden="true"><span class="knob" /></span>
-          </button>
-        </section>
-      </div>
-
-      <button
-        class="close-btn"
-        :class="{ show: settingsOpen }"
-        :style="closeStyle"
-        :aria-label="i18n('settingsClose')"
-        @click="close"
+    <!-- 外壳只负责投影：filter 作用在裁剪**之后**的轮廓上，于是阴影跟着圆形边缘走；
+         完全展开后圆边移出屏幕，阴影也就自然看不见了。 -->
+    <div class="settings-shell">
+      <div
+        class="settings-layer"
+        :class="{ open: settingsOpen, snapping: settingsSnapping }"
+        :style="layerStyle"
+        role="dialog"
+        aria-modal="true"
+        @click.self="close"
       >
-        <i i-mdi-close />
-      </button>
+        <div class="sheet" @click.stop>
+          <div class="hero">
+            <span class="hero-badge"><i i-mdi-cogs /></span>
+            <h2>{{ i18n('settingsTitle') }}</h2>
+          </div>
+
+          <section class="block">
+            <h3>{{ i18n('theme') }}</h3>
+            <div class="seg">
+              <span class="seg-slider" :style="{ '--i': themeIndex }" aria-hidden="true" />
+              <button
+                v-for="opt in themeOptions"
+                :key="opt.value"
+                class="seg-item"
+                :class="{ on: themeMode === opt.value }"
+                @click="setThemeMode(opt.value)"
+              >
+                <i :class="opt.icon" />
+                <span>{{ opt.label }}</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="block">
+            <h3>{{ i18n('language') }}</h3>
+            <div class="seg">
+              <span class="seg-slider" :style="{ '--i': langIndex }" aria-hidden="true" />
+              <button
+                v-for="opt in langOptions"
+                :key="opt.value"
+                class="seg-item"
+                :class="{ on: langMode === opt.value }"
+                @click="setLangMode(opt.value)"
+              >
+                <i v-if="opt.icon" :class="opt.icon" />
+                <span>{{ opt.label }}</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="block switches">
+            <button class="switch-row" :class="{ on: musicOn }" @click="toggleMusic">
+              <span class="switch-icon"><i i-mdi-music-note /></span>
+              <span class="switch-text">
+                <strong>{{ i18n('music') }}</strong>
+              </span>
+              <span class="switch" :class="{ on: musicOn }" aria-hidden="true"><span class="knob" /></span>
+            </button>
+
+            <button class="switch-row" :class="{ on: sfxOn }" @click="toggleSfx">
+              <span class="switch-icon"><i i-mdi-volume-high /></span>
+              <span class="switch-text">
+                <strong>{{ i18n('sfx') }}</strong>
+              </span>
+              <span class="switch" :class="{ on: sfxOn }" aria-hidden="true"><span class="knob" /></span>
+            </button>
+          </section>
+        </div>
+      </div>
     </div>
+
+    <button
+      class="close-btn"
+      :class="{ show: settingsOpen }"
+      :style="closeStyle"
+      :aria-label="i18n('settingsClose')"
+      @click="close"
+    >
+      <i i-mdi-close />
+    </button>
   </Teleport>
 </template>
 
@@ -87,7 +91,7 @@ import { computed, onMounted, onUnmounted, watch } from 'vue';
 
 import { i18n } from '@/shared/i18n';
 import { themeMode, langMode, musicOn, sfxOn, setThemeMode, setLangMode } from '@/shared/settings';
-import { settingsOpen, settingsOrigin, closeSettings } from '@/shared/ui';
+import { settingsOpen, settingsOrigin, settingsSnapping, closeSettings } from '@/shared/ui';
 
 const layerStyle = computed(() => ({
   '--ox': `${settingsOrigin.value.x}px`,
@@ -117,6 +121,10 @@ const langOptions = computed(() => [
   { value: 'en', icon: '', label: i18n('english') },
 ]);
 
+// 滑块要去第几格：跟随系统 = 0、第二项 = 1、第三项 = 2
+const themeIndex = computed(() => Math.max(0, themeOptions.value.findIndex(o => o.value === themeMode.value)));
+const langIndex = computed(() => Math.max(0, langOptions.value.findIndex(o => o.value === langMode.value)));
+
 const close = () => closeSettings();
 const toggleMusic = () => { musicOn.value = !musicOn.value; };
 const toggleSfx = () => { sfxOn.value = !sfxOn.value; };
@@ -138,14 +146,25 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-.settings-layer {
+.settings-shell {
   position: fixed;
   inset: 0;
   z-index: 90;
+  pointer-events: none;
+  // 双层投影：贴身一层让边缘清楚，外面一层柔和地铺开
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(0, 0, 0, 0.45));
+}
+
+.settings-layer {
+  position: absolute;
+  inset: 0;
   background: var(--bg-color);
   // 圆心是点击时那颗按钮的中心（视口坐标），半径从 0 扩到 150vmax 覆盖全屏
   clip-path: circle(0px at var(--ox, 50%) var(--oy, 0%));
-  transition: clip-path 0.52s cubic-bezier(0.22, 0.9, 0.26, 1), visibility 0.52s;
+  // 展开 / 收起：0.6s（比原来慢一点点）+ ease-in-out（起步慢、中段快、收尾也慢）
+  // will-change 让浏览器把 clip-path 交给合成层，扩张更顺、不抖
+  will-change: clip-path;
+  transition: clip-path 0.6s ease-in-out, visibility 0.6s;
   visibility: hidden;
   pointer-events: none;
   overflow-y: auto;
@@ -154,7 +173,12 @@ onUnmounted(() => {
   &.open {
     clip-path: circle(150vmax at var(--ox, 50%) var(--oy, 0%));
     visibility: visible;
-    pointer-events: auto;
+    pointer-events: auto;   // 外壳是 pointer-events: none，只有打开时才由这一层接管
+  }
+
+  // 正在无过渡地挪圆心：这一帧不许播过渡
+  &.snapping {
+    transition: none;
   }
 }
 
@@ -225,6 +249,7 @@ onUnmounted(() => {
 }
 
 .seg {
+  position: relative;
   display: flex;
   gap: 6px;
   padding: 4px;
@@ -232,7 +257,26 @@ onUnmounted(() => {
   background: var(--bg-color);
 }
 
+// 选中态是一块**共享滑块**：从上一个选项滑到下一个（而不是各画各的背景）
+// width = (100% − 左右 padding 8px − 两个 gap 12px) / 3；位移 = i × (自身宽度 + gap)
+// （transform 里的 100% 指滑块自己的宽度，所以不用硬算像素）
+.seg-slider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 20px) / 3);
+  border-radius: 11px;
+  background: var(--primary-bg);
+  box-shadow: var(--shadow-soft);
+  transform: translateX(calc(var(--i, 0) * (100% + 6px)));
+  transition: transform 0.32s cubic-bezier(0.34, 1.25, 0.5, 1);
+  pointer-events: none;
+}
+
 .seg-item {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -259,10 +303,9 @@ onUnmounted(() => {
     text-overflow: ellipsis;
   }
 
+  // 选中时只有文字变白 —— 背景由上面那块滑块负责
   &.on {
-    background: var(--primary-bg);
     color: #fff;
-    box-shadow: var(--shadow-soft);
   }
 
   &:not(.on):active {
@@ -312,7 +355,7 @@ onUnmounted(() => {
   .switch-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    justify-content: center;
     min-width: 0;
     flex: 1;
 
@@ -370,6 +413,8 @@ onUnmounted(() => {
 // 所以它和设置按钮像素级重合（不再 hard-code top/right 去猜顶栏的布局）。
 .close-btn {
   position: fixed;
+  // 必须高于 .settings-shell（z-index 90），否则会被浮层盖住、点不到
+  z-index: 95;
   display: grid;
   place-items: center;
   border: 0;
@@ -381,10 +426,14 @@ onUnmounted(() => {
   cursor: pointer;
   opacity: 0;
   transform: scale(0.6) rotate(-90deg);
+  // 隐藏时**必须**放弃命中测试：关闭按钮就压在设置按钮上，
+  // 否则浮层关掉之后那颗隐形按钮会把「点设置」全部吃掉（点一次就再也打不开）
+  pointer-events: none;
   transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.34, 1.4, 0.5, 1);
 
   &.show {
     opacity: 1;
+    pointer-events: auto;
     transform: scale(1) rotate(0deg);
     transition-delay: 0.3s;
   }

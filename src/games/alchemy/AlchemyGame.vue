@@ -135,6 +135,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import { playLose } from '@/shared/audio';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -514,6 +515,7 @@ function settle() {
     let gained = taken.reduce((sum, h) => sum + h.combo.score, 0);
     if (zjh) gained += zjhComboBonus(taken.length) + zjhChainBonus(chain.value);
     score.value += gained;
+    playElimination();   // 落子凑成一组
     const cleared = new Set(taken.flatMap(h => h.indices));
     // 局面立刻清空（不留重复计分的窗口），被消掉的牌进浮影层播动画
     const gone = new Map();

@@ -112,6 +112,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -490,6 +491,7 @@ function onCardClick(card) {
     firstCard.matched = card.matched = true;
     firstCard = null;
     registerClear();
+    playElimination();
     if (cards.value.every(c => c.matched)) {
       // 清空最后一对的瞬间就停表取成绩，闪烁 + 撒花只是演出，不能算进用时
       usedTime.value = timerRef.value?.seconds() || 0;

@@ -141,6 +141,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { playElimination } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import { playLose } from '@/shared/audio';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -433,6 +434,7 @@ function clearGroup(g) {
   g.cells.forEach(c => { if (board.value[c]) going.set(board.value[c].id, { ...board.value[c], cell: c }); });
   selected.value = [];
   clearing.value = going;
+  playElimination();   // 消掉一组 / 一对
   board.value = board.value.map((t, i) => (g.cells.includes(i) ? null : t));
   refreshGroups();
   timers.push(setTimeout(() => {
