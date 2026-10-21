@@ -41,6 +41,10 @@
 
 - 状态的**唯一真相**在 `shared/settings.js`；`theme.js` / `i18n.js` 只保留 `isDark` / `language` / `toggle`
   这些老接口做派生（别再往它们里面加状态）。旧 key `__games_hub__theme` / `__games_hub__language` 会自动迁移。
+- **状态栏 / 标题栏颜色**（装成 PWA 后最明显）由 `shared/settings.js` 的 `syncThemeColor()` 统一负责：
+  它读 `body` 计算后的背景色写进 `<meta name="theme-color">`，所以永远和 `--bg-color` 一致。
+  ⚠️ **别在别处「记住旧值再恢复」** —— 那样在弹窗开着期间切主题，关闭时会把状态栏颜色回滚成旧主题
+  （`HelpDialog` 踩过；它现在关闭时改成调用 `syncThemeColor()`）。
 - 音频全部走 **Web Audio API**（`shared/audio.js`）：`AudioBufferSourceNode` + `GainNode`，
   **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
   首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。

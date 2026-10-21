@@ -72,11 +72,20 @@ export const resolvedLang = computed(() => (
 
 // ---------- 应用 + 持久化 ----------
 
+// 状态栏 / 标题栏颜色：**唯一来源**就是这里。
+// 直接读 body 计算后的背景色，所以永远和 --bg-color 一致（不维护第二份色值）。
+// ⚠️ 别在别处「记住旧值再恢复」—— 期间切主题就会把颜色回滚成旧主题（HelpDialog 踩过）。
+export function syncThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const bg = getComputedStyle(document.body).backgroundColor;
+  if (bg && bg !== 'rgba(0, 0, 0, 0)') meta.setAttribute('content', bg);
+}
+
 watch([themeMode, resolvedTheme], ([mode, theme]) => {
   localStorage.setItem(KEY.themeMode, mode);
   document.body.classList.toggle('dark', theme === 'dark');
-  document.querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', theme === 'dark' ? '#262626' : '#f0f2f5');
+  syncThemeColor();
 }, { immediate: true });
 
 watch([langMode, resolvedLang], ([mode, lang]) => {

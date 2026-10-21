@@ -26,6 +26,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
+
+import { syncThemeColor } from '@/shared/settings';
 import { i18n, helpItems } from '@/shared/i18n';
 
 const props = defineProps({
@@ -37,18 +39,18 @@ const props = defineProps({
 
 const helpShow = ref(Boolean(props.helpKey && !localStorage.getItem(props.helpKey)));
 
-const metaThemeColorEl = document.querySelector('meta[name="theme-color"]');
-let lastColor = metaThemeColorEl.getAttribute('content');
-
 watch(helpShow, val => {
-  if (val) {
-    if (props.helpKey) localStorage.setItem(props.helpKey, 1);
-    lastColor = metaThemeColorEl.getAttribute('content');
-    metaThemeColorEl.setAttribute('content', 'rgba(0,0,0,0.85)');
-  } else {
-    metaThemeColorEl.setAttribute('content', lastColor);
-  }
-}, { immediate: true });
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (val) {
+      if (props.helpKey) localStorage.setItem(props.helpKey, 1);
+      // 弹窗期间压暗（和遮罩一致）
+      meta?.setAttribute('content', 'rgba(0,0,0,0.85)');
+    } else {
+      // ⚠️ 不能恢复「打开时记下的旧值」：这期间可能切过主题，那样会把状态栏颜色回滚成旧主题。
+      // 按**当前**主题重新取一次才算对。
+      syncThemeColor();
+    }
+  }, { immediate: true });
 </script>
 
 <style scoped lang="scss">
