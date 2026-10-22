@@ -49,8 +49,13 @@
   **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
   首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。
 - 12 首背景音乐在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）；
-  四个音效在 `public/audio/sfx/`（进预缓存，6~32KB）：`success.mp3`（5.07s）/ `lose.mp3`（4.08s）/
-  `elimination.mp3`（0.76s）/ `fail.mp3`（1.02s）—— 时长各不相同，实测时可以直接靠 `AudioBuffer.duration` 分辨。
+  五个音效在 `public/audio/sfx/`（进预缓存，6~32KB）：`success.mp3`（5.07s）/ `lose.mp3`（4.08s）/
+  `elimination.mp3`（0.76s）/ `fail.mp3`（1.02s）/ `firework-success.mp3`（1.67s）—— 时长各不相同，
+  实测时可以直接靠 `AudioBuffer.duration` 分辨。
+- **连击 / 多消的短促烟花**统一由 `shared/confetti.js` 的 `burstConfetti()` 发声（`playFirework()`）：
+  这个函数就是「短促烟花」本身，7 个调用点（crush / match / link / slide / mahjong / alchemy / legend）都走它。
+  `playElimination()` 里带一条**替换**规则 —— 同一瞬间刚放过烟花（240ms 内）就不再叠 elimination，
+  所以「连击 = 烟花音」「单次消除 = elimination」两者不会同时响。
 - 音效接入点（**语义**优先，不要只看游戏分类）：
   - **胜利**：`shared/confetti.js` 的 `celebrate()` 统一 `playWin()`（19 个有胜利烟花的游戏都走这里）；
   - **失败 / 放弃**：各游戏把 phase 置为 `OVER`/`LOSE`/`LOST` 处 `playLose()`（18 个游戏）；

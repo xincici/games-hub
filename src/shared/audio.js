@@ -34,6 +34,7 @@ const SFX_FILES = {
   lose: 'sfx/lose.mp3',
   elimination: 'sfx/elimination.mp3',
   fail: 'sfx/fail.mp3',
+  firework: 'sfx/firework-success.mp3',
 };
 
 const MUSIC_GAIN = 0.3;
@@ -206,7 +207,19 @@ export async function playSfx(name) {
 // 三个语义化入口：胜利 / 失败 / 消除一次
 export const playWin = () => playSfx('success');
 export const playLose = () => playSfx('lose');
-export const playElimination = () => playSfx('elimination');
+// 刚放过「连击烟花」的时间点：同一次消除里不要再叠一声消除音（用户要求「替换」而不是叠加）
+let lastFireworkAt = 0;
+const ELIM_REPLACE_MS = 240;
+
+export const playFirework = () => {
+  lastFireworkAt = performance.now();
+  playSfx('firework');
+};
+export const playElimination = () => {
+  // 连击 / 多消已经在同一瞬间播了烟花，这里直接跳过 —— 单个消除没有烟花，照常播 elimination
+  if (performance.now() - lastFireworkAt < ELIM_REPLACE_MS) return;
+  playSfx('elimination');
+};
 export const playFail = () => playSfx('fail');   // 扣❤️（选错 / 填错 / 提交错）
 
 // ---------- 启动 ----------

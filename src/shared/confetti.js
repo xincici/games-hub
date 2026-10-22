@@ -1,7 +1,7 @@
 // 各游戏共用的撒花动画：左右两侧持续喷洒 1.2 秒（canvas-confetti 封装）
 import confetti from 'canvas-confetti';
 
-import { playWin } from './audio';
+import { playFirework, playWin } from './audio';
 
 const COLORS = [
   '#5D8C7B',
@@ -45,7 +45,10 @@ export default function celebrate() {
 //   intensity：越大粒子越多（调用方按消除规模 / 连击数传 1~3）
 //   origin：喷发点，按视口比例给（默认屏幕中间偏下）；连连看会把喷发点搬到连击提示条那儿
 //   count：直接指定粒子数，用来压到更小的一束
-export function burstConfetti(intensity = 1, { origin, count } = {}) {
+export function burstConfetti(intensity = 1, {
+  origin, count } = {}) {
+  // 连击 / 多消的短促烟花：音效就用 firework-success（同一次消除里不再叠 elimination）
+  playFirework();
   confetti({
     colors: COLORS,
     particleCount: count ?? Math.min(110, Math.round(22 + 26 * intensity)),
