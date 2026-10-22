@@ -30,3 +30,13 @@ SnakeGame.vue（canvas 渲染；**暂停**：操作区「难度 | 新游戏 | �
 `var(--pause-fg)`（`#222`，9.89:1）—— 黄底配白字只有 1.61:1，所以文字色也要覆盖；和品牌绿的主按钮
 （`--primary-bg`）区分开，禁用时仍是灰（`#aaa`）+ 白字。
 规则写成 `.game-icon.pause-btn:not(:disabled)`，`:not(:disabled)` 保证禁用态不回落到蓝色。
+
+## 音效（用户报过）
+
+- **吃到食物** → `playElimination()`（和其它游戏的「消除一次」同一个音，0.76s）。
+- **撞死那一刻** → `playLose()`；但**还原一个「已失败」的存档时绝对不能播** ——
+  玩家只是退出重进看失败局面，不是又输了一次。`restore()` 里 `if (saved.result === 'lose')`
+  分支只设 `gameResult = LOSE` + 停表 + 画一帧，**没有** `playLose()`。
+  （实测：注入 `{result:'lose'}` 存档进游戏，`AudioBufferSourceNode.start` 记录为空 = 静音 ✓。）
+- 这个游戏踩过两次「用了没 import」：`playLose` / `playElimination` 都出现过「调用有了、import 没有」
+  → 运行时 `ReferenceError`，表现是音效不响、甚至整段逻辑中断。改完要单独看一眼 import 行。

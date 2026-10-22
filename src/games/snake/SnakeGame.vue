@@ -58,7 +58,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
-import { playLose } from '@/shared/audio';
+import { playLose, playElimination } from '@/shared/audio';
 import { useResumeCountdown } from '@/shared/resumeCountdown';
 import { throughWall, toggle as toggleWall } from './wall';
 import { clearGameStorage } from '@/shared/storage';
@@ -158,7 +158,7 @@ function restore() {
     // 等玩家自己点「新游戏」；进行中的局面仍照旧暂停 + 数 3 2 1
     if (saved.result === 'lose') {
       gameResult.value = LOSE;
-      playLose();
+      // 这里**不播** playLose：失败音只在真正撞死那一刻响，重进恢复是静音的
       paused.value = false;
       stopTimer();
       draw();
@@ -274,6 +274,7 @@ function tick() {
   snake.unshift(head);
   if (head[0] === food[0] && head[1] === food[1]) {
     score.value += SCORE_PER_FOOD[difficulty.value - 1];
+    playElimination();   // 吃到一个食物（与其它游戏的「消除一次」同一个音）
     // 一超过历史最佳就实时更新并持久化
     if (score.value > bestScore.value) {
       bestScore.value = score.value;
