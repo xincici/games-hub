@@ -1,6 +1,8 @@
 export default {
   en: {
     gameTitle: 'Emoji Match',
+    hintRemember: '👀 Memorise them quickly!',
+    hintMatch: '🧠 Now find the pairs!',
     levelLabel: '🏁 Level',
     bestLevel: '🏆 Best Level',
     leftPairs: '🧩 Pairs Left',
@@ -27,6 +29,8 @@ export default {
   },
   cn: {
     gameTitle: 'Emoji 对对碰',
+    hintRemember: '👀 快记住他们',
+    hintMatch: '🧠 把他们配对找出来',
     levelLabel: '🏁 关卡',
     bestLevel: '🏆 最高关',
     leftPairs: '🧩 剩余对数',

@@ -77,7 +77,22 @@
             </div>
           </div>
         </div>
+        <div v-if="phase === WON" class="result win">
+        <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
+        <div class="final-time">{{ fmt(usedTime) }}</div>
+        <div class="result-actions">
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+        <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
+        </div>
+        </div>
+        <div v-else-if="phase === OVER" class="result lose">
+        <div>⏰ {{ i18n('timeUp') }} ⏰</div>
+        <div class="final-time">{{ leftPairs }} {{ i18n('leftPairsShort') }}</div>
+        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+        </div>
       </div>
+        <!-- 阶段提示：观察期「快记住他们」，翻面后「把他们配对找出来」（与连击提示共用同一个槽位，连击优先） -->
+        <div v-if="phaseHint" class="phase-tip">{{ phaseHint }}</div>
       <!-- 连击提示：落在棋盘上方那条 16px 的空隙里（放在 .board 外层，与小游戏里的约定一致） -->
       <div
         v-if="comboTip"
@@ -85,19 +100,6 @@
         class="combo-tip"
         :class="`n-${Math.min(comboTip.n, 4)}`"
       >{{ i18n('comboTip').replace('{n}', comboTip.n) }}</div>
-      <div v-if="phase === WON" class="result win">
-        <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
-        <div class="final-time">{{ fmt(usedTime) }}</div>
-        <div class="result-actions">
-          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
-          <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
-        </div>
-      </div>
-      <div v-else-if="phase === OVER" class="result lose">
-        <div>⏰ {{ i18n('timeUp') }} ⏰</div>
-        <div class="final-time">{{ leftPairs }} {{ i18n('leftPairsShort') }}</div>
-        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
-      </div>
     </div>
     <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->
     <ConfirmDialog
@@ -137,6 +139,9 @@ const BACK_ICON = gameConfig('match').icon;
 // 第 11 关封顶、关数无限。一关分两段：PREVIEW 全体正面朝上供观察（不计时），
 // 观察结束翻面进入 PLAY，开始限时倒计时；限时内清空全部牌即过关
 const [PREVIEW, PLAY, WON, OVER] = ['preview', 'play', 'won', 'over'];
+const FLIP_HINT_MS = 2600;   // 翻面后的提示显示多久
+// 棋盘上方的提示带高度（与侦探同一套做法：提示落在带子里，棋盘从带子下面开始，两者不重叠）
+const TIP_BAND = 28;
 // 三种牌面：1 emoji / 2 扑克牌 / 3 麻将牌（切换顺序固定 1 → 2 → 3 → 1）
 const MODE_EMOJI = 1;
 const MODE_POKER = 2;
@@ -192,7 +197,8 @@ const boardLabel = computed(() => `${rows.value}×${cols.value} · ${i18n('pairs
 // 麻将的关卡曲线沿用 emoji 那一套，只是牌面换成更瘦的竖牌，所以宽度上限也用 emoji 的 96px
 const metrics = computed(() => {
   const boardW = Math.min(window.innerWidth || 420, 440) - 32;   // game-area 宽
-  const availH = Math.max(200, (window.innerHeight || 700) - 262);
+  // 262 是分数条 / 操作区 / 各种间距的固定预算；TIP_BAND 是棋盘上方那条提示带，也要扣掉
+  const availH = Math.max(200, (window.innerHeight || 700) - 262 - TIP_BAND);
   const ratio = mode.value === MODE_POKER ? CARD_RATIO : mode.value === MODE_MAHJONG ? TILE_RATIO : 1;
   const byW = Math.floor((boardW - 12 - (cols.value - 1) * gap.value) / cols.value);
   const byH = Math.floor(((availH - 12 - (rows.value - 1) * gap.value) / rows.value) / ratio);
@@ -237,6 +243,15 @@ const COMBO_MS = 2500;        // 连击窗口
 const COMBO_TIP_MS = 1500;    // 提示条停留时长（比窗口短一点，收得干净）
 const FIRE_DROP_PX = 30;      // 烟花喷发点 = 提示条中心再往下这么多
 const comboTip = ref(null);   // { id, n }
+const showFlipHint = ref(false);
+let flipHintTimer = 0;
+// 阶段提示：观察期常显「快记住他们」，翻面后短暂显示「把他们配对找出来」；有连击提示时让位
+const phaseHint = computed(() => {
+  if (comboTip.value) return '';
+  if (phase.value === PREVIEW) return i18n('hintRemember');
+  if (phase.value === PLAY && showFlipHint.value) return i18n('hintMatch');
+  return '';
+});
 const combo = ref(0);
 let lastClearAt = 0;
 let comboBroken = false;
@@ -418,7 +433,11 @@ function endPreview() {
   previewTick = null;
   cards.value.forEach(card => { card.flipped = false; });
   phase.value = PLAY;
-  timerRef.value?.reset();   // 从 0 开始正式计时
+  // 翻面后先提示「把他们配对找出来」，几秒后让位给连击提示
+  showFlipHint.value = true;
+  clearTimeout(flipHintTimer);
+  flipHintTimer = setTimeout(() => { showFlipHint.value = false; }, FLIP_HINT_MS);
+  timerRef.value?.reset();
 }
 
 // 每秒回调：同步已用时间，时间用尽即失败
@@ -746,14 +765,21 @@ function breakCombo() {
     border-radius: var(--radius-tile);
   }
   .game-area {
+    // 与侦探一致：游戏区收紧到棋盘宽度并居中，提示条因此贴着棋盘那一列（不是飘在满宽的空带上）
+    width: fit-content;
+    margin: 0 auto;
+    // 顶部留出提示带（与侦探同一套）：观察期「快记住他们」/ 翻面后「把他们配对找出来」落在带子里
+    --tip-band: 28px;
+    padding-top: var(--tip-band);
     position: relative;
-    width: calc(100% - 32px);
-    max-width: 440px;
+    // 侦探同款：宽度由 fit-content 收紧到棋盘，这两条只是上下限
+    max-width: min(calc(100% - 32px), 440px);
     box-sizing: border-box;
   }
   // 轨道与格子尺寸都由 JS 算好（--tile-w / --tile-h / --gap）：
   // emoji 模式是正方形，扑克 / 麻将模式是竖牌（2:3 与 1.282），没法再用 1fr + aspect-ratio: 1
   .board {
+    position: relative;   // 结算层是它的绝对定位子元素：必须由棋盘当包含块，才会和棋盘一样大
     display: grid;
     grid-template-columns: repeat(var(--n), var(--tile-w));
     grid-auto-rows: var(--tile-h);
@@ -887,10 +913,27 @@ function breakCombo() {
     }
   }
   // 连击提示：贴在棋盘上方那 16px 空隙里（与连连看 / 消消乐同款位置与动画）
+  // 阶段提示：严格照抄侦探 .phase-tip —— 带子里 top: 2px、padding 2px 14px、14px / 600、细描边
+  .phase-tip {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2px 14px;
+    border-radius: var(--radius-tile);
+    background: var(--card-bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: 3;
+  }
+
   .combo-tip {
     position: absolute;
     left: 50%;
-    top: -15px;
+    top: 5px;   /* 落进 28px 的提示带：上方约 21px、下方 5px 到棋盘 */
     z-index: 5;
     padding: 2px 10px;
     border-radius: var(--radius-tile);
