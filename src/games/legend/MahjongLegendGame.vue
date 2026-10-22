@@ -8,7 +8,6 @@ import { playElimination, playLose } from '@/shared/audio';
 import { i18n } from '@/shared/i18n';
 import { burstConfetti } from '@/shared/confetti';
 import { preloadTiles, TILE_RATIO } from '@/shared/mahjongTiles';
-import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import {
   COLS, ROWS, PREVIEW, CELLS, CLEAR_MS, FALL_MS, SPAWN_MS,
   multiBonus, chainBonus, emptyGrid, settle, placeTile, replaceTile,
@@ -356,7 +355,6 @@ function onScoreReset() {
 }
 
 // 「新游戏」的二次确认（清记录 + 回第 1 关，代价大）
-const confirming = ref(false);
 
 </script>
 
@@ -398,7 +396,7 @@ const confirming = ref(false);
         </div>
       </div>
       <div class="opt-half">
-        <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
+        <button class="game-icon" @click="newRun">{{ i18n('start') }}</button>
       </div>
     </div>
 
@@ -432,7 +430,7 @@ const confirming = ref(false);
           <span>💤💤 {{ i18n('tipLost') }} 💤💤</span>
           <span class="final-score">{{ i18n('finalScore') }} {{ score }}</span>
           <span v-if="isNewBest" class="result-note">{{ i18n('newBest') }}</span>
-          <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
+          <button class="game-icon" @click="newRun">{{ i18n('start') }}</button>
         </div>
       </div>
     </div>
@@ -441,12 +439,6 @@ const confirming = ref(false);
     <div v-if="flying" class="fly-tile" :style="flyStyle">
       <MahjongTile :value="faceOf(flying.v)" :suit="suitOf(flying.v)" :style="handTileVars" />
     </div>
-    <ConfirmDialog
-      :show="confirming"
-      :show-replay="false"
-      @confirm="newRun"
-      @cancel="confirming = false"
-    />
   </div>
 </template>
 
