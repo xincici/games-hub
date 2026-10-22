@@ -10,10 +10,18 @@ export const HONORS = 7;
 // 每个格子出字牌的概率：1/14 ≈ 7.1%，也就是**平均每 14 张牌才出一张字牌**
 // （用户要求落在「每 12~15 张一张」区间里，取区间中段；原来是 12% = 每 8.3 张一张，偏多）
 export const HONOR_RATE = 1 / 14;
-export const suitOf = v => (v > HONOR_BASE ? 'z' : 's');
-export const faceOf = v => (v > HONOR_BASE ? v - HONOR_BASE : v);
-export const isHonor = v => v > HONOR_BASE;
-export const MAX_VALUE = HONOR_BASE + HONORS;
+// 花牌：梅兰菊竹春夏秋冬（雪碧图第 6~7 行的 f1~f8），值是 17~24。
+// 花牌是**万能牌**：判组时可以当任意一张牌（见 bestInSegment），所以它既不能凑顺子也不怕凑顺子。
+export const FLOWER_BASE = HONOR_BASE + HONORS;   // 16
+export const FLOWERS = 8;
+// 出花牌的概率：用户要求 **10% 以下**，这里取 8%（约每 12.5 张一张）
+export const FLOWER_RATE = 0.08;
+
+export const isFlower = v => v > FLOWER_BASE;
+export const suitOf = v => (isFlower(v) ? 'f' : v > HONOR_BASE ? 'z' : 's');
+export const faceOf = v => (isFlower(v) ? v - FLOWER_BASE : v > HONOR_BASE ? v - HONOR_BASE : v);
+export const isHonor = v => v > HONOR_BASE && !isFlower(v);
+export const MAX_VALUE = FLOWER_BASE + FLOWERS;
 export const CELLS = ROWS * COLS;
 export const PREVIEW = 2;          // 候选区：当前要出的这张 + 后面两张
 
@@ -37,12 +45,13 @@ export const sameTile = (a, b) => !!a && !!b && a.v === b.v;
 export const emptyGrid = () => Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
 export const cloneGrid = grid => grid.map(row => row.slice());
 // 单张随机牌：以 HONOR_RATE 的概率出字牌，否则出条牌（字牌只在 7 种里等概率挑）
-export function randomKind(rand = Math.random, honorRate = HONOR_RATE) {
+export function randomKind(rand = Math.random, honorRate = HONOR_RATE, flowerRate = FLOWER_RATE) {
+  if (rand() < flowerRate) return FLOWER_BASE + 1 + Math.floor(rand() * FLOWERS);
   if (rand() < honorRate) return HONOR_BASE + 1 + Math.floor(rand() * HONORS);
   return 1 + Math.floor(rand() * KINDS);
 }
-export const randomRow = (rand = Math.random, honorRate = HONOR_RATE) =>
-  Array.from({ length: COLS }, () => randomKind(rand, honorRate));
+export const randomRow = (rand = Math.random, honorRate = HONOR_RATE, flowerRate = FLOWER_RATE) =>
+  Array.from({ length: COLS }, () => randomKind(rand, honorRate, flowerRate));
 
 // 重力：每一列的牌都落到底部（牌永远不会悬空）
 export function settle(grid) {
@@ -94,7 +103,15 @@ function bestInSegment(values) {
     // 连着 k 张**全都**相同 —— 只比首尾会把 [5,7,5] 当成刻子（踩过：
     // 当初写成 values[i+k] === values[i]，中间那张根本没查）
     const same = (k) => {
-      for (let j = 1; j < k; j++) if (i + j >= n || values[i + j] !== values[i]) return false;
+      // 花牌是万能牌：窗口里的**非花牌**必须全部相同；窗口全是花牌也算（可当任意三张相同）
+      let base = 0;
+      for (let j = 0; j < k; j++) {
+        if (i + j >= n) return false;
+        const v = values[i + j];
+        if (isFlower(v)) continue;
+        if (!base) base = v;
+        else if (v !== base) return false;
+      }
       return true;
     };
     if (same(4)) {                       // 杠：连着四张相同
@@ -109,10 +126,15 @@ function bestInSegment(values) {
     }
     // 顺子：连着三张、点数正好是连续三个数 —— **与顺序无关**（和真麻将一致）：
     // 玩家从下往上码成 1,2,3，从上往下扫就是 [3,2,1]；排好序再判连续才是对的
-    if (i + 2 < n && values[i] <= HONOR_BASE && values[i + 1] <= HONOR_BASE && values[i + 2] <= HONOR_BASE) {
-      // 顺子只能是条牌（值 ≤ 9）：不卡这一点的话「9条 + 東 + 南」会被算成连续三张
-      const tri = [values[i], values[i + 1], values[i + 2]].sort((a, b) => a - b);
-      if (tri[1] === tri[0] + 1 && tri[2] === tri[1] + 1) {
+      {
+      // 顺子：三张里的**非花牌**必须互不相同、且跨距 ≤ 2（花牌补空缺）；顺子只能条牌（值 ≤ 9）
+      const real = [];
+      let ok = i + 2 < n;
+      for (let j = 0; ok && j < 3; j++) if (!isFlower(values[i + j])) real.push(values[i + j]);
+      const suitOk = real.every(v => v <= HONOR_BASE);
+      const distinct = new Set(real).size === real.length;
+      const spanOk = real.length === 0 || Math.max(...real) - Math.min(...real) <= 2;
+      if (ok && suitOk && distinct && spanOk) {
         const rest = go(i + 3);
         const cand = { score: SCORE.run + rest.score, picks: [{ kind: 'run', from: i, len: 3 }, ...rest.picks] };
         if (cand.score > best.score) best = cand;

@@ -133,8 +133,8 @@ const cancelLabel = computed(() => props.cancelText || text.value.cancel);
     // 「重玩本关」是次要动作：描边款，和主按钮区分开
     .confirm-replay {
       background: transparent;
-      border: 1px solid var(--primary-bg);
-      color: var(--primary-bg);
+      border: 1px solid var(--god-bg);
+      color: var(--god-bg);
       font-weight: bold;
     }
     .confirm-ok {

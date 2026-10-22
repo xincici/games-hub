@@ -1,5 +1,6 @@
 export default {
   en: {
+    suitTip: 'Switch bamboo / circle tiles',
     gameTitle: 'Mahjong Legend',
     best: '🏆 Best',
     score: '✨ Score',
@@ -22,6 +23,7 @@ export default {
     help4: 'A tile that reaches the top row is on its last chance: clear it, or the next row that rises pushes it off the board and the game is over.',
   },
   cn: {
+    suitTip: '切换条牌 / 筒牌',
     gameTitle: '麻将传奇',
     best: '🏆 最高分',
     score: '✨ 得分',

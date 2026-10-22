@@ -134,7 +134,7 @@
         <div v-if="pickFailed" class="pick-mask">
           <span class="mask-text">👻 {{ i18n('revealFailed') }}</span>
           <div class="result-actions">
-            <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+            <button class="game-icon replay-btn" @click="retryLevel">{{ i18n('replayLevel') }}</button>
             <!-- 失败遮罩上的「新游戏」是用户指定的例外：不弹二次确认，直接清当前连胜、回第 1 关 -->
             <button class="game-icon" @click="startNewGame">{{ i18n('start') }}</button>
           </div>
@@ -146,7 +146,7 @@
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
         <span class="result-note">{{ i18n('winNote').replace('{n}', level) }} · {{ i18n('streakNow').replace('{n}', streak) }}</span>
         <div class="result-actions">
-          <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon replay-btn" @click="retryLevel">{{ i18n('replayLevel') }}</button>
           <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </div>
       </div>

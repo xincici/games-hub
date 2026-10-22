@@ -100,14 +100,14 @@
           <span class="level-note">{{ i18n('levelDone').replace('{n}', level) }}</span>
           <!-- 左「重玩本关」右「下一关」，两个都是主色绿按钮 -->
           <div class="result-btns">
-            <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+            <button class="game-icon replay-btn" @click="retryLevel">{{ i18n('replayLevel') }}</button>
             <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
           </div>
         </template>
         <template v-else>
           <span>💤💤 {{ i18n('tipLost') }} 💤💤</span>
           <span class="level-note">{{ i18n('score') }} {{ score }}</span>
-          <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon replay-btn" @click="retryLevel">{{ i18n('replayLevel') }}</button>
         </template>
       </div>
     </div>

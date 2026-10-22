@@ -4,7 +4,7 @@
 //
 // 只查**机械可判定**的部分，查不出来的（颜色是否好看、结算时机是否合理）留给人工与分册：
 //   1. 模板里不许再用历史别名的 i18n key（retry / playAgain / nextGame / answer）
-//   2. `.game-icon` 的特例类只允许 god-btn / pause-btn / answer-btn（别的都是没有规则的空类）
+//   2. `.game-icon` 的特例类只允许 god-btn / pause-btn / answer-btn / replay-btn（别的都是没有规则的空类）
 //   3. 规范里那四个按钮文案的 emoji 前缀必须对（start 🎮 / replayLevel 🔄 / nextLevel ➡️ / reveal 🔍）
 //   4. 有存档的游戏必须把 <TopHeader> 的 @onScoreReset 绑上，并且处理器里调用 clearGameStorage(自己的前缀)
 //   5.（提示级，不判失败）获胜层里有「下一关」却没有「重玩本关」—— 无关卡概念的游戏属合理变体
@@ -19,7 +19,8 @@ const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const GAMES_DIR = join(ROOT, 'src/games');
 
 const LEGACY_KEYS = ['retry', 'playAgain', 'nextGame', 'answer'];
-const ALLOWED_SPECIALS = new Set(['god-btn', 'pause-btn', 'answer-btn']);
+// replay-btn 是「重玩本关」的橙色描边样式（全局规则在 App.vue），属于外观变体而非行为特例
+const ALLOWED_SPECIALS = new Set(['god-btn', 'pause-btn', 'answer-btn', 'replay-btn']);
 const EMOJI = { start: '🎮', replayLevel: '🔄', nextLevel: '➡️', reveal: '🔍' };
 
 const problems = [];

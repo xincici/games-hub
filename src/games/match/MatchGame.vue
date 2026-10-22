@@ -81,14 +81,14 @@
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-time">{{ fmt(usedTime) }}</div>
         <div class="result-actions">
-        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+        <button class="game-icon replay-btn" @click="replayLevel">{{ i18n('replayLevel') }}</button>
         <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </div>
         </div>
         <div v-else-if="phase === OVER" class="result lose">
         <div>⏰ {{ i18n('timeUp') }} ⏰</div>
         <div class="final-time">{{ leftPairs }} {{ i18n('leftPairsShort') }}</div>
-        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+        <button class="game-icon replay-btn" @click="replayLevel">{{ i18n('replayLevel') }}</button>
         </div>
       </div>
         <!-- 阶段提示：观察期「快记住他们」，翻面后「把他们配对找出来」（与连击提示共用同一个槽位，连击优先） -->

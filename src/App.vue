@@ -201,6 +201,18 @@ html, body, #app {
 body.card-dragging {
   cursor: grabbing;
 }
+/* 「重玩本关」统一成橙色描边按钮：透明底 + 橙字 + 橙边
+   （胜利遮罩里的那颗、以及二次确认弹窗里的那颗，两处同款；图标按各自原样保留）
+   .game-icon 是各游戏自己的 scoped 类（0,1,0），这里 (0,2,0) 一定盖得住 */
+/* 类名写两遍提到 (0,3,0)：各游戏的 scoped 规则编译成 `.game-icon[data-v-x]`（也是 0,2,0），
+   同权重时后加载的 scoped 会赢，橙色描边就不生效（踩过） */
+.game-icon.replay-btn.replay-btn {
+  background: transparent;
+  color: var(--god-bg);
+  border: 1px solid var(--god-bg);
+  box-shadow: none;
+}
+
 body {
   color: var(--text-color);
   --border-color: #e1e1e1;

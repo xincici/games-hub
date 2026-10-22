@@ -12,8 +12,18 @@ import {
   COLS, ROWS, PREVIEW, CELLS, CLEAR_MS, FALL_MS, SPAWN_MS,
   multiBonus, chainBonus, emptyGrid, settle, placeTile, replaceTile,
   findGroups, clearGroups, spawnRow, initialGrid, makeTile, resetUid, randomKind, randomRow,
-  suitOf, faceOf, MAX_VALUE,
+  suitOf, faceOf, MAX_VALUE, isFlower,
 } from './board';
+
+// 条牌 / 筒牌**展示偏好**（只影响牌面；牌的值不变，所以判组、计分、存档都不动）
+const SUIT_KEY = '__legend__suit';
+const suitPref = ref(localStorage.getItem(SUIT_KEY) === 'p' ? 'p' : 's');
+const toggleSuit = () => {
+  suitPref.value = suitPref.value === 's' ? 'p' : 's';
+  localStorage.setItem(SUIT_KEY, suitPref.value);
+};
+// 字牌 → 'z'、花牌 → 'f'，条牌按偏好给 's' / 'p'
+const displaySuit = v => (isFlower(v) ? 'f' : v > 9 ? 'z' : suitPref.value);
 
 const PLAY = 'play';
 const OVER = 'over';
@@ -360,7 +370,13 @@ function onScoreReset() {
 
 <template>
   <div class="wrapper">
-    <TopHeader @onScoreReset="onScoreReset" />
+    <TopHeader @onScoreReset="onScoreReset">
+      <!-- 右上角：条牌 / 筒牌**展示偏好**切换（只换牌面，数字不变，判组与计分完全不受影响） -->
+      <span class="item-wrapper" :title="i18n('suitTip')" @click="toggleSuit">
+        <i v-if="suitPref === 's'" i-dinkie-icons-three-of-bamboos-mahjong />
+        <i v-else i-dinkie-icons-three-of-circles-mahjong />
+      </span>
+    </TopHeader>
 
     <div class="score-area card">
       <div class="stat">
@@ -384,14 +400,14 @@ function onScoreReset() {
     <div class="card opt-area">
       <div class="opt-half hand">
         <div class="tile-slot current" :style="slotVars">
-          <MahjongTile v-if="queue.length" :value="faceOf(queue[0])" :suit="suitOf(queue[0])" :style="handTileVars" />
+          <MahjongTile v-if="queue.length" :value="faceOf(queue[0])" :suit="displaySuit(queue[0])" :style="handTileVars" />
         </div>
         <div class="preview" :style="slotVars">
           <div
             v-for="(v, i) in queue.slice(1)" :key="`q-${i}`"
             class="tile-slot next" :style="{ transform: `scale(${PREVIEW_SCALES[i] ?? 0.6})` }"
           >
-            <MahjongTile :value="faceOf(v)" :suit="suitOf(v)" :style="handTileVars" />
+            <MahjongTile :value="faceOf(v)" :suit="displaySuit(v)" :style="handTileVars" />
           </div>
         </div>
       </div>
@@ -413,13 +429,13 @@ function onScoreReset() {
           :data-v="t.v"
           :style="{ ...posOf(t.from, t.col), animationDelay: dealing ? `${dealDelay(t.row, t.col)}ms` : '0ms' }"
         >
-          <MahjongTile :value="faceOf(t.v)" :suit="suitOf(t.v)" :style="tileVars" />
+          <MahjongTile :value="faceOf(t.v)" :suit="displaySuit(t.v)" :style="tileVars" />
         </span>
         <span
           v-for="t in clearingTiles" :key="`clear-${t.id}`"
           class="tile-slot clearing" :style="posOf(t.row, t.col)"
         >
-          <MahjongTile :value="faceOf(t.v)" :suit="suitOf(t.v)" :style="tileVars" />
+          <MahjongTile :value="faceOf(t.v)" :suit="displaySuit(t.v)" :style="tileVars" />
         </span>
         <div v-if="float" :key="float.id" class="celebrate">
           <span class="celebrate-title">{{ float.title }}</span>
@@ -437,7 +453,7 @@ function onScoreReset() {
 
     <!-- 从候选区飞向目标格的浮牌（position: fixed，不受棋盘 overflow: hidden 影响） -->
     <div v-if="flying" class="fly-tile" :style="flyStyle">
-      <MahjongTile :value="faceOf(flying.v)" :suit="suitOf(flying.v)" :style="handTileVars" />
+      <MahjongTile :value="faceOf(flying.v)" :suit="displaySuit(flying.v)" :style="handTileVars" />
     </div>
   </div>
 </template>

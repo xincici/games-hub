@@ -63,14 +63,14 @@
         <div class="result-title">🎉 {{ i18n('tipWin') }} 🎉</div>
         <div class="result-line">{{ i18n('time') }} {{ clock }}</div>
         <div class="result-actions">
-          <button class="game-icon" @click="startLevel(level)">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon replay-btn" @click="startLevel(level)">{{ i18n('replayLevel') }}</button>
           <button class="game-icon" @click="startLevel(level + 1)">{{ i18n('nextLevel') }}</button>
         </div>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
         <div class="result-title">⏰ {{ i18n('tipOver') }} ⏰</div>
         <div class="result-line">{{ i18n('left') }} {{ pairsLeft }}</div>
-        <button class="game-icon" @click="startLevel(level)">{{ i18n('replayLevel') }}</button>
+        <button class="game-icon replay-btn" @click="startLevel(level)">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <ConfirmDialog

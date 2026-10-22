@@ -87,14 +87,14 @@
         <div>🎉🎉 {{ i18n('levelDone').replace('{n}', level) }} 🎉🎉</div>
         <div class="final-score">{{ score }}</div>
         <div class="result-actions">
-          <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon replay-btn" @click="replayLevel">{{ i18n('replayLevel') }}</button>
           <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </div>
       </div>
       <div v-else-if="phase === OVER" class="result lose">
         <div>👻👻 {{ i18n('gameover') }} 👻👻</div>
         <div class="final-score">{{ score }} / {{ conf.target }}</div>
-        <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+        <button class="game-icon replay-btn" @click="replayLevel">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
     <!-- 共用的二次确认弹窗（文案与样式都在 shared/ConfirmDialog.vue 里） -->

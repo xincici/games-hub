@@ -65,6 +65,10 @@
     legend 的 `clearedCount += groups.length`）；猎手 / 侦探「选对」时也算一次消除，同样播它；
   - **扣❤️**：猎手 / 侦探选错、数独填错、赌神点错或提交错 —— 一律 `playFail()`（`hearts` 减少的那一行）。
 
+- **「重玩本关」是橙色描边按钮**（透明底 + `var(--god-bg)` 橙字 + 1px 橙边）：胜利/失败遮罩里那颗与
+  「新游戏」二次确认弹窗里那颗同款；其余结算按钮仍是主色绿。全局规则在 `App.vue`，类名写两遍
+  `.game-icon.replay-btn.replay-btn` 以压过各游戏 scoped 的 `.game-icon[data-v-x]`（同权重时 scoped 会赢）。
+
 ## 技术栈
 
 - **框架**：Vue 3（Composition API + `<script setup>`）+ Vue Router（hash 模式，懒加载/静态导入各游戏路由）

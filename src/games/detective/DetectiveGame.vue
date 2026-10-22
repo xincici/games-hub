@@ -77,14 +77,14 @@
       <div v-if="phase === WON" class="result win">
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
         <div class="result-actions">
-          <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon replay-btn" @click="retryLevel">{{ i18n('replayLevel') }}</button>
           <button class="game-icon" @click="nextLevel">{{ i18n('nextLevel') }}</button>
         </div>
       </div>
       <div v-else-if="phase === LOST" class="result lose">
         <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
         <div class="result-actions">
-          <button class="game-icon" @click="retryLevel">{{ i18n('replayLevel') }}</button>
+          <button class="game-icon replay-btn" @click="retryLevel">{{ i18n('replayLevel') }}</button>
         </div>
       </div>
     </div>

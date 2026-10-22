@@ -136,7 +136,7 @@
         <div class="result-streak">🔥 {{ i18n('streak') }} {{ streak }}</div>
       <!-- 保留连胜继续打：走 dealRound（按当前连胜给更难的档，见 board.js 的 RAMP），
            不走会清连胜的 startNewGame（那只是「新游戏」二次确认后的动作） -->
-      <button class="game-icon" @click="dealRound">{{ i18n('replayLevel') }}</button>
+      <button class="game-icon replay-btn" @click="dealRound">{{ i18n('replayLevel') }}</button>
       </div>
     </div>
 

@@ -57,14 +57,14 @@
             <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
             <span class="level-note">{{ i18n('levelDone').replace('{n}', level) }}</span>
             <div class="result-actions">
-              <button class="game-icon" @click="replayLevel">{{ i18n('replayLevel') }}</button>
+              <button class="game-icon replay-btn" @click="replayLevel">{{ i18n('replayLevel') }}</button>
               <button @click="nextLevel" class="game-icon">{{ i18n('nextLevel') }}</button>
             </div>
           </template>
           <template v-else>
             <span>👻👻 {{ i18n('tipLost') }} 👻👻</span>
             <span class="level-note">{{ i18n('level') }} {{ level }}</span>
-            <button @click="replayLevel" class="game-icon">{{ i18n('replayLevel') }}</button>
+            <button @click="replayLevel" class="game-icon replay-btn">{{ i18n('replayLevel') }}</button>
           </template>
         </div>
       </Transition>

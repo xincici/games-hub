@@ -28,6 +28,7 @@ export default defineConfig({
   safelist: [
     // 模式切换图标（三个游戏的麻将模式都用它）
     'i-dinkie-icons-three-of-circles-mahjong',
+    'i-dinkie-icons-three-of-bamboos-mahjong',
     'i-dinkie-icons-five-of-circles-mahjong',
     'i-dinkie-icons-white-dragon-mahjong',
     'i-dinkie-icons-seven-of-bamboos-mahjong',

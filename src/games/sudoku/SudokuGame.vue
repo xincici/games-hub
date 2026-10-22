@@ -68,7 +68,7 @@
             <span v-if="newBest" class="new-best">🏅 {{ i18n('newBest') }}</span>
           </template>
           <span v-else>👻👻 {{ i18n('tipLost') }} 👻👻</span>
-          <button @click="initGame" class="game-icon">{{ i18n('replayLevel') }}</button>
+          <button @click="initGame" class="game-icon replay-btn">{{ i18n('replayLevel') }}</button>
         </div>
       </Transition>
     </div>
