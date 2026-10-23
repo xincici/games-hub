@@ -51,7 +51,23 @@
             </div>
           </section>
 
-          <section class="block switches">
+          <section class="block">
+          <h3>{{ i18n('face') }}</h3>
+          <div class="seg">
+            <span class="seg-slider" :style="{ '--i': faceIndex }" aria-hidden="true" />
+            <button
+              v-for="opt in faceOptions"
+              :key="opt.value"
+              class="seg-item"
+              :class="{ on: facePref === opt.value }"
+              @click="setFacePref(opt.value)"
+            >
+              <span>{{ opt.label }}</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="block switches">
             <button class="switch-row" :class="{ on: musicOn }" @click="toggleMusic">
               <span class="switch-icon"><i i-mdi-music-note /></span>
               <span class="switch-text">
@@ -90,7 +106,10 @@
 import { computed, onMounted, onUnmounted, watch } from 'vue';
 
 import { i18n } from '@/shared/i18n';
-import { themeMode, langMode, musicOn, sfxOn, setThemeMode, setLangMode } from '@/shared/settings';
+import {
+  themeMode, langMode, facePref, musicOn, sfxOn,
+  setThemeMode, setLangMode, setFacePref, FACE_MODES,
+} from '@/shared/settings';
 import { settingsOpen, settingsOrigin, settingsSnapping, closeSettings } from '@/shared/ui';
 
 const layerStyle = computed(() => ({
@@ -124,6 +143,13 @@ const langOptions = computed(() => [
 // 滑块要去第几格：跟随系统 = 0、第二项 = 1、第三项 = 2
 const themeIndex = computed(() => Math.max(0, themeOptions.value.findIndex(o => o.value === themeMode.value)));
 const langIndex = computed(() => Math.max(0, langOptions.value.findIndex(o => o.value === langMode.value)));
+
+const faceIndex = computed(() => Math.max(0, FACE_MODES.indexOf(facePref.value)));
+const faceOptions = computed(() => [
+  { value: 'emoji', label: i18n('faceEmoji') },
+  { value: 'poker', label: i18n('facePoker') },
+  { value: 'mahjong', label: i18n('faceMahjong') },
+]);
 
 const close = () => closeSettings();
 const toggleMusic = () => { musicOn.value = !musicOn.value; };

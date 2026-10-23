@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Emoji Detective',
+    gameTitle: 'Detective',
     bestScore: '🏆 Best Level',
     levelLabel: '🏁 Level',
     livesLabel: '❤️ Lives',
@@ -29,7 +29,7 @@ export default {
     rotateTip: 'Please rotate your device to portrait'
   },
   cn: {
-    gameTitle: 'Emoji 侦探',
+    gameTitle: '侦探',
     bestScore: '🏆 最高关卡',
     levelLabel: '🏁 关卡',
     livesLabel: '❤️ 生命',

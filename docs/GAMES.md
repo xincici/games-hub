@@ -26,7 +26,7 @@
 | 18 | 扑克炼金术 | `alchemy` | `/#/alchemy` | `__poker_alchemy__` | `__poker_alchemy__mode`<br>`__poker_alchemy__level`<br>`__poker_alchemy__level_2`<br>`__poker_alchemy__state`<br>`__poker_alchemy__state_2`<br>`__poker_alchemy__best_`<br>`__poker_alchemy__` | 进度条 / 二次确认 / 撒花 | 4 |
 | 19 | 麻将英雄 | `mahjong` | `/#/mahjong` | `__mahjong_hero__` | `__mahjong_hero__mode`<br>`__mahjong_hero__level`<br>`__mahjong_hero__state`<br>`__mahjong_hero__best_`<br>`__mahjong_hero__` | 进度条 / 二次确认 / 撒花 | 3 |
 | 20 | 雀圣 | `quesheng` | `/#/quesheng` | `__quesheng__` | `__quesheng__mode`<br>`__quesheng__level_2`<br>`__quesheng__level`<br>`__quesheng__state_2`<br>`__quesheng__state`<br>`__quesheng__` | 进度条 / 上帝模式 / 二次确认 / 撒花 | 3 |
-| 21 | 麻将传奇 | `legend` | `/#/legend` | `__mahjong_legend__` | `__mahjong_legend__state`<br>`__mahjong_legend__best_1`<br>`__mahjong_legend__` | 二次确认 / 撒花 | 4 |
+| 21 | 麻将传奇 | `legend` | `/#/legend` | `__legend__` | `__legend__suit`<br>`__mahjong_legend__state`<br>`__mahjong_legend__best_1`<br>`__mahjong_legend__` | 撒花 | 4 |
 | 22 | Emoji 镜像 | `mirror` | `/#/mirror` | `__emoji_mirror__` | `__emoji_mirror__state`<br>`__emoji_mirror__best_`<br>`__emoji_mirror__` | 计时 / 进度条 / 撒花 | 3 |
 | 23 | point24 | `point24` | `/#/point24` | `__point24__` | `__point24__state`<br>`__point24__streak`<br>`__point24__best_streak`<br>`__point24__` | 二次确认 / 撒花 | 3 |
 | 24 | gambler | `gambler` | `/#/gambler` | `__gambler__` | `__gambler__`<br>`__gambler__mode`<br>`__gambler__level`<br>`__gambler__level_2`<br>`__gambler__best`<br>`__gambler__best_2`<br>`__gambler__streak`<br>`__gambler__streak_2`<br>`__gambler__state`<br>`__gambler__state_2` | 生命 / 二次确认 / 撒花 | 6 |

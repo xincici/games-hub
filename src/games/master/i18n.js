@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Emoji Master',
+    gameTitle: 'Elimination Master',
     level: '🏁 Level',
     remain: '🃏 Tiles Left',
     layersLabel: '{n} layers',
@@ -22,7 +22,7 @@ export default {
     rotateTip: 'Please rotate your device to portrait',
   },
   cn: {
-    gameTitle: 'Emoji 大师',
+    gameTitle: '消除大师',
     level: '🏁 关卡',
     remain: '🃏 剩余卡片',
     layersLabel: '{n} 层',

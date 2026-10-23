@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper">
-    <!-- 本游戏不记「最高关卡」，所以连点标题的彩蛋不接（与 Emoji 大师一致） -->
+    <!-- 本游戏不记「最高关卡」，所以连点标题的彩蛋不接（与 消除大师一致） -->
     <TopHeader @onScoreReset="onScoreReset" />
     <!-- 隐藏的计时器：只用来驱动倒计时与每秒落档，数字显示在统计条里 -->
     <CountTimer

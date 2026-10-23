@@ -101,6 +101,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
+import { facePref } from '@/shared/settings';
 import { playElimination, playFail, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
@@ -149,13 +150,16 @@ const LEVEL_KEY = `${KEY_PREFIX}level`;
 const BEST_KEY = `${KEY_PREFIX}best`;
 // 模式与关卡进度、最高关卡、当前局面都分开存：emoji 沿用不带后缀的老 key
 // （已经玩过的进度不丢），扑克用 _2、麻将用 _3 后缀
+const FACE_TO_MODE = { emoji: MODE_EMOJI, poker: MODE_CARDS, mahjong: MODE_MAHJONG };
 const MODE_KEY = `${KEY_PREFIX}mode`;
 // 三种牌面：1 emoji / 2 扑克牌 / 3 麻将牌；顶栏图标点一下按 1 → 2 → 3 → 1 循环
 const MODE_EMOJI = 1;
 const MODE_CARDS = 2;
 const MODE_MAHJONG = 3;
 const loadMode = () => {
-  const v = +(localStorage.getItem(MODE_KEY) || MODE_EMOJI);
+  const raw = localStorage.getItem(MODE_KEY);
+  // 没改过 → 用设置里的牌面偏好；改过就按他自己的
+  const v = raw === null ? FACE_TO_MODE[facePref.value] : +raw;
   return v === MODE_CARDS || v === MODE_MAHJONG ? v : MODE_EMOJI;   // 读到别的值一律当 emoji
 };
 const mode = ref(loadMode());

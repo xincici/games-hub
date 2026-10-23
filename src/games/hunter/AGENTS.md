@@ -1,4 +1,4 @@
-# Emoji 猎手（`src/games/hunter/`）
+# 猎手（`src/games/hunter/`）
 
 > 这是根目录 [`AGENTS.md`](../../../AGENTS.md) 的**游戏分册**：只讲这个游戏自己的实现、
 > 存档 key 和踩过的坑。**改这个游戏前先读这里**；跨游戏共用的约定（视觉语言、共享组件、
@@ -16,7 +16,7 @@ HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标
 
 ## 存档（localStorage）
 
-  - Emoji 猎手：`__emoji_hunter__*`（牌面 `__emoji_hunter__mode`=1 emoji / 2 扑克 / 3 麻将，读到 1/2/3 之外的值一律当 1；三种牌面各存一份——emoji 沿用 `__emoji_hunter__level` / `__emoji_hunter__best`，扑克用 `_2` 后缀（`__emoji_hunter__level_2` / `__emoji_hunter__best_2`），麻将用 `_3` 后缀（`__emoji_hunter__level_3` / `__emoji_hunter__best_3`）；关卡进度与局面同一个 key（JSON：关卡、剩余❤️、阶段、用时、展示牌、候选牌、已找回与标错的键，扑克牌面是 `{num, type}`、麻将牌面是 `'m5'` 这类 key），最高关卡 `__emoji_hunter__best`；**胜利与失败局面都连牌一起保留**（失败时展示牌与候选牌都翻正面、标出找回与标错），重进仍是结算层，玩家自己选「重玩本关 / 下一关」；只有中途退出直接重开当前关）
+  - 猎手：`__emoji_hunter__*`（牌面 `__emoji_hunter__mode`=1 emoji / 2 扑克 / 3 麻将，读到 1/2/3 之外的值一律当 1；三种牌面各存一份——emoji 沿用 `__emoji_hunter__level` / `__emoji_hunter__best`，扑克用 `_2` 后缀（`__emoji_hunter__level_2` / `__emoji_hunter__best_2`），麻将用 `_3` 后缀（`__emoji_hunter__level_3` / `__emoji_hunter__best_3`）；关卡进度与局面同一个 key（JSON：关卡、剩余❤️、阶段、用时、展示牌、候选牌、已找回与标错的键，扑克牌面是 `{num, type}`、麻将牌面是 `'m5'` 这类 key），最高关卡 `__emoji_hunter__best`；**胜利与失败局面都连牌一起保留**（失败时展示牌与候选牌都翻正面、标出找回与标错），重进仍是结算层，玩家自己选「重玩本关 / 下一关」；只有中途退出直接重开当前关）
 
 ## 界面约定
 

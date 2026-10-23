@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Emoji Match',
+    gameTitle: 'Match',
     hintRemember: '👀 Memorise them quickly!',
     hintMatch: '🧠 Now find the pairs!',
     levelLabel: '🏁 Level',
@@ -28,7 +28,7 @@ export default {
     rotateTip: 'Please rotate your device to portrait'
   },
   cn: {
-    gameTitle: 'Emoji 对对碰',
+    gameTitle: '对对碰',
     hintRemember: '👀 快记住他们',
     hintMatch: '🧠 把他们配对找出来',
     levelLabel: '🏁 关卡',

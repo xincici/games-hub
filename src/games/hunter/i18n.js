@@ -1,6 +1,6 @@
 export default {
   en: {
-    gameTitle: 'Emoji Hunter',
+    gameTitle: 'Hunter',
     bestScore: '🏆 Best Level',
     levelLabel: '🏁 Level',
     livesLabel: '❤️ Lives',
@@ -26,7 +26,7 @@ export default {
     rotateTip: 'Please rotate your device to portrait'
   },
   cn: {
-    gameTitle: 'Emoji 猎手',
+    gameTitle: '猎手',
     bestScore: '🏆 最高关卡',
     levelLabel: '🏁 关卡',
     livesLabel: '❤️ 生命',

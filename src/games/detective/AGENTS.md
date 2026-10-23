@@ -1,4 +1,4 @@
-# Emoji 侦探（`src/games/detective/`）
+# 侦探（`src/games/detective/`）
 
 > 这是根目录 [`AGENTS.md`](../../../AGENTS.md) 的**游戏分册**：只讲这个游戏自己的实现、
 > 存档 key 和踩过的坑。**改这个游戏前先读这里**；跨游戏共用的约定（视觉语言、共享组件、
@@ -113,7 +113,7 @@ if (hearts.value <= 0) {
 
 ## 存档（localStorage）
 
-  - Emoji 侦探：`__emoji_detective__*`（牌面模式 `__emoji_detective__mode` = 1 emoji / 2 扑克 / 3 麻将。
+  - 侦探：`__emoji_detective__*`（牌面模式 `__emoji_detective__mode` = 1 emoji / 2 扑克 / 3 麻将。
     **三种牌面各自一套 key**，后缀由 `modeSuffix()` 拼：emoji 不留后缀（老存档无缝）、扑克 `_2`、麻将 `_3`）
 
 | 牌面 | 牌面模式 | 进度 + 局面（同一个 key） | 最高关卡 |

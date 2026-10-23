@@ -1,4 +1,4 @@
-# Emoji 对对碰（`src/games/match/`）
+# 对对碰（`src/games/match/`）
 
 > 这是根目录 [`AGENTS.md`](../../../AGENTS.md) 的**游戏分册**：只讲这个游戏自己的实现、
 > 存档 key 和踩过的坑。**改这个游戏前先读这里**；跨游戏共用的约定（视觉语言、共享组件、
@@ -16,7 +16,7 @@ MatchGame.vue（emoji 对对碰 · 闯关制：每关一副新牌，分两段 �
 
 ## 存档（localStorage）
 
-  - Emoji 对对碰：`__emoji_match__*`（牌面 `__emoji_match__mode` = 1 emoji / 2 扑克 / 3 麻将，只接受这三个值、别的当 1）
+  - 对对碰：`__emoji_match__*`（牌面 `__emoji_match__mode` = 1 emoji / 2 扑克 / 3 麻将，只接受这三个值、别的当 1）
     - 三种牌面**各存一套进度与局面**，后缀由 `modeSuffix(m)` 给：emoji **无后缀**（沿用老 key）、扑克 `_2`、麻将 `_3`。
       代码里一律走 `levelKeyFor(m)` / `bestKeyFor(m)` / `stateKeyFor(m)`，不要写死 key。
     - 当前关卡：`__emoji_match__level`（emoji）/ `__emoji_match__level_2`（扑克）/ **`__emoji_match__level_3`（麻将）**

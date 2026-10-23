@@ -39,14 +39,14 @@ src/
     ├── puzzle/           # 数字迷宫 —— 见 src/games/puzzle/AGENTS.md
     ├── g2048/            # 2048 —— 见 src/games/g2048/AGENTS.md
     ├── snake/            # 贪吃蛇 —— 见 src/games/snake/AGENTS.md
-    ├── match/            # Emoji 对对碰 —— 见 src/games/match/AGENTS.md
+    ├── match/            # 对对碰 —— 见 src/games/match/AGENTS.md
     ├── link/             # Emoji 连连看 —— 见 src/games/link/AGENTS.md
-    ├── detective/        # Emoji 侦探 —— 见 src/games/detective/AGENTS.md
-    ├── hunter/           # Emoji 猎手 —— 见 src/games/hunter/AGENTS.md
+    ├── detective/        # 侦探 —— 见 src/games/detective/AGENTS.md
+    ├── hunter/           # 猎手 —— 见 src/games/hunter/AGENTS.md
     ├── three/            # Threes —— 见 src/games/three/AGENTS.md
     ├── crush/            # Emoji 消消乐 —— 见 src/games/crush/AGENTS.md
     ├── sudoku/           # 数独 —— 见 src/games/sudoku/AGENTS.md
-    ├── master/           # Emoji 大师 —— 见 src/games/master/AGENTS.md
+    ├── master/           # 消除大师 —— 见 src/games/master/AGENTS.md
     ├── down/             # Emoji 下坠 —— 见 src/games/down/AGENTS.md
     ├── slide/            # Emoji 滑行 —— 见 src/games/slide/AGENTS.md
     ├── sort/             # Emoji 排序 —— 见 src/games/sort/AGENTS.md
@@ -67,6 +67,33 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 - **localStorage 约定**（各游戏互不干扰，前缀与原独立项目一致）：**每个游戏的 key 清单、含义与
   「哪些局面会存档」都写在它自己的分册里**（见上方索引），根目录只保留共享 key。
   - 共享：`__games_hub__theme` / `__games_hub__language` / `__games_hub__home_order`（首页卡片排序，新游戏按注册顺序排在已排序结果之后）
-- **闯关游戏的统一约定**（对对碰 / 连连看 / 消消乐 / Emoji 大师 / Emoji 排序 / Emoji 侦探 / Emoji 猎手 / 扑克炼金术 / 麻将英雄 / 雀圣）：操作区分两半（对对碰在两者之间还有一格观察 / 操作倒计时）——左边是本关盘面信息（各游戏显示什么见该游戏分册；**雀圣例外**：那一半是它的 ⚡ 上帝模式按钮，说明文案已去掉），右边只放「🎮 新游戏」按钮（四者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——各处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，弹窗三个按钮：**取消 / 重玩本关 / 确定重来**（没有「本关」概念的模式传 `:show-replay="false"` 去掉中间那个按钮，扑克炼金术与麻将英雄的无尽模式都用）。调用方 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="retryLevel" @cancel="confirming = false" />`；`@replay` 只重开当前这一关、**保留闯关进度**（`retryLevel()` 里要顺手 `confirming = false`——五关走 `replayLevel()` → `initLevel()` 的那几个已经关））；失败结算浮层只放「🔄 重玩本关」；**进度条**（3px、贴统计卡底部、主色填充，样式以连连看那份为准）现有 7 个游戏有：连连看（已消对数 / 总对数）、消消乐、Emoji 大师（已消卡片 / 本关总卡片）、排序、**Emoji 滑行**（已消对数 / 本关总对数）、**扑克炼金术与麻将英雄**（得分 / 目标分，**只在本关模式显示**，无尽模式没有目标分所以不渲染）——后两个的数值是「离过关还有多远」，前几个是「盘面清了多少」。**侦探 / 猎手没有进度条**（它们是单关制、没有「本关总共多少」的概念），但同样：顶部统计卡**中间**一格显示「当前第几关」（`levelLabel` + `level + 1`，两边都是 0 基下标），「新游戏」也走同一个二次确认弹窗（`startNewGame` 里清掉当前牌面的 `bestKey()` 记录再回第 1 关；另一种牌面的记录不动，标题连点彩蛋才两边一起清）；除连连看（限定时间内清盘）外都不带计时器；闭环曲线：连连看 / 排序 / 大师在第 30 / 30 / 50 关封顶，消消乐第 30 关只是结构到顶，之后步数与目标分仍逐关上涨。
+- **闯关游戏的统一约定**（对对碰 / 连连看 / 消消乐 / 消除大师 / Emoji 排序 / 侦探 / 猎手 / 扑克炼金术 / 麻将英雄 / 雀圣）：操作区分两半（对对碰在两者之间还有一格观察 / 操作倒计时）——左边是本关盘面信息（各游戏显示什么见该游戏分册；**雀圣例外**：那一半是它的 ⚡ 上帝模式按钮，说明文案已去掉），右边只放「🎮 新游戏」按钮（四者 `.opt-half` / `.start-wrapper` 的 flex 比例统一为 1.6 : 1.2），点击弹同一个二次确认弹窗——各处共用 `src/shared/ConfirmDialog.vue`（模板、`.confirm-*` 样式、中英文案都只有这一份，弹窗三个按钮：**取消 / 重玩本关 / 确定重来**（没有「本关」概念的模式传 `:show-replay="false"` 去掉中间那个按钮，扑克炼金术与麻将英雄的无尽模式都用）。调用方 `<ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="retryLevel" @cancel="confirming = false" />`；`@replay` 只重开当前这一关、**保留闯关进度**（`retryLevel()` 里要顺手 `confirming = false`——五关走 `replayLevel()` → `initLevel()` 的那几个已经关））；失败结算浮层只放「🔄 重玩本关」；**进度条**（3px、贴统计卡底部、主色填充，样式以连连看那份为准）现有 7 个游戏有：连连看（已消对数 / 总对数）、消消乐、消除大师（已消卡片 / 本关总卡片）、排序、**Emoji 滑行**（已消对数 / 本关总对数）、**扑克炼金术与麻将英雄**（得分 / 目标分，**只在本关模式显示**，无尽模式没有目标分所以不渲染）——后两个的数值是「离过关还有多远」，前几个是「盘面清了多少」。**侦探 / 猎手没有进度条**（它们是单关制、没有「本关总共多少」的概念），但同样：顶部统计卡**中间**一格显示「当前第几关」（`levelLabel` + `level + 1`，两边都是 0 基下标），「新游戏」也走同一个二次确认弹窗（`startNewGame` 里清掉当前牌面的 `bestKey()` 记录再回第 1 关；另一种牌面的记录不动，标题连点彩蛋才两边一起清）；除连连看（限定时间内清盘）外都不带计时器；闭环曲线：连连看 / 排序 / 大师在第 30 / 30 / 50 关封顶，消消乐第 30 关只是结构到顶，之后步数与目标分仍逐关上涨。
 - **游戏特色按钮**：各游戏通过 `TopHeader` 的默认插槽注入自己的开关。每个游戏具体挂什么开关写在它自己的分册里。插槽样式由 TopHeader 的 `:slotted(.item-wrapper)` 提供——注意 TopHeader 自己的帮助 / 主题 / 语言按钮也用 `.item-wrapper`，所以**页面上会有多个同名的 wrapper**，测试脚本要按里面的图标（`[i-mdi-xxx]` 属性）去定位，别直接 `querySelector('.item-wrapper')`。
 - **玩法保持不变**：迁移自原项目的游戏逻辑（棋盘操作、发牌状态机、判牌、1A2B 判定等）一律不改行为；只允许改导入路径、CSS 变量引用和生命周期清理。
+
+## 背景音乐：场景 ↔ 曲目（**一次性定死**）
+
+`shared/audio.js` 的 `MUSIC_BY_SCENE` 是唯一来源；`App.vue` 用 `watch(() => route.meta.game)` 调
+`setMusicScene()`，`home` 放首页曲、其余 id 放对应游戏的曲。**26 个文件一一对应、互不重复**，
+加/换曲目时改这张表 + 本表，别动播放逻辑（按场景切歌、循环、交叉淡入淡出、页面失焦暂停都在引擎里）。
+
+| 场景 | 曲目 | 场景 | 曲目 |
+| --- | --- | --- | --- |
+| **home 首页** | **xianjian-yu-jian-jiang-hu**（御剑江湖） | crush 消消乐 | xianjian-zhan-dou-4 |
+| click 点击游戏 | xianjian-yang-ming-bai-na | sudoku 数独 | xianjian-zi-xuan |
+| puzzle 数字迷宫 | xianjian-shu-shan-gu-dao（蜀山故道） | master 大师 | xianjian-jing-tian（惊天） |
+| guess 1A2B | xianjian-ju-qing-2 | down 下坠 | xianjian-wei-zhi-14 |
+| poker 德州扑克 | tou-gong（偷功） | slide 滑行 | xianjian-li-shu-shan |
+| three Threes | shi-ji（四季） | sort 排序 | xianjian-wei-zhi-7 |
+| g2048 2048 | xianjian-xin-xian-jie | alchemy 炼金术 | xianjian-shu-shan-jun-ying |
+| snake 贪吃蛇 | xianjian-zhan-dou-3 | mahjong 麻将英雄 | xianjian-shu-shan |
+| match 对对碰 | xianjian-yu-man-tang（雨满塘） | quesheng 雀圣 | xianjian-hei-long-kui |
+| link 连连看 | xianjian-yong-an-dang | legend 麻将传奇 | xianjian-zhu-ti-qu（主题曲） |
+| detective 侦探 | xianjian-wang-peng-xu | mirror 镜像 | xianjian-hui-meng-you-xian（回梦游仙） |
+| hunter 猎手 | xianjian-tu-ling-zhu | point24 24 点 | xianjian-wei-zhi-9 |
+| gambler 赌神 | xianjian-zhan-dou-5 | solo 单人麻将 | xianjian-li-san-si |
+
+- 音乐音量 `MUSIC_GAIN = 0.22`（**比用户自己的音量更小**，音效是 0.9）；切换时旧曲 0.6s 淡出、新曲 0.9s 淡入；
+  每首 `source.loop = true`；页面不可见时整条图 `suspend()`。
+- 实测（390×844）：首页请求并播放 `xianjian-yu-jian-jiang-hu`（`loop: true`）→ 进数独请求
+  `xianjian-zi-xuan`（`loop: true`，旧曲淡出）→ 回首页复用已解码缓存、不再发请求。

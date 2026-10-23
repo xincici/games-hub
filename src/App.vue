@@ -28,11 +28,18 @@
 <script setup>
 import ParticleBackground from '@/shared/ParticleBackground.vue';
 import SettingsSheet from '@/shared/SettingsSheet.vue';
+import { useRoute } from 'vue-router';
+
+import { watch } from 'vue';
 import { i18n } from '@/shared/i18n';
-import { initAudio } from '@/shared/audio';
+import { initAudio, setMusicScene } from '@/shared/audio';
 
 // 音频引擎在挂载时初始化：只建 AudioContext（suspended），第一次手势时才真正解锁开播
 initAudio();
+
+// 背景音乐跟着路由走：首页放《御剑江湖》，进任意游戏就切到它自己那首（交叉淡入淡出）
+const route = useRoute();
+watch(() => route.meta.game, g => setMusicScene(g || 'home'), { immediate: true });
 </script>
 
 <style lang="scss">
@@ -45,7 +52,7 @@ initAudio();
   background-position: 5px 5px;
 }
 
-// 「选对了」的即时反馈（Emoji 侦探 / 猎手共用，比单纯高亮多一段动作）：
+// 「选对了」的即时反馈（侦探 / 猎手共用，比单纯高亮多一段动作）：
 // 弹一下 + 绿色光环从牌边扩散出去。**必须挂在正面那层**（.face），
 // 不能挂在外层 .card-flip / .cand-flip 上 —— 那一层的 transform 是翻面状态，
 // 动画的 transform 会把它顶掉，牌会当场翻回背面。

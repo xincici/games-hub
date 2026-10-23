@@ -1,4 +1,4 @@
-# Emoji 大师（`src/games/master/`）
+# 消除大师（`src/games/master/`）
 
 > 这是根目录 [`AGENTS.md`](../../../AGENTS.md) 的**游戏分册**：只讲这个游戏自己的实现、
 > 存档 key 和踩过的坑。**改这个游戏前先读这里**；跨游戏共用的约定（视觉语言、共享组件、
@@ -13,11 +13,11 @@
 
 ## 实现
 
-MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（组数 8→32（24→96 张，已是布局容量上限）、种类 **7→18**、层数 2→8，第 50 关到顶，之后关数无限；同一种可出多组，张数恒为 3 的倍数）、无计时器、无洗牌道具、顶部统计条底部有进度条（已消卡片/本关总卡片）、操作区左侧显示「层数 · 种类」、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；游戏区本身是一张带底色的卡片（`--board-bg` + `--card-radius` + 8px 内边距，与连连看 / 消消乐同款——卡片坐标按 `layout` 的 `BOARD_PAD` 一起算，改内边距要同步改 `unit` 与 `--board-h`）；被压住的卡片**一律不透明**（depth-N 仅作样式钩子），只靠 `filter: brightness(0.5)` 变暗表示不可点；层数只影响视觉，能不能点仍由 `freeIds` 判定；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ buildTripleBag/dealAlongOrder 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
+MasterGame.vue（消除大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡判定、7 格收集槽三消、关卡难度曲线（组数 8→32（24→96 张，已是布局容量上限）、种类 **7→18**、层数 2→8，第 50 关到顶，之后关数无限；同一种可出多组，张数恒为 3 的倍数）、无计时器、无洗牌道具、顶部统计条底部有进度条（已消卡片/本关总卡片）、操作区左侧显示「层数 · 种类」、新游戏二次确认、开局/恢复时自下层向上逐张堆叠入场；游戏区本身是一张带底色的卡片（`--board-bg` + `--card-radius` + 8px 内边距，与连连看 / 消消乐同款——卡片坐标按 `layout` 的 `BOARD_PAD` 一起算，改内边距要同步改 `unit` 与 `--board-h`）；被压住的卡片**一律不透明**（depth-N 仅作样式钩子），只靠 `filter: brightness(0.5)` 变暗表示不可点；层数只影响视觉，能不能点仍由 `freeIds` 判定；连点时每张牌各播一条独立飞行动画（互不等待，flights 数组），落格用 settling 做重入保护、通关判定要等 flights 清空）+ board.js（纯逻辑：难度曲线 + 错位分层摆放（禁止两张卡片完全重叠、不让任何卡片被彻底遮住）+ buildTripleBag/dealAlongOrder 保证可解的发牌）+ i18n.js（route /master，key 前缀 __emoji_master__）
 
 ## 存档（localStorage）
 
-  - Emoji 大师：`__emoji_master__*`
+  - 消除大师：`__emoji_master__*`
     - `__emoji_master__help_showed`（帮助弹窗，三种模式共享）
     - `__emoji_master__mode`：上次用的牌面模式（`emoji` / `poker` / `mahjong`，共享偏好）
     - **emoji 模式**：闯关进度 `__emoji_master__level`（当前第几关，「新游戏」二次确认后清除）、
@@ -39,7 +39,7 @@ MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡
   （emoji `i-mdi-emoticon-happy-outline` / 扑克 `i-mdi-cards-playing-outline` /
   麻将 `i-dinkie-icons-three-of-circles-mahjong`，都静态写在模板里所以 UnoCSS 能提取到；
   依赖 `@iconify-json/dinkie-icons`，集合已注册进 `uno.config.ts` 并进了 safelist）。
-  **照 Emoji 猎手的「emoji ↔ 扑克牌」写法抄的**，连 `modeTip` 这个 key 名都一样。
+  **照 猎手的「emoji ↔ 扑克牌」写法抄的**，连 `modeTip` 这个 key 名都一样。
   操作区因此**仍然是两格**：盘面信息（flex 1.6）+ divider + 新游戏（flex 1.2）。
 
 ## 三种牌面模式（玩法完全一样）
@@ -105,7 +105,7 @@ MasterGame.vue（Emoji 大师 / 羊了个羊闯关玩法：分层堆叠 + 遮挡
   麻将模式给卡片盒 `border-radius: calc(var(--mj-w) × 0.09 + 1px)`（+1 是盒子自己的 1px 描边），
   emoji 保持全局 `--radius-tile`。
 - **扑克模式下卡片盒要「让开」**：`.tile.poker` / `.tray-card.poker:not(.clearing)` / `.fly-card.poker`
-  把底色、描边、阴影全部取消，整张牌交给 `CardItem` 自己画（和 Emoji 猎手 / 对对碰 / 侦探的
+  把底色、描边、阴影全部取消，整张牌交给 `CardItem` 自己画（和 猎手 / 对对碰 / 侦探的
   `.poker .face` 同一做法）。⚠️ **这个块必须放在 `<style>` 的最末尾**：`.tile` 的底色是嵌在
   `.wrapper { .tile { … } }` 里编译出来的 `.wrapper .tile[data-v]`，与 `.tile.poker[data-v]` **同优先级**，
   靠「谁在后面谁赢」—— 放在中间会被它盖掉（实测底色仍是白的）。托盘卡用 `:not(.clearing)` 避开，

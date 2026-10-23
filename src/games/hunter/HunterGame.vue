@@ -118,6 +118,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { facePref } from '@/shared/settings';
 import { playElimination, playFail, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import CountTimer from '@/shared/CountTimer.vue';
@@ -180,8 +181,11 @@ const MODE_POKER = 2;
 const MODE_MAHJONG = 3;
 const MODE_KEY = `${KEY_PREFIX}mode`;
 // 读到的值只接受 1/2/3，其它（含旧存档里的脏值）一律当 emoji
-const storedMode = Math.floor(+(localStorage.getItem(MODE_KEY) || 1));
-const mode = ref([1, 2, 3].includes(storedMode) ? storedMode : 1);
+// 没改过（key 不存在）就用设置里的牌面偏好当默认，改过就按他自己的
+const FACE_TO_MODE = { emoji: MODE_EMOJI, poker: MODE_POKER, mahjong: MODE_MAHJONG };
+const storedModeRaw = localStorage.getItem(MODE_KEY);
+const storedMode = storedModeRaw === null ? FACE_TO_MODE[facePref.value] : Math.floor(+storedModeRaw);
+const mode = ref([1, 2, 3].includes(storedMode) ? storedMode : MODE_EMOJI);
 const modeSuffix = () => (mode.value === 2 ? '_2' : mode.value === 3 ? '_3' : '');
 const levelKey = () => `${LEVEL_KEY}${modeSuffix()}`;
 const bestKey = () => `${BEST_KEY}${modeSuffix()}`;

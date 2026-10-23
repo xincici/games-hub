@@ -10,6 +10,7 @@ import { computed, ref, watch } from 'vue';
 const KEY = {
   themeMode: '__games_hub__theme_mode',   // system | light | dark
   langMode: '__games_hub__lang_mode',     // system | cn | en
+  face: '__games_hub__face',              // emoji | poker | mahjong
   music: '__games_hub__music',            // '1' | '0'
   sfx: '__games_hub__sfx',                // '1' | '0'
   legacyTheme: '__games_hub__theme',      // 旧的布尔开关
@@ -39,6 +40,10 @@ function migrateLangMode() {
 
 export const themeMode = ref(migrateThemeMode() || readStr(KEY.themeMode, 'system'));
 export const langMode = ref(migrateLangMode() || readStr(KEY.langMode, 'system'));
+// 牌面偏好：只给「玩家自己没改过模式」的游戏当默认值（四个牌面游戏各自仍可独立覆盖）
+export const FACE_MODES = ['emoji', 'poker', 'mahjong'];
+const savedFace = readStr(KEY.face, 'emoji');
+export const facePref = ref(FACE_MODES.includes(savedFace) ? savedFace : 'emoji');
 export const musicOn = ref(readBool(KEY.music, false));   // 默认关：不请自来地放音乐很打扰
 export const sfxOn = ref(readBool(KEY.sfx, true));       // 默认开：只有过关 / 失败两个音
 
@@ -93,10 +98,12 @@ watch([langMode, resolvedLang], ([mode, lang]) => {
   document.documentElement.lang = lang === 'cn' ? 'zh-CN' : 'en';
 }, { immediate: true });
 
+watch(facePref, val => localStorage.setItem(KEY.face, val), { immediate: true });
 watch(musicOn, val => localStorage.setItem(KEY.music, val ? '1' : '0'), { immediate: true });
 watch(sfxOn, val => localStorage.setItem(KEY.sfx, val ? '1' : '0'), { immediate: true });
 
 export const setThemeMode = mode => { themeMode.value = mode; };
 export const setLangMode = mode => { langMode.value = mode; };
+export const setFacePref = mode => { facePref.value = mode; };
 export const THEME_MODES = ['system', 'light', 'dark'];
 export const LANG_MODES = ['system', 'cn', 'en'];

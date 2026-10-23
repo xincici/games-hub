@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper" :style="layout.vars">
-    <!-- 模式开关：emoji ⇄ 麻将牌（放在帮助图标旁边，照 Emoji 猎手的「emoji ↔ 扑克牌」写法） -->
+    <!-- 模式开关：emoji ⇄ 麻将牌（放在帮助图标旁边，照 猎手的「emoji ↔ 扑克牌」写法） -->
     <TopHeader @onScoreReset="onScoreReset">
       <span class="item-wrapper" :title="i18n('modeTip')" @click="switchMode">
         <i v-if="mode === 'emoji'" i-mdi-emoticon-happy-outline />
@@ -124,6 +124,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 
+import { facePref } from '@/shared/settings';
 import { playElimination, playLose } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import ConfirmDialog from '@/shared/ConfirmDialog.vue';
@@ -166,6 +167,8 @@ const WIN_DELAY = 620;   // 最后一组三消闪烁完再弹结算层
 function loadMode() {
   try {
     const m = localStorage.getItem(MODE_KEY);
+    // 没改过 → 用设置里的牌面偏好（同样是 'emoji'/'poker'/'mahjong'）；改过就按他自己的
+    if (m === null) return MODE_ORDER.includes(facePref.value) ? facePref.value : MODE_EMOJI;
     return MODE_ORDER.includes(m) ? m : MODE_EMOJI;
   } catch { return MODE_EMOJI; }
 }

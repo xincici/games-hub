@@ -23,7 +23,7 @@
 
 ## 项目概述
 
-「游戏合集」(Games Hub) — 将 4 个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、Emoji 对对碰、Emoji 连连看、Emoji 侦探、Emoji 猎手、Threes、Emoji 消消乐、数独 (Sudoku)、Emoji 大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 、Emoji 镜像 (Emoji Mirror) 、24 点 (24 Game) 、单人麻将 (Solo Mahjong) 和赌神 (God of Gamblers)，现共 25 个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**4/3/4/3/4/3/4 共 25 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
+「游戏合集」(Games Hub) — 将 4 个独立小游戏（点击游戏、1A2B、德州扑克、数字迷宫）合并到一个 Vue 3 单页应用中，并新增了 2048、贪吃蛇、对对碰、Emoji 连连看、侦探、猎手、Threes、Emoji 消消乐、数独 (Sudoku)、消除大师 (Emoji Master)、Emoji 排序 (Emoji Sort)、Emoji 下坠 (Emoji Down)、Emoji 滑行 (Emoji Slide)、扑克炼金术 (Poker Alchemy) 、麻将英雄 (Mahjong Hero) 、雀圣 (Mahjong Master) 、麻将传奇 (Mahjong Legend) 、Emoji 镜像 (Emoji Mirror) 、24 点 (24 Game) 、单人麻将 (Solo Mahjong) 和赌神 (God of Gamblers)，现共 25 个游戏。首页以蜂窝网格展示各游戏图标与名称（一行最多 4 个，**4/3/4/3/4/3/4 共 25 格**，与游戏数一一对应；每行格数奇偶交替，蜂巢自然咬合、不需要半格错位），点击进入对应游戏；游戏内标题栏最左侧有 🏠 按钮返回主页。主题与语言全局共享，各游戏的 localStorage 记录相互独立（沿用原游戏的前缀）。
 
 本目录是从同级的 `click-game/`、`guess-number/`、`poker/`、`puzzle-game/` 四个独立项目合并而来。**原目录保持只读，不要修改**；所有改动都在本目录进行。
 
@@ -36,9 +36,13 @@
 | --- | --- | --- | --- |
 | 主题 | `__games_hub__theme_mode` | `system` / `light` / `dark` | **system** |
 | 语言 | `__games_hub__lang_mode` | `system` / `cn` / `en` | **system**（系统语言非中英文 → en） |
+| 偏好设置（牌面） | `__games_hub__face` | `emoji` / `poker` / `mahjong` | **emoji** |
 | 背景音乐 | `__games_hub__music` | `'1'` / `'0'` | 关 |
 | 游戏音效 | `__games_hub__sfx` | `'1'` / `'0'` | 开 |
 
+- **偏好设置（牌面）只当默认值**：对对碰 / 消除大师 / 猎手 / 侦探 四个有牌面的游戏，**玩家没改过模式**
+  （自己那个 `__emoji_*__mode` key 不存在）时才用这里的设置；改过就完全按他自己的来，且四个游戏各记各的。
+  实测：全局=麻将 → 对对碰（未改过）盘面 `board mahjong`；全局=麻将但玩家自己选过扑克 → 仍是 `board poker`。
 - 状态的**唯一真相**在 `shared/settings.js`；`theme.js` / `i18n.js` 只保留 `isDark` / `language` / `toggle`
   这些老接口做派生（别再往它们里面加状态）。旧 key `__games_hub__theme` / `__games_hub__language` 会自动迁移。
 - **状态栏 / 标题栏颜色**（装成 PWA 后最明显）由 `shared/settings.js` 的 `syncThemeColor()` 统一负责：
@@ -48,7 +52,10 @@
 - 音频全部走 **Web Audio API**（`shared/audio.js`）：`AudioBufferSourceNode` + `GainNode`，
   **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
   首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。
-- 12 首背景音乐在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）；
+- **26 首背景音乐**在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）：
+  `shared/audio.js` 的 `MUSIC_BY_SCENE` 把**首页 → 御剑江湖、25 个游戏各一首**定死（不重复，表在
+  `docs/ARCHITECTURE.md`）；按路由切歌，循环播放，旧曲 0.6s 淡出 / 新曲 0.9s 淡入，
+  音乐音量 0.22（比用户自己的音量小、音效 0.9）；
   五个音效在 `public/audio/sfx/`（进预缓存，6~32KB）：`success.mp3`（5.07s）/ `lose.mp3`（4.08s）/
   `elimination.mp3`（0.76s）/ `fail.mp3`（1.02s）/ `firework-success.mp3`（1.67s）—— 时长各不相同，
   实测时可以直接靠 `AudioBuffer.duration` 分辨。
@@ -104,14 +111,14 @@ yarn preview   # 预览构建产物
 | 数字迷宫 | `src/games/puzzle/` | [`AGENTS.md`](src/games/puzzle/AGENTS.md) | `/#/puzzle` |
 | 2048 | `src/games/g2048/` | [`AGENTS.md`](src/games/g2048/AGENTS.md) | `/#/2048` |
 | 贪吃蛇 | `src/games/snake/` | [`AGENTS.md`](src/games/snake/AGENTS.md) | `/#/snake` |
-| Emoji 对对碰 | `src/games/match/` | [`AGENTS.md`](src/games/match/AGENTS.md) | `/#/match` |
+| 对对碰 | `src/games/match/` | [`AGENTS.md`](src/games/match/AGENTS.md) | `/#/match` |
 | Emoji 连连看 | `src/games/link/` | [`AGENTS.md`](src/games/link/AGENTS.md) | `/#/link` |
-| Emoji 侦探 | `src/games/detective/` | [`AGENTS.md`](src/games/detective/AGENTS.md) | `/#/detective` |
-| Emoji 猎手 | `src/games/hunter/` | [`AGENTS.md`](src/games/hunter/AGENTS.md) | `/#/hunter` |
+| 侦探 | `src/games/detective/` | [`AGENTS.md`](src/games/detective/AGENTS.md) | `/#/detective` |
+| 猎手 | `src/games/hunter/` | [`AGENTS.md`](src/games/hunter/AGENTS.md) | `/#/hunter` |
 | Threes | `src/games/three/` | [`AGENTS.md`](src/games/three/AGENTS.md) | `/#/three` |
 | Emoji 消消乐 | `src/games/crush/` | [`AGENTS.md`](src/games/crush/AGENTS.md) | `/#/crush` |
 | 数独 | `src/games/sudoku/` | [`AGENTS.md`](src/games/sudoku/AGENTS.md) | `/#/sudoku` |
-| Emoji 大师 | `src/games/master/` | [`AGENTS.md`](src/games/master/AGENTS.md) | `/#/master` |
+| 消除大师 | `src/games/master/` | [`AGENTS.md`](src/games/master/AGENTS.md) | `/#/master` |
 | Emoji 下坠 | `src/games/down/` | [`AGENTS.md`](src/games/down/AGENTS.md) | `/#/down` |
 | Emoji 滑行 | `src/games/slide/` | [`AGENTS.md`](src/games/slide/AGENTS.md) | `/#/slide` |
 | Emoji 排序 | `src/games/sort/` | [`AGENTS.md`](src/games/sort/AGENTS.md) | `/#/sort` |
