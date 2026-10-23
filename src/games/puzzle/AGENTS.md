@@ -24,3 +24,8 @@ MainGame.vue + difficulty/rocker/i18n.js
 - 空白格跟手的滑动走 **Pointer Events**（阈值 10px，小于阈值视为点击忽略），`touch-action: none` 加在 **`.game-area`** 上而**不是整页**：最高难度 6 × 320×568 时本页会溢出（实测 scrollH 590 > innerH 568），整页 none 会把「滚下去看棋盘」一起吃掉。原来只监听 touch 事件，PC 上鼠标拖动不动格子；摇杆按钮与方向键照旧可用。
 - 统计条第二格是**点击次数**（`clickCount` 从 0 往上加，不是「剩余可用」），它同时就是存进 `__number_puzzle__<难度>` 的分数（越少越好）。
 - 存档 key：`__number_puzzle__difficulty`（当前难度）、`__number_puzzle__state`（局面存档）、`__number_puzzle__best_*`（各难度最佳用时）
+
+## 音效
+
+点了**不可移动**的数字（四周没有「最大那张」，`onCellClick` 里 `operate === false` 的分支）除了抖动，
+还会播 `playFail()`（1.02s）。除此之外本作没有别的音效。

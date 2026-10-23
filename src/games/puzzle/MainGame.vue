@@ -94,6 +94,7 @@
 <script setup>
 import { ref, reactive, computed, watch, watchEffect } from 'vue';
 
+import { playFail } from '@/shared/audio';
 import TopHeader from '@/components/TopHeader.vue';
 import confetti from '@/shared/confetti';
 import { rocker, toggle as toggleRocker } from './rocker';
@@ -266,7 +267,11 @@ function onCellClick(idx) {
     clickCount.value++;
   });
   if (operate) checkResult();
-  else shakeCell(idx);
+  else {
+    shakeCell(idx);
+    // 点的是「空白那一格」（隐藏的最大数字本身）就不响：它不是走错，只是这里没有可换的邻居
+    if (gameData.list[idx] !== maxNumber.value) playFail();
+  }
 }
 function shakeCell(idx) {
   gameData.shake = idx;

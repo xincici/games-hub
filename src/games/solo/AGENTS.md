@@ -300,3 +300,10 @@ if (effective !== 14 && effective !== 13) return false;
 **5 连点清记录（彩蛋）**：注册表里的 `recordsPrefix: '__solo__'` 只是为了让 `TopHeader`
 **触发 emit**（它只删 `${prefix}${i}` 这种带数字的 key，删不到本作那几个 key），
 真正的清理写在组件的 `onScoreReset()` 里（三个 key 全删 + 连胜 / 最长连胜清零 + 重开一局）。
+
+## 结算层按钮：`nextRound`（下一局）
+
+胡牌 / 摸完共用一个结算层（`.result`），里面只有一颗按钮：文案 `i18n('nextRound')`
+（en `➡️ Next round` / cn `➡️ 下一局`），**样式是普通主色绿**（`game-icon`，不带 `replay-btn`），
+点击行为仍是 `dealRound()`（保留连胜、按当前连胜给更难的档）。**别再给它加 `replay-btn`** ——
+那是「重玩本关」专用的橙色描边样式（用户要求回到和闯关类一致的主色）。
