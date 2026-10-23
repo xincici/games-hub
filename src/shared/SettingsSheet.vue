@@ -211,7 +211,7 @@ onUnmounted(() => {
 .sheet {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 76px 20px 40px;
+  padding: 50px 20px 40px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -259,11 +259,11 @@ onUnmounted(() => {
   background: var(--card-bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
-  padding: 16px;
+  padding: 12px 16px;
   box-shadow: var(--shadow-soft);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 
   h3 {
     margin: 0;
