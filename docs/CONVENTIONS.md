@@ -260,7 +260,7 @@
   <ConfirmDialog :show="confirming" @confirm="startNewGame" @replay="replayLevel" @cancel="confirming = false" />
   ```
   `startNewGame()` 第一行 `confirming.value = false`，然后清当前模式的 level + best 并回第 1 关。
-- 变体：**无尽 / 无关卡模式**（扑克炼金术、麻将英雄的无尽、24 点、单人麻将）传
+- 变体：**无尽 / 无关卡模式**（麻将英雄的无尽、24 点、单人麻将）传
   `:show-replay="false"`（去掉中间那颗），需要时再覆盖 `title` / `message`（用游戏自己的 i18n key）。
 - 反例：扑克的破产原来用原生 `alert('破产了请重新来过!')`（全仓唯一硬编码中文），已改成 `i18n('bankrupt')`。
 - 不确认的操作：重玩本关 / 下一关 / 切模式 / 切难度 / 返回首页 / 查看答案（查看答案是明确的「放弃」动作，

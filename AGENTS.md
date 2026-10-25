@@ -51,7 +51,7 @@
   （`HelpDialog` 踩过；它现在关闭时改成调用 `syncThemeColor()`）。
 - 音频全部走 **Web Audio API**（`shared/audio.js`）：`AudioBufferSourceNode` + `GainNode`，
   **不用 `<audio>`、不注册 mediaSession** —— 这样不会夺取音频焦点、打断用户正在听的音乐。
-  首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时 `suspend()`、回来 resume。
+  首次 `pointerdown`/`keydown` 里 `resume()` 解锁（iOS 硬性要求）；页面不可见时先把**整条总线（音乐 + 音效）淡出 2 秒**再 `suspend()`（直接暂停会在波形中途硬切、出一声爆音），回来用 0.25s 恢复总线并 `resume()`；正在播的音效在 2 秒后一并停掉，避免回来续播尾巴。
 - **26 首背景音乐**在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）：
   `shared/audio.js` 的 `MUSIC_BY_SCENE` 把**首页 → 御剑江湖、25 个游戏各一首**定死（不重复，表在
   `docs/ARCHITECTURE.md`）；按路由切歌，循环播放，旧曲 0.6s 淡出 / 新曲 0.9s 淡入，

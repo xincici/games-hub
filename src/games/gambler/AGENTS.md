@@ -91,8 +91,8 @@
   ⚠️ 飞行期间（1~3s）`phase` 还是 `play` 而心里已是 0：`restore()` 对此直接按失败处理。
 - **点错标红不可再选**：`missedKeys`（存档里是 `missed`，刷新后仍标红），模板里是 `missed: missedSet.has(key)`，
   样式 `.pick-tile.missed`（红线 + 变灰 + `pointer-events: none`），`pick()` 里也先挡一道。
-- **遮罩按钮**：左边「重玩本关」、右边「新游戏」，**两颗都是主色绿**（`.game-icon`；
-  曾经给「新游戏」用过白底描边的 `.ghost`，玩家要求统一成绿色，那条样式已删）；
+- **遮罩按钮**：左边「重玩本关」、右边「新游戏」；**「重玩本关」是橙色描边 `.replay-btn`**
+  （全局规范：透明底 + `var(--god-bg)` 橙字 + 1px 橙边），「新游戏」仍是主色绿 `.game-icon`；
   `.result-actions` 已经
   **提到 `.wrapper` 顶层**（原先嵌在 `.result` 里 → 遮罩里的那颗没有 `gap`，两颗挤在一起），
   现在浮层与遮罩共用同一套 `gap: 12px`。

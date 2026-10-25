@@ -9,7 +9,8 @@
 // 约束：
 // - 浏览器（尤其 iOS Safari）要求 AudioContext 在**用户手势**里 resume，所以第一次 pointerdown/
 //   keydown 时解锁；解锁前不报错、也不排队播放，解锁后如果用户已经开了音乐就自动开始。
-// - 页面不可见（切后台 / 切标签）时 suspend 整个 context：音乐**自动暂停**，回来 resume。
+// - 页面不可见（切后台 / 切标签）时先把整条总线淡出 **2 秒**再 suspend：直接 suspend 会在
+//   AudioBufferSourceNode 的波形中途硬切，听感上是一声「咔」；回来 resume 并恢复总线音量。
 import { ref, watch } from 'vue';
 
 import { musicOn, sfxOn } from './settings';
@@ -61,6 +62,7 @@ const MASTER_GAIN = 0.9;
 const FADE_IN = 0.9;      // 新曲淡入
 const FADE_OUT = 0.6;     // 旧曲淡出
 const STOP_FADE = 0.4;    // 关闭音乐时的淡出
+const BACKGROUND_FADE = 2; // 切后台 / 回桌面前的整条总线淡出（用户要求 2s，避免硬切爆音）
 
 const audioUrl = rel => `${import.meta.env.BASE_URL}audio/${rel}`;
 
@@ -73,6 +75,8 @@ let current = null;             // { scene, source, gain }
 let scene = 'home';             // 当前场景（首页 / 某个游戏）
 let loadToken = 0;              // 切歌竞态保护：只让最后一次生效
 let unlocked = false;
+let backgroundTimer = 0;   // 后台淡出结束后再 suspend，避免 2s 淡出被立刻打断
+const activeSfx = new Set(); // 正在播的音效：后台挂起前停掉，回来时不会补播尾巴
 
 export const musicPlaying = ref(false);
 export const musicScene = ref('home');
@@ -124,6 +128,34 @@ function fadeTo(param, target, seconds) {
   param.cancelScheduledValues(now);
   param.setValueAtTime(Math.max(0.0001, param.value), now);
   param.exponentialRampToValueAtTime(Math.max(0.0001, target), now + seconds);
+}
+
+// 整条总线（音乐 + 音效）一起淡出 / 恢复：背景化时不能只停音乐，
+// 正在播的音效也要跟着淡掉；用 master 而不是逐个 source，才能覆盖所有正在响的声音。
+function fadeMaster(target, seconds) {
+  if (!master) return;
+  fadeTo(master.gain, target, seconds);
+}
+
+function beginBackgroundFade() {
+  if (!ctx) return;
+  clearTimeout(backgroundTimer);
+  fadeMaster(0.0001, BACKGROUND_FADE);
+  // AudioParam 的斜坡在音频线程里走，2s 内不会被打断；到点再把整个 context 挂起。
+  // setTimeout 在后台可能被节流，但即使晚一点，声音也已经先淡到静音了。
+  backgroundTimer = setTimeout(() => {
+    backgroundTimer = 0;
+    // 2s 淡出已经走完，音效也停掉，避免 resume 后把旧音效的尾巴续播出来
+    for (const src of activeSfx) { try { src.stop(); } catch { /* 已结束 */ } }
+    activeSfx.clear();
+    if (!visible() && ctx && ctx.state === 'running') ctx.suspend().catch(() => {});
+  }, BACKGROUND_FADE * 1000 + 20);
+}
+
+function endBackgroundFade() {
+  clearTimeout(backgroundTimer);
+  backgroundTimer = 0;
+  fadeMaster(MASTER_GAIN, 0.25);
 }
 
 function stopCurrent(fade = FADE_OUT) {
@@ -179,28 +211,30 @@ export function setMusicScene(next) {
 
 function syncMusic() {
   if (shouldPlayMusic()) {
-    if (!current) playScene(scene);
+    // 后台期间路由可能变过：current 还是旧场景，回来时也要切歌
+    if (!current || current.scene !== scene) playScene(scene);
   } else {
     stopAllMusic();
   }
 }
 
-// 后台 / 回到前台：suspend 让整条音频图暂停（回来 resume 会从原位置继续）
+// 后台 / 回到前台：先把整条总线淡出 2s，再 suspend；回来恢复总线并从暂停位置继续。
+// ⚠️ 不能像旧版那样 stopAllMusic() + 立刻 suspend()：那会在波形中途硬切，听起来像一声「咔」。
 function onVisibility() {
   if (!ctx) return;
   if (visible()) {
+    endBackgroundFade();
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     syncMusic();
   } else {
-    stopAllMusic();
-    if (ctx.state === 'running') ctx.suspend().catch(() => {});
+    beginBackgroundFade();
   }
 }
 
 // ---------- 音效 ----------
 
 export async function playSfx(name) {
-  if (!sfxOn.value) return;
+  if (!sfxOn.value || !visible()) return;   // 后台不补播 / 不唤醒 context
   const file = SFX_FILES[name];
   if (!file) return;
   const c = ensureCtx();
@@ -218,6 +252,8 @@ export async function playSfx(name) {
   const src = c.createBufferSource();
   src.buffer = buf;
   src.connect(sfxGain);
+  src.onended = () => activeSfx.delete(src);
+  activeSfx.add(src);
   src.start();
 }
 
@@ -254,6 +290,9 @@ export function initAudio() {
     window.addEventListener(ev, onFirstGesture, { once: true, passive: true });
   });
   document.addEventListener('visibilitychange', onVisibility);
+  // pagehide / pageshow 是 iOS 与部分浏览器切后台的另一条路径，和 visibility 一起兜底。
+  window.addEventListener('pagehide', beginBackgroundFade);
+  window.addEventListener('pageshow', () => { endBackgroundFade(); syncMusic(); });
   // 设置里的开关：一开就放、一关就停（暂停状态由 visibility 管）
   watch(musicOn, () => syncMusic());
 }

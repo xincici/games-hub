@@ -245,7 +245,7 @@
   `celebrate-pop` 0.95s 播完即消失，`pointer-events: none`。炸金花多消 / 连击时额外显示
   `.celebrate-groups`（连消 n 组）与 `.celebrate-chain`（🔥 连击 ×N）两行。
 - 结算浮层：胜利是「🔄 重玩本关（左）/ ➡️ 下一关（右）」，失败只有「🔄 重玩本关」；
-  **两个按钮都用主色绿 `--primary-bg`**。
+  **「重玩本关」是橙色描边 `.replay-btn`**（全局规范，透明底 + 橙字 + 橙边），下一关仍是主色绿。
 - 棋盘是常驻网格格位（描边 + 半透明底），牌嵌在格位里四周各留 3px；4×4 / 3×3 的列数由 `--size` 控制。
   空格在有手牌时可落子（`.placeable` 虚线）；炸金花的已有牌格加 `.actable`，鼠标悬停显示实线主色 + 光环。
 - 棋盘套 `.dot-board`（点阵底纹来自 `App.vue` 的全局类，别再写 `background: var(--board-bg)`）。
