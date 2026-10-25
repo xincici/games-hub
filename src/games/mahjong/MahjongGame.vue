@@ -560,15 +560,17 @@ function announceCelebration(trioId, gained, groups, chain = 1) {
   };
   clearTimeout(celebrateTimer);
   celebrateTimer = setTimeout(() => { celebration.value = null; }, celebrateLife(tier));
-  // 低于 300 分只有浮字，不震屏、不闪光、不撒花
-  if (gained < FX_MIN) return;
+  // 连击 / 多消：即使本次总分不到 300，也照麻将传奇的处理播小烟花（firework-success.mp3）；
+  // 普通单次消除仍然低于 300 只有浮字，不震屏、不闪光、不撒花。
+  const special = groups > 1 || chain > 1;
+  if (gained < FX_MIN && !special) return;
   shakeBoard();
   clearTimeout(flashTimer);
   celebrating.value = false;
   void document.querySelector('.board')?.offsetWidth;
   celebrating.value = true;
   flashTimer = setTimeout(() => { celebrating.value = false; }, 900);
-  burstConfetti(tier);
+  burstConfetti(groups > 1 ? 1 : (special ? 0.7 : tier));
 }
 
 // silent = true 时只补结算层、不播撒花（退出再进入时不该再放一次烟花）
