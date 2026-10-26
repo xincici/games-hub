@@ -55,7 +55,7 @@
 - **26 首背景音乐**在 `public/audio/music/`（**不进预缓存**，走 runtimeCaching 的 CacheFirst，一年有效期）：
   `shared/audio.js` 的 `MUSIC_BY_SCENE` 把**首页 → 御剑江湖、25 个游戏各一首**定死（不重复，表在
   `docs/ARCHITECTURE.md`）；按路由切歌，循环播放，旧曲 0.6s 淡出 / 新曲 0.9s 淡入，
-  音乐音量 0.22（比用户自己的音量小、音效 0.9）；
+  音乐总增益 0.40×0.9=0.36 ≈ −8.9 dB（听感约满响度的 5~6 成；音效 0.9）；
   五个音效在 `public/audio/sfx/`（进预缓存，6~32KB）：`success.mp3`（5.07s）/ `lose.mp3`（4.08s）/
   `elimination.mp3`（0.76s）/ `fail.mp3`（1.02s）/ `firework-success.mp3`（1.67s）—— 时长各不相同，
   实测时可以直接靠 `AudioBuffer.duration` 分辨。

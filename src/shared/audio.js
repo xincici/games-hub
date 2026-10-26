@@ -55,8 +55,9 @@ const SFX_FILES = {
   firework: 'sfx/firework-success.mp3',
 };
 
-// 背景音乐音量：用户要求**比他自己设定的音量更小一些**，所以这里只给 0.22（音效是 0.9）
-const MUSIC_GAIN = 0.22;
+// 背景音乐音量：总增益 = MUSIC_GAIN × MASTER_GAIN，听感按「10 dB ≈ 响度减半」估算
+// 0.40 × 0.9 = 0.36 → −8.9 dB → 约等于满响度的 0.54（用户要求「听上去 5~6 成响度」）
+const MUSIC_GAIN = 0.40;
 const SFX_GAIN = 0.9;
 const MASTER_GAIN = 0.9;
 const FADE_IN = 0.9;      // 新曲淡入

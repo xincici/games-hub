@@ -93,7 +93,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 | hunter 猎手 | xianjian-tu-ling-zhu | point24 24 点 | xianjian-wei-zhi-9 |
 | gambler 赌神 | xianjian-zhan-dou-5 | solo 单人麻将 | xianjian-li-san-si |
 
-- 音乐音量 `MUSIC_GAIN = 0.22`（**比用户自己的音量更小**，音效是 0.9）；切换时旧曲 0.6s 淡出、新曲 0.9s 淡入；
+- 音乐音量 `MUSIC_GAIN = 0.40`（× 主总线 0.9 = 0.36 ≈ −8.9 dB，听感约满响度的 5~6 成；音效是 0.9）；切换时旧曲 0.6s 淡出、新曲 0.9s 淡入；
   每首 `source.loop = true`；页面不可见时先把整条图淡出 2 秒再 `suspend()`，回来恢复总线并 resume。
 - 实测（390×844）：首页请求并播放 `xianjian-yu-jian-jiang-hu`（`loop: true`）→ 进数独请求
   `xianjian-zi-xuan`（`loop: true`，旧曲淡出）→ 回首页复用已解码缓存、不再发请求。
