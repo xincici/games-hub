@@ -81,10 +81,15 @@
 - **框架**：Vue 3（Composition API + `<script setup>`）+ Vue Router（hash 模式，懒加载/静态导入各游戏路由）
 - **构建**：Vite 5（`@` 别名指向 `src/`）
 - **样式**：SCSS + UnoCSS（presetUno / presetAttributify / presetIcons，图标用 carbon 和 mdi 集合）
-- **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）。**`workbox.globPatterns` 必须显式带上图片类型**
+- **PWA**：vite-plugin-pwa（autoUpdate，dev 下也启用）。**更新策略**：`workbox.skipWaiting` + `clientsClaim`
+  让新 SW 立刻接管；`src/shared/swUpdate.js` 在回到前台时 `registration.update()`、并在
+  `controllerchange` 时无感刷新（首次安装不刷、防循环）。细节与实测见 `docs/ARCHITECTURE.md`。**`workbox.globPatterns` 必须显式带上图片类型**
   （现在是 `**/*.{js,css,html,webp,png,svg,ico,woff2,mp3}`，其中 `**/audio/music/**` 用 `globIgnores` 排除）——插件默认只预缓存 `js/css/html`，
   图片（麻将牌雪碧图、各图标）不进预缓存，离线时牌面就是空白（实测默认下预缓存只有 9 个文件、
   加上图片类型后 12 个；禁掉 HTTP 缓存 + 断网时 3 个用到雪碧图的游戏仍能画全牌面）
+- **麻将雪碧图空闲预热**：`App.vue` 在首页路由上调 `idlePreloadTiles()`（`requestIdleCallback`），
+  进麻将类游戏时不再空白一帧；`preloadTiles()` 带 `img.decode()`。实测请求在 671ms 才发起
+  （晚于 load 653ms），进游戏时第二次 `transferSize` 为 0（缓存命中）。见 `docs/ARCHITECTURE.md`。
 - **依赖管理**：yarn 1.22.22（package.json `packageManager` 已固定；全局 yarn 已升级至 1.22.22，可直接 `yarn <cmd>`）
 
 ## 常用命令

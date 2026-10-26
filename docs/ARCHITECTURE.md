@@ -97,3 +97,40 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
   每首 `source.loop = true`；页面不可见时先把整条图淡出 2 秒再 `suspend()`，回来恢复总线并 resume。
 - 实测（390×844）：首页请求并播放 `xianjian-yu-jian-jiang-hu`（`loop: true`）→ 进数独请求
   `xianjian-zi-xuan`（`loop: true`，旧曲淡出）→ 回首页复用已解码缓存、不再发请求。
+
+## PWA 更新（用户报过「装完就更新不了」）
+
+安装版 PWA 的典型故障：SW 一直不换、用户看到的永远是老页面。两处配合解决：
+
+1. **SW 内**（`vite.config.js` 的 `workbox`）：`skipWaiting: true` + `clientsClaim: true`
+   —— 新 SW 一装好立刻接管，不用「所有页面关光再重开一次」。构建产物 `dist/sw.js` 里
+   能搜到 `skipWaiting()` 与 `clientsClaim(`（后者是 workbox 的压缩函数名，不是 `clients.claim()`）。
+2. **客户端**（`src/shared/swUpdate.js`，`main.js` 里 `initSwUpdate()`）：
+   - `visibilitychange → visible` 时主动 `registration.update()`（安装版常年不导航，靠它查更新）；
+     另有 30 分钟兜底定时；
+   - `controllerchange` → `location.reload()`，但**首次安装不刷**（`hadController` 为假时跳过）
+     且加锁防循环 —— 首次装好本身跑的就是最新版，白刷一次只会多一次加载。
+   - 注册用 `virtual:pwa-register` 的 `registerSW({ immediate: true })`，在 `mount()` 之后执行、
+     不阻塞首屏；`vite.config.js` 因此写成 `injectRegister: null`（否则会被自动注入一份）。
+
+**离线与首屏速度不受影响**：预缓存清单没动（21 条，含雪碧图与 5 个音效），
+背景音乐仍走 CacheFirst；更新检查都是后台请求。
+
+实测（390×844，headless Chrome + `Page.frameNavigated` 计数）：首次加载 5s 后
+`controller === true`（= clientsClaim 生效）但**没有**额外刷新；第二次加载（带旧 controller）时
+派发 `controllerchange` → **刷新 1 次**、页面标记被清掉；`visibilitychange` → `registration.update()`
+被调用 1 次。
+
+## 麻将雪碧图的空闲预热
+
+麻将牌雪碧图（`src/shared/mahjong-tiles.webp`，181KB）被 麻将英雄 / 雀圣 / 麻将传奇 / 赌神 /
+对对碰（麻将牌面）共用。以前只在进游戏时 `preloadTiles()`，冷启动会先看到一帧空白牌。
+
+现在 **首页就预热**：`App.vue` 的路由 watch 在 `home` 时调 `idlePreloadTiles()`
+（`src/shared/mahjongTiles.js`），它用 `requestIdleCallback(run, { timeout: 3000 })`
+把加载推到首屏空闲之后（不支持则 `setTimeout(…, 1200)`）。`preloadTiles()` 里除了等 `onload`，
+还会 `img.decode()` —— 只下载不解码的话，第一帧仍然可能画不出牌。
+
+实测（390×844）：请求在 **671ms** 才开始，晚于 `domContentLoaded` 637ms / `load` 653ms（不抢首屏）；
+首页停留 2.5s / 5s 都只请求一次；进 麻将英雄 时同一张图第二次的 `transferSize` 是 **0**（命中缓存），
+棋盘直接渲染。重复调用无副作用（`sheetPromise` 记住结果），游戏里的 `await preloadTiles()` 复用它。

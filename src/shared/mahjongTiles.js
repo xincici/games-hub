@@ -12,13 +12,30 @@ export function preloadTiles() {
   if (!sheetPromise) {
     sheetPromise = new Promise(resolve => {
       const img = new Image();
-      img.onload = () => resolve();
+      // decode() 才是真正把图变成可绘制的位图；只等 onload 的话，进游戏第一帧仍可能空白
+      img.onload = () => (img.decode ? img.decode().then(resolve, resolve) : resolve());
       img.onerror = () => resolve();     // 加载失败也不要卡住开局
       img.src = sheet;
     });
   }
   return sheetPromise;
 }
+
+// 首页空闲时预热这张雪碧图（181KB）：进「麻将英雄 / 雀圣 / 麻将传奇 / 赌神 / 对对碰（麻将牌面）」
+// 时就不会先空白一下。挂到 requestIdleCallback（首屏空闲之后）跑，绝不抢首屏带宽；
+// 浏览器不支持就退化成 1.2s 后的 setTimeout。重复调用无副作用（sheetPromise 记住结果）。
+let idleScheduled = false;
+export function idlePreloadTiles() {
+  if (idleScheduled) return;
+  idleScheduled = true;
+  const run = () => { preloadTiles().catch(() => {}); };
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    window.requestIdleCallback(run, { timeout: 3000 });
+  } else {
+    setTimeout(run, 1200);
+  }
+}
+
 //
 // 取格子用百分比而不是像素：background-size 放大 ZOOM 倍之后，
 // 「第 i 格的中心落在元素中心」解出来是 slotPos(i) = (k(i+0.5) − 0.5) / (n·k − 1)

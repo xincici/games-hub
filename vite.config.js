@@ -22,7 +22,8 @@ export default defineConfig({
     UnoCSS(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 注册代码自己写在 src/main.js（要做「回前台查更新 + 接管后无感刷新」）
+      injectRegister: null,
       devOptions: {
         enabled: true
       },
@@ -33,6 +34,9 @@ export default defineConfig({
         // 音效（success / lose，各 25~32KB）跟着预缓存，第一次过关就有声；
         // **背景音乐（12 首 ≈ 10MB）不进预缓存** —— 那会让首次安装多下 10MB，
         // 改走 runtimeCaching：第一次播放时进 CacheFirst，之后长效缓存、不再请求网络。
+        // 新 SW 装好立刻接管（不必等所有页面关掉再重开一次）；旧页面由客户端 reload 换新
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,webp,png,svg,ico,woff2,mp3}'],
         globIgnores: ['**/audio/music/**'],
         runtimeCaching: [

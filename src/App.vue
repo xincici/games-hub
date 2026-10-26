@@ -33,13 +33,18 @@ import { useRoute } from 'vue-router';
 import { watch } from 'vue';
 import { i18n } from '@/shared/i18n';
 import { initAudio, setMusicScene } from '@/shared/audio';
+import { idlePreloadTiles } from '@/shared/mahjongTiles';
 
 // 音频引擎在挂载时初始化：只建 AudioContext（suspended），第一次手势时才真正解锁开播
 initAudio();
 
 // 背景音乐跟着路由走：首页放《御剑江湖》，进任意游戏就切到它自己那首（交叉淡入淡出）
 const route = useRoute();
-watch(() => route.meta.game, g => setMusicScene(g || 'home'), { immediate: true });
+watch(() => route.meta.game, g => {
+  setMusicScene(g || 'home');
+  // 首页就趁空闲把麻将雪碧图预热好，进麻将类游戏时牌面不会先空白一下（重复调用无副作用）
+  if (!g || g === 'home') idlePreloadTiles();
+}, { immediate: true });
 </script>
 
 <style lang="scss">

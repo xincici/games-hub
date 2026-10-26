@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 
 import i18n from '@/shared/i18n';
+import { initSwUpdate } from '@/shared/swUpdate';
 import router from './router';
 import App from './App.vue';
 
@@ -10,6 +11,9 @@ createApp(App)
   .use(i18n)
   .use(router)
   .mount('#app');
+
+// PWA 更新：回前台主动查更新、新 SW 接管后无感刷新（详见文件注释）
+initSwUpdate();
 
 // iOS Safari 的滑动返回是系统手势，CSS 无法拦截。用历史哨兵使其失效：
 // 每次导航后压入一条与当前地址相同的记录，popstate（滑动返回/返回键）时再压回去，
