@@ -84,12 +84,20 @@
               :key="`${roundId}-a-${key}`"
               :ref="el => setAnswerEl(key, el)"
               class="answer-tile"
-              :class="{ landing: landingKeys.has(key), removable: mode === 2 }"
+              :class="{ landing: landingKeys.has(key), removable: mode === 2 && phase === 'play',
+                        wrong: answerStamp(key) === 'wrong' }"
               :data-key="key"
               :title="mode === 2 ? i18n('unpickTip') : ''"
               @click="unpick(key)"
             >
               <MahjongTile :suit="faceOf(key).suit" :value="faceOf(key).value" />
+              <!-- 失败复盘：只给玩家选错的牌盖「✗ 错误」章并抖一下；真正的答案不打任何标签（用户要求） -->
+              <span v-if="answerStamp(key)" class="stamp stamp-wrong">
+                <span class="stamp-inner">
+                  <span class="stamp-mark">✗</span>
+                  <span class="stamp-text">{{ i18n('stampWrong') }}</span>
+                </span>
+              </span>
             </div>
           </div>
           <!-- 最终判断模式：答案区右侧的提交按钮。选中的牌不即时判对错，点它才整组判卷 -->
@@ -127,6 +135,14 @@
               @click="pick(key)"
             >
               <MahjongTile :suit="faceOf(key).suit" :value="faceOf(key).value" />
+              <!-- 即时判断模式点错：在这张牌上盖一个「✗ 错误」章，**常驻**不消失
+                   （条件用 missedSet 而不是 620ms 的 wrongKey；抖动仍由 .wrong 一次性播放） -->
+              <span v-if="missedSet.has(key)" class="stamp stamp-wrong">
+                <span class="stamp-inner">
+                  <span class="stamp-mark">✗</span>
+                  <span class="stamp-text">{{ i18n('stampWrong') }}</span>
+                </span>
+              </span>
             </div>
           </div>
         </div>
@@ -253,6 +269,15 @@ const missedSet = computed(() => new Set(missedKeys.value));
 // 所以不再因为「有张牌还在飞」或「刚答错在抖」而置灰（用户要求）。
 const canSubmit = computed(() => mode.value === 2 && phase.value === 'play'
   && !pending.value && !revealing.value && pickedKeys.value.length > 0);
+
+// 失败复盘（扣完心 / 查看答案）之后，答案区里**只有玩家选错的牌**要盖章：
+// 'wrong' → 「✗ 错误」并抖一下；真正的答案不打任何标签（用户要求）。
+// 不额外存档：错牌就是 pickedKeys 里不在 picks 里的那些，恢复局面时照样推得出来。
+const answerSettled = computed(() => reason.value !== '' || pickFailed.value || phase.value === 'lost');
+function answerStamp(key) {
+  if (!answerSettled.value) return '';
+  return picks.value.includes(key) ? '' : 'wrong';
+}
 
 // ---------- 尺寸 ----------
 // 手牌 13 张排一行（像真的一手牌）；选择区每行 9 张（字牌 7 张）。
@@ -515,9 +540,8 @@ function submitPicks() {
 async function finishRound(kind) {
   if (revealing.value || phase.value !== 'play') return;
   revealing.value = true;
-  // 最终判断模式里答案区可能还躺着玩家选错的牌：先清掉，再把正确答案补齐，
-  // 失败复盘时答案区就只会剩下真正的答案（不然「已把全部答案标出来」里会混着错牌）
-  if (mode.value === 2) pickedKeys.value = pickedKeys.value.filter(k => picks.value.includes(k));
+  // 玩家选错的牌**留在答案区**（不再清掉）：失败复盘时它们会盖上「✗ 错误」章并抖一下，
+  // 真答案则飞进来盖「✓ 正确」章 —— 用户明确要求「错牌不要退回选择区」。
   revealed.value = kind === 'reveal';
   reason.value = kind;
   save();
@@ -761,10 +785,57 @@ onUnmounted(() => {
   }
   .answer-tile {
     flex: 0 0 auto;
+    position: relative;                 // 失败复盘的印章要盖在这张牌上
     // 目标槽位在飞行期间隐身（visibility 不影响布局，所以量位置照样准）
     &.landing { visibility: hidden; }
     // 最终判断模式：点答案区的牌退回到选择区
     &.removable { cursor: pointer; }
+    // 选错的牌留在答案区、盖「✗ 错误」章，章落地之后再抖一下
+    &.wrong { animation: gb-stamp-shake 0.5s ease 0.35s; }
+  }
+
+  // ---- 失败复盘 / 点错的印章 ----
+  // 打法照抄侦探失败时给正确答案盖的那枚 ✓ 章（歪着的圆角框 + 半透明白底 + 大号符号），
+  // 只把颜色和符号按对错分开：对 = 主色绿 ✓，错 = 失败红 ✗。
+  .stamp {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    .stamp-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2px 4px;
+      border: 2px solid currentColor;
+      border-radius: 6px;
+      background: rgb(255 255 255 / 40%);
+      font-weight: 900;
+      line-height: 1.05;
+      transform: rotate(-12deg);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+      animation: gb-stamp-in 0.42s cubic-bezier(0.22, 1.5, 0.44, 1) both;
+    }
+    .stamp-mark { font-size: calc(var(--mj-w, 30px) * 0.36); }
+    .stamp-text { font-size: calc(var(--mj-w, 30px) * 0.15); letter-spacing: 0.5px; }
+  }
+  .stamp-right { color: var(--primary-bg); }
+  .stamp-wrong { color: var(--lose-color); }
+
+  @keyframes gb-stamp-in {
+    0% { opacity: 0; transform: rotate(-12deg) scale(2.1); }
+    60% { opacity: 1; }
+    100% { opacity: 1; transform: rotate(-12deg) scale(1); }
+  }
+  @keyframes gb-stamp-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(3px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
   }
 
   // ---- 答案选择区 ----
@@ -812,6 +883,7 @@ onUnmounted(() => {
   }
   .pick-tile {
     flex: 0 0 auto;
+    position: relative;                 // 点错时的「✗ 错误」章要盖在这张牌上
     cursor: pointer;
     border-radius: calc(var(--mj-w, 30px) * 0.09);
     transition: transform 0.12s ease, filter 0.12s ease;
