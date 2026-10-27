@@ -100,9 +100,10 @@
               </span>
             </div>
           </div>
-          <!-- 最终判断模式：答案区右侧的提交按钮。选中的牌不即时判对错，点它才整组判卷 -->
+          <!-- 最终判断模式：答案区右侧的提交按钮。选中的牌不即时判对错，点它才整组判卷。
+               **按钮常驻不消失**（用户要求）：不可点时只切 disabled 态（灰掉），不 v-if 掉 -->
           <button
-            v-if="mode === 2 && phase === 'play'"
+            v-if="mode === 2"
             class="game-icon"
             :disabled="!canSubmit"
             @click="submitPicks"
