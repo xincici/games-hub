@@ -55,6 +55,10 @@
       </div>
       <div v-if="gameResult >= WIN" class="win">
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
+        <!-- curStreak 字典里已经带 🔥，这里不要再加，否则会出现两个火 -->
+        <span class="win-note">{{ i18n('curStreak') }} {{ streak }}</span>
+        <!-- 下一局：开新一局但**保留连胜**（走 initGame，不走会清零连胜的 startNewGame） -->
+        <button class="game-icon" @click="nextRound">{{ i18n('nextRound') }}</button>
       </div>
       <div v-if="gameResult === LOSE" class="lose">
         👻👻 {{ i18n('tipLost') }} 👻👻
@@ -343,6 +347,11 @@ function guessOnce() {
   saveState();
 }
 
+// 胜利层的「下一局」：开新一局、**连胜保留**（连胜只有输 / 点「新游戏」才清零）
+function nextRound() {
+  initGame();
+}
+
 // 计时每秒回调：把当前用时写进存档（刷新后时间接着走）
 function onTimerTick() {
   saveState();
@@ -525,6 +534,12 @@ function onScoreReset() {
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 12px;              /* 与约定第 5 节一致：结算层 gap 12px */
+    }
+    .win-note {
+      font-size: 14px;
+      font-weight: normal;
+      opacity: 0.85;
     }
     .lose {
       color: var(--lose-color);
