@@ -8,7 +8,7 @@
       v-for="b in bursts"
       :key="'fw-' + b.id"
       class="firework"
-      :style="{ left: b.x * 100 + '%', top: b.y * 100 + '%' }"
+      :style="{ left: b.x + 'px', top: b.y + 'px' }"
     >
       <view
         v-for="p in b.parts"
@@ -69,7 +69,9 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .firework-layer {
-  position: fixed;
+  /* absolute 而不是 fixed：坐标用的是 selectorQuery 量出来的**页面内容空间** px
+     （fixed 层是视口空间，页面一旦滚动就会差一截，实测差 29px） */
+  position: absolute;
   left: 0;
   top: 0;
   right: 0;

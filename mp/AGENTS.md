@@ -2143,8 +2143,8 @@ burstConfetti(intensity = 1, { origin, count } = {})
 
 | 文件 | 作用 |
 | --- | --- |
-| `src/core/firework.js` | `burstConfetti(intensity, {origin, count})`；`burstAtElement(selector, intensity, {count, dropPx})`（量元素矩形取「中心 x、底边 + 30px」= web 的 `comboOrigin()`，量不到退回默认点）；`makeBurstParticles(count)` 纯函数；`registerFireworkSink()` 单例注册 |
-| `src/components/FireworkBurst.vue` | 页面里挂一次就接活（`onMounted` 注册、`onUnmounted` 注销；多页面栈里**最后挂载的**那个生效）。`position: fixed; inset: 0; z-index: 45; pointer-events: none`，粒子 `animation: firework-fly` 三段：0→55% 减速上升（`--dx/--dy`）、55→100% 重力下落（`--drop`）并淡出，跑完自动从数组里摘掉（最多同时 6 束） |
+| `src/core/firework.js` | `burstConfetti(intensity, { count })`：**喷发点统一在「游戏区顶部中间」**（量 `.game-area`，取 `x = 中心`、`y = 顶部 + 24px`），粒子数 `min(28, round(10 + 12×intensity))`；`countForIntensity()` / `fallbackOrigin()` / `makeBurstParticles(count)` / `registerFireworkSink()` |
+| `src/components/FireworkBurst.vue` | 页面里挂一次就接活（`onMounted` 注册、`onUnmounted` 注销；多页面栈里**最后挂载的**那个生效）。**`position: absolute; inset: 0; z-index: 45; pointer-events: none`**（不是 fixed，原因见下），粒子 `animation: firework-fly` 三段：0→55% 减速上升（`--dx/--dy`）、55→100% 重力下落（`--drop`）并淡出，跑完自动从数组里摘掉（最多同时 6 束） |
 | `src/core/sfx.js` | 新增 `playFirework()`；`playElimination()` 加 240ms 抑制（同 web 的 `ELIM_REPLACE_MS`） |
 
 粒子参数：射程 150~330rpx、寿命 1.7~2.3s、5 色轮转、`delay` 0~60ms 错峰。
@@ -2164,8 +2164,8 @@ burstConfetti(intensity = 1, { origin, count } = {})
 
 | 页面 | web 位置 | 小程序 |
 | --- | --- | --- |
-| 连连看 `link` | `showCombo` | `burstAtElement('.combo-tip', min(3, 1+(n-2)*0.6), { count: min(44, 12+n*4) })` |
-| Emoji 滑行 `slide` | `showCombo` | 同上（喷发点 = 提示条中心往下 30px） |
+| 连连看 `link` | `showCombo` | `burstConfetti(min(3, 1+(n-2)*0.6), { count: min(24, 8+n*3) })` |
+| Emoji 滑行 `slide` | `showCombo` | 同上 |
 | 对对碰 `match` | `showCombo` | 同上（**顺手补了 web 有、mp 缺的「N 连击」提示条**：`.game-area` 里、`.board` 的兄弟节点，`top: -30rpx`，36rpx ≈ 18px 胶囊） |
 | Emoji 消消乐 `crush` | `announceCelebration` 尾部 | `burstConfetti(tier + (chain > 3 ? 1 : 0))`（门槛是 web 原有的「大消 / 连锁」判定，**没有**另加 300 分门槛 —— web 的 crush 也没有） |
 | 麻将英雄 `mahjong` | `announceCelebration` 尾部 | `burstConfetti(groups > 1 ? 1 : (special ? 0.7 : tier))`，`special = groups > 1 \|\| chain > 1` |
@@ -2175,7 +2175,30 @@ burstConfetti(intensity = 1, { origin, count } = {})
 > 连连看 / 滑行 / 对对碰原本各自在页面里写了一份局部粒子（`.combo-burst` / `.burst-dot` / `makeBurst()`），
 > 这次**全部删掉、统一走共享实现**（两份实现 = 两份参数，早晚会不一致）。
 
-**实测（mp 的 H5 构建，390×844）**：
+### 20b. 2026-10 追加：**粒子更少 + 喷发点统一到「游戏区顶部中间」**
+
+用户：「多消和连击的烟花效果，烟花数量再少一点，并且喷出位置都统一出现在游戏区的顶部中间。」
+
+- **粒子数**：`count = min(28, round(10 + 12×intensity))`（web 是 `22 + 26×intensity`、上限 110）；
+  连击那三处再压一档 `min(24, 8 + n×3)`。实测：强度 `0.7 / 1 / 1.5+` → `18 / 22 / 28`；
+  连击 `n=2..6` → `14 / 17 / 20 / 23 / 24`。
+- **喷发点**：不再跟着「连击提示条 / 棋盘中心」，统一量 `.game-area`，取 `x = 中心`、`y = 顶部 + 24px`。
+  原来的 `burstAtElement(selector, …)` **整个删掉**了（7 处调用全改成 `burstConfetti`）。
+- **坐标空间必须对齐**（这轮踩的坑）：`uni.createSelectorQuery()` 的 `boundingClientRect` 给的是
+  **页面内容空间**（H5 里比视口少一个 44px 导航栏），而粒子层原来是 `position: fixed`（视口空间）+
+  百分比定位 → 实测喷发点偏 **29px**（页面滚过之后更歪）。现在：
+  - 粒子层 `position: absolute; inset: 0`（内容空间，页面滚动时跟着游戏区一起走）；
+  - 容器坐标直接用**测出来的 px**（`left: ${x}px; top: ${y}px`），不再换算成百分比。
+  实测：`.game-area` top=298 → 喷发容器实际落在 **(195, 322)** = 中心 x 195、顶部 +24 ✓ 分毫不差。
+
+**实测（mp 的 H5 构建，390×844，对对碰连按 2 对）**：
+- 第 1 对**不炸**（combo=1，与 web 一致）；第 2 对弹出「2 连击」+ `.firework-dot` × **14** ✓
+- 粒子样式：`background: rgb(93,140,123)`（web 第一色）、`width: 6~10px ≈ 12~20rpx`、
+  `animation: firework-fly … 1.9s`、`transform: matrix(…, -38…)`（向上飞）✓
+- 喷发容器 `left: 195px; top: 277.7px`（层原点 44px）→ 视口 (195, 322) = 游戏区顶 298 + 24 ✓
+- 截图：一小撮 14 片碎纸从**棋盘正中偏上**喷出，正好在「2 连击」提示条上方 ✓
+
+**实测（旧的默认参数，留作对照）**：
 - 对对碰连按 3 对：第 1、2 对**不炸**（combo=1，与 web 一致），第 3 对弹出「2 连击」+
   `.firework-layer` × 1、`.firework-dot` × 20 ✓；粒子样式 `background: rgb(93,140,123)`（= web 第一色 `#5D8C7B`）、
   `width: 7.27px ≈ 14rpx`、`animation: firework-fly … 1.88s`、`transform: matrix(…, -87.5)`（向上飞）✓
@@ -2185,8 +2208,8 @@ burstConfetti(intensity = 1, { origin, count } = {})
   `static/audio/firework-success.mp3` 在包里 ✓
 
 **踩点提醒**：
-- 粒子层是 `position: fixed` 且 `pointer-events: none` —— 千万别给它背景色或 `overflow` 以外的裁剪，否则会盖住棋盘的点击。
-- 喷发点用 `uni.createSelectorQuery()` 量刚渲染的提示条，必须 `await nextTick()` 之后再量（提示条是 `v-if` 渲染的）。
+- 粒子层是 `position: absolute; inset: 0` 且 `pointer-events: none` —— 千万别给它背景色，否则会盖住棋盘的点击。
+- 喷发点量的是 `.game-area`（不是提示条），**不要再换算成百分比**：坐标必须和 `boundingClientRect` 同一个空间（页面内容空间）。
 - 连击只在 `combo >= 2` 时才炸（web 同款），单次消除不炸 —— 否则「每消一次都放烟花」就不叫连击了。
 
 ### 21. 猎手 / 侦探：观察阶段红色倒计时，操作从 0 开始（照对对碰）
@@ -2446,6 +2469,20 @@ mp 的尺寸照 web 换算：统计条 `min-height: 138rpx`、`.stat-label` 23rp
 > 而「记录区底边 → 键盘顶」当时是 12px —— 所以只看记录区的间隙会以为没问题，**必须量卡片的底边**。
 
 页整页可滚始终只有 H5 导航栏那 44px ✓；产物 `pages/guess/guess.wxml` 有 1 处 `history`、`wxss` 有 `column-reverse` / `overflow-y` ✓
+
+### 26b. 1A2B 胜利层的「下一局」（才能连胜）
+
+胜利层原来只有一行「🎉🎉 你赢了」，没有按钮 —— 想继续只能点操作区的「新游戏」，而它**会清零当前连胜**，
+所以连胜永远停在 1。现在 `.win` 里加三样：`🔥 当前连胜 N`（`.win-note`，27rpx / normal）+
+`➡️ 下一局` 按钮（`.game-icon`），`gap: 23rpx` 与 web 的 12px 对齐。
+
+- `nextRound()` = **只调 `initGame()`**（换答案 / 清历史 / 重置计时），**连胜保留**；
+  清连胜只在 `startNewGame()`（新游戏确认后）和输一局时发生 —— 别把 `nextRound` 写成 `startNewGame`。
+- i18n 加 `nextRound`（`➡️ 下一局` / `➡️ Next Round`，与单人麻将同名 key）。
+- ⚠️ `curStreak` 文案**自带 🔥**，模板不要再加，否则渲染成「🔥 🔥 当前连胜 3」。
+
+**实测（mp 的 H5 构建，390×844）**：存档 streak 2 / best 4 → 提交 1234 → 胜利层 `🔥 当前连胜 3` + 按钮 `["➡️ 下一局"]` ✓；
+点「下一局」→ 胜利层消失、换新答案（`answer: 2461`）、历史清空、`streak` 仍 **3**、统计 `["4","3"]` ✓
 
 > **教训（第 43 条）**：**先验证「这个滚动方案在当前运行时真的能滚」，再谈细节。**
 > 这轮在 `scroll-view` 上耗了好几轮：`scroll-into-view` 无效 → 换 `:scroll-top` 仍无效 →

@@ -65,6 +65,10 @@
 
         <view v-if="gameResult === WIN" class="win">
           <text>🎉🎉 {{ tt('tipWin') }} 🎉🎉</text>
+          <!-- curStreak 字典里已带 🔥，模板不要再加 -->
+          <text class="win-note">{{ tt('curStreak') }} {{ streak }}</text>
+          <!-- 下一局：开新一局但**保留连胜**（走 initGame，不走会清零连胜的 startNewGame） -->
+          <button class="game-icon" @click="nextRound">{{ tt('nextRound') }}</button>
         </view>
         <view v-if="gameResult === LOSE" class="lose">
           <text>👻👻 {{ tt('tipLost') }} 👻👻</text>
@@ -426,6 +430,11 @@ function winGame() {
   }, 4000);
 }
 
+// 胜利层的「下一局」：开新一局、**连胜保留**（连胜只有输 / 点「新游戏」才清零）
+function nextRound() {
+  initGame();
+}
+
 function toggleRobot() {
   robot.value = !robot.value;
   // 与 web 的 robot.js 同语义：开着写 '1'，关掉后 key 读到空（web 是 removeItem；
@@ -616,6 +625,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 23rpx;                 /* 与约定第 5 节一致（web 12px） */
   font-size: 34rpx;
   font-weight: bold;
   line-height: 1.5;
@@ -626,6 +636,12 @@ onUnmounted(() => {
 }
 .lose {
   color: #b11;
+}
+/* 胜利层的「当前连胜」小字 */
+.win-note {
+  font-size: 27rpx;           /* web 14px */
+  font-weight: normal;
+  opacity: 0.85;
 }
 
 /* ---------- 数字键盘（web 的 input-area 固定底部 + 4 列数字 + 退格/提交） ---------- */

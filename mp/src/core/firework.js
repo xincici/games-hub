@@ -8,14 +8,23 @@
 //     同时播 firework-success.mp3，并让 elimination 在 240ms 内不再叠响
 //
 // 小程序没有 canvas-confetti，也没有 DOM 画布（原生 canvas 会挡住点击、层级也压不住），
-// 所以改成「一层固定定位的粒子层 + CSS 动画」：粒子数、配色、喷射角度、喷发点全部照 web 的参数算，
+// 所以改成「一层固定定位的粒子层 + CSS 动画」：配色、喷射角度照 web 的参数算，
 // 动画用「上升 → 重力下落 → 淡出」三段关键帧复刻。
+//
+// ⚠️ 两条**小程序侧的有意差异**（用户 2026-10 指名要的，别按 web 改回去）：
+//   1. **粒子数更少**：`count = min(28, round(10 + 12 * intensity))`（web 是 22 + 26×intensity、上限 110），
+//      连击那几处再压一档：`min(24, 8 + n * 3)`；
+//   2. **喷发点统一在「游戏区顶部中间」**：量 `.game-area` 的矩形，取 `x = 中心`、`y = 顶部 + 24px`，
+//      不再跟着连击提示条 / 棋盘中心走（web 是元素中心或 {0.5, 0.64}）。
+//      坐标是**页面内容空间里的 px**（和 selectorQuery 量的 rect 同一个空间），粒子层用
+//      `position: absolute` 铺在页面内容上 —— 这样页面被滚动时喷发点仍然贴着游戏区，
+//      不需要在「视口 / 内容」两套坐标之间换算（实测 fixed 层 + 百分比会差 29px）。
 //
 // 用法（页面侧）：
 //   import { burstConfetti } from '@/core/firework';
 //   import FireworkBurst from '@/components/FireworkBurst.vue';   // 模板里挂一次
-//   burstConfetti(tier);                                  // 棋盘正中偏下
-//   burstConfetti(1, { origin: { x, y }, count: 24 });     // 指定喷发点（0~1 的视口比例）与粒子数
+//   burstConfetti(tier);                     // 粒子数按强度算
+//   burstConfetti(1, { count: 18 });         // 自己指定粒子数
 import { playFirework } from './sfx';
 
 // 与 web 完全一致的 5 色（绿 / 米黄 / 橙 / 红 / 深红）
@@ -29,52 +38,49 @@ export function registerFireworkSink(fn) {
   return () => { sinks = sinks.filter(s => s !== fn); };
 }
 
-// 默认喷发点与 canvas-confetti 的 0.64 一致（屏幕中间偏下，正好在棋盘中间）
-export const DEFAULT_ORIGIN = { x: 0.5, y: 0.64 };
+// 喷发点：游戏区顶部中间（再往里 24px，不然粒子会贴着卡片上沿飞出去）
+export const GAME_AREA_SELECTOR = '.game-area';
+export const TOP_INSET_PX = 24;
+// 量不到游戏区时的兜底：视口水平居中、偏上（内容空间 ≈ 视口，页面顶部时二者相同）
+export const fallbackOrigin = () => {
+  let info = { windowWidth: 375, windowHeight: 800 };
+  try { info = uni.getSystemInfoSync() || info; } catch { /* noop */ }
+  return { x: (info.windowWidth || 375) / 2, y: (info.windowHeight || 800) * 0.22 };
+};
 
-export function burstConfetti(intensity = 1, { origin, count } = {}) {
+// 粒子数：比 web 少（难度 / 连击强度只做温和加成，上限 28）
+export const countForIntensity = (intensity) => Math.min(28, Math.round(10 + 12 * intensity));
+
+export function burstConfetti(intensity = 1, { count } = {}) {
   // 音效：web 的 burstConfetti 里第一件事就是 playFirework()
   playFirework();
-  const n = count ?? Math.min(110, Math.round(22 + 26 * intensity));
-  const x = origin && typeof origin.x === 'number' ? origin.x : DEFAULT_ORIGIN.x;
-  const y = origin && typeof origin.y === 'number' ? origin.y : DEFAULT_ORIGIN.y;
+  const n = count ?? countForIntensity(intensity);
   const sink = sinks[sinks.length - 1];
   if (!sink) return;              // 页面还没挂载粒子层（极少见）→ 只出声，不炸
-  sink({ count: n, x, y });
+  emitAtGameTop(sink, n);
 }
 
-
-// 喷发点落在某个页面元素上（web 的组合：comboOrigin() = 提示条中心往下 FIRE_DROP_PX 30px）。
-// 小程序没有 getBoundingClientRect，用 createSelectorQuery 量完换算成视口比例。
-export function burstAtElement(selector, intensity = 1, { count, dropPx = 30 } = {}) {
-  const opts = { count };
+// 量游戏区 → 换算成视口比例 → 交给粒子层
+function emitAtGameTop(sink, count) {
   if (typeof uni === 'undefined' || typeof uni.createSelectorQuery !== 'function') {
-    burstConfetti(intensity, opts);
+    sink({ count, ...fallbackOrigin() });
     return;
   }
-  // 先出声（与 web 一致：音频不等测量），视觉等量到再炸
-  playFirework();
-  const n = count ?? Math.min(110, Math.round(22 + 26 * intensity));
-  let info = { windowWidth: 0, windowHeight: 0 };
-  try { info = uni.getSystemInfoSync() || info; } catch { /* noop */ }
   const q = uni.createSelectorQuery();
-  q.select(selector).boundingClientRect();
+  q.select(GAME_AREA_SELECTOR).boundingClientRect();
   q.exec((res) => {
     const rect = res && res[0];
+    const target = sinks[sinks.length - 1];
+    if (!target) return;
     if (!rect || !rect.width) {
-      // 量不到（还没渲染）→ 退回默认喷发点，宁可位置差一点也不能不炸
-      const sink = sinks[sinks.length - 1];
-      if (sink) sink({ count: n, x: DEFAULT_ORIGIN.x, y: DEFAULT_ORIGIN.y });
+      // 量不到（页面还没渲染出 .game-area）→ 用兜底位置，宁可位置差一点也不能不炸
+      target({ count, ...fallbackOrigin() });
       return;
     }
-    const vw = info.windowWidth || 375;
-    const vh = info.windowHeight || 800;
-    const sink = sinks[sinks.length - 1];
-    if (!sink) return;
-    sink({
-      count: n,
-      x: (rect.left + rect.width / 2) / vw,
-      y: (rect.top + rect.height + dropPx) / vh,
+    target({
+      count,
+      x: rect.left + rect.width / 2,
+      y: rect.top + TOP_INSET_PX,
     });
   });
 }

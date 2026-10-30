@@ -112,7 +112,7 @@
     <FloatingActions>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
-    <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstAtElement → 这里渲染） -->
+    <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstConfetti → 这里渲染，喷发点=游戏区顶部中间） -->
     <FireworkBurst />
     <!-- 新游戏二次确认：自绘三按钮弹窗（web 的 shared/ConfirmDialog 同款） -->
     <view v-if="confirming" class="confirm-mask" @click="confirming = false">
@@ -139,7 +139,7 @@
 // - 音效：Web Audio → @/core/sfx（消除 playElimination / 失败 playLose / 过关 playWin，落点与 web 一致）
 // - 计时：shared/CountTimer.vue → setInterval（1s，切后台暂停、回来自动续上，与 CountTimer 行为一致）
 // - 连线：SVG polyline + dasharray → 逐段圆头条 + 逐段「画出来」再淡出（没有 SVG / 没有 dash 动画）
-// - 连击烟花：canvas-confetti → @/core/firework 的 burstAtElement（喷发点 = 提示条中心往下 30px，与 web 的 comboOrigin 一致）
+// - 连击烟花：canvas-confetti → @/core/firework 的 burstConfetti（喷发点 = 游戏区顶部中间、粒子数比 web 少，用户要求的 mp 侧差异）
 // - 二次确认：shared/ConfirmDialog（三按钮）→ uni.showModal（两按钮）
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { onHide, onShow } from '@dcloudio/uni-app';
@@ -148,7 +148,7 @@ import Confetti from '@/components/Confetti.vue';
 import FireworkBurst from '@/components/FireworkBurst.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
-import { burstAtElement } from '@/core/firework';
+import { burstConfetti } from '@/core/firework';
 import { setNavTitle } from '@/core/i18n';
 import { playElimination, playLose, playWin } from '@/core/sfx';
 import { getJSON, getRaw, setJSON, setRaw } from '@/core/storage';
@@ -723,7 +723,7 @@ async function showCombo(n) {
   comboTipTimer = setTimeout(() => { comboTip.value = null; }, COMBO_TIP_MS);
   // 与 web 一致：喷发点 = 提示条中心往下 30px（提示条刚渲染出来才量得到，所以放 nextTick）
   await nextTick();
-  burstAtElement('.combo-tip', Math.min(3, 1 + (n - 2) * 0.6), { count: Math.min(44, 12 + n * 4) });
+  burstConfetti(Math.min(3, 1 + (n - 2) * 0.6), { count: Math.min(24, 8 + n * 3) });
 }
 
 function breakCombo() {

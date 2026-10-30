@@ -92,7 +92,7 @@
     </view>
     <!-- 胜利彩带（纯 CSS 降级版，web 是 confetti canvas） -->
     <Confetti v-if="justWon" />
-    <!-- 连击小烟花：web 的 burstConfetti（喷发点 = 提示条中心往下 30px） -->
+    <!-- 连击小烟花：web 的 burstConfetti（喷发点统一在游戏区顶部中间） -->
     <FireworkBurst />
     <FloatingActions>
       <view class="fab" @click="toggleMode"><view class="fab-ico" :class="mode === MODE_MAHJONG ? 'i-dinkie-icons-three-of-circles-mahjong' : 'i-mdi-emoticon-happy-outline'" /></view>
@@ -131,7 +131,7 @@ import { t } from '@/core/i18n';
 import { playElimination, playLose, playWin } from '@/core/sfx';
 import Confetti from '@/components/Confetti.vue';
 import FireworkBurst from '@/components/FireworkBurst.vue';
-import { burstAtElement } from '@/core/firework';
+import { burstConfetti } from '@/core/firework';
 import { levelConfig } from './board.js';
 import { setNavTitle } from '@/core/i18n';
 import ParticleBackground from '@/components/ParticleBackground.vue';
@@ -363,7 +363,7 @@ function onCardClick(card) {
         matchTimer = null;
         prev.matched = true;
         card.matched = true;
-        // 先等连击提示条渲染 + 烟花发声（burstAtElement 内部先 playFirework），
+        // 先等连击提示条渲染 + 烟花发声（burstConfetti 内部先 playFirework），
         // 再播 elimination —— sfx 的规则是「烟花后 240ms 内不叠 elimination」
         await registerClear();
         playElimination();
@@ -395,11 +395,10 @@ async function registerClear() {
   if (comboCount >= 2) {
     comboTip.value = comboCount;
     comboTimer = setTimeout(() => { comboTip.value = 0; }, COMBO_MS);
-    // 提示条是刚渲染的：等一帧再量，喷发点才是「提示条中心往下 30px」（web 的 comboOrigin）
-    await nextTick();
-    // 强度 / 粒子数照 web：Math.min(3, 1 + (n-2)*0.6) / Math.min(44, 12 + n*4)
-    burstAtElement('.combo-tip', Math.min(3, 1 + (comboCount - 2) * 0.6), {
-      count: Math.min(44, 12 + comboCount * 4),
+    // 强度照 web：Math.min(3, 1 + (n-2)*0.6)；
+    // 粒子数比 web 少一档、喷发点统一在「游戏区顶部中间」（用户要求的 mp 侧差异）
+    burstConfetti(Math.min(3, 1 + (comboCount - 2) * 0.6), {
+      count: Math.min(24, 8 + comboCount * 3),
     });
   }
 }

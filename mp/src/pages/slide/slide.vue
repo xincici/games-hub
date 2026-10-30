@@ -84,7 +84,7 @@
     <FloatingActions>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
-    <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstAtElement → 这里渲染） -->
+    <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstConfetti → 这里渲染，喷发点=游戏区顶部中间） -->
     <FireworkBurst />
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
 
@@ -113,7 +113,7 @@
 //   拖动时关掉 transition 做到 1:1 跟手，松手后带同样的回弹 bezier）；
 // - 棋盘尺寸不再靠 CSS 变量 + 内联 px，而是「格子 × 行列」在 rpx 里反算（§零 第 2 条），
 //   格子与牌共用同一份 cell 数学（web 的棋盘没有内边距，3px 缝就在格子内部，所以这里 PAD = 0）；
-// - 连击烟花：canvas-confetti → @/core/firework 的 burstAtElement（喷发点、粒子数照 web；音效由它内部播 playFirework）；
+// - 连击烟花：canvas-confetti → @/core/firework 的 burstConfetti（喷发点=游戏区顶部中间、粒子数比 web 少；音效由它内部播 playFirework）；
 // - localStorage → @/core/storage（key 与 web 一字不差：__emoji_slide__state）；Web Audio → @/core/sfx。
 // - **不是全局锁**：拖动 / 消除动画期间，玩家照样能按住别的牌继续滑、点别的牌继续消；
 //   真正挡住的只有「已经被消费的那两张牌」（它们已经 popping）。
@@ -126,7 +126,7 @@ import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import { getJSON, setJSON } from '@/core/storage';
 import { playElimination, playLose, playWin } from '@/core/sfx';
-import { burstAtElement } from '@/core/firework';
+import { burstConfetti } from '@/core/firework';
 import { setNavTitle } from '@/core/i18n';
 import {
   levelConfig, makeBoard, findPartner, slideParams, shiftGroup,
@@ -469,7 +469,7 @@ async function showCombo(n) {
   comboTipTimer = setTimeout(() => { comboTip.value = null; }, COMBO_TIP_MS);
   // 与 web 一致：喷发点 = 提示条中心往下 30px（提示条刚渲染出来才量得到，所以放 nextTick）
   await nextTick();
-  burstAtElement('.combo-tip', Math.min(3, 1 + (n - 2) * 0.6), { count: Math.min(44, 12 + n * 4) });
+  burstConfetti(Math.min(3, 1 + (n - 2) * 0.6), { count: Math.min(24, 8 + n * 3) });
 }
 
 // ---------- 消除 ----------

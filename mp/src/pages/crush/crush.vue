@@ -118,7 +118,7 @@
 
     <!-- 胜利彩带（纯 CSS 降级版，web 是 canvas confetti；只在真正赢下那一刻放） -->
     <Confetti v-if="justWon" />
-    <!-- 多消 / 连锁的小烟花：web 的 burstConfetti（默认喷发点 = 屏幕中间偏下） -->
+    <!-- 多消 / 连锁的小烟花：web 的 burstConfetti（喷发点统一在游戏区顶部中间） -->
     <FireworkBurst />
     <FloatingActions>
       <!-- 本游戏没有模式切换，右下角只有帮助 -->
@@ -842,7 +842,7 @@ function announceCelebration(count, chain, gained) {
     celebrateFlashTimer = setTimeout(() => { celebrating.value = false; }, 900);
   }, 20);
   // 撒一把小烟花（web 的 announceCelebration 尾部同款）+ 烟花音：
-  // 强度 = tier，连锁 > 3 再加 1；喷发点 / 粒子数用 burstConfetti 的默认值
+  // 强度 = tier，连锁 > 3 再加 1；喷发点=游戏区顶部中间、粒子数用 countForIntensity（比 web 少）
   // （默认喷发点 = 屏幕中间偏下；sfx 规则是烟花后 240ms 内不再叠 elimination）
   burstConfetti(tier + (chain > 3 ? 1 : 0));
 }
