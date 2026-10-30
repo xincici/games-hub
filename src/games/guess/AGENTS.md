@@ -55,3 +55,28 @@ GuessNumber.vue + robot/i18n.js
   只有超过 480 才封顶，和标题栏逐档一致。
 - 实测（2026-10-17）：1280 / 800 / 600 宽下标题栏与输入区都是 **480**；390 / 375 下都是整屏宽。
   键盘仍是 3 行（8 个数字两行 + 退格/提交一行）、最右按钮不超出输入区、横向/纵向滚动都是 0。
+
+## 猜测记录区：动态 max-height + 只在本地滚动
+
+**原来**：`.game-area` 写死 `margin-bottom: 185px` 给底部固定键盘让位，记录一多就**整页滚动**（用户要求改成「记录区内部滚动」）。
+
+**现在（web）**
+
+- `.game-area` 去掉 `margin-bottom`，改成 `overflow-y: auto` + `overscroll-behavior: contain` + `-webkit-overflow-scrolling: touch`，
+  并显式画一条细滚动条（`scrollbar-width: thin` + `::-webkit-scrollbar 6px`，否则 macOS 的 overlay 滚动条平时看不见）。
+- `max-height` 由 `measureGameArea()` 算：`innerHeight − el.getBoundingClientRect().top − 输入区高度 − 16`（下限 96）。
+  - 输入区是 `position: fixed`，隐藏（`.hide`，`bottom: -100%`）时用 `.input-area:not(.hide)` 取不到 → 高度按 0 算，记录区自然铺到底。
+  - `ResizeObserver` 观察输入区 + `window.resize` + 进页面后 60/200/480ms 补量（键盘有 0.5s 滑入过渡，一次量不准）。
+  - **改高度前先记 `wasAtBottom`**：容器变矮时 `scrollTop` 不会自己跟着变，改完再判断会误判成「玩家往上翻了」。
+- 每添一行记录 / 结算层出现都 `nextTick` 里贴底（`scrollTop = scrollHeight`），玩家正在往上翻时不打扰。
+
+**实测（web，H5）**
+
+| 视口 | 记录区 | 输入区 | 间隙 | 可滚 | 滚动量 | 整页可滚 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 390×844，9 行 | 240..626（386） | 642 起（高 202） | **16px** | 是 | 66 | **0** |
+| 375×667，9 行 | 240..449（209） | 465 起（高 202） | **16px** | 是 | 243 | **0** |
+| 390×844，3 行 | 240..416（176） | 642 起 | 226 | 否 | 0 | **0** |
+
+> 坑：`maxHeight` 用了「卡片 top」算 → 记录的底部会跟输入区差 18px（键盘高度在首帧还没量全）；
+> 一定要用 `ResizeObserver` + 补量，别只量一次。

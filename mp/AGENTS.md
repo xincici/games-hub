@@ -2399,3 +2399,56 @@ mp 的尺寸照 web 换算：统计条 `min-height: 138rpx`、`.stat-label` 23rp
 
 > **降级**：小程序没有「标题连点 5 次清记录」（原生导航栏没有标题点击），所以 mp 侧只有 web 能清记录。
 > mp 的 `recordsPrefix` 只用于文档一致性（`__guess_number__`），页面里没有对应入口。
+
+### 26. 1A2B：猜测记录区动态高度 + 只在记录区内滚动（web 与小程序同步）
+
+用户：「优化中间猜测记录区域的高度，动态计算 max-height，当底部即将接触到输入区的时候出现垂直滚动条，
+滚动条仅在猜测记录区滚动。」
+
+**web**：`.game-area { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin }`（+ `::-webkit-scrollbar` 细滚动条），
+`max-height` 由 JS 量：`innerHeight − 卡片 top − 输入区高 − 16`；`ResizeObserver` 观察输入区 + 补量 60/200/480ms。
+
+**mp（不一样，必须用这套）**：
+
+1. 记录行包进 `<view id="history" class="history">`，高度写死 `historyHeight = min(内容高, 可用高)`：
+   - 可用高 = **`windowHeight − #history.top − 输入区高 − 12 − 卡片 padding-bottom`**；
+   - **量 `#history` 自己的 top，不要量卡片 top** —— 卡片上下各有 31rpx 内边距，会重复算进去；
+   - **还必须再扣掉卡片的 `padding-bottom`**（`select('#game-area').fields({ computedStyle: ['paddingBottom'] })`，
+     ≈16px）：只扣到「记录区」底部时，卡片自己那圈内边距仍会伸到数字键盘下面
+     —— 实测「卡片底边 − 键盘顶 = **−4 / −3px**」，视觉上就是用户报的「记录区和数字键盘区重叠」；
+     扣掉之后卡片底边距键盘 **12 / 13px** ✓。
+2. **行高用「相邻两行的间距」**（`selectAll('.answer-line')` 后 `|top[i+1] − top[i]|`）：
+   单行的 `rect.height` **不含 `.answer-line` 的上下 margin**，直接乘行数会算少（3 行时少 21px，
+   于是明明放得下也出现一截多余滚动量）。只有 1 行时用 `height + 12` 补 margin。
+3. **滚动别用 `scroll-view`**：实测 uni 的 H5 实现里 `.uni-scroll-view` 不是原生滚动容器
+   （`scrollTop` 恒 0、`scroll-into-view` 只在首次生效，换 `:scroll-top` 也纹丝不动），
+   而 `view { overflow-y: auto }` 是原生滚动、两端都稳。所以用普通 `view`：
+   ```css
+   .history {
+     display: flex; flex-direction: column-reverse;   /* 关键 */
+     overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+   }
+   ```
+   配合**DOM 里「最新的在最前」**（`reversedHistory = [...guessHistory].reverse()`）：
+   视觉顺序仍是旧的在上、新的在下，而 `column-reverse` 让**滚动锚点天然在底部** ——
+   新加的行一定在视野里，**不需要任何 JS 去设 scrollTop**（这是 `scroll-view` 做不到而普通 view 能做到的一点）。
+4. 每次加行 / 赢 / 输 都 `measureHistory()`（结算时键盘不渲染 → 可用高度变大）；`onWindowResize` / `offWindowResize` 记得成对。
+
+**实测（mp 的 H5 构建）**
+
+| 视口 | 卡片 | 记录区高 | 卡片底边 → 键盘顶 | 可滚 | 滚动量 |
+| --- | --- | --- | --- | --- | --- |
+| 390×844，9 行 | 250..641 | 359 | **12px** | 是 | 77 |
+| 375×667，9 行 | 242..471 | 198 | **13px** | 是 | 221 |
+| 390×844，3 行 | 250..432（内容 150 → 刚好装下） | 150 | 221 | **否** | 0 |
+
+> 这张表是**修完 padding 之后**的数；修之前卡片底边比键盘顶还低 3~4px（就是「重叠」的来源），
+> 而「记录区底边 → 键盘顶」当时是 12px —— 所以只看记录区的间隙会以为没问题，**必须量卡片的底边**。
+
+页整页可滚始终只有 H5 导航栏那 44px ✓；产物 `pages/guess/guess.wxml` 有 1 处 `history`、`wxss` 有 `column-reverse` / `overflow-y` ✓
+
+> **教训（第 43 条）**：**先验证「这个滚动方案在当前运行时真的能滚」，再谈细节。**
+> 这轮在 `scroll-view` 上耗了好几轮：`scroll-into-view` 无效 → 换 `:scroll-top` 仍无效 →
+> 最后发现它压根不是原生滚动容器。判断手段很土但有效：量 `scrollHeight / clientHeight / scrollTop`，
+> 以及内容容器的 `getBoundingClientRect()` 有没有位移。
+> 换成 `view + overflow` 之后一次就对了，而且 3 行/9 行两种极端都能覆盖。

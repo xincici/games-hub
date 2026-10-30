@@ -26,7 +26,8 @@
         <button ref="initRef" @click="onNewGame" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
-    <div class="card game-area">
+    <!-- 猜测记录区：max-height 由 JS 按「离底部输入区还有多少可用空间」动态算，超出后**只在这一块内滚动** -->
+    <div ref="gameAreaRef" class="card game-area" :style="gameAreaStyle">
       <p v-show="isDebug">anwser: {{ anwser }}</p>
       <div
         v-for="(oneGuess, idx) in guessHistory"
@@ -94,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { computed, nextTick, ref, watch, onMounted, onUnmounted } from 'vue';
 import sampleSize from 'lodash.samplesize';
 
 import TopHeader from '@/components/TopHeader.vue';
@@ -120,6 +121,13 @@ const gameResult = ref(GAMING);
 const guessHistory = ref([]);
 const currentGuess = ref('');
 
+// 猜测记录区的动态高度（从卡片顶部到底部输入区上方的可用空间）
+const gameAreaRef = ref(null);
+const gameAreaMax = ref(0);
+const gameAreaStyle = computed(() => (gameAreaMax.value ? { maxHeight: `${gameAreaMax.value}px` } : {}));
+const AREA_GAP = 16;   // 记录区底部与输入区之间至少留 16px：即将接触就出滚动条
+let inputObserver = null;
+
 // 连胜记录：赢一局 +1、输一局清零；最长连胜只增不减（「新游戏」清当前连胜、保留最长）
 const streak = ref(0);
 const bestStreak = ref(0);
@@ -144,11 +152,57 @@ onMounted(() => {
   // 恢复存档（有存档就停在原处、不播任何动画；没有才开新局）
   if (!restoreState()) initGame();
   addListener();
+  nextTick(() => {
+    measureGameArea();
+    scrollHistoryToEnd();
+    // 输入区的键盘有 0.5s 的滑入过渡 / 字体也可能晚一点撑开，前几帧再多量几次
+    [60, 200, 480].forEach((d) => setTimeout(measureGameArea, d));
+  });
+  window.addEventListener('resize', measureGameArea);
+  // 输入区高度会变（结算时滑走、字体晚加载），观察它而不是只依赖一次测量
+  if (typeof ResizeObserver !== 'undefined') {
+    inputObserver = new ResizeObserver(() => measureGameArea());
+    const inputEl = document.querySelector('.input-area');
+    if (inputEl) inputObserver.observe(inputEl);
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('resize', measureGameArea);
+  if (inputObserver) inputObserver.disconnect();
 });
+
+// 每添一行记录 / 结算层出现（输入区滑走）都重新量一次，并滚到最新一行
+watch(() => guessHistory.value.length, () => nextTick(() => {
+  scrollHistoryToEnd();
+  measureGameArea();
+}));
+watch(gameResult, () => nextTick(measureGameArea));
+
+// 记录区高度 = 视口底 − 卡片顶部 − 输入区高度 − 间距；量不到就给个兜底值
+function measureGameArea() {
+  const el = gameAreaRef.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const inputEl = document.querySelector('.input-area:not(.hide)');
+  const inputH = inputEl ? inputEl.getBoundingClientRect().height : 0;
+  const avail = Math.floor(window.innerHeight - rect.top - inputH - AREA_GAP);
+  // 先记下「改高度之前是不是贴着底」：容器变矮时 scrollTop 不会自己跟着变，
+  // 改完再判断会误以为玩家往上翻过（小屏实测过这一点）
+  const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  gameAreaMax.value = Math.max(96, avail);
+  nextTick(() => scrollHistoryToEnd(wasAtBottom));
+}
+
+// 滚到最新一行（记录多了以后新结果要在视野里）
+// force=true：新添了一行/刚进页面，必须贴底；否则只在「本来就在底部附近」时才贴底
+function scrollHistoryToEnd(force = true) {
+  const el = gameAreaRef.value;
+  if (!el) return;
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  if (force || nearBottom) el.scrollTop = el.scrollHeight;
+}
 
 // 操作区「新游戏」：非失败态要二次确认（会清空当前连胜），失败态直接重开
 function onNewGame() {
@@ -408,7 +462,24 @@ function onScoreReset() {
   .game-area {
     position: relative;
     padding: 16px 12px;
-    margin-bottom: 185px;
+    /* 高度由 JS 写 max-height（见 measureGameArea）：底部输入区是 fixed 的，这里不再靠
+       margin-bottom 给输入区留位，而是「量出来」——超出就在本区域内部滚动 */
+    overflow-y: auto;
+    overscroll-behavior: contain;      /* 滚到边界也不带动整页 */
+    -webkit-overflow-scrolling: touch;
+    /* 显式画一条细滚动条：macOS 的 overlay 滚动条平时看不见，不画的话玩家不知道这里能滚 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-color) transparent;
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--muted-color) 55%, transparent);
+      border-radius: 3px;
+    }
     .answer-line {
       margin: 6px 0;
       .number-card, .result-tip {

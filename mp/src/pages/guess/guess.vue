@@ -30,25 +30,37 @@
       </view>
 
       <!-- 游戏区（web 的 game-area）：历史行 + 当前输入行；胜利/失败遮罩正好盖住这张卡 -->
-      <view class="card game-area">
-        <view v-for="(oneGuess, idx) in guessHistory" :key="idx" class="answer-line">
-          <view v-for="(number, index) in oneGuess.nums" :key="index" class="number-card">
-            <text>{{ number }}</text>
+      <view id="game-area" class="card game-area">
+        <!-- 记录区：高度由 JS 动态算（min(内容高, 到输入区上方的可用高)），
+             超出就在这一块内部滚动 —— scroll-view 才有滚动条与 scroll-into-view -->
+        <!-- 记录区：高度 = min(内容高, 到输入区上方的可用高)，超出就在这块内部滚动。
+             用 column-reverse + 「DOM 最新的在最前」→ 视觉顺序仍是旧的在上、新的在下，
+             而且滚动锚点天然在底部：新加的行一定看得见（不需要 JS 去设 scrollTop，
+             scroll-view 的 scroll-into-view 在 H5 侧只在首次生效，实测过） -->
+        <view
+          id="history"
+          class="history"
+          :style="{ height: historyHeight + 'px' }"
+        >
+          <view v-if="gameResult === GAMING" class="answer-line">
+            <view
+              v-for="n in GAME_SIZE"
+              :key="n"
+              class="number-card"
+              :class="{ 'current-input': n - 1 === currentGuess.length }"
+            >
+              <text>{{ cellText(n - 1) }}</text>
+              <view v-if="n - 1 === currentGuess.length" class="caret" />
+            </view>
+            <view class="result-tip"><text>_A_B</text></view>
           </view>
-          <view class="result-tip"><text>{{ oneGuess.res }}</text></view>
-        </view>
 
-        <view v-if="gameResult === GAMING" class="answer-line">
-          <view
-            v-for="n in GAME_SIZE"
-            :key="n"
-            class="number-card"
-            :class="{ 'current-input': n - 1 === currentGuess.length }"
-          >
-            <text>{{ cellText(n - 1) }}</text>
-            <view v-if="n - 1 === currentGuess.length" class="caret" />
+          <view v-for="(oneGuess, idx) in reversedHistory" :key="idx" class="answer-line">
+            <view v-for="(number, index) in oneGuess.nums" :key="index" class="number-card">
+              <text>{{ number }}</text>
+            </view>
+            <view class="result-tip"><text>{{ oneGuess.res }}</text></view>
           </view>
-          <view class="result-tip"><text>_A_B</text></view>
         </view>
 
         <view v-if="gameResult === WIN" class="win">
@@ -121,7 +133,7 @@
 // - web 固定底部的数字键盘 → 页面流内的自绘 view 键盘（小程序里 <input> 会弹系统键盘、视觉跑偏）
 // - web 的 lodash.samplesize → 本地洗牌取前 4 位（分布等价，少一个依赖）
 // - 彩带 → components/Confetti.vue（纯 CSS 版）；音效 → core/sfx
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 import Confetti from '@/components/Confetti.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
@@ -203,6 +215,58 @@ function resetTick() {
   stopTick();
   seconds.value = 0;
   startTick();
+}
+
+// ---------- 记录区高度（只在这一块内部滚动）----------
+// 高度 = min(内容高, 视口高 − 卡片顶部 − 输入区高 − 间距)；行高统一，用行数算内容高最稳
+const historyMax = ref(0);      // 可用高度上限（px）
+const rowH = ref(44);           // 单行记录高度（px，进页面量一次）
+const AREA_GAP = 12;            // 记录区底部与输入区之间至少留 12px
+const rowCount = computed(() => guessHistory.value.length + (gameResult.value === GAMING ? 1 : 0));
+const contentH = computed(() => Math.ceil(rowCount.value * rowH.value) + 4);
+const historyHeight = computed(() => {
+  const cap = historyMax.value > 0 ? historyMax.value : contentH.value;
+  return Math.max(rowH.value, Math.min(cap, contentH.value));
+});
+// scroll-into-view：一直贴在最新一行（进行中时是当前输入行）
+// DOM 里「最新在最前」，靠 .history 的 column-reverse 显示到最下面
+const reversedHistory = computed(() => [...guessHistory.value].reverse());
+
+const queryRect = (sel) => new Promise((resolve) => {
+  const q = uni.createSelectorQuery();
+  q.select(sel).boundingClientRect((r) => resolve(r && r.height ? r : null)).exec();
+});
+// 一次量多行：用相邻两行的**间距**当行高（包含 .answer-line 的上下 margin，
+// 单行的 rect.height 不含 margin，直接乘行数会算少 —— 实测 3 行时少 21px，多出一截滚动量）
+const queryRows = () => new Promise((resolve) => {
+  const q = uni.createSelectorQuery();
+  q.selectAll('.answer-line').boundingClientRect((rs) => resolve(Array.isArray(rs) ? rs : [])).exec();
+});
+// 卡片的 padding-bottom：记录区的高度只扣到「记录区」为止，卡片自己还有一圈内边距，
+// 不把它算进去，卡片底边就会伸到数字键盘下面（实测压 3~4px，看起来就是「两块重叠」）
+const queryCardPad = () => new Promise((resolve) => {
+  const q = uni.createSelectorQuery();
+  q.select('#game-area').fields({ computedStyle: ['paddingBottom'] }, (r) => resolve(r ? parseFloat(r.paddingBottom) || 0 : 0)).exec();
+});
+
+async function measureHistory() {
+  // ⚠️ 要量「记录区自己」的 top，不是卡片的 top：卡片上下各有 31rpx 内边距，
+  //    拿卡片 top 算高度会把这段 padding 重复算进去，记录区底部就会压到输入区（实测 375 宽压 3px）
+  const [area, kb, rows, cardPad] = await Promise.all([
+    queryRect('#history'),
+    queryRect('.input-area'),
+    queryRows(),
+    queryCardPad(),
+  ]);
+  const list = rows.filter((r) => r && r.height);
+  if (list.length >= 2) rowH.value = Math.abs(list[1].top - list[0].top) || list[0].height;
+  else if (list.length === 1) rowH.value = list[0].height + 12;   // 单行：补上 11rpx×2 的 margin
+  if (!area) return;
+  const info = uni.getSystemInfoSync();
+  const kbH = kb ? kb.height : 0;          // 结算时输入区不渲染 → 可用高度变大
+  // 再扣掉卡片的下内边距：这样「卡片底边」距键盘 AREA_GAP，而不是记录区底边距键盘
+  const avail = Math.floor(info.windowHeight - area.top - kbH - AREA_GAP - cardPad);
+  historyMax.value = Math.max(60, avail);
 }
 
 // ---------- 存档（与 web 的 __guess_number__* 完全一致）----------
@@ -338,10 +402,12 @@ function guessOnce() {
     streak.value = 0;            // 输一局：当前连胜清零（最长连胜保留）
     saveRecords();
     saveState();
+    measureHistory();
     return;
   }
   currentGuess.value = '';
   saveState();
+  measureHistory();
 }
 
 // 真正赢下：停表 + 胜利音效 + 彩带（justWon 只在这一次置 true，4 秒后复位）
@@ -383,9 +449,12 @@ function showHelp() {
 onMounted(() => {
   loadRecords();
   if (!restoreState()) initGame();
+  setTimeout(measureHistory, 60);
+  if (typeof uni !== 'undefined' && uni.onWindowResize) uni.onWindowResize(measureHistory);
 });
 
 onUnmounted(() => {
+  if (typeof uni !== 'undefined' && uni.offWindowResize) uni.offWindowResize(measureHistory);
   if (firstGuessTimer) clearTimeout(firstGuessTimer);
   clearTimeout(wonTimer);
   stopTick();
@@ -487,6 +556,16 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   padding: 31rpx 23rpx;
+}
+.history {
+  /* 高度由 JS 写死（min(内容, 可用空间)）；column-reverse 让 DOM 里最新的那行显示在最下面，
+     滚动锚点因此天然在底部 —— 新加的行一定在视野里，不用 JS 去设 scrollTop */
+  display: flex;
+  flex-direction: column-reverse;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .answer-line {
   margin: 11rpx 0;
