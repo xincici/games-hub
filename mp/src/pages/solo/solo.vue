@@ -48,7 +48,7 @@
           </view>
         </view>
 
-        <!-- ④ 出牌区：前三行打出去的牌（正面朝上），第四行是杠牌（右对齐） -->
+        <!-- ④ 出牌区：打出去的牌（正面朝上） -->
         <view class="card discard-card">
           <view class="discard-row">
             <view
@@ -62,59 +62,10 @@
             </view>
             <text v-if="!discards.length" class="discard-empty">{{ tt('hint') }}</text>
           </view>
-          <view class="kong-row">
-            <view
-              v-for="(k, ki) in kongs"
-              :id="'kong-set-' + ki"
-              :key="'kong-set-' + ki"
-              class="kong-set"
-              :class="{ 'fly-hidden': ki === hiddenKongIndex }"
-            >
-              <MahjongTile
-                v-for="n in 4"
-                :key="n"
-                :value="k.value"
-                :suit="k.suit"
-                class="mj-face"
-                :style="smallTileStyle"
-              />
-            </view>
-          </view>
         </view>
 
-        <!-- ⑤ 手牌区：显式槽位绝对定位（7 列），杠组占 4 个槽位宽；打出一张后整副重新排序 -->
+        <!-- ⑤ 手牌区：显式槽位绝对定位（7 列），打出一张后整副重新排序 -->
         <view id="hand-card" class="card hand-card" :style="{ height: handCardH + 'rpx' }">
-          <!-- 杠组：4 张一样的牌被框在一起，上方（下排时下方）浮出「杠牌」tooltip -->
-          <view
-            v-for="g in kongCells"
-            :id="'kong-group-' + g.key"
-            :key="g.k"
-            class="kong-group"
-            :class="{ framing: canFrame, drawn: g.drawn }"
-            :style="g.style"
-          >
-            <button
-              v-for="t in g.tiles"
-              :key="'kt-' + t.id"
-              :id="'hand-' + t.id"
-              class="hand-tile kong-tile"
-              :class="{ deal: dealing, celebrate: celebrating, 'fly-hidden': t.id === hiddenTileId }"
-              :style="g.tileStyle"
-              :disabled="phase !== PLAY || busy"
-              @click="playTileId(t.id)"
-            >
-              <MahjongTile :value="t.value" :suit="t.suit" class="mj-face" />
-            </button>
-            <button
-              v-if="kongOpenKey === g.key && phase === PLAY && canFrame"
-              class="kong-tip"
-              :class="{ below: kongTipBelow }"
-              @click="doKong(g)"
-            >
-              {{ tt('kong') }}
-            </button>
-          </view>
-
           <!-- 单张手牌 -->
           <button
             v-for="c in singleCells"
@@ -145,18 +96,8 @@
       </view>
     </view>
 
-    <!-- 飞牌替身：摸牌 / 出牌是一张；杠牌是**一整组 4 张**一起飞（不是一张飞过去再变四张） -->
-    <view v-if="flying && flying.tiles" class="flying flying-kong" :style="flyingVars">
-      <MahjongTile
-        v-for="(t, i) in flying.tiles"
-        :key="'ft-' + i"
-        :value="t.value"
-        :suit="t.suit"
-        class="mj-face fly-face"
-        :style="flyTileStyle(i)"
-      />
-    </view>
-    <view v-else-if="flying" class="flying" :style="flyingVars">
+    <!-- 飞牌替身：摸牌 / 出牌各一段 -->
+    <view v-if="flying" class="flying" :style="flyingVars">
       <MahjongTile :value="flying.tile.value" :suit="flying.tile.suit" class="mj-face" />
     </view>
 
@@ -186,7 +127,7 @@
 <script setup>
 // 单人麻将 · 微信小程序版（web 的 src/games/solo/SoloGame.vue 移植）
 // 纯逻辑来自 web 的 board.js（**逐字节复制**，没有 import，因此一行都没改）：
-// 发牌 / 胡牌判断 / 杠 / 难度曲线 / 牌墙。
+// 发牌 / 胡牌判断 / 难度曲线 / 牌墙。
 // 这里只重写视图，并把 localStorage → core/storage、Web Audio → core/sfx、
 // getBoundingClientRect / getComputedStyle → selectorQuery + rpx 现算。
 import { computed, getCurrentInstance, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -202,7 +143,7 @@ import { preloadTiles, TILE_RATIO } from '@/shared/mahjongTiles';
 import { tt } from './i18n';
 import ParticleBackground from '@/components/ParticleBackground.vue';
 import {
-  HAND_SIZE, MELD_SIZE, isWin, kongOptions, newRoundSafe, sortTiles, tileKey,
+  HAND_SIZE, isWin, newRoundSafe, sortTiles,
 } from './board';
 
 // 原生导航栏标题跟随语言（pages.json 里的标题是静态的）
@@ -229,7 +170,7 @@ const COLS_PER_ROW = 7;              // 手牌每行 7 张
 // 手牌单张宽度：**(690 − 左右内边距 − 6 个间隙) / 7**，由内容反算，不写死
 const HAND_TILE_W = Math.floor((690 - HAND_PAD * 2 - (COLS_PER_ROW - 1) * HAND_GAP) / COLS_PER_ROW);
 const HAND_TILE_H = Math.round(HAND_TILE_W * TILE_RATIO);
-const SMALL_W = 37;                  // 出牌区 / 杠区的牌 19px
+const SMALL_W = 37;                  // 出牌区的牌 19px
 const SMALL_H = Math.round(SMALL_W * TILE_RATIO);   // 24px
 // 牌墙：牌背 26×33px、列步进 29px（26 + 左右各 1px 描边 + 1px 缝）、每层右错 2px / 上错 4px
 const BACK_W = 50;
@@ -254,10 +195,6 @@ const validTile = t => t && typeof t === 'object'
   && ['m', 's', 'p', 'z'].includes(t.suit)
   && Number.isInteger(t.value) && t.value >= 1 && t.value <= (t.suit === 'z' ? 7 : 9)
   && Number.isInteger(t.id) && t.id > 0;
-// 杠只存牌面（4 张同牌、没有 id）；点数范围按字牌 1~7、数牌 1~9 校验
-const validKong = k => k && typeof k === 'object'
-  && ['m', 's', 'p', 'z'].includes(k.suit)
-  && Number.isInteger(k.value) && k.value >= 1 && k.value <= (k.suit === 'z' ? 7 : 9);
 
 // ---------- 状态（**在 setup 里就恢复**，首帧即最终样子） ----------
 // ⚠️ restoreState() 里要写到的 ref 必须全部声明在它**之前**，否则是 TDZ，
@@ -266,7 +203,6 @@ const hand = ref([]);
 const drawnId = ref(null);       // 刚摸到的牌：显示时永远排最右，打出一张后清空 → 手牌按顺序重排
 const wall = ref([]);
 const discards = ref([]);
-const kongs = ref([]);           // 已经杠出去的牌：[{ suit, value, count: 4 }]
 const phase = ref(PLAY);
 const omitSuit = ref(null);      // 本局缺哪个花色（null = 三个花色都在，只有旧存档才可能）
 const busy = ref(false);         // 动画中不接受点击
@@ -274,10 +210,8 @@ const celebrating = ref(false);  // 胡牌后「挨个跳一下」的那一段
 const confirming = ref(false);   // 「新游戏」的二次确认
 const dealing = ref(false);      // 发牌波浪进行中
 const dealSeq = ref(0);          // 拼进 :key → 重开一局 / 恢复存档时波浪才会重播
-const kongOpenKey = ref(null);   // 哪个杠组的 tooltip 正开着（tileKey）
 const flying = ref(null);        // 飞牌替身
 const hiddenTileId = ref(null);  // 飞行中的那张牌：落点处的实体先藏起来（FLIP 不能露馅）
-const hiddenKongIndex = ref(null);   // 杠牌飞行时，杠行里即将出现的那一组也先藏起来
 const justWon = ref(false);      // 只有真胡牌才放彩带
 const streak = ref(readInt(KEYS.streak, 0));
 const best = ref(readInt(KEYS.best, 0));
@@ -292,18 +226,12 @@ function restoreState() {
   try {
     const s = getJSON(KEYS.state);
     if (!s || !Array.isArray(s.hand) || !Array.isArray(s.wall)) return false;
-    const savedKongs = Array.isArray(s.kongs) ? s.kongs : [];
-    if (!savedKongs.every(validKong)) return false;
-    // 同一张牌不可能杠两次（每张最多 4 张）
-    if (new Set(savedKongs.map(tileKey)).size !== savedKongs.length) return false;
-    // ⚠️ 有杠之后手牌不再是 14 张，而是 14 − 3 × 杠数。判据必须和 isWin() 一样按「等效张数」算：
-    // 等效 13 张是「刚打出 / 刚杠完、自动补摸还没落盘」的那一瞬间（save() 在 commit 时就写了），
-    // 恢复后要补上那次摸牌，见 onMounted 里的 pendingDraw。
-    const effective = s.hand.length + MELD_SIZE * savedKongs.length;
+    // 手牌只可能是 14 张，或 13 张（「刚打出一张、自动补摸还没落盘」的那一瞬间），
+    // 后者恢复后要补上那次摸牌，见 onMounted 里的 pendingDraw。
+    const effective = s.hand.length;
     if (effective !== HAND_SIZE && effective !== HAND_SIZE - 1) return false;
     if (![...s.hand, ...s.wall].every(validTile)) return false;
     hand.value = s.hand.map(t => ({ suit: t.suit, value: t.value, id: t.id }));
-    kongs.value = savedKongs.map(k => ({ suit: k.suit, value: k.value, count: 4 }));
     wall.value = s.wall.map(t => ({ suit: t.suit, value: t.value, id: t.id }));
     discards.value = Array.isArray(s.discards)
       ? s.discards.filter(validTile).map(t => ({ suit: t.suit, value: t.value, id: t.id }))
@@ -321,76 +249,32 @@ function restoreState() {
   }
 }
 const restored = restoreState();
-// 存档可能落在「刚打出一张 / 刚杠完、补摸还没落地」的那一瞬间：等效 13 张 → 恢复后补摸一张
-const pendingDraw = restored && phase.value === PLAY
-  && hand.value.length + MELD_SIZE * kongs.value.length === HAND_SIZE - 1;
+// 存档可能落在「刚打出一张、补摸还没落地」的那一瞬间（13 张）→ 恢复后补摸一张
+const pendingDraw = restored && phase.value === PLAY && hand.value.length === HAND_SIZE - 1;
 
 const save = () => {
   setJSON(KEYS.state, {
-    hand: hand.value, wall: wall.value, discards: discards.value, kongs: kongs.value,
+    hand: hand.value, wall: wall.value, discards: discards.value,
     omit: omitSuit.value, drawnId: drawnId.value, phase: phase.value,
   });
 };
 
-// ---------- 手牌显示项（web 的 displayItems，原样搬过来；拆成纯函数方便自检） ----------
-// 除「刚摸到的那张」之外按顺序排列（刚摸的永远在最右），并把**手里凑齐 4 张一样**的
-// 那 4 张抽成一个「杠组」——不管它们原本排在哪，包括刚摸到的那张补齐第 4 张的情况。
+// ---------- 手牌显示项（web 的 displayItems；拆成纯函数方便自检） ----------
+// 除「刚摸到的那张」之外按顺序排列（刚摸的永远在最右）。
+// 以前这里还会把「手里凑齐 4 张一样」的 4 张抽成一个「杠组」—— 杠牌机制已按用户要求移除。
 function buildDisplayItems(tiles, drawnTileId) {
   const drawn = tiles.find(t => t.id === drawnTileId);
   const rest = sortTiles(tiles.filter(t => t.id !== drawnTileId));
-  const ordered = drawn ? [...rest, drawn] : rest;
-  const counts = new Map();
-  for (const t of ordered) { const k = tileKey(t); counts.set(k, (counts.get(k) || 0) + 1); }
-  const items = [];
-  const taken = new Set();
-  for (const t of ordered) {
-    if (taken.has(t.id)) continue;
-    const k = tileKey(t);
-    if ((counts.get(k) || 0) >= 4) {
-      const four = ordered.filter(x => tileKey(x) === k);
-      four.forEach(x => taken.add(x.id));
-      items.push({ kind: 'kong', key: k, suit: t.suit, value: t.value, tiles: four });
-    } else {
-      taken.add(t.id);
-      items.push({ kind: 'tile', tile: t });
-    }
-  }
-  return items;
+  return drawn ? [...rest, drawn] : rest;
 }
 
-// 手牌槽位：**显式排**，不靠自动布局 —— 杠组是 1 个元素但占 4 张牌宽，
-// 用 flex 换行会把它整体挤到下一行、用 grid 自动布局会在行尾留空洞，14 槽摊成 3 行。
-// 规则（与 web 一致）：**第 i 个杠组占第 i 行行首**，其余单牌按显示顺序逐行填空位
-// → 1 个杠 = 4+3 / 7、2 个杠 = 4+3 / 4+3，都恰好 7+7（3 个杠才需要 3 行，14 张里极罕见）。
+// 手牌槽位：显式排（7 列），14 张永远 7+7 —— 槽位与牌共用同一份坐标数学。
 function buildHandSlots(items) {
-  const slots = items.map(() => null);
-  const used = [];                                   // used[row][col] = true（1 基）
-  const mark = (row, col, span) => {
-    used[row] = used[row] || [];
-    for (let c = col; c < col + span; c++) used[row][c] = true;
-  };
-  let kongNo = 0;
-  items.forEach((it, i) => {
-    if (it.kind !== 'kong') return;
-    kongNo += 1;
-    slots[i] = { row: kongNo, col: 1, span: 4 };
-    mark(kongNo, 1, 4);
-  });
-  let row = 1;
-  let col = 1;
-  items.forEach((it, i) => {
-    if (slots[i]) return;
-    for (;;) {
-      used[row] = used[row] || [];
-      if (col > COLS_PER_ROW) { row += 1; col = 1; continue; }
-      if (used[row][col]) { col += 1; continue; }
-      break;
-    }
-    slots[i] = { row, col, span: 1 };
-    mark(row, col, 1);
-    col += 1;
-  });
-  return slots;
+  return items.map((_it, i) => ({
+    row: Math.floor(i / COLS_PER_ROW) + 1,
+    col: (i % COLS_PER_ROW) + 1,
+    span: 1,
+  }));
 }
 
 const displayItems = computed(() => buildDisplayItems(hand.value, drawnId.value));
@@ -421,67 +305,18 @@ const slotStyle = (i) => {
 // 发牌波浪 / 胡牌跳动：延迟用 CSS 变量给（值恒定，不会因为重渲染把动画重播）
 const waveVars = i => ({ '--di': `${i * 45}ms`, '--dc': `${i * 55}ms` });
 
-// 手牌显示列表：单张与杠组分开两个 v-for（小程序里 `:key` 要是简单成员表达式才会编译成 wx:key）
-const singleCells = computed(() => {
-  const out = [];
-  displayItems.value.forEach((it, i) => {
-    if (it.kind !== 'tile') return;
-    out.push({
-      tile: it.tile,
-      k: `${dealSeq.value}-t${it.tile.id}`,
-      style: { ...slotStyle(i), ...waveVars(i) },
-    });
-  });
-  return out;
-});
-const kongCells = computed(() => {
-  const out = [];
-  displayItems.value.forEach((it, i) => {
-    if (it.kind !== 'kong') return;
-    out.push({
-      key: it.key,
-      suit: it.suit,
-      value: it.value,
-      tiles: it.tiles,
-      k: `${dealSeq.value}-k${it.key}`,
-      style: slotStyle(i),
-      tileStyle: {
-        width: `${HAND_TILE_W}rpx`,
-        height: `${HAND_TILE_H}rpx`,
-        ...waveVars(i),
-      },
-      drawn: it.tiles.some(t => t.id === drawnId.value),
-    });
-  });
-  return out;
-});
-
-// tooltip 朝上还是朝下：杠组在**下排**时翻到下方（否则会盖住上排的牌、容易误点）。
-// web 靠 getBoundingClientRect 量中心；这里槽位是显式算出来的，直接看它在第几行更准。
-const kongTipBelow = computed(() => {
-  const idx = displayItems.value.findIndex(it => it.kind === 'kong' && it.key === kongOpenKey.value);
-  if (idx < 0) return false;
-  const s = handSlots.value[idx];
-  return !!s && s.row > 1;
-});
-
-// 手里有可杠的牌就自动浮出 tooltip（玩家点牌打出去后它自然消失）
-const kongOpts = computed(() => kongOptions(hand.value).map(t => tileKey(t)));
-watch(kongOpts, (opts) => {
-  if (!opts.length) { kongOpenKey.value = null; return; }
-  if (!opts.includes(kongOpenKey.value)) kongOpenKey.value = opts[0];
-}, { immediate: true });
-
-// 什么时候可以把 4 张「框起来」（并浮出 tooltip）：**发牌波浪结束** 且 **没有飞行中的牌**。
-// 摸到第 4 张是「先提交再飞」的，只判 !dealing 的话牌还在空中就已经被抽成杠组并画上橙框了。
-const canFrame = computed(() => !dealing.value && !flying.value);
+// 手牌显示列表（小程序里 `:key` 要是简单成员表达式才会编译成 wx:key）
+const singleCells = computed(() => displayItems.value.map((it, i) => ({
+  tile: it,
+  k: `${dealSeq.value}-t${it.id}`,
+  style: { ...slotStyle(i), ...waveVars(i) },
+})));
 
 // 兜底：没有替身在飞、也不在飞行流程里（busy=false）时，不该有「隐形」标记残留。
 // 「偶发手牌里某张一直看不见」就是这种残留造成的，这里在空闲态强制清掉。
 watch([busy, flying, dealing], () => {
   if (!busy.value && !flying.value && !dealing.value) {
     if (hiddenTileId.value !== null) hiddenTileId.value = null;
-    if (hiddenKongIndex.value !== null) hiddenKongIndex.value = null;
   }
 });
 
@@ -610,25 +445,8 @@ async function flyToTile(tile, from, targetSelector, dur, commit) {
   }
 }
 
-// 量一个「杠组」的出发口径：外层矩形 + 组内单张尺寸 + 组内间距（间距是本页常量）
-async function groupShape(selector) {
-  const r = await queryRect(selector);
-  if (!r) return null;
-  const gap = rpxPx(HAND_GAP);
-  return { rect: centerOf(r), tileW: Math.max(8, (r.width - 3 * gap) / 4), tileH: r.height, gap };
-}
-const flyTileStyle = (i) => {
-  const f = flying.value;
-  if (!f || !f.tiles) return {};
-  return {
-    left: `${i * (f.tw + f.gap)}px`,
-    top: '0px',
-    width: `${f.tw}px`,
-    height: `${f.th}px`,
-  };
-};
-
-// ---------- 摸一张（打牌后、杠牌后都走这里） ----------
+// ---------- 摸一张（打牌后走这里） ----------
+// ---------- 摸一张（打牌后走这里） ----------
 async function drawOne() {
   if (!wall.value.length) { lose(); return; }
   const seq = roundSeq;
@@ -643,7 +461,7 @@ async function drawOne() {
     save();
   });
   if (seq !== roundSeq) return;
-  if (isWin(hand.value, kongs.value.length)) { await celebrateWin(seq); return; }
+  if (isWin(hand.value)) { await celebrateWin(seq); return; }
   // 摸完最后一张还没胡 → 稍等一下直接判负（不用等玩家再打出去）
   if (!wall.value.length) {
     await sleep(350);
@@ -688,7 +506,6 @@ async function playTileId(id) {
   const tile = hand.value.find(t => t.id === id);
   if (!tile) return;
   busy.value = true;
-  kongOpenKey.value = null;
   const seq = roundSeq;
   const from = await queryRect(`#hand-${id}`);
   if (seq !== roundSeq) return;      // 同上：量完位置先确认还是同一局
@@ -701,72 +518,6 @@ async function playTileId(id) {
   });
   if (seq !== roundSeq) return;
   await drawOne();
-  if (seq !== roundSeq) return;
-  busy.value = false;
-}
-
-// ---------- 杠牌：4 张一样的牌出去、进右下角的杠区，再从牌墙补摸一张 ----------
-async function doKong(item) {
-  if (phase.value !== PLAY || busy.value) return;
-  const four = hand.value.filter(t => tileKey(t) === item.key);
-  if (four.length < 4) return;
-  busy.value = true;
-  kongOpenKey.value = null;
-  const seq = roundSeq;
-  try {
-    // 出发口径 = 手牌里那个被框住的杠组（4 张 + 3 个间隙）
-    const shape = await groupShape(`#kong-group-${item.key}`);
-    if (seq !== roundSeq) return;      // 量完位置先确认还是同一局
-    // ① 替身（一整组 4 张）先在**源位置**立住：此时 4 张还在手牌里，两者重叠看不出来
-    if (shape) {
-      flying.value = {
-        tiles: four,
-        x: shape.rect.x,
-        y: shape.rect.y,
-        dx: 0,
-        dy: 0,
-        dur: 380,
-        scale: 1,
-        w: shape.rect.w,
-        h: shape.rect.h,
-        tw: shape.tileW,
-        th: shape.tileH,
-        gap: shape.gap,
-        go: false,
-      };
-      await nextTick();
-    }
-    // ② 藏「杠行里即将出现的那一组」+ 提交（手牌里的 4 张消失，替身已经在原地顶着）
-    const newIndex = kongs.value.length;
-    hiddenKongIndex.value = newIndex;
-    hand.value = hand.value.filter(t => tileKey(t) !== item.key);
-    kongs.value = [...kongs.value, { suit: item.suit, value: item.value, count: 4 }];
-    drawnId.value = null;
-    save();
-    await nextTick();
-    // ③ 量落点 → 整组飞过去
-    if (shape && flying.value) {
-      const toEl = await queryRect(`#kong-set-${newIndex}`);
-      if (toEl) {
-        const to = centerOf(toEl);
-        flying.value = {
-          ...flying.value,
-          dx: to.x - shape.rect.x,
-          dy: to.y - shape.rect.y,
-          scale: rpxPx(SMALL_H) / shape.tileH,
-          go: true,
-        };
-        await sleep(380);
-      }
-    }
-  } finally {
-    // ④ 先露出实体（杠行那一组），下一帧再撤替身；顺手把隐形标记清干净
-    hiddenKongIndex.value = null;
-    flying.value = null;
-    await nextTick();
-  }
-  if (seq !== roundSeq) return;
-  await drawOne();                     // 杠完补摸一张
   if (seq !== roundSeq) return;
   busy.value = false;
 }
@@ -785,8 +536,6 @@ function dealRound() {
   hand.value = sortTiles(withIds(r.hand));
   wall.value = withIds(r.wall);
   discards.value = [];
-  kongs.value = [];
-  kongOpenKey.value = null;
   drawnId.value = null;
   omitSuit.value = r.omitted;
   phase.value = PLAY;
@@ -794,7 +543,6 @@ function dealRound() {
   flying.value = null;
   // 这里只清「隐形」标记即可（同步流程里没有替身要撤）
   hiddenTileId.value = null;
-  hiddenKongIndex.value = null;
   justWon.value = false;
   save();
   // 发牌波浪必须放在**末尾**：上面那行 busy=false 会覆盖这里的 busy=true（web 踩过）
@@ -853,8 +601,7 @@ onMounted(async () => {
   await playDealWave();
   if (!pendingDraw) return;
   // 波浪期间用户可能点了「新游戏」：只有手牌仍是那副「等效 13 张」的恢复局面时才补摸
-  const stillPending = phase.value === PLAY
-    && hand.value.length + MELD_SIZE * kongs.value.length === HAND_SIZE - 1;
+  const stillPending = phase.value === PLAY && hand.value.length === HAND_SIZE - 1;
   if (!stillPending) return;
   if (!wall.value.length) { lose(); return; }
   const seq = roundSeq;
@@ -1034,10 +781,10 @@ onUnmounted(() => {
   animation: solo-deal 0.36s ease both;
 }
 
-/* ---------- ④ 出牌区：3 行出牌 + 1 行杠牌 ---------- */
+/* ---------- ④ 出牌区：3 行出牌（杠牌机制已移除） ---------- */
 .discard-card {
   width: 100%;
-  height: 250rpx;                     /* --small-tile-h × 4 + 32px */
+  height: 173rpx;                     /* 149rpx（3 行牌）+ 上下各 12rpx 内边距 = 173 */
   padding: 12rpx 15rpx;
   display: flex;
   flex-direction: column;
@@ -1076,24 +823,6 @@ onUnmounted(() => {
   align-self: center;
   margin: 0 auto;
 }
-.kong-row {
-  flex: 1;
-  min-height: 47rpx;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12rpx;
-}
-.kong-set {
-  display: flex;
-  align-items: center;
-  gap: 2rpx;
-  padding: 4rpx;
-  border-radius: 12rpx;
-  background: rgba(35, 128, 78, 0.14);
-  box-shadow: inset 0 0 0 2rpx rgba(35, 128, 78, 0.45);
-}
-.kong-set.fly-hidden { visibility: hidden; }
 
 /* ---------- ⑤ 手牌区：绝对定位的显式槽位 ---------- */
 .hand-card {
@@ -1103,8 +832,7 @@ onUnmounted(() => {
   padding: 15rpx;
   /* 高度由 handCardH 内联给出（2 行 = 109 × 2 + 10 + 30 = 258rpx） */
 }
-/* 手牌：单张是**绝对定位的槽位**；杠组里的 4 张是 flex item（不能一起绝对定位，
-   否则容器排版会塌掉） —— 两种用法共用下面这份外观 */
+/* 手牌：单张是**绝对定位的槽位**（槽位由 buildHandSlots 算，与牌共用同一份坐标） */
 .hand-tile {
   display: block;
   margin: 0;
@@ -1121,7 +849,6 @@ onUnmounted(() => {
   line-height: 0;
 }
 .hand-tile.single { position: absolute; }
-.hand-tile.kong-tile { position: relative; flex: 0 0 auto; }
 /* 小程序里 button[disabled] 自带灰底/灰字，会盖到牌面上 —— 这里显式清掉 */
 .hand-tile[disabled] {
   background: none;
@@ -1140,62 +867,6 @@ onUnmounted(() => {
 }
 .hand-tile.fly-hidden { visibility: hidden; }
 
-/* 杠组：4 张牌框在一起（框必须用 box-shadow 画：它不占布局空间，不会把后面的牌挤换行） */
-.kong-group {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  border-radius: 15rpx;
-}
-.kong-group.framing {
-  box-shadow: 0 0 0 4rpx #c2410c;
-  background: rgba(194, 65, 12, 0.10);
-}
-.kong-group.drawn { animation: solo-drawn 0.3s ease; }
-
-/* 杠牌 tooltip：浮在杠组上方（下排时翻到下方，避免盖住上排的牌造成误点） */
-.kong-tip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 12rpx);
-  transform: translateX(-50%);
-  z-index: 40;
-  margin: 0;
-  padding: 17rpx 35rpx;
-  height: auto;
-  line-height: 1.2;
-  white-space: nowrap;
-  font-size: 27rpx;
-  font-weight: 700;
-  color: #fff;
-  background: #c2410c;
-  border: 0;
-  border-radius: 999rpx;
-  box-shadow: 0 4rpx 15rpx rgba(0, 0, 0, 0.25);
-}
-/* 小三角：朝下手牌那侧，**不吃点击**（不然「想点这张牌」会变成触发杠牌） */
-.kong-tip::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  margin-left: -10rpx;
-  border: 10rpx solid transparent;
-  border-top-color: #c2410c;
-  pointer-events: none;
-}
-.kong-tip.below {
-  top: calc(100% + 12rpx);
-  bottom: auto;
-}
-.kong-tip.below::after {
-  top: auto;
-  bottom: 100%;
-  border-top-color: transparent;
-  border-bottom-color: #c2410c;
-}
-
 /* ---------- 飞牌替身：fixed 定位（不受滚动影响），位移 / 时长走内联样式 ---------- */
 .flying {
   /* absolute 而不是 fixed：left/top 来自 selectorQuery 的 rect（**页面内容空间**），
@@ -1210,15 +881,6 @@ onUnmounted(() => {
   transform: translate(-50%, -50%);
   transition-property: transform;
   transition-timing-function: cubic-bezier(0.3, 0.9, 0.4, 1);
-}
-/* 杠牌：4 张作为一个整体 —— 容器整体缩放，组内的牌按出发时的像素尺寸绝对定位 */
-.flying-kong {
-  transform-origin: center center;
-}
-.fly-face {
-  position: absolute;
-  top: 0;
-  left: 0;
 }
 
 /* ---------- 结算浮层：盖住整个游戏区（矩形与 .game-area 完全重合） ---------- */

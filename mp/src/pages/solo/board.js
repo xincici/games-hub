@@ -52,7 +52,7 @@ const countsOf = tiles => {
 
 /**
  * 剩下的牌能不能拆成**恰好 n 组**（刻子或顺子）—— 从最小的那张开始拆是唯一正确的贪心。
- * 杠过的牌不再参与拆组（一个杠本身就算一组），所以这里要能拆「指定组数」。
+ * 拆将之后调用时 n = 4。
  */
 function canMeldN(c, n) {
   let i = 0;
@@ -74,32 +74,22 @@ function canMeldN(c, n) {
   return false;
 }
 
-/** 手里有没有 4 张一样的牌可以杠（返回可杠的牌，可能不止一组） */
-export function kongOptions(hand) {
-  const c = countsOf(hand);
-  const out = [];
-  for (let i = 0; i < 34; i++) if (c[i] >= COPIES) out.push(tileOf(i));
-  return out;
-};
-
 /** 七对子 */
 const isSevenPairs = c => c.reduce((n, x) => n + (x === 2 ? 1 : 0), 0) === 7 && c.every(x => x % 2 === 0);
 
 /**
  * 胡牌：4 组 + 1 将，或者七对子。
- * **杠过的牌算一组**：所以要求 `手牌张数 + 3 × 杠数 === 14`，再拆 (4 − 杠数) 组 + 1 将。
- * （杠完会补摸一张，所以手上会是 11 张 + 1 个杠 = 等效 14；七对子只在没有杠时成立。）
+ * 手牌必须是 14 张（单人麻将已移除杠牌机制，不再有「手牌 + 杠」的等效张数）。
  */
-export function isWin(tiles, kongs = 0) {
-  const k = Math.max(0, Math.min(4, Math.floor(kongs) || 0));
-  if (tiles.length + MELD_SIZE * k !== HAND_SIZE) return false;
+export function isWin(tiles) {
+  if (tiles.length !== HAND_SIZE) return false;
   const c = countsOf(tiles);
-  if (c.some((n, i) => n > COPIES || n < 0)) return false;
-  if (k === 0 && isSevenPairs(c)) return true;
+  if (c.some(n => n > COPIES || n < 0)) return false;
+  if (isSevenPairs(c)) return true;
   for (let i = 0; i < 34; i++) {
     if (c[i] < 2) continue;
     c[i] -= 2;                                   // 试着把这一对当将
-    const ok = canMeldN(c, 4 - k);
+    const ok = canMeldN(c, 4);
     c[i] += 2;
     if (ok) return true;
   }
@@ -107,15 +97,14 @@ export function isWin(tiles, kongs = 0) {
 }
 
 /** 13 张听哪些牌（返回能胡的牌数组）—— 发牌自检与「只差一张」的保证都靠它 */
-export function waits(tiles13, kongs = 0) {
-  const k = Math.max(0, Math.min(4, Math.floor(kongs) || 0));
-  if (tiles13.length + MELD_SIZE * k !== HAND_SIZE - 1) return [];
+export function waits(tiles13) {
+  if (tiles13.length !== HAND_SIZE - 1) return [];
   const c = countsOf(tiles13);
   const out = [];
   for (let i = 0; i < 34; i++) {
     if (c[i] >= COPIES) continue;                 // 手上已经有 4 张，摸不到第 5 张
     const next = [...tiles13, tileOf(i)];
-    if (isWin(next, k)) out.push(tileOf(i));
+    if (isWin(next)) out.push(tileOf(i));
   }
   return out;
 }
