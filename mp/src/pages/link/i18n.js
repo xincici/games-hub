@@ -31,10 +31,11 @@ const dict = {
     shuffleTip: '无可消除，已重新排列',
     rotateTip: '请旋转设备至竖屏',
     // 小程序额外需要：web 的 ConfirmDialog 是自绘三按钮弹窗，小程序用 uni.showModal（两个按钮）
-    newGameTitle: '🔄 开始新游戏？',
-    newGameMsg: '会清除闯关记录并从第 1 关重新开始；只想重玩当前这一关，就点「取消」后进结算层重玩。',
-    newGameOk: '确定重来',
-    newGameCancel: '取消',
+    confirmTitle: '🔄 开始新游戏？',
+    confirmMsg: '会清除闯关记录并从第 1 关重新开始；只想重玩当前这一关，就点「重玩本关」。',
+    confirmOk: '确定重来',
+    confirmReplay: '重玩本关',
+    cancel: '取消',
   },
   en: {
     gameTitle: 'Emoji Link',
@@ -63,10 +64,11 @@ const dict = {
     shuffleTip: 'No moves left — reshuffled',
     rotateTip: 'Please rotate your device to portrait',
     // 小程序额外需要（与 cn 一一对应）
-    newGameTitle: '🔄 Start a new game?',
-    newGameMsg: 'This clears your level record and restarts from level 1. To retry just the level you are on, replay it from the result screen.',
-    newGameOk: 'Yes, Restart',
-    newGameCancel: 'Cancel',
+    confirmTitle: '🔄 Start a new game?',
+    confirmMsg: 'This clears your level record and restarts from level 1. To retry just the level you are on, pick Replay Level.',
+    confirmOk: 'Yes, Restart',
+    confirmReplay: 'Replay Level',
+    cancel: 'Cancel',
   },
 };
 

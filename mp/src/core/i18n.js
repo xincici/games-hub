@@ -69,6 +69,12 @@ const dict = {
     mHintRemember: '👀 快记住他们',
     mHintMatch: '🧠 把他们配对找出来',
     mFaceEmoji: '切换麻将牌面',
+    // 新游戏二次确认（三按钮：取消 / 重玩本关 / 确定重来，与 web 的 shared/ConfirmDialog 一致）
+    confirmTitle: '🔄 开始新游戏？',
+    confirmMsg: '会清除闯关记录并从第 1 关重新开始；只想重玩当前这一关，就点「重玩本关」。',
+    confirmOk: '确定重来',
+    confirmReplay: '重玩本关',
+    cancel: '取消',
     mFaceMahjong: '切换 Emoji 牌面',
     // ---- 赌神 ----
     gBest: '最高关',
@@ -184,6 +190,11 @@ const dict = {
     mHintRemember: '👀 Memorise them quickly!',
     mHintMatch: '🧠 Now find the pairs!',
     mFaceEmoji: 'Switch to mahjong',
+    confirmTitle: '🔄 Start a new game?',
+    confirmMsg: 'This clears your level record and restarts from level 1. To retry just the level you are on, pick Replay Level.',
+    confirmOk: 'Yes, Restart',
+    confirmReplay: 'Replay Level',
+    cancel: 'Cancel',
     mFaceMahjong: 'Switch to emoji',
     // ---- Gambler ----
     gBest: 'Best',

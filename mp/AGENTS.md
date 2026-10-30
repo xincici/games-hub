@@ -652,18 +652,30 @@ const cellPos = (c) => ({
 - `.answer-line { text-align: center }` → 历史行 / 当前输入行整行居中；
 - 键盘改成 **`position: fixed`**（`z-index: 20`），`.page` 底部内边距用 `calc(var(--kb-h) + 24rpx)`
   留出键盘高度（`--kb-h` 必须声明在 `.page` 上，否则 `var()` 取不到值）。
-  **⚠️ 键盘不再贴屏幕底**（用户第二次要求「键盘向下一点，底部靠近帮助按钮的上方」）：
-  原来 `bottom: 0` + 面板 `padding-bottom: 280rpx` 会让键盘**看起来悬在半空、下面一大条空白** ✗。
-  现在把这段空白改成**外部偏移**：
-  ```css
-  .input-area {
-    bottom: calc(108rpx + env(safe-area-inset-bottom));  /* = 按钮 84 + 底距 16 + 缝隙 8 */
-    padding: 23rpx;          /* 四边等距，底部不再留空白 */
-    border-radius: 27rpx;    /* 不贴屏幕边了，四角都圆 */
-  }
-  ```
-  `.page` 的 `--kb-h` 同步 560 → **600rpx**（键盘高 ≈ 480 + 下沿偏移 108）。
-  实测 393×852：键盘 `bottom` 距屏底 **57px**、与帮助按钮上沿缝隙 **4px** ✓；375×667 同样 54 / 4px ✓。
+  **键盘的最终形态（2026-10 第三次调整，用户口径就是现在这样，别再改回去）**：
+  - **贴屏幕底**：`bottom: 0`，底部内边距自己吃安全区 `padding: 23rpx 23rpx calc(16rpx + env(safe-area-inset-bottom))`，
+    只圆上面两个角（`border-radius: 27rpx 27rpx 0 0`）。
+  - **「退格 / 提交」单独一行、只占 70% 宽、靠左** —— 因为右下角那两颗悬浮按钮（模式 / 帮助）就压在这一行的右边：
+    ```html
+    <view class="opt-row"> …退格… …提交… </view>
+    ```
+    ```css
+    .opt-row { display: flex; justify-content: space-between; width: 70%; }
+    .opt-row .number-button { flex: 0 0 calc(50% - 8rpx); margin: 8rpx 0; height: 88rpx; }
+    ```
+    ⚠️ `width: 70%` 是**相对面板内容盒**（面板左右各有 23rpx 内边距），所以量到的是屏宽的 **65.6%**；
+    这正是「留出 30% 给悬浮按钮」想要的效果，**不要**为了凑「屏宽 70%」写成 `calc(70% + 46rpx)` ——
+    那样提交按钮右沿会正好压到第一颗悬浮按钮上（实测 285 vs 282）。
+  - `.page` 的 `--kb-h` = **360rpx**（键盘实测高 191px / 390 宽 ≈ 367rpx）。
+  - 历史（别再犯）：② 曾用 `bottom: calc(108rpx + safe-area)` 让键盘悬在按钮上方 → 视觉上「悬空、下面一大条空白」✗；
+    ① 更早用 `bottom: 0` + 面板 `padding-bottom: 280rpx` → 同样一大条空白 ✗。
+
+  **实测（贴底版，H5）**
+
+  | 视口 | 键盘 | 贴底差 | 退格/提交行 | 行占面板宽 | 与悬浮按钮重叠 | 内容被挡 |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 390×844 | 0..390 × 653..844（高 191） | **0** | 12..268（宽 256） | 65.6% | **否**（提交右沿 268 vs 按钮左沿 282，留 14px） | **0** |
+  | 375×667 | 0..375 × 484..667（高 184） | **0** | 12..258（宽 246） | 65.6% | **否**（258 vs 271，留 13px） | **0** |
 
 ### 教训汇总
 
@@ -2220,3 +2232,170 @@ web 侧改法（两页一样，见各游戏分册）：操作区中间那格从 
 > 2. **在嵌套 SCSS 里插规则要看它落在哪一层**：插到 `.difficulty-wrapper` 里面，编译成
 >    `.wrapper .opt-area .difficulty-wrapper .time-note.observe` ✗ 红色整段不生效（web 那次）；
 >    删块时还容易连带吃掉 `.difficulty-wrapper` 的收尾 `}` → `unmatched "}"`。
+
+### 22. 连连看 / 对对碰：「新游戏」二次确认统一成三按钮自绘弹窗
+
+用户报：「连连看的新游戏二次确认弹窗不对…应该包含取消、重玩本关、确定重开 3 个选项」「对对碰的新游戏按钮缺少二次确认」。
+
+**问题**
+- **连连看**：用的是 `uni.showModal` —— 系统弹窗**只有两个按钮**（确定 / 取消），
+  「重玩本关」那个选项根本放不下 ✗（web 的 `shared/ConfirmDialog` 是自绘三按钮）。
+- **对对碰**：`新游戏` 直接 `initLevel(1)`，**连二次确认都没有** ✗（web 有 `ConfirmDialog`）。
+
+**修法**：两页都改成自绘三按钮弹窗，样式与其它 9 个页面**完全同一套**（照 `pages/mahjong/mahjong.vue` 抄）：
+
+```html
+<view v-if="confirming" class="confirm-mask" @click="confirming = false">
+  <view class="card confirm-box" @click.stop>
+    <text class="confirm-title">{{ …confirmTitle }}</text>
+    <text class="confirm-msg">{{ …confirmMsg }}</text>
+    <view class="confirm-actions">
+      <button class="confirm-cancel" @click="confirming = false">取消</button>
+      <button class="confirm-replay" @click="replayLevel">重玩本关</button>
+      <button class="confirm-ok" @click="startNewGame">确定重来</button>
+    </view>
+  </view>
+</view>
+```
+CSS 也是照抄：`.confirm-mask`（fixed / `z-index: 120` / 半透明黑）、`.confirm-box`（`width: calc(100% - 122rpx)`、
+`max-width: 610rpx`、27rpx 圆角）、`.confirm-cancel` 灰底、`.confirm-replay` 橙描边、`.confirm-ok` 主色绿。
+
+- **连连看**：删掉 `onNewGame()`（整个 `uni.showModal` 包装），按钮改 `@click="confirming = true"`；
+  `replayLevel()` / `startNewGame()` 进来先 `confirming.value = false`。
+  文案加在**本页** `i18n.js`（`confirmTitle` / `confirmMsg` / `confirmOk` / `confirmReplay` / `cancel`，cn + en），
+  沿用 web `ConfirmDialog` 的原文（旧 `newGameTitle/newGameMsg/...` 5 个 key 已被替换掉）。
+- **对对碰**：这页没有本地 `i18n.js`（一直用 `core/i18n.js` 的 `t()`），所以这 5 个 key 加进 **core 字典**（cn + en）；
+  新增 `startNewGame()`（清**当前牌面**的最高关记录 + 回第 1 关，另两种牌面不动）、`replayLevel()` 顺手关弹窗，
+  并把原来直接 `initLevel(1)` 的 `startNewRun()` 删掉（结算层那颗「新游戏」也改走 `confirming = true`，
+  否则会引用已删除的函数 → `ReferenceError`）。
+
+**验收（mp 的 H5 构建，390×844）**
+- 连连看：点「新游戏」→ 弹窗标题 `🔄 开始新游戏？`、按钮依次 `取消 / 重玩本关 / 确定重来` ✓；
+  点「重玩本关」→ 弹窗关闭、本关重开（计时 01:10 → 01:12）✓
+- 对对碰：点「新游戏」→ 同样的三按钮弹窗 ✓；点「重玩本关」→ 弹窗关闭 ✓
+- 0 异常；产物 `pages/link/link.wxml`、`pages/match/match.wxml` 各有 `confirm-box` × 1 与
+  `confirm-cancel / confirm-replay / confirm-ok` 三个类名 ✓；`core/i18n.js` 里能找到「开始新游戏」✓
+
+> **教训（第 39 条）**：**`uni.showModal` 只能二选一**。凡是 web 用 `shared/ConfirmDialog`（取消 / 重玩本关 /
+> 确定重来）的地方，小程序都**不能**用系统弹窗凑合 —— 少一个「重玩本关」玩家就必须「确定重来 → 掉回第 1 关」，
+> 属于功能缺失。以后新增页面时，只要 web 那边 import 了 `ConfirmDialog`，这里就照 `mahjong.vue` 抄一份自绘弹窗。
+
+### 23. 赌神：「新游戏」补二次确认（但**失败遮罩上那颗例外，不弹**）
+
+用户：「赌神游戏也少了新游戏二次确认，补上。注意参考 web 的修改，失败遮罩上的新游戏没有二次确认。」
+
+web（`src/games/gambler/GamblerGame.vue`）就是这个分工，两个「新游戏」入口**行为不同**：
+
+| 入口 | web | 说明 |
+| --- | --- | --- |
+| 操作区那颗 `新游戏` | `@click="confirming = true"` → `ConfirmDialog`（取消 / 重玩本关 / 确定重来）| 会清连胜记录，必须先确认 |
+| 选择区**失败遮罩**里的 `新游戏` | `@click="startNewGame"` **直连** | web 源码里有一行注释写明：**「失败遮罩上的『新游戏』是用户指定的例外：不弹二次确认，直接清当前连胜、回第 1 关」** |
+
+小程序原先两颗都直连 `startNewRun()` ✗；现在照 web 拆开：
+
+- 操作区按钮 → `@click="confirming = true"`；
+- 新增 `confirming` + `startNewGame()`（`confirming = false` 后调 `startNewRun()` = 清连胜 + `deal(1)`，语义同 web）；
+- `replayLevel()` 先 `confirming.value = false`（web 踩过「点了重玩本关弹窗不关」）；
+- **失败遮罩那颗保持 `@click="startNewRun"` 不动** —— 这是刻意的，不是漏改；
+- 文案用 `core/i18n.js` 里已有的 `confirmTitle / confirmMsg / confirmOk / confirmReplay / cancel`
+  （赌神没有本地 `i18n.js`，一直用 core 的 `t()`）。
+
+**实测（mp 的 H5 构建，390×844）**
+- 操作区「新游戏」→ 弹窗标题 `🔄 开始新游戏？`、按钮 `["取消","重玩本关","确定重来"]` ✓；点「取消」→ 弹窗关闭 ✓
+- 点「查看答案」进失败态 → 失败遮罩按钮是 `["🔄 重玩本关","🎮 新游戏"]`；点遮罩上的「新游戏」→
+  **没有出现确认弹窗**（`弹确认了吗: false`）、遮罩消失、新一局开始 ✓
+- 0 异常；产物 `pages/gambler/gambler.wxml` 里有 1 处 `confirm-box` 与三个 `confirm-*` 按钮类名 ✓
+
+> **教训（第 40 条）**：同一页里两个同名按钮**可能是有意不同的行为**。改「xxx 少了确认」这类需求前，
+> 先去 web 里把**每一个**同名入口的点击处理都看一遍（`grep -n "@click="startNewGame"\|@click="confirming = true""`），
+> 别图省事把 `startNewRun` 全部替换成 `confirming = true` —— 那会把「失败后直接重开」变成「失败后还得多点一次确认」。
+
+### 24. 赌神：飞牌动画重做（照 web 的 `flyToAnswer` 时序，落点/起点都要「严丝合缝」）
+
+用户报：「牌从答案区飞到选择区的动画效果不对，不连贯」。
+实测（H5，390×844，抓 `.fly-ghost` 的逐帧矩形）确认了**四个**真问题，全在旧实现里：
+
+| 现象（实测） | 原因 |
+| --- | --- |
+| 替身起点在 (34, **400**)，而点的那张牌在 (34, **444**) —— 偏 **44px**，看起来像从答案区那一带冒出来 | `position: fixed` 的替身在这个页面里**包含块不是视口**（嵌套/平台差异），直接写 `left/top = rect` 会偏 |
+| 替身终点 (22, 385)、真实答案槽位 (19, 381) —— 离线 3~4px，落位时跳一下 | 终点用「槽位宽 52rpx + 间距 6rpx」**算出来**的，而不是量真实元素；且 `transform: scale()` 默认以**中心**为原点，缩小时整体往右下偏 (w差/2, h差/2) |
+| 替身落地后，答案牌**自己又从下方弹一下**（`answer-in`）| web 的 `.answer-tile` **没有**入场动画（只有错牌的印章抖动）；小程序这边多加了 0.26s 的 `answer-in`，于是「飞过去 → 再弹一次」= 用户说的不连贯 |
+| 动的是 `left/top/opacity/transform` 四个属性（0.26s ease）| `left/top` 每帧触发布局，且和 web 的 `element.animate`（420ms + `cubic-bezier(.3,.7,.35,1)`）不同步 |
+
+**现在的实现（与 web 一一对应）**
+
+1. **先落档、再量真实目标**：`picked` 立刻加上这张牌 → `.answer-tile.landing { visibility: hidden }`（`visibility` 不影响布局，量位置照样准）→
+   `await nextTick()` 后用 `#answer-<key>` 量**真实**槽位矩形。
+2. **起点也要量准**：替身先以 `opacity: 0` 渲染在 `#pick-<key>` 的矩形上 → 等一帧 → **量替身自己的矩形**，
+   用 `fixX/fixY` 校正 `left/top`（这次实测校正量正好 44px）→ 隔一帧再 `show: true`。
+   **必须分两拍**：显形和起飞写在同一拍时，玩家看到的是「牌在半空中冒出来」。
+3. **只动 `transform`**：`translate(dx, dy) scale(to.width / from.width)`，
+   `transition: transform .42s cubic-bezier(.3, .7, .35, 1)`（= web 的 `FLY_MS = 420` + 同一条曲线）。
+   并且 **`transform-origin: 0 0`** —— 否则 scale 以中心为原点，落点会偏 (w差/2, h差/2)。
+4. **落位即交接**：`FLY_MS + 20` 后移除替身 + 去掉 `landing` → 槽位在原地现身（此时替身正压在它上面，肉眼看不出切换）。
+5. **删掉 `.answer-tile` 的 `answer-in` 入场动画**（连 `@keyframes` 一起删，与 web 对齐）。
+6. **支持多张并发**：`flyGhosts` 改成数组（提交模式允许边飞边点），`flyingCount` 只用于「即时判断模式一次一张」。
+7. **失败收尾也飞**：`finishRound()` 改成 `for (const k of missing) { await flyToAnswer(k); await sleep(120) }`，
+   全部落地后才 `phase='lost'` + 盖遮罩（web 注释：不这样的话遮罩先出来、牌从遮罩上穿过去）。
+
+**实测（H5，390×844）**
+
+- 起点：替身 `(34, 444)` = 被点的那张牌 ✓（隐形两帧 → 显形在起点 → 才起飞）
+- 轨迹：`444 → 438 → 426 → 414 → 404 → 397 → 391 → 387 → 385 → 383 → 382 → 381`，宽度 `34 → 27` ✓
+- 终点：替身 `(19, 381)` = 真实答案槽位 `(19, 381)`，**误差 0** ✓；替身消失后槽位 `visibility: visible`、`animation-name: none`（不再补弹）✓
+- 查看答案：41 帧有替身，遮罩在 `t=708ms` **替身全部落地之后**才出现，`landing` 残留 0 ✓，0 异常
+- 产物：`pages/gambler/gambler.wxss` 里有 `transform-origin:0 0`、`cubic-bezier(.3,.7,.35,1)`、`.answer-tile.landing`，
+  `answer-in` 残留 0 ✓
+
+> **教训（第 41 条）**：「飞牌」这类动画要做到**连贯**，本质是三件事：**起点用实测、终点用实测、交接零位移**。
+> 只要有一点是「算出来的」，落位那一刻就会看到跳一下；再加上一条入场动画，就变成「飞过去又弹一次」。
+> 另外：`transform: scale()` 默认以中心缩放 —— 除非你就是要中心缩放，否则记得 `transform-origin: 0 0`。
+
+> **教训（第 42 条）**：这轮修改**又踩了一次「按行号区间批量改缩进」的坑** ✗——
+> 我用「找到 `setTimeout(() => {` 那行、把到下一个 `});` 之前的所有行统一加缩进」的循环，
+> 结果把**后面 `onMounted(...)` 的收尾 `});`** 也改成了 `}, FLY_MS + 20);`，
+> 于是 `onMounted` 变成了「带第二个参数 440 的生命周期钩子」→ `TypeError: Cannot create property 'm' on number '440'`
+> （`injectHook` 拿 440 当实例），整页白屏 ✗。
+> **教训**：缩进/格式化**不要用「找下一个 }」的循环**；宁可用编辑器式的最小替换，或者改完立刻编译 + 打开页面看一眼。
+> 定位手段：`git diff` + 在 dev server 下看**未压缩**的堆栈（`vite` 的 HMR 会给出真实行号，压缩产物只能看到 `injectHook`）。
+
+### 25. 1A2B：局面存档 + 连胜记录 + 新游戏二次确认（web 与小程序同步）
+
+用户要求：①「游戏状态也要记录下来，重进恢复」②「增加最长连胜和当前连胜的记录，规则参考其它类似闯关游戏」
+③「非失败状态下点击新游戏按钮，增加要清空当前连胜记录的提示二次确认」。
+
+**存档 key（与 web 一字不差）**
+
+| key | 内容 |
+| --- | --- |
+| `__guess_number__robot` | 机器人开关（原有） |
+| `__guess_number__state` | JSON `{ answer, history, result, time, streak }` |
+| `__guess_number__streak` | 当前连胜 |
+| `__guess_number__best` | 最长连胜 |
+
+mp 用 `@/core/storage` 的 `getJSON/setJSON` 读写 state、`getRaw/setRaw` 读写两个数字。
+**每秒计时也要 `saveState()`**（与 web 的 `on-tick` 一致），否则重进时用时归零。
+
+**连胜规则**：赢 `streak += 1` + `best = max(best, streak)`；输（8 次用尽）`streak = 0`；
+「新游戏」`streak = 0`（最长连胜保留）；清记录时一并清零。
+
+**界面**：统计条 `.card.score-area`（`🏆 最长连胜` → `🔥 当前连胜`，记录在前、当前在后，空值 `--`）；
+mp 的尺寸照 web 换算：统计条 `min-height: 138rpx`、`.stat-label` 23rpx（12px）、`.stat-value` 42rpx（22px 粗体）。
+
+**新游戏确认**：`onNewGame()` —— `gameResult === LOSE` 时直接 `startNewGame()`（**不弹窗**，与赌神失败遮罩同一例外），
+其它情况 `confirming = true` → 自绘两按钮弹窗（取消 / 确定重来），文案
+「会清空当前连胜（🔥 {n}）；最长连胜记录会保留」，`{n}` 用 `String(streak)` 替换。
+
+**恢复要点**：`onMounted` 先 `loadRecords()` 再 `restoreState()`；恢复成功就**不开新局、不帮玩家落子**
+（`robot` 只对新局生效，否则重进会突然冒出一注 1234）；`result !== GAMING` 时 `stopTick()`，否则 `startTick()` 接着走表。
+
+**实测（mp 的 H5 构建，390×844）**
+- 首次进入：`["--","0"]`（最长 / 当前）✓
+- 构造「差一步赢 + streak 3 / best 5」的存档 → reload：`["5","3"]`、历史 2 行 ✓
+- 输入 1234 提交 → 胜利层出现、`streak: 3→4`、`best` 仍 5、存档 `result: 2` ✓；reload 后仍是 `["5","4"]`、时间 `00:10` 接着 ✓
+- 游戏中点「新游戏」→ 弹窗按钮 `["取消","确定重来"]`、正文含「🔥 3」；确定后 `streak: 0`、`best: 5`、统计 `["5","0"]` ✓
+- 失败态（8 次用尽）点「新游戏」→ **无弹窗**、直接重开、`streak: 0` ✓
+- 0 异常；产物 `pages/guess/guess.wxml` 有 1 处 `score-area`、1 处 `confirm-box`，`i18n.js` 有「最长连胜」✓
+
+> **降级**：小程序没有「标题连点 5 次清记录」（原生导航栏没有标题点击），所以 mp 侧只有 web 能清记录。
+> mp 的 `recordsPrefix` 只用于文档一致性（`__guess_number__`），页面里没有对应入口。

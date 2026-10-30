@@ -25,7 +25,7 @@
       </view>
       <view class="divider" />
       <view class="opt-third">
-        <button class="btn" @click="startNewRun">{{ t('start') }}</button>
+        <button class="btn" @click="confirming = true">{{ t('start') }}</button>
       </view>
     </view>
 
@@ -76,7 +76,7 @@
           <text class="result-sub">{{ t('mLevel') }} {{ level }}</text>
           <view class="result-btns">
             <button class="btn ghost" @click="replayLevel">{{ t('mReplay') }}</button>
-            <button class="btn" @click="startNewRun">{{ t('start') }}</button>
+            <button class="btn" @click="confirming = true">{{ t('start') }}</button>
           </view>
         </view>
       </view>
@@ -98,6 +98,18 @@
       <view class="fab" @click="toggleMode"><view class="fab-ico" :class="mode === MODE_MAHJONG ? 'i-dinkie-icons-three-of-circles-mahjong' : 'i-mdi-emoticon-happy-outline'" /></view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 新游戏二次确认：自绘三按钮弹窗（web 的 shared/ConfirmDialog 同款） -->
+    <view v-if="confirming" class="confirm-mask" @click="confirming = false">
+      <view class="card confirm-box" @click.stop>
+        <text class="confirm-title">{{ t('confirmTitle') }}</text>
+        <text class="confirm-msg">{{ t('confirmMsg') }}</text>
+        <view class="confirm-actions">
+          <button class="confirm-cancel" @click="confirming = false">{{ t('cancel') }}</button>
+          <button class="confirm-replay" @click="replayLevel">{{ t('confirmReplay') }}</button>
+          <button class="confirm-ok" @click="startNewGame">{{ t('confirmOk') }}</button>
+        </view>
+      </view>
+    </view>
     <HelpSheet :open="helpOpen" :text="t('helpM')" @close="helpOpen = false" />
   </view>
 </template>
@@ -413,9 +425,18 @@ function loseLevel() {
   save();
 }
 
-function replayLevel() { initLevel(level.value); }
+function replayLevel() {
+  confirming.value = false;
+  initLevel(level.value);
+}
+// 新游戏：清掉**当前牌面**的闯关记录（最高关），从第 1 关重新开始（另两种牌面的记录不动，与 web 一致）
+function startNewGame() {
+  confirming.value = false;
+  setRaw(bestKeyFor(mode.value), '');
+  bestLevel.value = 1;
+  initLevel(1);
+}
 function nextLevel() { initLevel(level.value + 1); }
-function startNewRun() { initLevel(1); }
 
 function toggleMode() {
   mode.value = mode.value === MODE_MAHJONG ? MODE_EMOJI : MODE_MAHJONG;
@@ -433,6 +454,8 @@ onMounted(() => {
 onUnmounted(clearTimers);
 
 const helpOpen = ref(false);
+// 「新游戏」二次确认（取消 / 重玩本关 / 确定重来，与 web 的 shared/ConfirmDialog 一致）
+const confirming = ref(false);
 
 function showHelp() {
   helpOpen.value = true;
@@ -616,4 +639,60 @@ function showHelp() {
   padding: 0 24rpx;
 }
 .hint { font-size: 22rpx; color: #8a8f99; }
+/* ---------- 新游戏二次确认（本地版 ConfirmDialog，与其它页面同一套） ---------- */
+.confirm-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.confirm-box {
+  width: calc(100% - 122rpx);
+  max-width: 610rpx;
+  padding: 38rpx 38rpx 31rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border-radius: 27rpx;
+  background: #fff;
+  color: #2c3e50;
+}
+.confirm-title { font-size: 32rpx; font-weight: bold; margin-bottom: 15rpx; }
+.confirm-msg {
+  font-size: 27rpx;
+  opacity: 0.8;
+  line-height: 1.5;
+  margin-bottom: 31rpx;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 19rpx;
+}
+.confirm-actions button {
+  margin: 0;
+  padding: 0 23rpx;
+  height: 62rpx;
+  line-height: 62rpx;
+  font-size: 27rpx;
+  border: 0;
+  border-radius: 15rpx;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.confirm-cancel { background: #eef0f4; color: #2c3e50; }
+.confirm-actions .confirm-replay {
+  background: transparent;
+  border: 2rpx solid #c2410c;
+  color: #c2410c;
+  font-weight: bold;
+}
+.confirm-ok { background: #23804e; color: #fff; font-weight: bold; }
 </style>

@@ -3,6 +3,18 @@
     <!-- 全站背景（粒子连线 + 底部过山车，与 web 的 ParticleBackground 同款） -->
     <ParticleBackground />
     <view class="page">
+      <!-- 统计条（约定第 4 节：最长连胜在前、当前连胜在后；空值占位 --） -->
+      <view class="card score-area">
+        <view class="stat">
+          <text class="stat-label">{{ tt('bestStreak') }}</text>
+          <text class="stat-value">{{ bestStreak || '--' }}</text>
+        </view>
+        <view class="divider" />
+        <view class="stat">
+          <text class="stat-label">{{ tt('curStreak') }}</text>
+          <text class="stat-value">{{ streak }}</text>
+        </view>
+      </view>
       <!-- 操作区（web 的 opt-area）：计时 | 新游戏，中间一条竖分隔线 -->
       <view class="card opt-area">
         <view class="opt-half">
@@ -13,7 +25,7 @@
         </view>
         <view class="divider" />
         <view class="opt-half">
-          <button class="game-icon" @click="initGame">{{ tt('start') }}</button>
+          <button class="game-icon" @click="onNewGame">{{ tt('start') }}</button>
         </view>
       </view>
 
@@ -58,18 +70,21 @@
           :hover-class="isNumDisabled(num) ? 'none' : 'key-hover'"
           @click="addNumber(num)"
         ><text>{{ num }}</text></view>
-        <view
-          class="number-button opt-button del-button"
-          :class="{ disabled: !canDel }"
-          :hover-class="canDel ? 'key-dim' : 'none'"
-          @click="delNumber"
-        ><text>{{ tt('optDel') }}</text></view>
-        <view
-          class="number-button opt-button enter-button"
-          :class="{ disabled: !canEnter }"
-          :hover-class="canEnter ? 'key-dim' : 'none'"
-          @click="guessOnce"
-        ><text>{{ tt('optEnter') }}</text></view>
+        <!-- 退格 / 提交单独一行，只占 70% 宽度并靠左：右边让开右下角的「模式 / 帮助」悬浮按钮 -->
+        <view class="opt-row">
+          <view
+            class="number-button opt-button del-button"
+            :class="{ disabled: !canDel }"
+            :hover-class="canDel ? 'key-dim' : 'none'"
+            @click="delNumber"
+          ><text>{{ tt('optDel') }}</text></view>
+          <view
+            class="number-button opt-button enter-button"
+            :class="{ disabled: !canEnter }"
+            :hover-class="canEnter ? 'key-dim' : 'none'"
+            @click="guessOnce"
+          ><text>{{ tt('optEnter') }}</text></view>
+        </view>
       </view>
     </view>
 
@@ -83,6 +98,17 @@
       </view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 新游戏二次确认：会清空当前连胜（最长连胜保留）。失败态下直接重开、不弹窗（与 web 一致） -->
+    <view v-if="confirming" class="confirm-mask" @click="confirming = false">
+      <view class="card confirm-box" @click.stop>
+        <text class="confirm-title">{{ tt('confirmTitle') }}</text>
+        <text class="confirm-msg">{{ tt('confirmMsg').replace('{n}', String(streak)) }}</text>
+        <view class="confirm-actions">
+          <button class="confirm-cancel" @click="confirming = false">{{ tt('cancel') }}</button>
+          <button class="confirm-ok" @click="startNewGame">{{ tt('confirmOk') }}</button>
+        </view>
+      </view>
+    </view>
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
   </view>
 </template>
@@ -100,7 +126,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import Confetti from '@/components/Confetti.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
-import { getRaw, setRaw } from '@/core/storage';
+import { getJSON, getRaw, setJSON, setRaw } from '@/core/storage';
 import { playLose, playWin } from '@/core/sfx';
 import { tt } from './i18n';
 import { setNavTitle } from '@/core/i18n';
@@ -114,6 +140,9 @@ const [GAMING, LOSE, WIN] = [0, 1, 2];
 const GAME_SIZE = 4; // 永远是 4 位数
 const MAX_GUESS = 8; // 最多猜 8 次
 const ROBOT_KEY = '__guess_number__robot'; // 与 web 的 src/games/guess/robot.js 完全一致
+const STATE_KEY = '__guess_number__state';   // 局面（答案 / 历史 / 结果 / 用时 / 连胜）
+const STREAK_KEY = '__guess_number__streak'; // 当前连胜
+const BEST_KEY = '__guess_number__best';     // 最长连胜
 const FIRST_GUESS_DURATION = 200;
 
 // 机器人偏好：web 里是「存 1 / 关掉时 removeItem」，这里保持同样的读写语义
@@ -124,6 +153,10 @@ const gameResult = ref(GAMING);
 const guessHistory = ref([]);
 const currentGuess = ref('');
 const seconds = ref(0);
+// 连胜：赢一局 +1、输一局清零；最长连胜只增不减（「新游戏」只清当前连胜）
+const streak = ref(0);
+const bestStreak = ref(0);
+const confirming = ref(false);
 // 彩带只在真正赢下的那一刻放：进入页面/恢复时一律是 false
 const justWon = ref(false);
 
@@ -163,6 +196,7 @@ function startTick() {
   stopTick();
   tickTimer = setInterval(() => {
     seconds.value += 1;
+    saveState();          // 用时进存档，重进接着走
   }, 1000);
 }
 function resetTick() {
@@ -171,8 +205,57 @@ function resetTick() {
   startTick();
 }
 
+// ---------- 存档（与 web 的 __guess_number__* 完全一致）----------
+function loadRecords() {
+  streak.value = Math.max(0, +(getRaw(STREAK_KEY) || 0));
+  bestStreak.value = Math.max(0, +(getRaw(BEST_KEY) || 0));
+}
+function saveRecords() {
+  setRaw(STREAK_KEY, String(streak.value));
+  setRaw(BEST_KEY, String(bestStreak.value));
+}
+function saveState() {
+  setJSON(STATE_KEY, {
+    answer: anwser.value,
+    history: guessHistory.value,
+    result: gameResult.value,
+    time: seconds.value,
+    streak: streak.value,
+  });
+}
+// 恢复存档：成功返回 true（界面直接是「停在那里」的样子，彩带/动画都不播）
+function restoreState() {
+  const saved = getJSON(STATE_KEY, null);
+  if (!saved || !/^[1-8]{4}$/.test(saved.answer || '')) return false;
+  if (!Array.isArray(saved.history) || !saved.history.length) return false;
+  streak.value = Number.isFinite(saved.streak) ? saved.streak : streak.value;
+  initGame({
+    answer: saved.answer,
+    history: saved.history,
+    result: saved.result === LOSE ? LOSE : saved.result === WIN ? WIN : GAMING,
+    time: +saved.time || 0,
+    robot: false,
+  });
+  return true;
+}
+
+// 操作区「新游戏」：非失败态要二次确认（会清空当前连胜），失败态直接重开（与 web 一致）
+function onNewGame() {
+  if (gameResult.value === LOSE) {
+    startNewGame();
+    return;
+  }
+  confirming.value = true;
+}
+function startNewGame() {
+  confirming.value = false;
+  streak.value = 0;
+  saveRecords();
+  initGame();
+}
+
 // ---------- 局面 ----------
-function initGame() {
+function initGame(opts = {}) {
   if (firstGuessTimer) {
     clearTimeout(firstGuessTimer);
     firstGuessTimer = null;
@@ -181,12 +264,20 @@ function initGame() {
   wonTimer = null;
   justWon.value = false;
 
-  anwser.value = pickAnswer();
-  guessHistory.value = [];
+  anwser.value = opts.answer || pickAnswer();
+  guessHistory.value = opts.history ? opts.history.slice() : [];
   currentGuess.value = '';
-  gameResult.value = GAMING;
-  resetTick();
-  if (robot.value) initWithFirstGuess(1);
+  gameResult.value = opts.result ?? GAMING;
+  if (opts.time != null) {
+    stopTick();
+    seconds.value = opts.time;
+    if (gameResult.value === GAMING) startTick();     // 恢复时继续走表；已结算就停在原处
+  } else {
+    resetTick();
+  }
+  const autoGuess = opts.robot === true || (opts.robot === undefined && robot.value && !opts.history);
+  if (autoGuess && gameResult.value === GAMING) initWithFirstGuess(1);
+  saveState();
 }
 
 // 机器人：开局每 200ms 自动填一位，填满 4 位自动提交（与 web 逐字一致，只作用于第一猜）
@@ -244,15 +335,23 @@ function guessOnce() {
     gameResult.value = LOSE;
     stopTick();
     playLose();
+    streak.value = 0;            // 输一局：当前连胜清零（最长连胜保留）
+    saveRecords();
+    saveState();
     return;
   }
   currentGuess.value = '';
+  saveState();
 }
 
 // 真正赢下：停表 + 胜利音效 + 彩带（justWon 只在这一次置 true，4 秒后复位）
 function winGame() {
   gameResult.value = WIN;
   stopTick();
+  streak.value += 1;
+  bestStreak.value = Math.max(bestStreak.value, streak.value);
+  saveRecords();
+  saveState();
   playWin();
   justWon.value = true;
   clearTimeout(wonTimer);
@@ -282,7 +381,8 @@ function showHelp() {
 }
 
 onMounted(() => {
-  initGame();
+  loadRecords();
+  if (!restoreState()) initGame();
 });
 
 onUnmounted(() => {
@@ -301,7 +401,7 @@ onUnmounted(() => {
   background: transparent;  /* 背景交给 ParticleBackground（canvas 自己铺底色） */
 }
 .page {
-  --kb-h: 600rpx;          /* 键盘高度 + 下沿偏移（页面底部内边距用它） */
+  --kb-h: 360rpx;          /* 贴底键盘的实际高度（3 行 ≈ 264rpx + 上下内边距 ≈ 360rpx） */
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -312,6 +412,33 @@ onUnmounted(() => {
   color: #2c3e50;
 }
 
+/* ---------- 统计条（约定第 4 节：记录在前、当前在后；高 138rpx = web 的 72px） ---------- */
+.score-area {
+  display: flex;
+  align-items: center;
+  min-height: 138rpx;
+}
+.stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  min-width: 0;
+}
+.stat-label {
+  font-size: 23rpx;              /* web 的 12px */
+  color: #8a8f99;
+  white-space: nowrap;
+}
+.stat-value {
+  font-size: 42rpx;              /* web 的 22px */
+  font-weight: bold;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: #2c3e50;
+}
 /* ---------- 操作区（web --row-height: 72px；mp 全局 .opt-area 统一 120rpx） ---------- */
 .opt-area {
   display: flex;
@@ -424,22 +551,30 @@ onUnmounted(() => {
 
 /* ---------- 数字键盘（web 的 input-area 固定底部 + 4 列数字 + 退格/提交） ---------- */
 .input-area {
-  /* 键盘不再贴屏幕底：下沿正好落在帮助按钮上方（按钮 84rpx + 底距 16rpx = 100rpx，取 108rpx）；
-     页面底部留 --kb-h 的内边距，内容不会被挡。 */
+  /* 用户要求：键盘**贴屏幕底**（bottom: 0），底部内边距自己吃掉安全区；
+     右下角那两颗悬浮按钮（模式 / 帮助）会压在这一块上，所以「退格 / 提交」那行只占 70% 并靠左。 */
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(108rpx + env(safe-area-inset-bottom));
+  bottom: 0;
   z-index: 20;
   box-sizing: border-box;
   margin: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  padding: 23rpx;               /* 四边等距（原来底部 280rpx 是给悬浮按钮让位的空白，已改到 bottom） */
+  /* 底部 16rpx（不是 23）刚好等于悬浮按钮的 16rpx 底距，让按钮不被键盘底边切到 */
+  padding: 23rpx 23rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #fff;
-  border-radius: 27rpx;         /* 不再贴屏幕边，四角都圆 */
+  border-radius: 27rpx 27rpx 0 0;   /* 贴底 → 只圆上面两个角 */
   box-shadow: 0 -8rpx 38rpx rgba(0, 0, 0, 0.08);
+}
+/* 退格 / 提交那一行：占 70%、靠左，右侧 30% 留给右下角悬浮按钮 */
+.opt-row {
+  display: flex;
+  justify-content: space-between;
+  width: 70%;
+  margin-top: 8rpx;
 }
 .number-button {
   display: flex;
@@ -465,9 +600,11 @@ onUnmounted(() => {
 .number-button.disabled {
   opacity: 0.35;
 }
-.number-button.opt-button {
-  flex-grow: 1;
-  flex-basis: calc(50% - 16rpx);
+.number-button.opt-row .number-button,
+.opt-row .number-button {
+  flex: 0 0 calc(50% - 8rpx);
+  margin: 8rpx 0;
+  height: 88rpx;                /* 最后一行稍矮一点，给底部安全区留余量 */
 }
 .number-button.enter-button {
   background: #e5f6ec;
@@ -477,4 +614,54 @@ onUnmounted(() => {
   background: #fdeeee;
   color: #b8433d;
 }
+/* ---------- 新游戏二次确认（本地版 ConfirmDialog，与其它页面同一套） ---------- */
+.confirm-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.confirm-box {
+  width: calc(100% - 122rpx);
+  max-width: 610rpx;
+  padding: 38rpx 38rpx 31rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border-radius: 27rpx;
+  background: #fff;
+  color: #2c3e50;
+}
+.confirm-title { font-size: 32rpx; font-weight: bold; margin-bottom: 15rpx; }
+.confirm-msg {
+  font-size: 27rpx;
+  opacity: 0.8;
+  line-height: 1.5;
+  margin-bottom: 31rpx;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 19rpx;
+}
+.confirm-actions button {
+  margin: 0;
+  padding: 0 23rpx;
+  height: 62rpx;
+  line-height: 62rpx;
+  font-size: 27rpx;
+  border: 0;
+  border-radius: 15rpx;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.confirm-cancel { background: #eef0f4; color: #2c3e50; }
+.confirm-ok { background: #23804e; color: #fff; font-weight: bold; }
 </style>

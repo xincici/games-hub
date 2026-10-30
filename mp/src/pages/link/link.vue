@@ -30,7 +30,7 @@
         </view>
         <view class="divider" />
         <view class="start-wrapper">
-          <button class="game-icon" hover-class="none" @click="onNewGame">{{ tt('start') }}</button>
+          <button class="game-icon" hover-class="none" @click="confirming = true">{{ tt('start') }}</button>
         </view>
       </view>
 
@@ -114,6 +114,18 @@
     </FloatingActions>
     <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstAtElement → 这里渲染） -->
     <FireworkBurst />
+    <!-- 新游戏二次确认：自绘三按钮弹窗（web 的 shared/ConfirmDialog 同款） -->
+    <view v-if="confirming" class="confirm-mask" @click="confirming = false">
+      <view class="card confirm-box" @click.stop>
+        <text class="confirm-title">{{ tt('confirmTitle') }}</text>
+        <text class="confirm-msg">{{ tt('confirmMsg') }}</text>
+        <view class="confirm-actions">
+          <button class="confirm-cancel" @click="confirming = false">{{ tt('cancel') }}</button>
+          <button class="confirm-replay" @click="replayLevel">{{ tt('confirmReplay') }}</button>
+          <button class="confirm-ok" @click="startNewGame">{{ tt('confirmOk') }}</button>
+        </view>
+      </view>
+    </view>
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
   </view>
 </template>
@@ -193,6 +205,8 @@ const combo = ref(0);
 // 彩带只在真正赢下的那一刻放（恢复存档的胜利态不放，与 web 一致）
 const justWon = ref(false);
 const helpOpen = ref(false);
+// 「新游戏」二次确认（三按钮：取消 / 重玩本关 / 确定重来，与 web 的 ConfirmDialog 一致）
+const confirming = ref(false);
 
 let lastClearAt = 0;
 let comboBroken = false;
@@ -639,26 +653,16 @@ function nextLevel() {
   initLevel(level.value + 1);
 }
 function replayLevel() {
+  confirming.value = false;
   initLevel(level.value);
 }
 
 // 新游戏：清除闯关记录（最高关卡）并从第 1 关重新开始，任何时候点都要二次确认
 function startNewGame() {
+  confirming.value = false;
   setRaw(BEST_KEY, '');        // 空串在 core/storage 里读出来就是 null，等同 web 的 removeItem
   bestLevel.value = 1;
   initLevel(1);
-}
-
-// web 的 ConfirmDialog 是自绘三按钮弹窗（取消 / 重玩本关 / 确定重来）；
-// 小程序只有 uni.showModal 的两按钮，保留「确定重来 / 取消」（重玩本关在结算层里）
-function onNewGame() {
-  uni.showModal({
-    title: tt('newGameTitle'),
-    content: tt('newGameMsg'),
-    confirmText: tt('newGameOk'),
-    cancelText: tt('newGameCancel'),
-    success: (res) => { if (res.confirm) startNewGame(); },
-  });
 }
 
 // ---------- 点击 ----------
@@ -1272,4 +1276,60 @@ onUnmounted(() => {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* ---------- 新游戏二次确认（本地版 ConfirmDialog，与其它页面同一套） ---------- */
+.confirm-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.confirm-box {
+  width: calc(100% - 122rpx);
+  max-width: 610rpx;
+  padding: 38rpx 38rpx 31rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border-radius: 27rpx;
+  background: #fff;
+  color: #2c3e50;
+}
+.confirm-title { font-size: 32rpx; font-weight: bold; margin-bottom: 15rpx; }
+.confirm-msg {
+  font-size: 27rpx;
+  opacity: 0.8;
+  line-height: 1.5;
+  margin-bottom: 31rpx;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 19rpx;
+}
+.confirm-actions button {
+  margin: 0;
+  padding: 0 23rpx;
+  height: 62rpx;
+  line-height: 62rpx;
+  font-size: 27rpx;
+  border: 0;
+  border-radius: 15rpx;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.confirm-cancel { background: #eef0f4; color: #2c3e50; }
+.confirm-actions .confirm-replay {
+  background: transparent;
+  border: 2rpx solid #c2410c;
+  color: #c2410c;
+  font-weight: bold;
+}
+.confirm-ok { background: #23804e; color: #fff; font-weight: bold; }
 </style>
