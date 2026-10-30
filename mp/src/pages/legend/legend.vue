@@ -118,6 +118,8 @@
       </view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 连击 / 多消的小烟花：burstConfetti 的粒子层，页面里挂一次就接活 -->
+    <FireworkBurst />
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
   </view>
 </template>
@@ -133,6 +135,8 @@ import MahjongTile from '@/components/MahjongTile.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
+import { burstConfetti } from '@/core/firework';
 import { getJSON, getRaw, setRaw } from '@/core/storage';
 import { playElimination, playLose } from '@/core/sfx';
 import { preloadTiles, TILE_RATIO } from '@/shared/mahjongTiles';
@@ -428,9 +432,10 @@ async function cascade(chain) {
     did = true;
     // 浮字与特效和上面的闪烁同一帧触发（先落位 / 拿掉，再 announce）
     showFloat(groups, gain, chain);
-    if (groups.length > 1 || chain > 1) {   // 多消 / 连击：震动 + 外圈闪光
+    if (groups.length > 1 || chain > 1) {   // 多消 / 连击：震动 + 外圈闪光 + 撒花
       shakeBoard();
       flashBoard();
+      burstConfetti(groups.length > 1 ? 1 : 0.7);
     }
     await wait(CLEAR_MS);
     clearing.value = new Map();

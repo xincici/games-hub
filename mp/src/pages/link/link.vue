@@ -85,22 +85,6 @@
             class="combo-tip"
             :class="[comboTipClass, comboTip.pop]"
           >{{ comboTipText }}</view>
-          <!-- 连击烟花：web 的 burstConfetti（canvas-confetti）。喷发点 = 提示条中心往下 30px -->
-          <view v-if="burst" class="combo-burst">
-            <view
-              v-for="p in burst.parts"
-              :key="'bp-' + burst.id + '-' + p.id"
-              class="burst-dot"
-              :style="{
-                '--dx': p.dx,
-                '--dy': p.dy,
-                width: p.size + 'rpx',
-                height: p.size + 'rpx',
-                background: p.color,
-                animationDelay: p.delay,
-              }"
-            />
-          </view>
           <view v-if="shuffleTip" class="shuffle-tip">{{ tt('shuffleTip') }}</view>
 
           <!-- 结算层：盖住棋盘（web 的 .result，按钮规格走 App.vue 全局） -->
@@ -128,6 +112,8 @@
     <FloatingActions>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstAtElement → 这里渲染） -->
+    <FireworkBurst />
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
   </view>
 </template>
@@ -141,14 +127,16 @@
 // - 音效：Web Audio → @/core/sfx（消除 playElimination / 失败 playLose / 过关 playWin，落点与 web 一致）
 // - 计时：shared/CountTimer.vue → setInterval（1s，切后台暂停、回来自动续上，与 CountTimer 行为一致）
 // - 连线：SVG polyline + dasharray → 逐段圆头条 + 逐段「画出来」再淡出（没有 SVG / 没有 dash 动画）
-// - 连击烟花：canvas-confetti → CSS 粒子（喷发点 = 提示条中心往下 30px，与 web 的 comboOrigin 一致）
+// - 连击烟花：canvas-confetti → @/core/firework 的 burstAtElement（喷发点 = 提示条中心往下 30px，与 web 的 comboOrigin 一致）
 // - 二次确认：shared/ConfirmDialog（三按钮）→ uni.showModal（两按钮）
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { onHide, onShow } from '@dcloudio/uni-app';
 
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
+import { burstAtElement } from '@/core/firework';
 import { setNavTitle } from '@/core/i18n';
 import { playElimination, playLose, playWin } from '@/core/sfx';
 import { getJSON, getRaw, setJSON, setRaw } from '@/core/storage';
@@ -186,7 +174,6 @@ const LANE_GAP = 0.14;          // 棋盘外那一圈虚拟通道（web 的 LANE
 const ENDPOINT_INSET = 0.42;    // 连线端点从牌中心沿路径内缩（web 的 ENDPOINT_INSET）
 const LINK_W = 0.08;            // 线宽（web stroke-width 0.08 格）
 const LINK_HALO_W = 0.18;       // 光晕宽（web 0.18 格）
-const BURST_COLORS = ['#5D8C7B', '#F2D091', '#F2A679', '#D9695F', '#8C4646'];
 
 // ---------- 响应式状态 ----------
 const level = ref(loadLevel());
@@ -205,7 +192,6 @@ const comboTip = ref(null);
 const combo = ref(0);
 // 彩带只在真正赢下的那一刻放（恢复存档的胜利态不放，与 web 一致）
 const justWon = ref(false);
-const burst = ref(null);
 const helpOpen = ref(false);
 
 let lastClearAt = 0;
@@ -213,7 +199,6 @@ let comboBroken = false;
 let comboSeq = 0;
 let comboTimer = null;
 let comboTipTimer = null;
-let burstTimer = null;
 let dealTimer = null;
 let idleTimer = null;
 let hintTimer = null;
@@ -609,9 +594,6 @@ function clearTransient() {
   comboTipTimer = null;
   comboTip.value = null;
   combo.value = 0;
-  clearTimeout(burstTimer);
-  burstTimer = null;
-  burst.value = null;
   lastClearAt = 0;
   comboBroken = false;
   clearTimeout(winTimer);
@@ -729,35 +711,15 @@ function registerClear() {
 const comboTipText = computed(() => (comboTip.value ? tt('comboTip').replace('{n}', comboTip.value.n) : ''));
 const comboTipClass = computed(() => `n-${Math.min(comboTip.value ? comboTip.value.n : 1, 4)}`);
 
-// 烟花：喷发点 = 提示条中心再往下 30px（web 的 FIRE_DROP_PX）；粒子数 min(44, 12 + n*4)
-function makeBurst(n) {
-  const count = Math.min(44, 12 + n * 4);
-  const parts = [];
-  for (let i = 0; i < count; i += 1) {
-    // canvas-confetti 的 spread 76°（向上 ±38°）、粒子往外炸开后落下
-    const angle = ((-90 + (Math.random() * 76 - 38)) * Math.PI) / 180;
-    const dist = 50 + Math.random() * 110;
-    parts.push({
-      id: i,
-      dx: `${(Math.cos(angle) * dist).toFixed(1)}rpx`,
-      dy: `${(Math.sin(angle) * dist + 60).toFixed(1)}rpx`,
-      delay: `${(Math.random() * 0.08).toFixed(2)}s`,
-      size: 6 + Math.round(Math.random() * 6),
-      color: BURST_COLORS[i % BURST_COLORS.length],
-    });
-  }
-  return parts;
-}
-
-function showCombo(n) {
+async function showCombo(n) {
   comboSeq += 1;
   // §零.10：同一条提示条靠「切换两条同内容的关键帧名」重播动画（不能靠布尔 flag）
   comboTip.value = { id: comboSeq, n, pop: comboSeq % 2 ? 'pop-a' : 'pop-b' };
-  burst.value = { id: comboSeq, parts: makeBurst(n) };
   clearTimeout(comboTipTimer);
   comboTipTimer = setTimeout(() => { comboTip.value = null; }, COMBO_TIP_MS);
-  clearTimeout(burstTimer);
-  burstTimer = setTimeout(() => { burst.value = null; }, 1000);
+  // 与 web 一致：喷发点 = 提示条中心往下 30px（提示条刚渲染出来才量得到，所以放 nextTick）
+  await nextTick();
+  burstAtElement('.combo-tip', Math.min(3, 1 + (n - 2) * 0.6), { count: Math.min(44, 12 + n * 4) });
 }
 
 function breakCombo() {
@@ -769,9 +731,6 @@ function breakCombo() {
   comboTimer = null;
   comboTipTimer = null;
   comboTip.value = null;
-  clearTimeout(burstTimer);
-  burstTimer = null;
-  burst.value = null;
 }
 
 function onMismatch(a, b) {
@@ -1204,21 +1163,6 @@ onUnmounted(() => {
 .combo-tip.n-4 { font-size: 31rpx; }
 /* 同一条提示条靠切换两条同内容的关键帧名来重播（§零.10） */
 .combo-tip.pop-b { animation-name: combo-pop-b; }
-/* 烟花：喷发点 = 提示条中心往下 30px（web 的 FIRE_DROP_PX = 30）≈ 47rpx */
-.combo-burst {
-  position: absolute;
-  left: 50%;
-  top: 47rpx;
-  z-index: 6;
-  pointer-events: none;
-}
-.burst-dot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border-radius: 50%;
-  animation: burst-dot 1s ease-out forwards;
-}
 .shuffle-tip {
   position: absolute;
   left: 50%;
@@ -1323,13 +1267,6 @@ onUnmounted(() => {
   14% { opacity: 1; transform: translate(-50%, 0) scale(1.12); }
   26%, 78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -15rpx) scale(0.96); }
-}
-/* 烟花粒子：原地炸开 + 略微回落，透明度快速收尾 */
-@keyframes burst-dot {
-  0% { transform: translate(0, 0) scale(1); opacity: 0; }
-  10% { opacity: 1; }
-  70% { opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
 }
 @keyframes result-in {
   from { opacity: 0; }

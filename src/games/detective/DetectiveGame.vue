@@ -31,12 +31,17 @@
       </div>
       <div class="divider"></div>
       <div class="opt-half">
-        <CountTimer ref="timerRef" :enable="timerRunning" />
+        <!-- 观察阶段：红色倒计时（👀）；开始操作后：⏳ 从 0 开始正计时（与对对碰同一套显示方式） -->
+        <span class="time-note" :class="{ observe: observing }">
+          {{ observing ? '👀' : '⏳' }} {{ fmt(observing ? memoryLeft : usedTime) }}
+        </span>
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
         <button @click="confirming = true" class="game-icon">{{ i18n('start') }}</button>
       </div>
+      <!-- 只负责计时与每秒回调（时间显示在上面的 .time-note 里） -->
+      <CountTimer ref="timerRef" :enable="phase === ANSWER" :on-tick="onTimerTick" :show="false" />
     </div>
     <div class="game-area" :style="{ '--tip-band': `${TIP_BAND}px` }">
       <div class="board-frame dot-board" :style="boardStyle">
@@ -199,6 +204,11 @@ const locked = computed(() => settling.value || stamping.value || losing.value);
 // 选错的牌：常驻红色标记，并且不能再点（否则同一张能被反复点、反复扣心）
 const wrongIdxs = ref([]);
 const memoryLeft = ref(0);
+// 观察阶段 = MEMORY / FLIP（红色倒计时）；ANSWER 起才是「操作时间」，从 0 开始正计时
+const usedTime = ref(0);
+const observing = computed(() => phase.value === MEMORY || phase.value === FLIP);
+const fmt = sec => ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
+function onTimerTick(sec) { usedTime.value = sec; }
 const HEARTS_MAX = 3;      // 每局 3 颗心
 const hearts = ref(HEARTS_MAX);
 const bestLevel = ref(+(localStorage.getItem(bestKey()) || 0));
@@ -370,7 +380,9 @@ function startLevel() {
     clearInterval(memoryTicker);
     flipPhase();
   }, ms);
-  timerRef.value?.reset();
+  // 观察阶段只跑红色倒计时：操作计时器先停住、并从 0 开始（进入 ANSWER 再启动）
+  timerRef.value?.stop();
+  usedTime.value = 0;
   save();
 }
 
@@ -389,6 +401,9 @@ function flipPhase() {
   flipTimer = setTimeout(() => {
     if (phase.value !== FLIP) return;
     phase.value = ANSWER;
+    memoryLeft.value = 0;
+    usedTime.value = 0;
+    timerRef.value?.reset();     // 操作计时从 0 开始
     save();
   }, FLIP_MS);
 }
@@ -612,6 +627,21 @@ function onScoreReset() {
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    // 计时 / 倒计时（与对对碰同一套：14px / 600 / 等宽数字）
+    .time-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      // 观察阶段的倒计时**整段**标红（不是只剩 15 秒才红）
+      &.observe {
+        color: var(--del-color);
+      }
     }
     .start-wrapper {
       flex: 4;

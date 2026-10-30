@@ -37,9 +37,9 @@
         </view>
         <view class="divider" />
         <view class="opt-half">
-          <view class="timer">
-            <view class="timer-ico i-carbon-timer" />
-            <text class="timer-txt">{{ timeText }}</text>
+          <!-- 观察阶段：红色倒计时（👀）；开始操作后：⏳ 从 0 开始正计时（与对对碰同一套） -->
+          <view class="time-note" :class="{ observe: observing }">
+            <text class="time-note-txt">{{ observing ? '👀' : '⏳' }} {{ noteText }}</text>
           </view>
         </view>
         <view class="divider" />
@@ -415,10 +415,22 @@ function clearTimers() {
 }
 
 // ---------- 计时（web 的 shared/CountTimer：每秒 +1 并写存档，结算后停表）----------
-const timeText = computed(() => {
-  const sec = Math.max(0, Math.floor(elapsed.value));
-  return ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + (sec % 60)).slice(-2);
-});
+// 观察阶段 = MEMORY / FLIP（红色倒计时）；ANSWER 起才是「操作时间」，从 0 开始正计时
+const memoryLeft = ref(0);
+let memoryTicker = null;
+const observing = computed(() => phase.value === MEMORY || phase.value === FLIP);
+const fmtSec = v => ('00' + ~~(v / 60)).slice(-2) + ':' + ('00' + (v % 60)).slice(-2);
+const noteText = computed(() => fmtSec(Math.max(0, observing.value ? memoryLeft.value : Math.floor(elapsed.value))));
+const timeText = computed(() => fmtSec(Math.max(0, Math.floor(elapsed.value))));
+function startMemoryCountdown(ms) {
+  stopMemoryCountdown();
+  memoryLeft.value = Math.ceil(ms / 1000);
+  memoryTicker = setInterval(() => { memoryLeft.value = Math.max(0, memoryLeft.value - 1); }, 1000);
+}
+function stopMemoryCountdown() {
+  if (memoryTicker) clearInterval(memoryTicker);
+  memoryTicker = null;
+}
 function startTick() {
   stopTick();
   tickTimer = setInterval(() => {
@@ -561,8 +573,10 @@ function startLevel() {
   board.value = newBoard(rows.value * cols.value);
   phase.value = MEMORY;
   elapsed.value = 0;
-  startTick();
+  // 观察阶段只跑红色倒计时：操作计时器先停住、并从 0 开始（进入 ANSWER 再启动）
+  stopTick();
   const ms = memories.value[level.value] || 2000;
+  startMemoryCountdown(ms);
   memoryTimer = setTimeout(flipPhase, ms);
   save();
 }
@@ -584,6 +598,10 @@ function flipPhase() {
   flipTimer = setTimeout(() => {
     if (phase.value !== FLIP) return;
     phase.value = ANSWER;
+    stopMemoryCountdown();
+    memoryLeft.value = 0;
+    elapsed.value = 0;
+    startTick();                   // 操作计时从 0 开始
     save();
   }, FLIP_MS);
 }
@@ -690,6 +708,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearTimers();
   stopTick();
+  stopMemoryCountdown();
   clearTimeout(wonTimer);
   clearTimeout(popTimer);
   if (typeof uni !== 'undefined' && uni.offWindowResize) uni.offWindowResize(handleResize);
@@ -798,16 +817,23 @@ onUnmounted(() => {
   justify-content: center;
   min-width: 0;
 }
-/* web 的 shared/CountTimer：图标 + MM:SS，14px / 600 */
-.timer {
+/* 计时 / 倒计时（web 的 CountTimer；与对对碰同一套：14px / 600 / 等宽数字） */
+.time-note {
   display: flex;
   align-items: center;
-  gap: 11rpx;                    /* web 的 gap: 6px */
-  font-size: 27rpx;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  justify-content: center;
 }
-.timer-ico { font-size: 29rpx; }
+.time-note-txt {
+  font-size: 27rpx;              /* web 的 14px */
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #2c3e50;
+}
+/* 观察阶段的倒计时**整段**标红 */
+.time-note.observe .time-note-txt {
+  color: #b8433d;
+}
 /* 主按钮：web 的 .game-icon（padding 8px 12px / 13px 粗体 / 8px 圆角，实测高 37px） */
 .game-icon {
   margin: 0;

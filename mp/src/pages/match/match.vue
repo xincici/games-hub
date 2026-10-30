@@ -33,56 +33,67 @@
     <!-- 提示条常驻占位（只有可见性变化），避免下方棋盘上下跳 -->
     <view class="phase-tip" :class="{ empty: !phaseHintText }">{{ phaseHintText }}</view>
 
-    <view class="board" :class="{ 'no-deal': silentRestore }" :style="{ width: boardW + 'rpx', height: boardH + 'rpx' }">
-        <view
-          v-for="(card, i) in cards"
-          :key="card.id"
-          class="tile"
-          :class="{ up: card.flipped || phase === PREVIEW, matched: card.matched, blink: card.bouncing, mjback: !card.flipped && phase !== PREVIEW && mode === MODE_MAHJONG }"
-          :style="cardStyle(i)"
-          @click="onCardClick(card)"
-        >
-          <!-- 正反两面常驻（照 Emoji 镜像）：.flip 只负责 3D 舞台，
-               .tile 负责定位 + 发牌动画（两者分开，动画的 transform 不会污染 3D 上下文） -->
-          <view class="flip">
-            <view class="face face-back">
-              <!-- ⚠️ 图标类必须放内层：i-xxx 会加 mask + background-color，
-                   写在 .face-back 上会把整块牌背裁成灯泡形状（AGENTS 第八节同一个坑） -->
-              <view
-                v-if="mode !== MODE_MAHJONG"
-                class="back-ico i-mdi-lightbulb-on-50"
-                :style="{ fontSize: Math.round(tileSize * 0.56) + 'rpx' }"
-              />
-            </view>
-            <view class="face face-front">
-              <text v-if="mode === 1" class="emoji" :style="{ fontSize: faceFont + 'rpx' }">{{ card.item }}</text>
-              <MahjongTile v-else :suit="card.item[0]" :value="+card.item.slice(1)" class="mj" />
+    <view class="game-area" :style="{ width: boardW + 'rpx', height: boardH + 'rpx' }">
+      <view class="board" :class="{ 'no-deal': silentRestore }" :style="{ width: boardW + 'rpx', height: boardH + 'rpx' }">
+          <view
+            v-for="(card, i) in cards"
+            :key="card.id"
+            class="tile"
+            :class="{ up: card.flipped || phase === PREVIEW, matched: card.matched, blink: card.bouncing, mjback: !card.flipped && phase !== PREVIEW && mode === MODE_MAHJONG }"
+            :style="cardStyle(i)"
+            @click="onCardClick(card)"
+          >
+            <!-- 正反两面常驻（照 Emoji 镜像）：.flip 只负责 3D 舞台，
+                 .tile 负责定位 + 发牌动画（两者分开，动画的 transform 不会污染 3D 上下文） -->
+            <view class="flip">
+              <view class="face face-back">
+                <!-- ⚠️ 图标类必须放内层：i-xxx 会加 mask + background-color，
+                     写在 .face-back 上会把整块牌背裁成灯泡形状（AGENTS 第八节同一个坑） -->
+                <view
+                  v-if="mode !== MODE_MAHJONG"
+                  class="back-ico i-mdi-lightbulb-on-50"
+                  :style="{ fontSize: Math.round(tileSize * 0.56) + 'rpx' }"
+                />
+              </view>
+              <view class="face face-front">
+                <text v-if="mode === 1" class="emoji" :style="{ fontSize: faceFont + 'rpx' }">{{ card.item }}</text>
+                <MahjongTile v-else :suit="card.item[0]" :value="+card.item.slice(1)" class="mj" />
+              </view>
             </view>
           </view>
-        </view>
 
 
-      <view v-if="phase === WON" class="result win">
-        <text class="result-title">{{ t('mWin') }}</text>
-        <text class="result-sub">{{ t('mTime') }} {{ usedTime }}s</text>
-        <view class="result-btns">
-          <button class="btn ghost" @click="replayLevel">{{ t('mReplay') }}</button>
-          <button class="btn" @click="nextLevel">{{ t('mNext') }}</button>
+        <view v-if="phase === WON" class="result win">
+          <text class="result-title">{{ t('mWin') }}</text>
+          <text class="result-sub">{{ t('mTime') }} {{ usedTime }}s</text>
+          <view class="result-btns">
+            <button class="btn ghost" @click="replayLevel">{{ t('mReplay') }}</button>
+            <button class="btn" @click="nextLevel">{{ t('mNext') }}</button>
+          </view>
+        </view>
+        <view v-else-if="phase === OVER" class="result lose">
+          <text class="result-title">{{ t('mLose') }}</text>
+          <text class="result-sub">{{ t('mLevel') }} {{ level }}</text>
+          <view class="result-btns">
+            <button class="btn ghost" @click="replayLevel">{{ t('mReplay') }}</button>
+            <button class="btn" @click="startNewRun">{{ t('start') }}</button>
+          </view>
         </view>
       </view>
-      <view v-else-if="phase === OVER" class="result lose">
-        <text class="result-title">{{ t('mLose') }}</text>
-        <text class="result-sub">{{ t('mLevel') }} {{ level }}</text>
-        <view class="result-btns">
-          <button class="btn ghost" @click="replayLevel">{{ t('mReplay') }}</button>
-          <button class="btn" @click="startNewRun">{{ t('start') }}</button>
-        </view>
-      </view>
+      <!-- 连击提示：落在棋盘上方那条空隙里（web 的 .combo-tip）。
+           ⚠️ 必须是 .board 的**兄弟**节点：.board 有 overflow:hidden，放进去会把探出棋盘的那截裁掉 -->
+      <view
+        v-if="comboTip"
+        class="combo-tip"
+        :class="comboTipPop"
+      >{{ comboTipText }}</view>
     </view>
 
     </view>
     <!-- 胜利彩带（纯 CSS 降级版，web 是 confetti canvas） -->
     <Confetti v-if="justWon" />
+    <!-- 连击小烟花：web 的 burstConfetti（喷发点 = 提示条中心往下 30px） -->
+    <FireworkBurst />
     <FloatingActions>
       <view class="fab" @click="toggleMode"><view class="fab-ico" :class="mode === MODE_MAHJONG ? 'i-dinkie-icons-three-of-circles-mahjong' : 'i-mdi-emoticon-happy-outline'" /></view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
@@ -95,7 +106,7 @@
 // 对对碰 · 微信小程序版
 // 关卡曲线与发牌逻辑来自 web 的 board.js（原样复制）；这里重写视图。
 // v1 差异：没有 3D 翻面动画（牌背 → 牌面用淡入替代），扑克牌面暂未移植（emoji / 麻将两种）。
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 import MahjongTile from '@/components/MahjongTile.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
@@ -107,6 +118,8 @@ import { face } from '@/core/settings';
 import { t } from '@/core/i18n';
 import { playElimination, playLose, playWin } from '@/core/sfx';
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
+import { burstAtElement } from '@/core/firework';
 import { levelConfig } from './board.js';
 import { setNavTitle } from '@/core/i18n';
 import ParticleBackground from '@/components/ParticleBackground.vue';
@@ -175,12 +188,15 @@ const progressPct = computed(() => {
   return Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
 });
 // 提示条逻辑与 web 一致：观察期常显「快记住他们」；翻面后「把他们配对找出来」显示 FLIP_HINT_MS(2.6s) 就隐藏；
-// 连击时优先占这个槽位（2.5s），结束后回到阶段提示
+// 连击提示现在有自己的 .combo-tip 槽位（web 同款），阶段提示在连击期间让位（只留空占位，避免棋盘上下跳）
 const FLIP_HINT_MS = 2600;
 const showFlipHint = ref(true);
 let flipHintTimer = null;
+const comboTipText = computed(() => (comboTip.value ? t('mCombo').replace('{n}', comboTip.value) : ''));
+// 同一条提示条靠切换两条同内容的关键帧名来重播（连击 1 → 2 → 3 时动画会跟着重播）
+const comboTipPop = computed(() => (comboTip.value % 2 ? 'pop-a' : 'pop-b'));
 const phaseHintText = computed(() => {
-  if (comboTip.value) return t('mCombo').replace('{n}', comboTip.value);
+  if (comboTip.value) return '';
   if (phase.value === PREVIEW) return t('mHintRemember');
   if (phase.value === PLAY && showFlipHint.value) return t('mHintMatch');
   return '';
@@ -331,11 +347,13 @@ function onCardClick(card) {
       // 这两张牌已经 flipped=true（onCardClick 里本来就会挡住），不需要全局锁。
       const prev = firstCard;
       firstCard = null;
-      matchTimer = setTimeout(() => {
+      matchTimer = setTimeout(async () => {
         matchTimer = null;
         prev.matched = true;
         card.matched = true;
-        registerClear();
+        // 先等连击提示条渲染 + 烟花发声（burstAtElement 内部先 playFirework），
+        // 再播 elimination —— sfx 的规则是「烟花后 240ms 内不叠 elimination」
+        await registerClear();
         playElimination();
         if (cards.value.every(c => c.matched)) {
           usedTime.value = elapsed.value;
@@ -353,16 +371,24 @@ function onCardClick(card) {
   }
 }
 
-function registerClear() {
+// 返回 Promise：连击分支要等提示条渲染出来（nextTick）再量它的位置，调用方 await 后才知道烟花已发声
+async function registerClear() {
   const now = Date.now();
   const chained = lastClearAt > 0 && !comboBroken && now - lastClearAt < COMBO_MS;
   lastClearAt = now;
   comboBroken = false;
   comboCount = chained ? comboCount + 1 : 1;
   clearTimeout(comboTimer); clearTimeout(comboTimerOut);
+  // 只有真的连上了（≥2）才弹提示 + 炸烟花（与 web 的 showCombo 同款条件）
   if (comboCount >= 2) {
     comboTip.value = comboCount;
     comboTimer = setTimeout(() => { comboTip.value = 0; }, COMBO_MS);
+    // 提示条是刚渲染的：等一帧再量，喷发点才是「提示条中心往下 30px」（web 的 comboOrigin）
+    await nextTick();
+    // 强度 / 粒子数照 web：Math.min(3, 1 + (n-2)*0.6) / Math.min(44, 12 + n*4)
+    burstAtElement('.combo-tip', Math.min(3, 1 + (comboCount - 2) * 0.6), {
+      count: Math.min(44, 12 + comboCount * 4),
+    });
   }
 }
 function breakCombo() { comboBroken = true; lastClearAt = 0; comboCount = 0; comboTip.value = 0; }
@@ -471,6 +497,8 @@ function showHelp() {
   box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
 }
 .phase-tip.empty { visibility: hidden; }
+/* 游戏区：只负责给棋盘 + 连击提示条做定位上下文（尺寸 = 棋盘，由内联 style 给） */
+.game-area { position: relative; margin: 0 auto; }
 .board { position: relative; margin: 0 auto; border-radius: 27rpx; background: #3a4a3f; overflow: hidden; }
 .tile {
   /* 3D 翻转舞台（与 Emoji 镜像同一套）：透视 + 正反两面常驻 */
@@ -537,7 +565,41 @@ function showHelp() {
 }
 .emoji { line-height: 1; }
 .mj { width: 100%; height: 100%; }
-.combo-old { position: absolute; left: 50%; top: 8rpx; transform: translateX(-50%); padding: 4rpx 16rpx; border-radius: 999rpx; background: #ffc300; color: #222; font-size: 22rpx; font-weight: 800; }
+/* 连击提示（web 的 .combo-tip）：落在棋盘上方那条空隙里，探出棋盘的一截不会被 .board 裁掉。
+   高度 36rpx ≈ 18px、22rpx 字号、圆角胶囊、主色底白字 —— 比阶段提示条小一号，不抢戏 */
+.combo-tip {
+  position: absolute;
+  left: 50%;
+  top: -30rpx;
+  z-index: 5;
+  height: 36rpx;
+  line-height: 36rpx;
+  box-sizing: border-box;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: #23804e;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: combo-pop-a 2.5s ease forwards;   /* 停留时长 = COMBO_MS，收得干净 */
+}
+/* 连击数变化时切一条同内容的关键帧，让「弹入」重播（§零.15：布尔开关不灵，用计数/换名） */
+.combo-tip.pop-b { animation-name: combo-pop-b; }
+@keyframes combo-pop-a {
+  0% { opacity: 0; transform: translate(-50%, 16rpx) scale(0.6); }
+  8% { opacity: 1; transform: translate(-50%, 0) scale(1.12); }
+  16%, 88% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -16rpx) scale(0.96); }
+}
+@keyframes combo-pop-b {
+  0% { opacity: 0; transform: translate(-50%, 16rpx) scale(0.6); }
+  8% { opacity: 1; transform: translate(-50%, 0) scale(1.12); }
+  16%, 88% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -16rpx) scale(0.96); }
+}
 .result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14rpx; border-radius: 20rpx; background: rgba(250,248,239,0.92); }
 .result-title { font-size: 40rpx; font-weight: 800; color: #222; }
 .result-sub { font-size: 24rpx; color: #776e65; }

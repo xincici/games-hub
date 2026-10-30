@@ -37,10 +37,9 @@
         </view>
         <view class="divider" />
         <view class="opt-half">
-          <!-- web 的 shared/CountTimer：图标 + MM:SS，每秒把秒数写进存档 -->
-          <view class="timer">
-            <view class="timer-ico i-carbon-timer" />
-            <text class="timer-txt">{{ timeText }}</text>
+        <!-- 观察阶段：红色倒计时（👀）；开始操作后：⏳ 从 0 开始正计时（与对对碰同一套） -->
+          <view class="time-note" :class="{ observe: observing }">
+            <text class="time-note-txt">{{ observing ? '👀' : '⏳' }} {{ noteText }}</text>
           </view>
         </view>
         <view class="divider" />
@@ -343,12 +342,22 @@ watch(hearts, (now, was) => {
 });
 
 // ---------- 计时（web 的 shared/CountTimer：MM:SS，每秒回调写存档） ----------
-const seconds = ref(0);
+const seconds = ref(0);          // 操作时间（ANSWER 起从 0 开始累加）
+const memoryLeft = ref(0);       // 观察阶段剩余秒数（红色倒计时）
 let tickTimer = null;
-const timeText = computed(() => {
-  const s = seconds.value;
-  return `${('0' + Math.floor(s / 60)).slice(-2)}:${('0' + Math.floor(s % 60)).slice(-2)}`;
-});
+let memoryTicker = null;
+const observing = computed(() => phase.value === MEMORY || phase.value === FLIP);
+const fmtSec = s => `${('0' + Math.floor(s / 60)).slice(-2)}:${('0' + Math.floor(s % 60)).slice(-2)}`;
+const noteText = computed(() => fmtSec(Math.max(0, observing.value ? memoryLeft.value : seconds.value)));
+function startMemoryCountdown(ms) {
+  stopMemoryCountdown();
+  memoryLeft.value = Math.ceil(ms / 1000);
+  memoryTicker = setInterval(() => { memoryLeft.value = Math.max(0, memoryLeft.value - 1); }, 1000);
+}
+function stopMemoryCountdown() {
+  if (memoryTicker) clearInterval(memoryTicker);
+  memoryTicker = null;
+}
 function startTick() {
   if (tickTimer) return;
   tickTimer = setInterval(() => { seconds.value += 1; }, 1000);
@@ -617,12 +626,19 @@ async function startLevel() {
   await wait(32);
   if (token !== levelToken) return;
   phase.value = MEMORY;            // 全体从背面翻到正面
-  resetTick();
+  // 观察阶段只跑红色倒计时：操作计时器先停住、并从 0 开始（进入 ANSWER 再启动）
+  stopTick();
+  seconds.value = 0;
+  startMemoryCountdown(memoriesFor(level.value));
   memoryTimer = setTimeout(() => {
     phase.value = FLIP;
     flipTimer = setTimeout(() => {
       if (phase.value !== FLIP) return;
       phase.value = ANSWER;
+      stopMemoryCountdown();
+      memoryLeft.value = 0;
+      seconds.value = 0;
+      startTick();                 // 操作计时从 0 开始
       save();
     }, 500);
   }, memoriesFor(level.value));
@@ -746,6 +762,7 @@ onShow(() => {
 });
 onHide(() => {
   stopTick();
+  stopMemoryCountdown();
 });
 onUnmounted(() => {
   levelToken += 1;
@@ -753,6 +770,7 @@ onUnmounted(() => {
   clearTimeout(wonTimer);
   clearTimeout(heartPopTimer);
   stopTick();
+  stopMemoryCountdown();
 });
 </script>
 
@@ -859,16 +877,23 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
 }
-/* 计时（web 的 CountTimer：图标 + MM:SS，14px / 600） */
-.timer {
+/* 计时 / 倒计时（web 的 CountTimer；与对对碰同一套：14px / 600 / 等宽数字） */
+.time-note {
   display: flex;
   align-items: center;
-  gap: 11rpx;                    /* 6px */
-  font-size: 27rpx;
-  font-weight: 600;
+  justify-content: center;
 }
-.timer-ico { pointer-events: none; }
-.timer-txt { font-variant-numeric: tabular-nums; }
+.time-note-txt {
+  font-size: 27rpx;              /* web 的 14px */
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #2c3e50;
+}
+/* 观察阶段的倒计时**整段**标红 */
+.time-note.observe .time-note-txt {
+  color: #b8433d;
+}
 
 /* 主按钮：web 的 .game-icon（padding 8px 12px / 13px 粗体 / 8px 圆角） */
 .game-icon {

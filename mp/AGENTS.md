@@ -2108,3 +2108,115 @@ if (props.mini) { showFront.value = !isBack.value; rot.value = ''; return; }
 图例文字 `灭 → 全亮 → 半亮 ↺`（一行）+「四邻一起变」✓、提示文案正常（不再是 key）✓、
 `scrollHeight - innerHeight = 44`（= H5 壳的顶部导航条，改造前也是这个数，**不是图例撑出来的**）✓、
 产物 `pages/click/click.wxss` 里有 `.inner.zero{…}` 与 `.inner.zero .bulb{…}` ✓、`click.js` 里 `lampOff/lampTip` 各 1 处 ✓。
+
+### 20. 连击 / 多消的「小型烟花」：一个共享粒子层，7 处触发点
+
+用户要求：「在小程序里复刻 web 里多消、连击时的小型烟花效果，参考 web 侧的为所有符合要求的触发点加上。」
+
+**web 的实现**（`src/shared/confetti.js` 的 `burstConfetti`，底层是 canvas-confetti）：
+
+```js
+burstConfetti(intensity = 1, { origin, count } = {})
+  → playFirework()                                            // firework-success.mp3
+  → count ?? min(110, round(22 + 26 * intensity))
+  → spread 76°（向上 ±38°）、startVelocity 34、gravity 0.9、scalar 0.9、ticks 140（≈2.3s）
+  → 5 色固定： #5D8C7B #F2D091 #F2A679 #D9695F #8C4646
+  → origin 默认 { x: 0.5, y: 0.64 }（视口比例）
+```
+另外 `playElimination()` 有一条**替换**规则：`playFirework()` 之后 240ms 内不再响 elimination
+（「连击 = 烟花音」「单次消除 = elimination」，两者不同时响）。
+
+**小程序没有 canvas-confetti**（原生 canvas 会挡点击、层级也压不住），所以改成
+「**固定定位的粒子层 + CSS 三段关键帧**」，参数全部照 web 算：
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/core/firework.js` | `burstConfetti(intensity, {origin, count})`；`burstAtElement(selector, intensity, {count, dropPx})`（量元素矩形取「中心 x、底边 + 30px」= web 的 `comboOrigin()`，量不到退回默认点）；`makeBurstParticles(count)` 纯函数；`registerFireworkSink()` 单例注册 |
+| `src/components/FireworkBurst.vue` | 页面里挂一次就接活（`onMounted` 注册、`onUnmounted` 注销；多页面栈里**最后挂载的**那个生效）。`position: fixed; inset: 0; z-index: 45; pointer-events: none`，粒子 `animation: firework-fly` 三段：0→55% 减速上升（`--dx/--dy`）、55→100% 重力下落（`--drop`）并淡出，跑完自动从数组里摘掉（最多同时 6 束） |
+| `src/core/sfx.js` | 新增 `playFirework()`；`playElimination()` 加 240ms 抑制（同 web 的 `ELIM_REPLACE_MS`） |
+
+粒子参数：射程 150~330rpx、寿命 1.7~2.3s、5 色轮转、`delay` 0~60ms 错峰。
+
+**粒子不是圆点**（用户要求「不要全部都用圆形，改成不规则的块」；canvas-confetti 的粒子本来也是矩形纸片）：
+每片从 4 种形状里轮转 —— `square`（方块）/ `wide`（宽条 1.7×0.85）/ `tall`（竖条 0.8×1.6）/
+`ribbon`（细丝 0.55×2.2），基准边长 11~19rpx，各自带**初始角度 `--rot`** 与**整段自转 `--spin`**
+（±430~1290°，1.2~3.6 圈，随机方向），关键帧里 `rotate(calc(var(--rot) + var(--spin) * 0.55))` →
+落定时转满。圆角按形状给 2 / 4 / 2 / 6rpx（不是 50%）。
+
+实测 `makeBurstParticles(24)`：形状 6/6/6/6、尺寸如 `18×18 / 20×10 / 13×27 / 9×35`（rpx）、
+自转 −1221~1137°、初始角度 1~352° ✓；H5 里读 `getComputedStyle` 得到
+`border-radius: 1.04 / 2.08 / 1.04 / 3.12px`、尺寸 `7.8×7.8 / 16.1×8.3 / 5.7×11.4 / 3.1×13px`、
+`transform: matrix(旋转+位移)` ✓ —— 截图里就是一撮翻着飞的碎纸片，不再是圆点。
+
+**7 处触发点（与 web 一一对应，参数一字不差）**：
+
+| 页面 | web 位置 | 小程序 |
+| --- | --- | --- |
+| 连连看 `link` | `showCombo` | `burstAtElement('.combo-tip', min(3, 1+(n-2)*0.6), { count: min(44, 12+n*4) })` |
+| Emoji 滑行 `slide` | `showCombo` | 同上（喷发点 = 提示条中心往下 30px） |
+| 对对碰 `match` | `showCombo` | 同上（**顺手补了 web 有、mp 缺的「N 连击」提示条**：`.game-area` 里、`.board` 的兄弟节点，`top: -30rpx`，36rpx ≈ 18px 胶囊） |
+| Emoji 消消乐 `crush` | `announceCelebration` 尾部 | `burstConfetti(tier + (chain > 3 ? 1 : 0))`（门槛是 web 原有的「大消 / 连锁」判定，**没有**另加 300 分门槛 —— web 的 crush 也没有） |
+| 麻将英雄 `mahjong` | `announceCelebration` 尾部 | `burstConfetti(groups > 1 ? 1 : (special ? 0.7 : tier))`，`special = groups > 1 \|\| chain > 1` |
+| 扑克炼金术 `alchemy` | `announceCelebration` 尾部 | `burstConfetti(tier)`（`gained >= FX_MIN` 门禁沿用原来的） |
+| 麻将传奇 `legend` | `cascade` 的多消/连击分支 | `burstConfetti(groups.length > 1 ? 1 : 0.7)` |
+
+> 连连看 / 滑行 / 对对碰原本各自在页面里写了一份局部粒子（`.combo-burst` / `.burst-dot` / `makeBurst()`），
+> 这次**全部删掉、统一走共享实现**（两份实现 = 两份参数，早晚会不一致）。
+
+**实测（mp 的 H5 构建，390×844）**：
+- 对对碰连按 3 对：第 1、2 对**不炸**（combo=1，与 web 一致），第 3 对弹出「2 连击」+
+  `.firework-layer` × 1、`.firework-dot` × 20 ✓；粒子样式 `background: rgb(93,140,123)`（= web 第一色 `#5D8C7B`）、
+  `width: 7.27px ≈ 14rpx`、`animation: firework-fly … 1.88s`、`transform: matrix(…, -87.5)`（向上飞）✓
+- 7 个页面逐个进：`.board` 都在、**0 异常**；`FireworkBurst` 只在真的触发时才渲染（`hasFw: false` 是正常的）
+- 产物：`components/FireworkBurst.wxss` 有 `.firework-layer / .firework-dot / @keyframes firework-fly`；
+  7 个页面的 `.wxml` 里各有一处 `firework-burst` 节点；`core/sfx.js` 里能找到 `firework-success`；
+  `static/audio/firework-success.mp3` 在包里 ✓
+
+**踩点提醒**：
+- 粒子层是 `position: fixed` 且 `pointer-events: none` —— 千万别给它背景色或 `overflow` 以外的裁剪，否则会盖住棋盘的点击。
+- 喷发点用 `uni.createSelectorQuery()` 量刚渲染的提示条，必须 `await nextTick()` 之后再量（提示条是 `v-if` 渲染的）。
+- 连击只在 `combo >= 2` 时才炸（web 同款），单次消除不炸 —— 否则「每消一次都放烟花」就不叫连击了。
+
+### 21. 猎手 / 侦探：观察阶段红色倒计时，操作从 0 开始（照对对碰）
+
+用户要求与 web 一致：观察阶段显示**红色倒计时**，玩家开始操作后计时器**从 0 重新开始**。
+
+web 侧改法（两页一样，见各游戏分册）：操作区中间那格从 `<CountTimer :enable="timerRunning" />`
+换成 `.time-note`（`👀 mm:ss` / `⏳ mm:ss`）+ 一个隐藏的 `<CountTimer :enable="phase === ANSWER" :show="false" :on-tick>`；
+`MEMORY` 开始只 `stop()` 并启动观察倒计时，`ANSWER` 开始时 `reset()` 从 0 起。
+
+小程序侧（`pages/hunter/hunter.vue`、`pages/detective/detective.vue`，两页同一套）：
+
+- 本页原本自己实现计时（`seconds` / `elapsed` + `startTick/stopTick/resetTick`），**没有** CountTimer 组件，
+  所以直接在这些函数上加一层：
+  ```js
+  const memoryLeft = ref(0);           // 观察倒计时剩余秒数
+  const observing = computed(() => phase.value === MEMORY || phase.value === FLIP);
+  const noteText = computed(() => fmtSec(Math.max(0, observing.value ? memoryLeft.value : seconds.value)));
+  function startMemoryCountdown(ms) { stopMemoryCountdown(); memoryLeft.value = Math.ceil(ms / 1000);
+    memoryTicker = setInterval(() => { memoryLeft.value = Math.max(0, memoryLeft.value - 1); }, 1000); }
+  ```
+- `startLevel()` 进入 `MEMORY`：`stopTick(); seconds.value = 0; startMemoryCountdown(memories.length)` ——
+  **不要**再 `resetTick()`（那是「观察就开始计时」的老行为）。
+- `FLIP → ANSWER`：`stopMemoryCountdown(); memoryLeft.value = 0; seconds.value = 0; startTick();` —— 从 0 开始。
+- 模板：`.timer`（图标 + MM:SS）→
+  ```html
+  <view class="time-note" :class="{ observe: observing }">
+    <text class="time-note-txt">{{ observing ? '👀' : '⏳' }} {{ noteText }}</text>
+  </view>
+  ```
+  样式：`.time-note-txt { font-size: 27rpx; font-weight: 600; font-variant-numeric: tabular-nums; color: #2c3e50 }`，
+  `.time-note.observe .time-note-txt { color: #b8433d }`（web 的 `--del-color`，浅色主题 `#b8433d`）。
+- 清理：`onHide` / `onUnmounted` 都要 `stopMemoryCountdown()`（否则观察倒计时的 interval 会在后台一直跑）。
+
+**实测（mp 的 H5 构建，390×844）**：
+猎手 `👀 00:03`（`rgb(184,67,61)` 红）→ 1.2s 后 `👀 00:02` → 4.2s 后 `⏳ 00:01`（`rgb(44,62,80)` 正常色）；
+侦探 `👀 00:02` → `👀 00:00` → `⏳ 00:02` ✓ 0 异常。
+产物：两页 `wxml` 各有 1 处 `time-note`、`wxss` 里有 `#b8433d`、`js` 里有 `👀` 字面量（表情在 data 里，不在 wxml 里）✓
+
+> ⚠️ 这轮踩了两个纯编辑事故，都值得记：
+> 1. **多行替换前先 `repr()` 确认缩进**：mp 的 `<script setup>` 顶层声明是**0 缩进**、模板是 8/10 缩进，
+>    我照 web（2/10/12）写替换串 → 三次 `assert` 失败；`grep`/`sed` 输出带的 2 空格前缀会骗人。
+> 2. **在嵌套 SCSS 里插规则要看它落在哪一层**：插到 `.difficulty-wrapper` 里面，编译成
+>    `.wrapper .opt-area .difficulty-wrapper .time-note.observe` ✗ 红色整段不生效（web 那次）；
+>    删块时还容易连带吃掉 `.difficulty-wrapper` 的收尾 `}` → `unmatched "}"`。

@@ -32,12 +32,17 @@
       </div>
       <div class="divider"></div>
       <div class="opt-half">
-        <CountTimer ref="timerRef" :enable="timerRunning" />
+        <!-- 观察阶段：红色倒计时（👀）；开始操作后：⏳ 从 0 开始正计时（与对对碰同一套显示方式） -->
+        <span class="time-note" :class="{ observe: observing }">
+          {{ observing ? '👀' : '⏳' }} {{ fmt(observing ? memoryLeft : usedTime) }}
+        </span>
       </div>
       <div class="divider"></div>
       <div class="start-wrapper">
         <button @click="confirming = true" class="game-icon">{{ i18n('start') }}</button>
       </div>
+      <!-- 只负责计时与每秒回调（时间显示在上面的 .time-note 里） -->
+      <CountTimer ref="timerRef" :enable="phase === ANSWER" :on-tick="onTimerTick" :show="false" />
     </div>
     <div class="game-area" :style="{ '--tip-band': `${TIP_BAND}px` }">
       <div class="stage-frame dot-board" :class="{ poker: mode === 2, mahjong: mode === 3 }" :style="stageStyle">
@@ -170,6 +175,19 @@ const MEMORIES = 3000;
 // 观察时长：目标越多越难记，高关卡适当放宽（第 3 关起每关 +0.4s：3.0 / 3.0 / 3.0 / 3.4 / 3.8 / 4.2s）
 const MEMORY_EXTRA = 400;
 const memoriesFor = lv => MEMORIES + Math.max(0, lv - 2) * MEMORY_EXTRA;
+// 观察阶段 = MEMORY / FLIP（红色倒计时）；ANSWER 起才是「操作时间」，从 0 开始正计时
+const memoryLeft = ref(0);
+const usedTime = ref(0);
+const observing = computed(() => phase.value === MEMORY || phase.value === FLIP);
+const fmt = sec => ('00' + ~~(sec / 60)).slice(-2) + ':' + ('00' + sec % 60).slice(-2);
+function onTimerTick(sec) { usedTime.value = sec; }
+let memoryTicker = null;
+function startMemoryCountdown(ms) {
+  clearInterval(memoryTicker);
+  memoryLeft.value = Math.ceil(ms / 1000);
+  memoryTicker = setInterval(() => { memoryLeft.value = Math.max(0, memoryLeft.value - 1); }, 1000);
+}
+function stopMemoryCountdown() { clearInterval(memoryTicker); memoryTicker = null; }
 const [MEMORY, FLIP, ANSWER, WON, LOST] = ['memory', 'flip', 'answer', 'won', 'lost'];
 const KEY_PREFIX = '__emoji_hunter__';
 const LEVEL_KEY = `${KEY_PREFIX}level`;
@@ -310,10 +328,12 @@ onMounted(bootMode);
 onUnmounted(() => {
   levelToken += 1;
   clearTimeout(memoryTimer);
+  stopMemoryCountdown();
 });
 
 function clearTimers() {
   clearTimeout(memoryTimer);
+  stopMemoryCountdown();
   justFound.value = null;   // 换关 / 切模式后不再重播动画
   cancelSettle();          // 换关 / 重开时把「结算前停留」一起取消，免得浮层冒到新一关
 }
@@ -402,12 +422,19 @@ async function startLevel() {
   await new Promise(r => requestAnimationFrame(r));
   if (token !== levelToken) return;
   phase.value = MEMORY;                          // 全体从背面翻到正面
-  timerRef.value?.reset();
+  // 观察阶段只跑红色倒计时：操作计时器先停住、并从 0 开始（进入 ANSWER 再启动）
+  timerRef.value?.stop();
+  usedTime.value = 0;
+  startMemoryCountdown(memoriesFor(level.value));
   memoryTimer = setTimeout(() => {
     phase.value = FLIP;
     setTimeout(() => {
       if (phase.value === FLIP) {
         phase.value = ANSWER;
+        stopMemoryCountdown();
+        memoryLeft.value = 0;
+        usedTime.value = 0;
+        timerRef.value?.reset();      // 操作计时从 0 开始
         save();
       }
     }, 500);
@@ -541,6 +568,7 @@ function restore() {
       // 结算层的钟停在过关那一刻（restore 会顺带把表起起来，随即再停掉）
       timerRef.value?.restore(+saved.time || 0);
       timerRef.value?.stop();
+      usedTime.value = +saved.time || 0;
       return true;
     }
     // 玩到一半退出：重开当前关（棋盘随机，公平）
@@ -637,6 +665,22 @@ function onScoreReset() {
       align-items: center;
       justify-content: center;
     }
+
+    // 计时 / 倒计时（与对对碰同一套：14px / 600 / 等宽数字）
+    .time-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      // 观察阶段的倒计时**整段**标红（不是只剩 15 秒才红）
+      &.observe {
+        color: var(--del-color);
+      }
+    }
+
     .start-wrapper {
       flex: 4;
       display: flex;

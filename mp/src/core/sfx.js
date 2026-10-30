@@ -17,8 +17,20 @@ function play(file, volume) {
   } catch { /* 静音失败不影响玩 */ }
 }
 
+// 连击 / 多消的小烟花（web 的 playFirework）；240ms 内不再叠 elimination —— 与 web 的
+// ELIM_REPLACE_MS 同一套规则：「连击 = 烟花音」「单次消除 = elimination」，两者不同时响。
+let lastFireworkAt = 0;
+const ELIM_REPLACE_MS = 240;
+
 export const playWin = () => play('success.mp3', 0.9);
 export const playLose = () => play('lose.mp3', 0.9);
-export const playElimination = () => play('elimination.mp3', 0.8);
+export const playFirework = () => {
+  lastFireworkAt = Date.now();
+  play('firework-success.mp3', 0.9);
+};
+export const playElimination = () => {
+  if (Date.now() - lastFireworkAt < ELIM_REPLACE_MS) return;
+  play('elimination.mp3', 0.8);
+};
 export const playFail = () => play('fail.mp3', 0.8);
 export const stopAll = () => { playing.forEach(a => { try { a.stop(); a.destroy(); } catch { /* noop */ } }); playing.clear(); };

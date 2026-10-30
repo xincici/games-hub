@@ -210,6 +210,8 @@
       </view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 低于 300 分不撒花；≥300 时与 web 的 burstConfetti(tier) 同参数 -->
+    <FireworkBurst />
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
 
     <!-- 新游戏二次确认（web 的 shared/ConfirmDialog 三按钮版；小程序没有共享弹窗，这里本地实现） -->
@@ -240,7 +242,7 @@
 // - 拖拽：web 的 Pointer Events → touchstart / touchmove.stop.prevent / touchend；
 // - 飞牌：web 的 getBoundingClientRect + 固定浮牌 → selectorQuery 量矩形 + fixed 替身 + transition
 //   （量不到就直接落位，绝不卡住）；
-// - 得分 ≥300 时的 burstConfetti（短促烟花）小程序没有粒子层 → 降级为「震屏 + 外圈光圈」；
+// - 得分 ≥300 时的 burstConfetti（短促烟花）由 FireworkBurst 粒子层复刻（参数照 web）；
 // - 恢复存档的铺牌波浪、消除闪烁、发牌 card-in、得分浮字 celebrate-pop 全部用 CSS 保留。
 //
 // 注意：本页**没有**全局锁 —— 飞牌期间只挡那一次落子（web 的 busy），消除动画期间棋盘照常可点。
@@ -248,8 +250,10 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { onHide } from '@dcloudio/uni-app';
 
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
+import { burstConfetti } from '@/core/firework';
 import { setNavTitle } from '@/core/i18n';
 import { playElimination, playLose, playWin } from '@/core/sfx';
 import { getJSON, getRaw, setRaw } from '@/core/storage';
@@ -845,7 +849,7 @@ function announceCelebration(id, gained, extra = null) {
   if (gained < FX_MIN) return;
   shakeBoard();
   celebrateFlash();
-  // web 这里还有 burstConfetti(tier)（短促烟花）：小程序没有粒子层，降级为「震屏 + 光圈」
+  burstConfetti(tier);
 }
 
 // silent = true 时只补结算层、不播撒花（退出再进入时不该再放一次烟花）。

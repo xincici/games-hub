@@ -21,3 +21,40 @@ HunterGame.vue（emoji 猎手：记忆→翻面→从候选区找回全部目标
 ## 界面约定
 
 - 顶栏「游戏特色按钮」：牌面玩法切换（`TopHeader` 默认插槽）。三个图标都用静态 `v-if` / `v-else-if` / `v-else` 写死类名 —— emoji `i-mdi-emoticon-happy-outline`、扑克 `i-mdi-cards-playing-outline`、麻将 `i-dinkie-icons-three-of-circles-mahjong`（最后这个在 `uno.config.ts` 的 safelist 里），用变量拼 class 的话 UnoCSS 扫不到、会变空白方块
+
+## 计时器：观察阶段红色倒计时 + 操作从 0 开始（2026-10 按对对碰统一）
+
+用户要求：「猎手游戏的计时器，在观察阶段都修改成红色的倒计时，玩家开始操作的时候再从 0 开始计时，参考对对碰的实现方式。」
+
+**原来**：`<CountTimer :enable="timerRunning" />` 在 `MEMORY` 阶段就 `reset()` 起跑 ——
+观察时间也被算进「用时」，而且数字是普通颜色、还在**正计时**。
+
+**现在（与对对碰同一套）**：
+
+```html
+<div class="opt-half">
+  <span class="time-note" :class="{ observe: observing }">
+    {{ observing ? '👀' : '⏳' }} {{ fmt(observing ? memoryLeft : usedTime) }}
+  </span>
+</div>
+…
+<!-- 只负责计时与每秒回调（时间显示在 .time-note 里） -->
+<CountTimer ref="timerRef" :enable="phase === ANSWER" :on-tick="onTimerTick" :show="false" />
+```
+
+- `observing = phase === MEMORY || phase === FLIP`；观察阶段显示 `👀 mm:ss` **倒计时**（`memoryLeft` 每秒 −1），
+  **整段红色**（`.time-note.observe { color: var(--del-color) }`，浅色 `#b8433d` / 深色 `#f5a49e`）——
+  不是「只剩 15 秒才红」，对需求是「观察阶段就是红的」。
+- 进入 `ANSWER` 那一刻：`memoryLeft = 0`、`usedTime = 0`、`timerRef.reset()` → `⏳ mm:ss` **从 0 正计时**，
+  颜色回到正常文本色。
+- `MEMORY` 开始时只 `timerRef.stop()`（不再 reset 起跑），并 `startMemoryCountdown(memoriesFor(level))`。
+- 换关 / 卸载 / 恢复存档：`stopMemoryCountdown()`；恢复时 `usedTime = saved.time`（结算层显示的是操作时间）。
+
+**实测（390×844，light）**：猎手 `👀 00:03`（`color: rgb(184,67,61)`）→ 1s 后 `👀 00:02` → 4s 后 `⏳ 00:01`（`rgb(44,62,80)`）；
+侦探 `👀 00:02` → `👀 00:01` → `⏳ 00:01` ✓
+
+> ⚠️ 踩坑：`scoped` 样式把 `.time-note` 块插进了 `.difficulty-wrapper` 里面，
+> 编译出来选择器变成 `.wrapper .opt-area .difficulty-wrapper .time-note.observe` ✗ → 红色完全不生效，
+> 但 `getComputedStyle` 只看到「颜色没变」，很难判断。
+> **验证手段**：在页面里枚举 `document.styleSheets` 的规则、用 `el.matches(selectorText)` 找出真正命中的规则
+> （本次结果是 `hits: []`），再看产物 CSS 里选择器的**完整前缀**。

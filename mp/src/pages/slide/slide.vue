@@ -56,22 +56,6 @@
         <!-- 连击提示：必须在 .board **外面**（.board 有 overflow:hidden，会把向上探出棋盘的
              那一截整条裁掉）；落在棋盘上方那条 31rpx 空隙里（web 的 .combo-tip，top: -15px） -->
         <view v-if="comboTip" class="combo-tip" :class="comboTipClass">{{ comboTipText }}</view>
-        <!-- 连击小烟花：web 的 burstConfetti（canvas-confetti）→ CSS 粒子（喷发点 = 提示条中心往下 30px） -->
-        <view v-if="burst" class="combo-burst">
-          <view
-            v-for="p in burst.parts"
-            :key="'bp-' + burst.id + '-' + p.id"
-            class="burst-dot"
-            :style="{
-              '--dx': p.dx,
-              '--dy': p.dy,
-              width: p.size + 'rpx',
-              height: p.size + 'rpx',
-              background: p.color,
-              animationDelay: p.delay,
-            }"
-          />
-        </view>
         <!-- 死局重排提示：棋盘正中浮一下（web 的 .shuffle-tip） -->
         <view v-if="shuffling" class="shuffle-tip">{{ tt('shuffled') }}</view>
 
@@ -100,6 +84,8 @@
     <FloatingActions>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 连击烟花粒子层（共享实现：@/core/firework 的 burstAtElement → 这里渲染） -->
+    <FireworkBurst />
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
 
     <!-- 新游戏二次确认（web 的 shared/ConfirmDialog 三按钮版；小程序没有共享弹窗，本地实现） -->
@@ -127,7 +113,7 @@
 //   拖动时关掉 transition 做到 1:1 跟手，松手后带同样的回弹 bezier）；
 // - 棋盘尺寸不再靠 CSS 变量 + 内联 px，而是「格子 × 行列」在 rpx 里反算（§零 第 2 条），
 //   格子与牌共用同一份 cell 数学（web 的棋盘没有内边距，3px 缝就在格子内部，所以这里 PAD = 0）；
-// - 连击烟花：canvas-confetti → CSS 粒子（喷发点、粒子数、配色照 web）；没有 firework 音效（core/sfx 只有 4 个）；
+// - 连击烟花：canvas-confetti → @/core/firework 的 burstAtElement（喷发点、粒子数照 web；音效由它内部播 playFirework）；
 // - localStorage → @/core/storage（key 与 web 一字不差：__emoji_slide__state）；Web Audio → @/core/sfx。
 // - **不是全局锁**：拖动 / 消除动画期间，玩家照样能按住别的牌继续滑、点别的牌继续消；
 //   真正挡住的只有「已经被消费的那两张牌」（它们已经 popping）。
@@ -135,10 +121,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { onHide, onShow } from '@dcloudio/uni-app';
 
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import { getJSON, setJSON } from '@/core/storage';
 import { playElimination, playLose, playWin } from '@/core/sfx';
+import { burstAtElement } from '@/core/firework';
 import { setNavTitle } from '@/core/i18n';
 import {
   levelConfig, makeBoard, findPartner, slideParams, shiftGroup,
@@ -168,8 +156,6 @@ const COMBO_TIP_MS = 1500; // 提示条停留时长（比窗口短一点，收�
 const DEAL_STEP = 28;     // 入场错峰：按 (行 + 列) 排波浪，第几张就延迟几个 DEAL_STEP
 const DEAL_MS = 320;
 const GLYPHS = ['🍎', '🍋', '🍇', '🥝', '🫐', '🍑', '🥕', '🍄'];
-// 连击烟花的配色（与 web 的 shared/confetti.js 的 COLORS 完全一致）
-const BURST_COLORS = ['#5D8C7B', '#F2D091', '#F2A679', '#D9695F', '#8C4646'];
 
 // ---------- 页面固定高度（rpx）：棋盘以上 / 底部让开悬浮按钮 ----------
 // 上内边距 27 + 统计卡 168 + 间距 31 + 操作区 120 + 间距 31 = 377（高度来自 App.vue 的全局 .score-area / .opt-area）
@@ -190,7 +176,6 @@ const combo = ref(0);           // 当前连到几（1 = 刚消一对，0 = 没�
 const confirming = ref(false);
 const justWon = ref(false);
 const helpOpen = ref(false);
-const burst = ref(null);
 // 拖拽状态：ref 里的对象是深响应式，逐帧只改 shift 一个数
 const drag = ref(null);
 
@@ -204,7 +189,6 @@ let lastClearAt = 0;            // 上一次消除的时刻
 let comboBroken = false;        // 上一次消除之后是否出现过无效操作
 let comboTimer = null;          // 窗口到期就断开
 let comboTipTimer = null;
-let burstTimer = null;
 let comboSeq = 0;
 let wonTimer = null;
 let generation = 0;             // 换局时 +1，异步动画据此收手
@@ -461,12 +445,9 @@ function breakCombo() {
   comboBroken = false;
   clearTimeout(comboTimer);
   clearTimeout(comboTipTimer);
-  clearTimeout(burstTimer);
   comboTimer = null;
   comboTipTimer = null;
-  burstTimer = null;
   comboTip.value = null;
-  burst.value = null;
 }
 
 // 有一次操作没消掉 → 标记中断（真正清空留给 registerClear / 窗口超时）
@@ -480,35 +461,15 @@ const comboTipClass = computed(() => {
   return `n-${Math.min(n, 4)} ${comboTip.value && comboTip.value.pop === 'b' ? 'pop-b' : 'pop-a'}`;
 });
 
-// 烟花：喷发点 = 提示条中心再往下 30px（CSS 里是 .combo-burst 的 top 47rpx）；
-// 粒子数 min(44, 12 + n*4)、spread 76°（向上 ±38°），与 web 的 burstConfetti 一致
-function makeBurst(n) {
-  const count = Math.min(44, 12 + n * 4);
-  const parts = [];
-  for (let i = 0; i < count; i += 1) {
-    const angle = ((-90 + (Math.random() * 76 - 38)) * Math.PI) / 180;
-    const dist = 50 + Math.random() * 110;
-    parts.push({
-      id: i,
-      dx: `${(Math.cos(angle) * dist).toFixed(1)}rpx`,
-      dy: `${(Math.sin(angle) * dist + 60).toFixed(1)}rpx`,
-      delay: `${(Math.random() * 0.08).toFixed(2)}s`,
-      size: 6 + Math.round(Math.random() * 6),
-      color: BURST_COLORS[i % BURST_COLORS.length],
-    });
-  }
-  return parts;
-}
-
-function showCombo(n) {
+async function showCombo(n) {
   comboSeq += 1;
   // 同一条提示条靠切换两条同内容的关键帧名重播动画（不要用布尔开关）
   comboTip.value = { id: comboSeq, n, pop: comboSeq % 2 ? 'a' : 'b' };
-  burst.value = { id: comboSeq, parts: makeBurst(n) };
   clearTimeout(comboTipTimer);
   comboTipTimer = setTimeout(() => { comboTip.value = null; }, COMBO_TIP_MS);
-  clearTimeout(burstTimer);
-  burstTimer = setTimeout(() => { burst.value = null; }, 1000);
+  // 与 web 一致：喷发点 = 提示条中心往下 30px（提示条刚渲染出来才量得到，所以放 nextTick）
+  await nextTick();
+  burstAtElement('.combo-tip', Math.min(3, 1 + (n - 2) * 0.6), { count: Math.min(44, 12 + n * 4) });
 }
 
 // ---------- 消除 ----------
@@ -788,7 +749,6 @@ onUnmounted(() => {
   clearTimeout(dealTimer);
   clearTimeout(comboTimer);
   clearTimeout(comboTipTimer);
-  clearTimeout(burstTimer);
   clearTimeout(wonTimer);
   drag.value = null;
   save();
@@ -1011,21 +971,6 @@ onUnmounted(() => {
 .combo-tip.n-4 { font-size: 31rpx; }
 /* 同一条提示条靠切换两条同内容的关键帧名来重播 */
 .combo-tip.pop-b { animation-name: combo-pop-b; }
-/* 连击小烟花：喷发点 = 提示条中心往下 30px（web 的 FIRE_DROP_PX = 30）≈ 47rpx */
-.combo-burst {
-  position: absolute;
-  left: 50%;
-  top: 47rpx;
-  z-index: 6;
-  pointer-events: none;
-}
-.burst-dot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border-radius: 50%;
-  animation: burst-dot 1s ease-out forwards;
-}
 /* 死局重排的提示：棋盘正中浮一下（web 的 .shuffle-tip） */
 .shuffle-tip {
   position: absolute;
@@ -1165,12 +1110,6 @@ onUnmounted(() => {
   14% { opacity: 1; transform: translate(-50%, 0) scale(1.12); }
   26%, 78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -15rpx) scale(0.96); }
-}
-@keyframes burst-dot {
-  0% { transform: translate(0, 0) scale(1); opacity: 0; }
-  10% { opacity: 1; }
-  70% { opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
 }
 @keyframes pop-ring {
   0% { transform: scale(0.6); opacity: 0.9; }

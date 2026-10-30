@@ -163,6 +163,8 @@
       </view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
+    <!-- 连击 / 多消的小烟花：burstConfetti 的粒子层，页面里挂一次就接活 -->
+    <FireworkBurst />
     <HelpSheet :open="helpOpen" :text="helpText" @close="helpOpen = false" />
   </view>
 </template>
@@ -178,6 +180,8 @@ import MahjongTile from '@/components/MahjongTile.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
+import { burstConfetti } from '@/core/firework';
 import { getJSON, getRaw, setRaw } from '@/core/storage';
 import { playElimination, playLose, playWin } from '@/core/sfx';
 import { preloadTiles } from '@/shared/mahjongTiles';
@@ -649,6 +653,8 @@ function announceCelebration(trioId, gained, groups, chain = 1) {
     celebrating.value = true;
     flashTimer = setTimeout(() => { celebrating.value = false; }, 900);
   }, 20);
+  // 与 web 同表达式：多消 1、连击 0.7、普通单次按档位
+  burstConfetti(groups > 1 ? 1 : (special ? 0.7 : tier));
 }
 
 // silent = true 时只补结算层、不播撒花（退出再进入时不该再放一次烟花）

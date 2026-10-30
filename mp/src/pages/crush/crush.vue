@@ -118,6 +118,8 @@
 
     <!-- 胜利彩带（纯 CSS 降级版，web 是 canvas confetti；只在真正赢下那一刻放） -->
     <Confetti v-if="justWon" />
+    <!-- 多消 / 连锁的小烟花：web 的 burstConfetti（默认喷发点 = 屏幕中间偏下） -->
+    <FireworkBurst />
     <FloatingActions>
       <!-- 本游戏没有模式切换，右下角只有帮助 -->
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
@@ -156,10 +158,12 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 import Confetti from '@/components/Confetti.vue';
+import FireworkBurst from '@/components/FireworkBurst.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import { getJSON, getRaw, setRaw } from '@/core/storage';
 import { playElimination, playLose, playWin } from '@/core/sfx';
+import { burstConfetti } from '@/core/firework';
 import { EMOJIS } from '@/shared/emojis';
 import {
   WALL, BOMB, WILD, isWall, isFrozen, frozenKind, thawTargets, applyThaw,
@@ -837,8 +841,10 @@ function announceCelebration(count, chain, gained) {
     celebrating.value = true;
     celebrateFlashTimer = setTimeout(() => { celebrating.value = false; }, 900);
   }, 20);
-  // web 这里还会调 shared/confetti 的 burstConfetti（本地一段小烟花 + 烟花音）：
-  // 小程序没有那块 canvas，且用户要求音效落点只保留 elimination / win / lose，故不撒花。
+  // 撒一把小烟花（web 的 announceCelebration 尾部同款）+ 烟花音：
+  // 强度 = tier，连锁 > 3 再加 1；喷发点 / 粒子数用 burstConfetti 的默认值
+  // （默认喷发点 = 屏幕中间偏下；sfx 规则是烟花后 240ms 内不再叠 elimination）
+  burstConfetti(tier + (chain > 3 ? 1 : 0));
 }
 
 function clearCelebration() {
