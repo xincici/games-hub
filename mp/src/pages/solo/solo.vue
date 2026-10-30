@@ -476,6 +476,15 @@ watch(kongOpts, (opts) => {
 // 摸到第 4 张是「先提交再飞」的，只判 !dealing 的话牌还在空中就已经被抽成杠组并画上橙框了。
 const canFrame = computed(() => !dealing.value && !flying.value);
 
+// 兜底：没有替身在飞、也不在飞行流程里（busy=false）时，不该有「隐形」标记残留。
+// 「偶发手牌里某张一直看不见」就是这种残留造成的，这里在空闲态强制清掉。
+watch([busy, flying, dealing], () => {
+  if (!busy.value && !flying.value && !dealing.value) {
+    if (hiddenTileId.value !== null) hiddenTileId.value = null;
+    if (hiddenKongIndex.value !== null) hiddenKongIndex.value = null;
+  }
+});
+
 // ---------- 牌墙 / 出牌区的显示数据 ----------
 const stackW = computed(() => Math.min(wall.value.length, STACK_COLS) * BACK_STEP + LAYER_DX + BACK_GAP);
 const stackH = computed(() => BACK_H + LAYER_DY + 6);
@@ -553,42 +562,52 @@ const flyingVars = computed(() => {
   };
 });
 
-// 统一 FLIP：**先藏、再提交**（`hiddenTileId` 必须在 commit() 之前设好，落点第一帧就是隐形的），
-// 提交后量落点、让替身飞过去。量不到位置就只提交、不飞（绝不卡住操作）。
+// 统一 FLIP。顺序很关键（用户报过「牌飞出去之前会闪一下」）：
+//   ① 替身**先**落在源位置显形（dx/dy = 0、不缩放）—— 此时源牌还在，两者重叠，看不出来；
+//   ② 再藏落点 + commit（源牌从手牌消失，替身已在原地顶着，所以没有「两者都不见」的空帧）；
+//   ③ 量落点 → 让替身飞过去；
+//   ④ 先露出实体、下一帧再撤替身（同一帧撤会闪一下）。
+// 整段 try/finally 兜底：任何一步抛错都不能留下「隐形牌」或「不走的替身」。
 async function flyToTile(tile, from, targetSelector, dur, commit) {
   if (!from) { commit(); return; }
-  hiddenTileId.value = tile.id;
-  commit();
-  await nextTick();
-  const el = await queryRect(targetSelector);
-  if (el) {
-    const to = centerOf(el);
-    await flyTile(tile, from, to, dur, to.w / (from.w || 40));
+  try {
+    // ① 替身先在源位置站住
+    flying.value = {
+      tile,
+      x: from.x,
+      y: from.y,
+      dx: 0,
+      dy: 0,
+      dur,
+      scale: 1,
+      w: from.w,
+      h: Math.round(from.w * TILE_RATIO),
+      go: false,
+    };
+    await nextTick();                 // 先让替身画出一帧，再让实体消失
+    // ② 藏落点 + 提交
+    hiddenTileId.value = tile.id;
+    commit();
+    await nextTick();
+    // ③ 量落点 → 起飞
+    const el = await queryRect(targetSelector);
+    if (el && flying.value) {
+      const to = centerOf(el);
+      flying.value = {
+        ...flying.value,
+        dx: to.x - from.x,
+        dy: to.y - from.y,
+        scale: to.w / (from.w || 40),
+        go: true,
+      };
+      await sleep(dur);
+    }
+  } finally {
+    // ④ 先露出实体，等一帧再撤替身
+    hiddenTileId.value = null;
+    flying.value = null;
+    await nextTick();
   }
-  // 先露出实体（清 hiddenTileId），等它画出一帧，再撤替身
-  hiddenTileId.value = null;
-  await nextTick();
-  await sleep(24);
-  flying.value = null;
-}
-async function flyTile(tile, from, to, dur, scale) {
-  flying.value = {
-    tile,
-    x: from.x,
-    y: from.y,
-    dx: to.x - from.x,
-    dy: to.y - from.y,
-    dur,
-    scale,
-    w: from.w,
-    h: Math.round(from.w * TILE_RATIO),
-    go: false,
-  };
-  await sleep(30);                                  // 先「落原位」，下一拍再改 transform 才会过渡
-  if (flying.value) flying.value = { ...flying.value, go: true };
-  await sleep(dur);
-  // ⚠️ 不在这里清 flying：真机上「替身消失」与「实体牌重画」若落在同一帧，会出现一帧空白（看着像闪一下）。
-  // 交给调用方：先露出实体，下一帧再撤替身。
 }
 
 // 量一个「杠组」的出发口径：外层矩形 + 组内单张尺寸 + 组内间距（间距是本页常量）
@@ -597,32 +616,6 @@ async function groupShape(selector) {
   if (!r) return null;
   const gap = rpxPx(HAND_GAP);
   return { rect: centerOf(r), tileW: Math.max(8, (r.width - 3 * gap) / 4), tileH: r.height, gap };
-}
-// 杠牌：**4 张作为一个整体飞过去**。替身是个容器（尺寸 = 出发那一组的实测尺寸），
-// 整体按关键帧缩放到落点那一组的**单张牌高** —— 用牌高算缩放比，两端的牌看起来一样大。
-async function flyGroup(tiles, shape, toEl, dur) {
-  const to = centerOf(toEl);
-  const from = shape.rect;
-  flying.value = {
-    tiles,
-    x: from.x,
-    y: from.y,
-    dx: to.x - from.x,
-    dy: to.y - from.y,
-    dur,
-    scale: rpxPx(SMALL_H) / shape.tileH,
-    w: from.w,
-    h: from.h,
-    tw: shape.tileW,
-    th: shape.tileH,
-    gap: shape.gap,
-    go: false,
-  };
-  await sleep(30);
-  if (flying.value) flying.value = { ...flying.value, go: true };
-  await sleep(dur);
-  // ⚠️ 不在这里清 flying：真机上「替身消失」与「实体牌重画」若落在同一帧，会出现一帧空白（看着像闪一下）。
-  // 交给调用方：先露出实体，下一帧再撤替身。
 }
 const flyTileStyle = (i) => {
   const f = flying.value;
@@ -720,20 +713,58 @@ async function doKong(item) {
   busy.value = true;
   kongOpenKey.value = null;
   const seq = roundSeq;
-  // 出发口径 = 手牌里那个被框住的杠组（4 张 + 3 个间隙）
-  const shape = await groupShape(`#kong-group-${item.key}`);
-  if (seq !== roundSeq) return;      // 同上：量完位置先确认还是同一局
-  // 先藏「杠行里即将出现的那一组」，再提交 —— 和摸牌 / 出牌同一个套路：落点第一帧就隐形
-  const newIndex = kongs.value.length;
-  hiddenKongIndex.value = newIndex;
-  hand.value = hand.value.filter(t => tileKey(t) !== item.key);
-  kongs.value = [...kongs.value, { suit: item.suit, value: item.value, count: 4 }];
-  drawnId.value = null;
-  save();
-  await nextTick();
-  const toEl = await queryRect(`#kong-set-${newIndex}`);
-  if (shape && toEl) await flyGroup(four, shape, toEl, 380);
-  hiddenKongIndex.value = null;
+  try {
+    // 出发口径 = 手牌里那个被框住的杠组（4 张 + 3 个间隙）
+    const shape = await groupShape(`#kong-group-${item.key}`);
+    if (seq !== roundSeq) return;      // 量完位置先确认还是同一局
+    // ① 替身（一整组 4 张）先在**源位置**立住：此时 4 张还在手牌里，两者重叠看不出来
+    if (shape) {
+      flying.value = {
+        tiles: four,
+        x: shape.rect.x,
+        y: shape.rect.y,
+        dx: 0,
+        dy: 0,
+        dur: 380,
+        scale: 1,
+        w: shape.rect.w,
+        h: shape.rect.h,
+        tw: shape.tileW,
+        th: shape.tileH,
+        gap: shape.gap,
+        go: false,
+      };
+      await nextTick();
+    }
+    // ② 藏「杠行里即将出现的那一组」+ 提交（手牌里的 4 张消失，替身已经在原地顶着）
+    const newIndex = kongs.value.length;
+    hiddenKongIndex.value = newIndex;
+    hand.value = hand.value.filter(t => tileKey(t) !== item.key);
+    kongs.value = [...kongs.value, { suit: item.suit, value: item.value, count: 4 }];
+    drawnId.value = null;
+    save();
+    await nextTick();
+    // ③ 量落点 → 整组飞过去
+    if (shape && flying.value) {
+      const toEl = await queryRect(`#kong-set-${newIndex}`);
+      if (toEl) {
+        const to = centerOf(toEl);
+        flying.value = {
+          ...flying.value,
+          dx: to.x - shape.rect.x,
+          dy: to.y - shape.rect.y,
+          scale: rpxPx(SMALL_H) / shape.tileH,
+          go: true,
+        };
+        await sleep(380);
+      }
+    }
+  } finally {
+    // ④ 先露出实体（杠行那一组），下一帧再撤替身；顺手把隐形标记清干净
+    hiddenKongIndex.value = null;
+    flying.value = null;
+    await nextTick();
+  }
   if (seq !== roundSeq) return;
   await drawOne();                     // 杠完补摸一张
   if (seq !== roundSeq) return;
@@ -1077,16 +1108,14 @@ onUnmounted(() => {
 .hand-tile {
   display: block;
   margin: 0;
-  /* 真机兜底：牌面是 735% 放大的雪碧图，位置/动画变化时容易「先白一下」（合成层问题）。
-     固定到合成层后不再重新栅格化（与 match / poker 的 .face 同一套兜底）。 */
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  -webkit-transform: translateZ(0);
-  will-change: transform, opacity;
+  /* ⚠️ 这里**不要**再加 will-change / translateZ / backface-visibility / overflow:hidden：
+     14 张手牌各自提升合成层、再叠上「735% 放大的雪碧图 + 圆角裁切」，部分机型上会出现
+     **个别牌整张不参与绘制**（用户报过「偶发手牌里有几张看不见」）。
+     圆角与裁切由内层 MahjongTile 的 .mj-wrap（overflow:hidden + border-radius:inherit）负责，
+     这一层只保留摆位 / 动画必需的属性。 */
   padding: 0;
   border: 0;
   background: none;
-  overflow: hidden;
   border-radius: 8rpx;
   border-radius: 9% / 7%;
   line-height: 0;
@@ -1169,7 +1198,10 @@ onUnmounted(() => {
 
 /* ---------- 飞牌替身：fixed 定位（不受滚动影响），位移 / 时长走内联样式 ---------- */
 .flying {
-  position: fixed;
+  /* absolute 而不是 fixed：left/top 来自 selectorQuery 的 rect（**页面内容空间**），
+     fixed 是视口空间 —— 两套坐标混用会让替身整体偏一个导航栏的高度（实测 44px），
+     看起来就是「牌先往上跳一下再飞」。 */
+  position: absolute;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   will-change: transform;

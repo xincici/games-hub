@@ -1581,28 +1581,56 @@ helpG: '这 13 张手牌正在听牌：…\n\n点下面的牌就能选中它。�
 > 教训：**「选项少了」和「逻辑没接」是两回事** —— 改这类问题先 grep 数据源（`settings.js` 认哪些值）
 > 与消费端（各页 `FACE_TO_MODE`），确认只缺 UI 一项再动，别去重写映射。
 
-### 6. 单人麻将：摸牌 / 打牌时牌面会闪一下
+### 6. 单人麻将：飞牌「先闪一下」的真正原因（坐标空间），以及个别手牌不可见
 
-用户报「摸牌和打牌时，牌都会闪烁」。H5 里**复现不出来**（实测 107 帧：手牌 opacity 全程 1、没有任何
-`animationName` 除 `none`/`solo-drawn`、手牌节点只增删各 1 个、left 无突变），所以按「真机合成层」处理：
+用户报过两次：「摸牌 / 打牌时牌会闪烁」「牌从手牌区飞出之前会闪烁」+「偶发手牌里个别牌不可见」。
 
-**两处改动**（`pages/solo/solo.vue`）：
+#### 6a. 闪烁 = 坐标空间混用（这次终于量出来了）
 
-1. **飞牌收尾顺序**：原来 `flyTile()` 内部 `await sleep(dur)` 之后立刻 `flying.value = null`，
-   紧接着调用方再把 `hiddenTileId` 清掉 —— 真机上「替身消失」与「实体牌重画」可能落在同一帧 → 一帧空白 ✗。
-   现在：**先清 `hiddenTileId`（露出实体）→ `await nextTick()` → `await sleep(24)` → 才撤替身**。
-   （`dealRound()` 那种同步流程里只清标记，不能 `await` —— 见下面第 2 条教训。）
-2. **合成层兜底**（与 match / poker 的 `.face` 同一套）：`.hand-tile` 与 `.flying` 加
-   `backface-visibility: hidden; -webkit-transform: translateZ(0); will-change: transform(, opacity)` ——
-   牌面是 **735% 放大的雪碧图**，位置/动画一变就容易「先白一下」（重新栅格化）。
+旧实现：`.flying` 替身是 `position: fixed`（**视口空间**），而 `left/top` 来自 `uni.createSelectorQuery().boundingClientRect`
+（**页面内容空间**，H5 里比视口少一个 44px 导航栏）。实测打出一张牌的第一帧：
 
-**验收**（H5，逐 16ms 采样一次「打一张 + 摸一张」的全过程）：
-**空白帧 0**、替身出现 56 帧后消失、手牌可见数始终 13~14、结束态 `替身残留 0 / fly-hidden 残留 0`、
-手牌 14、出牌区 1 ✓、0 异常。
+| | 手牌那张牌 | 替身 |
+| --- | --- | --- |
+| 位置 | (23, **482**) | (23, **438**) |
 
-> **教训**：给「同步函数」批量插入 `await` 会直接编译报错（`Unexpected reserved word 'await'`）——
-> 这次 `hiddenTileId.value = null` 在 `flyToTile`（async）和 `dealRound`（sync）里各有一处，
-> 按字符串批量替换把两处都插了 `await` ✗。**替换前先确认命中了几处、分别在什么函数里。**
+→ 替身**凭空出现在比源牌高 44px 的地方**，看起来就是「牌先跳一下再飞」；再叠上旧顺序
+（先 `hiddenTileId` 藏起来 + `commit()`，再 `await nextTick()`、再异步 `queryRect`，之后才创建替身），
+前后有 2~4 帧「源牌没了、替身还没出来」→ 玩家看到的就是闪烁。
+
+**现在的做法**（`pages/solo/solo.vue`，摸牌 / 出牌 / 杠牌三条路径统一）：
+
+1. `.flying` 改 **`position: absolute`** —— 和 `boundingClientRect` 同一个空间（内容空间），
+   页面滚动时替身也跟着走；
+2. **顺序反过来**：① 替身先在**源位置**立住（`dx/dy = 0`、`scale = 1`）→ ② `await nextTick()`（让替身先画出来）
+   → ③ 才 `hiddenTileId` + `commit()`（源牌消失时替身已经在原地顶着，**没有空帧**）
+   → ④ 量落点、置 `go: true` 飞过去 → ⑤ `finally` 里先清隐形标记、再撤替身；
+3. 杠牌（一整组 4 张）同样处理（`doKong` 里内联，不再走单独的 `flyGroup`）；
+4. 整段 `try/finally`：任何一步抛错都不会留下「隐形牌」或「不走的替身」。
+
+**实测（H5，390×844，逐帧采样）**：替身起点偏差 **dx=0 / dy=0 / 宽差 0**、**空帧 0**、
+落定后 `替身残留 false`；杠牌组起点偏差同样 **dx=0 / dy=0**、杠行最后 `visibility: visible` ✓
+
+#### 6b. 个别手牌不可见：三个可能原因都封掉了
+
+H5 里 20 次连续出牌**复现不出来**（0 异常、手牌恒 14 张、`fly-hidden` 残留 0），
+所以按「真机合成层 + 状态残留」两类原因各封一层：
+
+1. **去掉每张手牌各自的合成层提示**：旧版本给 `.hand-tile` 加了
+   `backface-visibility: hidden; translateZ(0); will-change: transform, opacity; overflow: hidden`（14 张牌各自提升一层）。
+   牌面是 **735% 放大的雪碧图 + 圆角裁切**，部分机型上会出现「个别牌整张不参与绘制」。
+   → 现在这些属性全部去掉（**别再按旧笔记加回来**），圆角与裁切由内层 `MahjongTile` 的
+   `.mj-wrap { overflow: hidden; border-radius: inherit }` 负责；实测手牌外观不变（截图核对过圆角与牌面）✓
+2. **隐形标记的残留**：`hiddenTileId` / `hiddenKongIndex` 只表示「这张牌正在飞、先藏起来」，
+   一旦某条 `await` 链提前 `return`（`seq !== roundSeq`、量不到落点、异常）就可能永远留着 → 那张牌永久不可见 ✗。
+   现在三条飞行路径都包在 `try/finally` 里强制清理，并加了一条**空闲态兜底 watch**：
+   `!busy && !flying && !dealing` 时若还有隐形标记，立刻清掉。
+3. **杠行那一组**：旧的 `doKong` 在「量完落点发现换局了」时直接 `return`，**没清 `hiddenKongIndex`**
+   → 杠行里那一组永久隐形（和用户描述吻合）。现在也走 `try/finally`。
+
+> 真机上如果再看到「个别牌不可见」，先查三件事：① 那张牌的 `visibility/opacity`；
+> ② 它父级（`.hand-card`）有没有被 `overflow: hidden` 裁掉（槽位 `left/top` 超界）；
+> ③ 是不是 `hiddenTileId` 残留（现在有兜底 watch，理论上不该再有）。
 
 ### 7. 扑克炼金术：游戏区改成屏宽 75%
 
