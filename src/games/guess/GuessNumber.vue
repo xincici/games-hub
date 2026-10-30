@@ -1,17 +1,29 @@
 <template>
   <div class="wrapper">
-    <TopHeader>
+    <TopHeader @onScoreReset="onScoreReset">
       <span class="item-wrapper" @click="toggleRobot">
         <i i-mdi-robot-outline v-if="robot" />
         <i i-mdi-robot-off-outline v-else />
       </span>
     </TopHeader>
+    <!-- 统计条：最长连胜在前、当前连胜在后（约定第 4 节） -->
+    <div class="card score-area">
+      <div class="stat">
+        <span class="stat-label">{{ i18n('bestStreak') }}</span>
+        <span class="stat-value">{{ bestStreak || '--' }}</span>
+      </div>
+      <div class="divider"></div>
+      <div class="stat">
+        <span class="stat-label">{{ i18n('curStreak') }}</span>
+        <span class="stat-value">{{ streak }}</span>
+      </div>
+    </div>
     <div class="card opt-area">
       <div class="opt-half">
-        <CountTimer ref="timerRef" :enable="gameResult === GAMING" />
+        <CountTimer ref="timerRef" :enable="gameResult === GAMING"  :on-tick="onTimerTick" />
       </div>
       <div class="opt-half">
-        <button ref="initRef" @click="initGame" class="game-icon">{{ i18n('start') }}</button>
+        <button ref="initRef" @click="onNewGame" class="game-icon">{{ i18n('start') }}</button>
       </div>
     </div>
     <div class="card game-area">
@@ -68,6 +80,16 @@
         :disabled="currentGuess.length !== GAME_SIZE || gameResult !== GAMING"
       >{{ i18n('optEnter') }}</button>
     </div>
+    <!-- 新游戏二次确认：会清空当前连胜（最长连胜保留）。失败态下直接重开、不弹窗（与赌神同） -->
+    <ConfirmDialog
+      :show="confirming"
+      :title="i18n('confirmTitle')"
+      :message="i18n('confirmMsg').replace('{n}', streak)"
+      :confirm-text="i18n('confirmOk')"
+      :show-replay="false"
+      @confirm="startNewGame"
+      @cancel="confirming = false"
+    />
   </div>
 </template>
 
@@ -76,10 +98,12 @@ import { ref, watch, onMounted, onUnmounted } from 'vue';
 import sampleSize from 'lodash.samplesize';
 
 import TopHeader from '@/components/TopHeader.vue';
+import ConfirmDialog from '@/shared/ConfirmDialog.vue';
 import { playLose } from '@/shared/audio';
 import CountTimer from '@/shared/CountTimer.vue';
 import { robot, toggle as toggleRobot } from './robot.js';
 import confetti from '@/shared/confetti';
+import { clearGameStorage } from '@/shared/storage';
 
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const [GAMING, LOSE, WIN] = [0, 1, 2];
@@ -96,6 +120,17 @@ const gameResult = ref(GAMING);
 const guessHistory = ref([]);
 const currentGuess = ref('');
 
+// 连胜记录：赢一局 +1、输一局清零；最长连胜只增不减（「新游戏」清当前连胜、保留最长）
+const streak = ref(0);
+const bestStreak = ref(0);
+const confirming = ref(false);
+
+// 存档 key（与机器人开关同一前缀 __guess_number__）
+const KEY_PREFIX = '__guess_number__';
+const KEY_STATE = '__guess_number__state';
+const KEY_STREAK = '__guess_number__streak';
+const KEY_BEST = '__guess_number__best';
+
 let firstGuessTimer = null;
 const firstGuessDuration = 200;
 
@@ -105,7 +140,9 @@ watch(gameResult, val => {
 });
 
 onMounted(() => {
-  initGame();
+  loadRecords();
+  // 恢复存档（有存档就停在原处、不播任何动画；没有才开新局）
+  if (!restoreState()) initGame();
   addListener();
 });
 
@@ -113,18 +150,80 @@ onUnmounted(() => {
   window.removeEventListener('keyup', onKeyUp);
 });
 
-function initGame() {
+// 操作区「新游戏」：非失败态要二次确认（会清空当前连胜），失败态直接重开
+function onNewGame() {
+  initRef.value?.blur();
+  if (gameResult.value === LOSE) {
+    startNewGame();
+    return;
+  }
+  confirming.value = true;
+}
+
+// 确定重来：清空当前连胜（最长连胜保留）→ 开新局
+function startNewGame() {
+  confirming.value = false;
+  streak.value = 0;
+  saveRecords();
+  initGame();
+}
+
+// 内部：开一局新的（不清连胜，供首次进入 / 失败后重开用）
+function initGame(opts = {}) {
   if (firstGuessTimer) {
     clearTimeout(firstGuessTimer);
     firstGuessTimer = null;
   }
-  anwser.value = sampleSize(NUMBERS, GAME_SIZE).join('');
-  guessHistory.value.length = 0;
+  anwser.value = opts.answer || sampleSize(NUMBERS, GAME_SIZE).join('');
+  guessHistory.value = opts.history ? opts.history.slice() : [];
   currentGuess.value = '';
-  gameResult.value = GAMING;
-  timerRef.value.reset();
-  initRef.value.blur();
-  if (robot.value) initWithFirstGuess(1);
+  gameResult.value = opts.result ?? GAMING;
+  if (opts.time != null) timerRef.value.restore(opts.time); else timerRef.value.reset();
+  if (gameResult.value !== GAMING) timerRef.value.stop();
+  initRef.value?.blur();
+  // 恢复存档时不要自动帮玩家落子（那是「新一局」的行为）
+  const autoGuess = opts.robot === true || (opts.robot === undefined && robot.value && !opts.history);
+  if (autoGuess && gameResult.value === GAMING) initWithFirstGuess(1);
+  saveState();
+}
+
+// ---------- 存档 ----------
+function loadRecords() {
+  streak.value = Math.max(0, +(localStorage.getItem(KEY_STREAK) || 0));
+  bestStreak.value = Math.max(0, +(localStorage.getItem(KEY_BEST) || 0));
+}
+function saveRecords() {
+  try {
+    localStorage.setItem(KEY_STREAK, String(streak.value));
+    localStorage.setItem(KEY_BEST, String(bestStreak.value));
+  } catch { /* 隐私模式忽略 */ }
+}
+function saveState() {
+  try {
+    localStorage.setItem(KEY_STATE, JSON.stringify({
+      answer: anwser.value,
+      history: guessHistory.value,
+      result: gameResult.value,
+      time: timerRef.value?.seconds() || 0,
+      streak: streak.value,
+    }));
+  } catch { /* 隐私模式忽略 */ }
+}
+// 恢复存档：返回 true 表示成功恢复（界面直接是「停在那里」的样子，不播动画）
+function restoreState() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY_STATE) || 'null'); } catch { saved = null; }
+  if (!saved || !/^[1-8]{4}$/.test(saved.answer || '')) return false;
+  if (!Array.isArray(saved.history) || !saved.history.length) return false;   // 空盘口不算存档
+  streak.value = Number.isFinite(saved.streak) ? saved.streak : streak.value;
+  initGame({
+    answer: saved.answer,
+    history: saved.history,
+    result: saved.result === LOSE ? LOSE : saved.result === WIN ? WIN : GAMING,
+    time: +saved.time || 0,
+    robot: false,
+  });
+  return true;
 }
 function initWithFirstGuess(num) {
   firstGuessTimer = setTimeout(() => {
@@ -173,13 +272,36 @@ function guessOnce() {
   if (A === GAME_SIZE) {
     gameResult.value = WIN;
     currentGuess.value = '';
+    // 连胜 +1；最长连胜同步（只增不减）
+    streak.value += 1;
+    bestStreak.value = Math.max(bestStreak.value, streak.value);
+    saveRecords();
+    saveState();
     return;
   }
   if (guessHistory.value.length >= MAX_GUESS) {
     gameResult.value = LOSE;
     playLose();
+    streak.value = 0;          // 输一局：当前连胜清零（最长连胜保留）
+    saveRecords();
   }
   currentGuess.value = '';
+  saveState();
+}
+
+// 计时每秒回调：把当前用时写进存档（刷新后时间接着走）
+function onTimerTick() {
+  saveState();
+}
+
+// 连点标题 5 次：清掉本游戏的所有记录（局面 / 当前连胜 / 最长连胜 / 机器人偏好）后开新局
+function onScoreReset() {
+  clearGameStorage(KEY_PREFIX);
+  streak.value = 0;
+  bestStreak.value = 0;
+  anwser.value = '';
+  guessHistory.value = [];
+  initGame();
 }
 </script>
 
@@ -219,10 +341,48 @@ function guessOnce() {
     border-radius: var(--radius-tile);
     // 按压反馈统一由 App.vue 的全局 :active 规则提供
   }
+  // 统计条：最长连胜 / 当前连胜（约定第 4 节：记录在前、当前在后；高 var(--row-height)）
+  .score-area {
+    display: flex;
+    align-items: center;
+    margin-top: 64px;
+    margin-bottom: var(--row-gap);
+    height: var(--row-height);
+    .stat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-width: 0;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted-color);
+      opacity: 0.75;
+      white-space: nowrap;
+    }
+    .stat-value {
+      font-size: 22px;
+      font-weight: bold;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+  // 竖分隔线：统计条与操作区共用（必须定义在 .wrapper 层级）
+  .divider {
+    width: 1px;
+    height: 24px;
+    align-self: center;
+    flex: 0 0 auto;
+    background: var(--border-color);
+    opacity: 0.6;
+  }
   .opt-area {
     display: flex;
     align-items: stretch;
-    margin-top: 64px;
+    margin-top: 0;
     margin-bottom: var(--row-gap);
     height: var(--row-height);
     .opt-half {

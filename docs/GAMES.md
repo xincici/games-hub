@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 关灯游戏 | `click` | `/#/click` | `__easy_click_game__` | `__easy_click_game__`<br>`__easy_click_game__difficulty` | 上帝模式 / 撒花 | 4 |
 | 2 | 数字迷宫 | `puzzle` | `/#/puzzle` | `__number_puzzle__` | `__number_puzzle__`<br>`__number_puzzle__difficulty` | 撒花 | 2 |
-| 3 | 1A2B | `guess` | `/#/guess` | `__guess_number__` | `__guess_number__robot` | 计时 / 撒花 | 3 |
+| 3 | 1A2B | `guess` | `/#/guess` | `__guess_number__` | `__guess_number__`<br>`__guess_number__state`<br>`__guess_number__streak`<br>`__guess_number__best`<br>`__guess_number__robot` | 计时 / 二次确认 / 撒花 | 3 |
 | 4 | 德州扑克 | `poker` | `/#/poker` | `—` | — | — | 5 |
 | 5 | Threes | `three` | `/#/three` | `__threes_game__` | `__threes_game__best`<br>`__threes_game__state`<br>`__threes_game__` | 计时 | 6 |
 | 6 | 2048 | `g2048` | `/#/2048` | `__game_2048__` | `__game_2048__best`<br>`__game_2048__state`<br>`__game_2048__` | 计时 / 撒花 | 3 |

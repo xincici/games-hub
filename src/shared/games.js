@@ -57,6 +57,7 @@ export const games = [
     icon: 'i-mdi-counter',
     accent: 'number',
     helpKey: '__guess_number__help_showed',
+    recordsPrefix: '__guess_number__',   // 连点标题 5 次清记录：局面 / 连胜 / 最长连胜 / 机器人偏好
   },
   {
     id: 'poker',
