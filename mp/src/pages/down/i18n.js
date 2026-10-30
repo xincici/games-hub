@@ -1,0 +1,51 @@
+// Emoji 下坠 · 本页局部文案（不塞进 core/i18n.js，避免和其它页面的大文件冲突）。
+// 文案逐字来自 web 的 src/games/down/i18n.js（连 emoji 前缀都保留，按钮文案与 web 一致）。
+import { lang } from '@/core/settings';
+
+const dict = {
+  cn: {
+    gameTitle: 'Emoji 下坠',
+    score: '⭐ 得分',
+    best: '🏆 最高分',
+    speed: '⏩ 速度',
+    start: '🎮 新游戏',
+    pause: '⏸ 暂停',
+    resume: '▶️ 继续',
+    resumeTip: '已暂停，点击继续',
+    readyTip: '准备开始…',
+    tipOver: '顶到天花板了',
+    helpTip: '查看帮助',
+    helpMsg: '点某一列，emoji 就滑过去。停在顶排同款上方就炸掉整排，你落到下一排，消一排得 1 分。牌堆越升越快，被顶到棋盘顶部即结束。',
+    help1: '8 行 × 6 列：整排 emoji 从底部升起往上顶。',
+    help2: '控制牌堆最上方的 emoji，点列即滑过去。',
+    help3: '滑到顶排同款 emoji 上方即消掉整排。每排 5 种齐全，目标一定存在，趁早找到。',
+    help4: '每消 3~5 排就换一种 emoji，新 emoji 必在顶排。',
+    help5: '每消一排速度都会加快，顶到棋盘顶部即失败。',
+    confirmText: '好的，明白',
+    rotateTip: '请旋转设备至竖屏',
+  },
+  en: {
+    gameTitle: 'Emoji Down',
+    score: '⭐ Score',
+    best: '🏆 Best',
+    speed: '⏩ Speed',
+    start: '🎮 New Game',
+    pause: '⏸ Pause',
+    resume: '▶️ Resume',
+    resumeTip: 'Paused — tap to continue',
+    readyTip: 'Get ready…',
+    tipOver: 'Reached the Top',
+    helpTip: 'Click for help!',
+    helpMsg: 'Land right above the same emoji in the stack top row and it blows up — you drop a row and score 1. Rows keep rising; reach the top and the run ends.',
+    help1: 'An 8×6 board; rows rise from the bottom and push the rest up.',
+    help2: 'Tap a column to slide the emoji riding the stack top.',
+    help3: 'Match your column top-row emoji to clear the row. Every row has all five, so a target always exists.',
+    help4: 'Every 3–5 cleared rows your emoji switches to one in the top row.',
+    help5: 'Each cleared row speeds the rise up; reach the board top and the run ends.',
+    confirmText: 'OK, I See',
+    rotateTip: 'Please rotate your device to portrait',
+  },
+};
+
+// lang 是 ref：模板里调用 tt() 会自动建立依赖，切换语言后整页重渲染（与 core/i18n 的 t() 同款）
+export const tt = (k) => dict[lang.value]?.[k] ?? dict.cn[k] ?? k;

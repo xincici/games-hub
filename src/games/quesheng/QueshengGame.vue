@@ -771,7 +771,13 @@ function onScoreReset() {
   }
 
   // 撤销 / 重做（与点击游戏同款）
+
   .undo-card {
+    // 与小程序一致：卡片宽 = 622rpx = 屏宽的 82.93%（mp 的 `.undo-card { width: 622rpx }`），
+    // 两颗按钮合计因此 ≈ 屏宽的 75%（web 原来卡片按「屏宽 − 32px」铺满、按钮 82% 宽）。
+    width: calc(100vw * 622 / 750);
+    max-width: 398px;
+    box-sizing: border-box;
     display: flex;
     align-items: stretch;
     margin: 12px auto;
@@ -788,8 +794,7 @@ function onScoreReset() {
       align-items: center;
       justify-content: center;
       gap: 8px;
-      width: 100%;
-      max-width: 160px;
+      width: 100%;            // 不限 max-width：与小程序一样，两格各占卡片一半
       padding: 8px 16px;
       font-size: 14px;
       font-weight: bold;

@@ -1,0 +1,43 @@
+// 1A2B · 本页局部文案（不塞进 core/i18n.js，避免和其它页面的大文件冲突）。
+// 文案逐字来自 web 的 src/games/guess/i18n.js（含 en），一个字都没改。
+import { lang } from '@/core/settings';
+
+const dict = {
+  cn: {
+    gameTitle: '1A2B',
+    availableClicks: '剩余点击',
+    start: '🎮 新游戏',
+    helpTip: '查看帮助',
+    helpMsg: '你有 8 次机会猜中 4 位数字。每次提交后游戏会给出判断：1A2B 表示 1 个数字数值与位置都对，2 个数字数值对但位置不对。',
+    help1: '数字不重复',
+    help2: '目标是 4A0B，四个数字全对即获胜',
+    help3: '开启左上角机器人，开局自动填 1234',
+    confirmText: '好的，明白',
+    tipWin: '你赢了',
+    tipLost: '你输了',
+    anwserIs: '答案是: ',
+    optEnter: '✅ 提交',
+    optDel: '⌫ 退格',
+    rotateTip: '请旋转设备至竖屏',
+  },
+  en: {
+    gameTitle: '1A2B',
+    availableClicks: 'Available Clicks',
+    start: '🎮 New Game',
+    helpTip: 'Click for help!',
+    helpMsg: 'You have 8 chances to guess a 4-digit number. After each submit the game judges your guess: 1A2B means 1 digit is right in value and position, 2 digits are right in value but in the wrong position.',
+    help1: 'Digits never repeat.',
+    help2: 'Goal: 4A0B, all four digits correct.',
+    help3: 'Turn on the robot in the upper left: it fills in 1234 for you on a new game.',
+    confirmText: 'OK, I See',
+    tipWin: 'You Win',
+    tipLost: 'You Lose',
+    anwserIs: 'The anwser is: ',
+    optEnter: '✅ Enter',
+    optDel: '⌫ Delete',
+    rotateTip: 'Please rotate your device to portrait',
+  },
+};
+
+// lang 是 ref：模板里调用 tt() 会自动建立依赖，切换语言后整页重渲染（与 core/i18n 的 t() 同款）
+export const tt = (k) => dict[lang.value]?.[k] ?? dict.cn[k] ?? k;

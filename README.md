@@ -4,7 +4,7 @@
 
 | 游戏 | 玩法简介 |
 | --- | --- |
-| 👆 [点击游戏](src/games/click/README.md) | 点击方块把全盘数字归零 |
+| 💡 [关灯游戏](src/games/click/README.md) | 点一盏灯，它和四邻一起变亮一档；把所有灯熄灭 |
 | 🧩 [数字迷宫](src/games/puzzle/README.md) | 数字华容道，按顺序排好 |
 | 🔢 [1A2B](src/games/guess/README.md) | 8 次机会猜出 4 位数 |
 | 🃏 [德州扑克](src/games/poker/README.md) | 单人视频扑克，选牌换牌 |

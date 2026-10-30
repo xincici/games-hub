@@ -312,3 +312,31 @@ const clearingTiles = computed(() => [...clearing.value.values()]);   // 存的�
 「⚡ 上帝模式」按钮**可点击时是橙色** `var(--god-bg)`（`#c2410c`，白字 5.18:1），禁用时仍是灰
 （`#aaa`）：`.game-icon.god-btn:not(:disabled) { background-color: var(--god-bg); }`。
 与点击游戏同一套写法、同一个变量（见根 AGENTS 的「emoji 游戏统一视觉语言」）。
+
+## 撤销 / 重做按钮宽度：与小程序一致（屏宽的 75%）
+
+web 原来 `.undo-card` 是普通 `.card`（`width: calc(100% - 32px)`，390 宽时 358px），
+两颗 `.undo` 又各限 `max-width: 160px` → 按钮合计 **320px = 屏宽的 82%**，比小程序宽一截。
+
+小程序那边（雀圣页）是 `.undo-card { width: 622rpx }`（= 屏宽的 82.93%），
+两颗按钮各占一半、`padding: 15rpx` → **合计 562rpx = 屏宽的 75%**。
+
+现在 web 照抄这个口径：
+
+```scss
+.undo-card {
+  width: calc(100vw * 622 / 750);   // 622rpx = 屏宽的 82.93%
+  max-width: 398px;                 // 480 宽屏时的 622rpx
+  box-sizing: border-box;
+}
+.undo { width: 100%; }            // 去掉 max-width: 160px →
+```
+
+**实测**（两颗按钮宽度合计 / 占屏宽）：
+
+| 视口 | 改造前 | 现在（web） | 小程序 |
+| --- | --- | --- | --- |
+| 390×844 | 320px（82%） | **290px（74.5%）** | **292px（74.9%）** ✓ |
+| 375×667 | ~314px（84%） | **278px（74.1%）** | **280px（74.7%）** ✓ |
+
+卡片与按钮都仍然是居中（390 下卡片 left 33 / 宽 323，中心 194.5 vs 195 ✓）。

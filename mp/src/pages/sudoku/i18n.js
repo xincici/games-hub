@@ -1,0 +1,59 @@
+// 数独 · 本页局部文案（不塞进 core/i18n.js，避免和其它页面的大文件冲突）。
+// 文案逐字来自 web 的 src/games/sudoku/i18n.js（cn + en，一个字都没改）。
+import { lang } from '@/core/settings';
+
+const dict = {
+  cn: {
+    gameTitle: '数独',
+    bestScore: '🏆 最佳用时',
+    hearts: '❤️ 生命',
+    start: '🎮 新游戏',
+    candidates: '候选',
+    candAllTip: '候选按钮：一键填满全盘',
+    notes: '笔记',
+    erase: '擦除',
+    diffEasy: '简单',
+    diffMedium: '中等',
+    diffHard: '困难',
+    tipWin: '你赢了',
+    tipLost: '游戏失败',
+    newBest: '新纪录诞生',
+    replayLevel: '🔄 再来一局',
+    helpTip: '查看帮助',
+    helpMsg: '填满 9×9：每行、每列、每个 3×3 宫都含 1~9 各一次，预填数字固定。',
+    help1: '越高预填越少：1 简单/2 中等/3 困难',
+    help2: '点击空格选中，再点数字填入；键盘敲数字、方向键移动。',
+    help3: '「笔记」手动标记候选，「候选」点一下填入该格所有可用候选；帮助图标旁的开关可让它一次填满全盘空格。点盘面上的数字会高亮同数字的格子与笔记。',
+    help4: '填错的数字立即标红并扣一颗❤️；初始❤️数即难度档位，简单 1、中等 2、困难 3，扣掉最后一颗❤️就失败。填满整盘即获胜。',
+    confirmText: '好的，明白',
+    rotateTip: '请旋转设备至竖屏',
+  },
+  en: {
+    gameTitle: 'Sudoku',
+    bestScore: '🏆 Best Time',
+    hearts: '❤️ Lives',
+    start: '🎮 New Game',
+    candidates: 'Candidates',
+    candAllTip: 'Candidate button: fill all cells at once',
+    notes: 'Notes',
+    erase: 'Erase',
+    diffEasy: 'Easy',
+    diffMedium: 'Medium',
+    diffHard: 'Hard',
+    tipWin: 'You Win',
+    tipLost: 'Game Over',
+    newBest: 'New Best Time',
+    replayLevel: '🔄 New Puzzle',
+    helpTip: 'Click for help!',
+    helpMsg: 'Fill 9×9: each row, column and 3×3 box needs 1–9 once. Given cells cannot change.',
+    help1: 'Easy / Medium / Hard: fewer givens as you go.',
+    help2: 'Tap a cell, then tap a digit to fill; keyboard: type digits, arrows to move.',
+    help3: 'Notes marks candidates by hand; Candidates fills every available one for a cell — the switch by the help icon makes it fill every empty cell at once. Tapping a number highlights the same digit and matching notes.',
+    help4: 'Wrong numbers turn red and cost a heart; hearts start at 1/2/3 for Easy/Medium/Hard. Lose the last heart and the game ends. Fill the grid to win.',
+    confirmText: 'OK, I See',
+    rotateTip: 'Please rotate your device to portrait',
+  },
+};
+
+// lang 是 ref：模板里调用 tt() 会自动建立依赖，切换语言后整页重渲染（与 core/i18n 的 t() 同款）
+export const tt = (k) => dict[lang.value]?.[k] ?? dict.cn[k] ?? k;

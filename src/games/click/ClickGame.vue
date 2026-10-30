@@ -35,13 +35,30 @@
         </button>
       </div>
     </div>
-    <div class="game-area" :class="`cell-${cellSize}`">
-      <div v-for="(item, idx_row) in gameData" :key="idx_row">
-        <div class="cell" v-for="(cell, idx_col) in item" :key="idx_col">
-          <div class="mask" v-show="maskData[idx_row][idx_col] === 0"></div>
-          <button class="inner" :class="{zero: cell === 0, one: cell === 1, two: cell === 2, clicked: autoClick[0] === idx_row && autoClick[1] === idx_col}" @click="onCellClick(idx_row, idx_col)">{{ cell }}</button>
-        </div>
+      <!-- 图例：一行看完三档亮度 + 循环方向（灭 → 全亮 → 半亮 ↺）
+           只占一行：小屏（375×667）上多一行就会把整页顶出滚动条 -->
+      <div class="legend">
+        <span class="legend-chip"><span class="lamp zero"></span><em>{{ i18n('lampOff') }}</em></span>
+        <span class="legend-sep">→</span>
+        <span class="legend-chip"><span class="lamp one"></span><em>{{ i18n('lampFull') }}</em></span>
+        <span class="legend-sep">→</span>
+        <span class="legend-chip"><span class="lamp two"></span><em>{{ i18n('lampHalf') }}</em></span>
+        <span class="legend-sep">↺</span>
+        <span class="legend-tip">{{ i18n('lampTip') }}</span>
       </div>
+      <div class="game-area" :class="`cell-${cellSize}`">
+        <div v-for="(item, idx_row) in gameData" :key="idx_row">
+          <div class="cell" v-for="(cell, idx_col) in item" :key="idx_col">
+            <div class="mask" v-show="maskData[idx_row][idx_col] === 0"></div>
+            <!-- 每格就是一盏灯：0 = 熄、1 = 全亮（带灯圈）、2 = 半亮；颜色 / 辉光都走 transition 渐变 -->
+            <button
+              class="inner"
+              :class="{zero: cell === 0, one: cell === 1, two: cell === 2, clicked: autoClick[0] === idx_row && autoClick[1] === idx_col}"
+              :aria-label="lampLabel(cell)"
+              @click="onCellClick(idx_row, idx_col)"
+            ><span class="bulb"></span></button>
+          </div>
+        </div>
       <div v-if="gameResult >= WIN" class="win">
         <span>🎉🎉 {{ i18n('tipWin') }} 🎉🎉</span>
         <span v-if="gameResult === NB">{{ i18n('newBest') }}</span>
@@ -71,6 +88,7 @@
 import { ref, reactive, computed, watch, watchEffect, onUnmounted } from 'vue';
 
 import TopHeader from '@/components/TopHeader.vue';
+import { i18n } from '@/shared/i18n';
 import { playLose } from '@/shared/audio';
 import confetti from '@/shared/confetti';
 import { difficulty, changeDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY } from './difficulty';
@@ -104,6 +122,9 @@ const historyOpts = {
     else this.list.delete(opt);
   }
 };
+
+// 无障碍：读屏时把亮度说成人话（灯本身没有文字）
+const lampLabel = cell => (cell === 0 ? i18n('lampOff') : cell === 1 ? i18n('lampFull') : i18n('lampHalf'));
 
 const randomOnce = max => [Math.floor(Math.random() * max), Math.floor(Math.random() * max)];
 const randomData = length => Array.from({ length }, () => Array.from({ length }, () => 0));
@@ -365,11 +386,45 @@ function userRedo() {
       cursor: not-allowed;
     }
   }
+  /* ---------- 图例（灭 → 全亮 → 半亮 ↺）：一眼看懂三档亮度怎么循环 ---------- */
+  .legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 6px auto 0;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--muted-color);
+    white-space: nowrap;
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      em { font-style: normal; }
+    }
+    .legend-sep { font-size: 12px; opacity: 0.8; }
+    .lamp {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: inline-block;
+      &.zero { background: var(--lamp-bulb-off); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5); }
+      &.two { background: var(--lamp-bulb-half); box-shadow: 0 0 6px 1px var(--lamp-glow-half); }
+      &.one { background: var(--lamp-bulb-full); box-shadow: 0 0 8px 2px var(--lamp-glow-full); }
+    }
+  }
+  .legend-tip {
+    margin-left: 8px;
+    font-size: 10px;
+    line-height: 1.3;
+    color: var(--muted-color);
+  }
   .game-area {
     display: inline-block;
     position: relative;
     padding: 10px;
-    margin: 12px 0;
+    margin: 0 0 12px;     /* 上边距由图例提供，避免多加一行高度 */
     .win,.lose,.automask {
       background: var(--mask-color);
       position: absolute;
@@ -403,38 +458,67 @@ function userRedo() {
         background: var(--cell-mask);
         border-radius: 8px;
       }
+      /* ---------- 关灯：每一格就是一盏灯 ----------
+         0 = 熄（灯珠暗、灯圈不亮），1 = 全亮（灯珠近白 + 强辉光 + 亮灯圈），2 = 半亮（琥珀色、辉光减半）。
+         亮度变化全部走 transition（background-color / box-shadow / border-color）→ 切换时是「渐变」而不是跳变。 */
       .inner {
+        position: relative;
         cursor: pointer;
         display: block;
         width: 44px;
         height: 44px;
-        line-height: 44px;
         padding: 0;
-        border: 1px solid var(--tile-border-color);
+        border: 1px solid var(--lamp-rim-on);
         border-radius: 8px;
-        font-size: 16px;
-        font-weight: bold;
-        background: var(--one-bg-color);
-        color: var(--one-color);
+        background: var(--lamp-housing-on);
         opacity: 1;
-        // 0 = 已完成（贴近主题绿、去掉描边，看起来就不需要再点）
+        /* !important：App.vue 里 `#app button:not(:disabled):hover` 有一条只带 filter/opacity 的全局 transition，
+           ID 选择器优先级高过组件内的类，会盖掉这条 → 亮度就得跳变。桌面端才命中，但同样要保证渐变。 */
+        transition: background-color 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease, transform 0.12s ease !important;
+        .bulb {
+          position: absolute;
+          inset: 22%;
+          border-radius: 50%;
+          background: var(--lamp-bulb-full);
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 12px 4px var(--lamp-glow-full);
+          transition: background-color 0.32s ease, box-shadow 0.32s ease;
+        }
+        // 0 = 熄
         &.zero {
-          background: var(--zero-bg-color);
-          color: var(--zero-color);
           border-color: transparent;
+          background: var(--lamp-housing-off);
+          .bulb {
+            background: var(--lamp-bulb-off);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55);
+          }
         }
-        // 2 = 再点一次就归零，比 1 浅一档
+        // 2 = 半亮
         &.two {
-          background: var(--two-bg-color);
-          color: var(--two-color);
+          border-color: var(--lamp-rim-half);
+          background: var(--lamp-housing-half);
+          .bulb {
+            background: var(--lamp-bulb-half);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.22), 0 0 7px 2px var(--lamp-glow-half);
+          }
         }
+        // 上帝模式「正在点这一格」：亮一圈主色环（原来整格调到 10% 透明，灯就看不见了）
         &.clicked {
-          opacity: 0.1;
+          outline: 3px solid var(--primary-bg);
+          outline-offset: -3px;
+        }
+        &:active {
+          transform: scale(0.96);
         }
       }
     }
   }
+
   .undo-card {
+    // 与小程序一致：卡片宽 = 622rpx = 屏宽的 82.93%（mp 的 `.undo-card { width: 622rpx }`），
+    // 两颗按钮合计因此 ≈ 屏宽的 75%（web 原来卡片按「屏宽 − 32px」铺满、按钮 82% 宽）。
+    width: calc(100vw * 622 / 750);
+    max-width: 398px;
+    box-sizing: border-box;
     display: flex;
     align-items: stretch;
     margin: 12px auto;
@@ -451,8 +535,7 @@ function userRedo() {
       align-items: center;
       justify-content: center;
       gap: 8px;
-      width: 100%;
-      max-width: 160px;
+      width: 100%;            // 不限 max-width：与小程序一样，两格各占卡片一半
       padding: 8px 16px;
       font-size: 14px;
       font-weight: bold;

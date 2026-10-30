@@ -26,3 +26,8 @@ yarn-error.log*
 
 # Vite / build cache
 .vite
+
+# 微信小程序工程（mp/）已纳入本仓库（独立子工程，不参与 web 构建）：
+# 只排除它的依赖与构建产物；`node_modules` / `dist` 两条通用规则在上面已经覆盖到任意层级。
+mp/.mksim.mjs
+mp/.sim.mjs

@@ -1,0 +1,74 @@
+// Emoji 连连看 · 本页局部文案（不塞进 core/i18n.js，避免和其它页面的大文件冲突）。
+// 文案逐字来自 web 的 src/games/link/i18n.js（连 emoji 前缀都保留，按钮文案与 web 一致）；
+// cn / en 两个字典的 key 必须完全一致（加 key 时两边同时加）。
+import { lang } from '@/core/settings';
+
+const dict = {
+  cn: {
+    gameTitle: 'Emoji 连连看',
+    levelLabel: '🏁 关卡',
+    timeLeft: '⏳ 剩余时间',
+    leftPairs: '🧩 剩余对数',
+    leftPairsShort: '对未消除',
+    kindsLabel: '{n} 种',
+    wallsLabel: '{n} 面墙',
+    start: '🎮 新游戏',
+    replayLevel: '🔄 重玩本关',
+    nextLevel: '➡️ 下一关',
+    levelDone: '第 {n} 关完成!',
+    timeUp: '时间到',
+    helpTip: '查看帮助',
+    helpMsg: '点两张相同 emoji：最多 2 个转折、不穿过其他牌的连线可消。限时清空全盘过关。',
+    help1: '每关棋盘、种类、牌数、墙数、限时各异：最高 10 列 × 12 行、30 对、12 种、18 面墙。第 30 关封顶，关数无限。',
+    help2: '同一种 emoji 可出现多对，总数是偶数即可。',
+    help3: '连线可绕出棋盘，2 个转折内，不能有牌或墙。',
+    help4: '每局保证有解；没有可连的牌对时会自动重排。',
+    help5: '连着消有连击：两次消除之间没有无效点击、间隔 2.5 秒内即累积，上方弹出「N 连击」并放烟花。间隔超 2.5 秒或点到的牌没消掉则中断。',
+    help6: '时间用尽即失败，结算遮罩可重玩；「新游戏」清记录后回第 1 关。',
+    confirmText: '好的，明白',
+    tipWin: '你赢了',
+    comboTip: '{n} 连击!',
+    shuffleTip: '无可消除，已重新排列',
+    rotateTip: '请旋转设备至竖屏',
+    // 小程序额外需要：web 的 ConfirmDialog 是自绘三按钮弹窗，小程序用 uni.showModal（两个按钮）
+    newGameTitle: '🔄 开始新游戏？',
+    newGameMsg: '会清除闯关记录并从第 1 关重新开始；只想重玩当前这一关，就点「取消」后进结算层重玩。',
+    newGameOk: '确定重来',
+    newGameCancel: '取消',
+  },
+  en: {
+    gameTitle: 'Emoji Link',
+    levelLabel: '🏁 Level',
+    timeLeft: '⏳ Time',
+    leftPairs: '🧩 Pairs Left',
+    leftPairsShort: 'pairs left',
+    kindsLabel: '{n} kinds',
+    wallsLabel: '{n} walls',
+    start: '🎮 New Game',
+    replayLevel: '🔄 Replay Level',
+    nextLevel: '➡️ Next Level',
+    levelDone: 'Level {n} cleared!',
+    timeUp: 'Time Up',
+    helpTip: 'Click for help!',
+    helpMsg: 'Tap two identical emojis: a line of at most 2 turns, crossing nothing, clears both. Clear the board before time runs out.',
+    help1: 'Board, kinds, pairs, walls and time grow per level — max 10×12, 30 pairs, 12 kinds, 18 walls at level 30. Levels never end.',
+    help2: 'An emoji may repeat, as long as the total is even.',
+    help3: 'Lines may leave the board — 2 turns max, nothing blocking.',
+    help4: 'Solvable boards; if no pair connects, the rest reshuffles.',
+    help5: 'Two removals in a row, no wasted click, under 2.5s apart = a combo, with an "N Combo!" chip and fireworks. Over 2.5s or a click that clears nothing breaks it.',
+    help6: 'Time up = failed; retry from the result screen. New Game clears records, back to level 1.',
+    confirmText: 'OK, I See',
+    tipWin: 'You Win',
+    comboTip: '{n} Combo!',
+    shuffleTip: 'No moves left — reshuffled',
+    rotateTip: 'Please rotate your device to portrait',
+    // 小程序额外需要（与 cn 一一对应）
+    newGameTitle: '🔄 Start a new game?',
+    newGameMsg: 'This clears your level record and restarts from level 1. To retry just the level you are on, replay it from the result screen.',
+    newGameOk: 'Yes, Restart',
+    newGameCancel: 'Cancel',
+  },
+};
+
+// lang 是 ref：模板里调用 tt() 会自动建立依赖，切换语言后整页重渲染（与 core/i18n 的 t() 同款）
+export const tt = (k) => dict[lang.value]?.[k] ?? dict.cn[k] ?? k;

@@ -1,14 +1,18 @@
 export default {
   en: {
-    gameTitle: 'Click',
+    gameTitle: 'Lights Out',
     bestScore: '🏆 Best Score',
     availableClicks: '👆 Available Clicks',
     start: '🎮 New Game',
     godMode: '⚡ God Mode',
     godPause: '⏸ Pause',
     helpTip: 'Click for help!',
-    helpMsg: `Clicking a block adds 1 to it and to the blocks above, below, left and right. A 2 becomes 0 when you add 1.
-Make every number 0 to win. If your clicks run out first, you lose.`,
+    lampOff: 'Off',
+    lampFull: 'Full',
+    lampHalf: 'Dim',
+    lampTip: 'neighbours too',
+    helpMsg: `Lamps have three levels: off, full and dim. Tapping a lamp changes it and its four neighbours to the next level - full becomes dim, dim goes off, off becomes full.
+Switch every lamp off to win. If your taps run out first, you lose.`,
     help1: 'Difficulty 3~10.',
     help2: 'Every new game is solvable.',
     help3: 'Available clicks equal the difficulty squared.',
@@ -22,15 +26,19 @@ Make every number 0 to win. If your clicks run out first, you lose.`,
     rotateTip: 'Please rotate your device to portrait'
   },
   cn: {
-    gameTitle: '点击游戏',
+    gameTitle: '关灯游戏',
     bestScore: '🏆 最佳得分',
     availableClicks: '👆 剩余点击',
     start: '🎮 新游戏',
     godMode: '⚡ 上帝模式',
     godPause: '⏸ 暂停',
     helpTip: '查看帮助',
-    helpMsg: `点击方块，它和上下左右邻格的数字都加 1。数字 2 再加 1 变为 0。
-把所有数字变成 0 即获胜；次数用尽仍未获胜则失败。`,
+    lampOff: '灭',
+    lampFull: '全亮',
+    lampHalf: '半亮',
+    lampTip: '四邻一起变',
+    helpMsg: `灯有三档：灭、全亮、半亮。点一盏灯，它和上下左右的邻灯都变到下一档 —— 全亮变半亮、半亮熄灭、熄灭的直接全亮。
+把所有灯都熄灭即获胜；点击次数用尽仍未获胜则失败。`,
     help1: '难度 3~10',
     help2: '每局保证有解',
     help3: '剩余次数 = 难度的平方',

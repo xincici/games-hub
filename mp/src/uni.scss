@@ -1,0 +1,14 @@
+// 与 web（src/App.vue）一致的视觉 token —— 卡片间距 / 圆角 / 阴影 / 配色全部照抄，不要自己另定。
+// web 用 px；这里统一按 750rpx = 屏宽（iPhone 390 → 1px ≈ 1.923rpx）折算成 rpx，
+// 因此在 390 宽的手机上与 web 逐像素同比例。
+$primary-bg: #23804e;
+$card-bg: #fff;
+$card-radius: 27rpx;          // 14px
+$card-shadow: 0 4rpx 23rpx rgba(0, 0, 0, 0.08);
+$row-height: 138rpx;          // 72px
+$row-gap: 16rpx;              // 8px
+$radius-tile: 15rpx;          // 8px
+$border-color: #e1e1e1;
+$muted-color: #5f6b7a;
+$page-bg: #f0f2f5;
+$text-color: #222;

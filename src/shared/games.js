@@ -33,7 +33,8 @@ export const games = [
   {
     id: 'click',
     path: '/click',
-    icon: 'i-carbon-touch-1',
+      // 关灯游戏（原「点击游戏」）：用灯泡图标，比手指更贴题
+      icon: 'i-carbon-idea',
     accent: 'logic',
     helpKey: '__easy_click_game__help_showed',
     recordsPrefix: '__easy_click_game__',

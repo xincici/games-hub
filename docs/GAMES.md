@@ -6,7 +6,7 @@
 
 | # | 游戏 | id | 路由 | i18n 前缀 | 存档 key | 用到的能力 | 帮助条数 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 点击游戏 | `click` | `/#/click` | `__easy_click_game__` | `__easy_click_game__`<br>`__easy_click_game__difficulty` | 上帝模式 / 撒花 | 4 |
+| 1 | 关灯游戏 | `click` | `/#/click` | `__easy_click_game__` | `__easy_click_game__`<br>`__easy_click_game__difficulty` | 上帝模式 / 撒花 | 4 |
 | 2 | 数字迷宫 | `puzzle` | `/#/puzzle` | `__number_puzzle__` | `__number_puzzle__`<br>`__number_puzzle__difficulty` | 撒花 | 2 |
 | 3 | 1A2B | `guess` | `/#/guess` | `__guess_number__` | `__guess_number__robot` | 计时 / 撒花 | 3 |
 | 4 | 德州扑克 | `poker` | `/#/poker` | `—` | — | — | 5 |

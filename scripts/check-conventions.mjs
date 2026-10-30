@@ -120,7 +120,7 @@ for (const g of games) {
 // ---------- ⑥ 生成 docs/GAMES.md ----------
 const base = ['click','guess','poker','puzzle','g2048','snake','match','link','detective','hunter','three','crush',
   'sudoku','master','down','slide','sort','alchemy','mahjong','quesheng','legend','mirror'];
-const names = { click:'点击游戏', guess:'1A2B', poker:'德州扑克', puzzle:'数字迷宫', g2048:'2048', snake:'贪吃蛇',
+const names = { click:'关灯游戏', guess:'1A2B', poker:'德州扑克', puzzle:'数字迷宫', g2048:'2048', snake:'贪吃蛇',
   match:'Emoji 对对碰', link:'Emoji 连连看', detective:'Emoji 侦探', hunter:'Emoji 猎手', three:'Threes',
   crush:'Emoji 消消乐', sudoku:'数独', master:'Emoji 大师', down:'Emoji 下坠', slide:'Emoji 滑行', sort:'Emoji 排序',
   alchemy:'扑克炼金术', mahjong:'麻将英雄', quesheng:'雀圣', legend:'麻将传奇', mirror:'Emoji 镜像' };

@@ -34,6 +34,7 @@ export default defineConfig({
     'i-dinkie-icons-seven-of-bamboos-mahjong',
     'i-dinkie-icons-red-dragon-mahjong',
     'i-carbon-touch-1',
+    'i-carbon-idea',
     'i-mdi-counter',
     'i-mdi-cards-playing-spade-multiple-outline',
     'i-mdi-puzzle',
@@ -61,6 +62,7 @@ export default defineConfig({
     'i-mdi-hammer-wrench',
   
     'i-carbon-touch-1',
+    'i-carbon-idea',
     'i-mdi-counter',
     'i-mdi-cards-playing-spade-multiple-outline',
     'i-mdi-puzzle',

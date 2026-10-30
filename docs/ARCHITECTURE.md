@@ -33,7 +33,7 @@ src/
 │   ├── TopHeader.vue     # 共享标题栏：🏠 返回主页 + 帮助 + 游戏特色按钮插槽 + 标题（连点 5 次清记录彩蛋；首页位置不显示「游戏合集」文案，改为显示游戏图标——直接引用图标源文件 scripts/make-icon.svg；游戏标题 15px + margin-top 5px，与左右控件对齐）+ 主题/语言切换
 │   └── HelpDialog.vue    # 共享帮助弹窗：帮助条目按字典 help1~help9 动态渲染，首次进入自动弹出
 └── games/                # 每个游戏一个目录，utils 已扁平化到游戏目录内
-    ├── click/            # 点击游戏 —— 见 src/games/click/AGENTS.md
+    ├── click/            # 关灯游戏（原点击游戏）—— 见 src/games/click/AGENTS.md
     ├── guess/            # 1A2B（原猜数字） —— 见 src/games/guess/AGENTS.md
     ├── poker/            # 德州扑克 —— 见 src/games/poker/AGENTS.md
     ├── puzzle/           # 数字迷宫 —— 见 src/games/puzzle/AGENTS.md
@@ -80,7 +80,7 @@ public/                   # favicon、PWA 图标（已替换为 games hub 专属
 | 场景 | 曲目 | 场景 | 曲目 |
 | --- | --- | --- | --- |
 | **home 首页** | **xianjian-yu-jian-jiang-hu**（御剑江湖） | crush 消消乐 | xianjian-zhan-dou-4 |
-| click 点击游戏 | xianjian-yang-ming-bai-na | sudoku 数独 | xianjian-zi-xuan |
+| click 关灯游戏 | xianjian-yang-ming-bai-na | sudoku 数独 | xianjian-zi-xuan |
 | puzzle 数字迷宫 | xianjian-shu-shan-gu-dao（蜀山故道） | master 大师 | xianjian-jing-tian（惊天） |
 | guess 1A2B | xianjian-ju-qing-2 | down 下坠 | xianjian-wei-zhi-14 |
 | poker 德州扑克 | tou-gong（偷功） | slide 滑行 | xianjian-li-shu-shan |

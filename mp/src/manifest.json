@@ -1,0 +1,30 @@
+{
+  "name": "游戏合集",
+  "appid": "",
+  "description": "游戏合集 · 微信小程序版",
+  "versionName": "0.1.0",
+  "versionCode": "1",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "wx44d366fc7dc1dec1",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "lazyCodeLoading": "requiredComponents"
+  },
+  "h5": {
+    "title": "游戏合集",
+    "router": {
+      "mode": "hash"
+    },
+    "icons": {
+      "favicon": {
+        "src": "static/icon-192.png"
+      }
+    }
+  },
+  "vueVersion": "3"
+}

@@ -291,6 +291,19 @@ body {
   --one-color: #6f3603;
   --two-bg-color: #fbe4c4;
   --two-color: #8a5312;
+  // 关灯（原点击游戏）的灯：灯座 / 灯珠 / 辉光 / 灯圈
+  //   0 = 熄（灯珠暗灰、灯圈不亮）、1 = 全亮（近白灯珠 + 强辉光 + 亮灯圈）、2 = 半亮（琥珀、辉光减半）
+  // 灯座三档都是深色（深色底才衬得出灯光），亮度差别靠灯珠与辉光表达。
+  --lamp-housing-off: #1c232d;
+  --lamp-housing-half: #232019;
+  --lamp-housing-on: #3a3119;
+  --lamp-bulb-off: #39414f;
+  --lamp-bulb-half: #d99433;
+  --lamp-bulb-full: #fff6cf;
+  --lamp-glow-half: rgba(217, 148, 51, 0.34);
+  --lamp-glow-full: rgba(255, 205, 90, 0.85);
+  --lamp-rim-half: rgba(255, 214, 102, 0.4);
+  --lamp-rim-on: rgba(255, 214, 102, 0.95);
   // 连连看墙块底色（原来借用 --two-bg-color，现已拆开）
   --wall-bg: #e4e8ee;
   --even-bg-color: #f2f4f7;
@@ -371,6 +384,17 @@ body {
     --one-color: #f8d0a0;
     --two-bg-color: rgba(235, 170, 80, 0.22);
     --two-color: #efc489;
+    // 关灯（原点击游戏）的灯：深色主题下灯座再压暗一档，辉光略强，暗处看灯更亮
+    --lamp-housing-off: #151b23;
+    --lamp-housing-half: #1f1d18;
+    --lamp-housing-on: #332b16;
+    --lamp-bulb-off: #333b47;
+    --lamp-bulb-half: #e3a648;
+    --lamp-bulb-full: #fff9dc;
+    --lamp-glow-half: rgba(227, 166, 72, 0.38);
+    --lamp-glow-full: rgba(255, 210, 96, 0.9);
+    --lamp-rim-half: rgba(255, 214, 102, 0.42);
+    --lamp-rim-on: rgba(255, 214, 102, 0.98);
     --wall-bg: rgba(255, 255, 255, 0.14);
     --even-bg-color: rgba(255, 255, 255, 0.06);
     --odd-bg-color: rgba(78, 201, 138, 0.22);

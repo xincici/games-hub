@@ -1,0 +1,83 @@
+// Emoji 消消乐 · 本页局部文案（不塞进 core/i18n.js，避免和其它页面的大文件冲突）。
+// 文案逐字来自 web 的 src/games/crush/i18n.js（cn + en 的 key 集合完全一致）。
+// 额外补了 5 个「新游戏」二次确认的 key（confirmTitle / confirmMsg / confirmOk / confirmReplay / cancel）：
+// web 那边用的是 shared/ConfirmDialog.vue 自带的文案，小程序没有这个共享弹窗，本地三按钮弹窗要用。
+import { lang } from '@/core/settings';
+
+const dict = {
+  cn: {
+    gameTitle: 'Emoji 消消乐',
+    score: '✨ 得分',
+    movesLabel: '🔄 剩余步数',
+    levelLabel: '🏁 关卡',
+    targetLabel: '🎯 目标分',
+    kindsLabel: '{n} 种',
+    wallsLabel: '{n} 面墙',
+    start: '🎮 新游戏',
+    replayLevel: '🔄 重玩本关',
+    nextLevel: '➡️ 下一关',
+    levelDone: '第 {n} 关完成!',
+    gameover: '没达到目标分',
+    niceBig: '{n} 连消!',
+    niceCombo: '{n} 连锁!',
+    helpTip: '查看帮助',
+    helpMsg: '交换相邻两个 emoji 凑成三连即消除（点或拖），上方掉落、顶部补新，连锁加分！',
+    help1: '在步数用完前达到目标分即过关；关卡越高面板越大、种类越多、目标分越高、墙与冰块也越多。第 30 关其余因素到顶，之后只有步数与目标分继续涨。',
+    help2: '无效弹回不耗步；有效交换耗一步。',
+    help3: '计分：三连 60 分，每多消一个 +35；连锁每层 +30%（最多翻倍）；炸弹每格 12 分。一次消 4 个以上或连成连锁会庆祝：棋盘闪光、中央弹出得分并撒花。',
+    help4: '💣 炸弹：不能参与连线，相邻格被消除时引爆，炸掉周围 3×3（每格 12 分），连锁引爆。',
+    help5: '💎 万能元素：可当作任意 emoji 补齐一段连线；紧挨着哪一段就跟着哪一段一起消（左右都算），整段全是它时不消。',
+    help6: '🧱 墙：不能交换或消除，emoji 下落时穿过。',
+    help7: '无解时自动重洗。',
+    help8: '卡住了？6 秒没操作会给出提示：该换的两个 emoji 会呼吸、牌面发光。',
+    help9: '❄️ 冰块：冻住的 emoji 不能消除、也不能交换。消掉相邻（含斜角）的格子即可解冻——解冻后留在原地变回普通 emoji。冰块永远连成一片出现，关卡越高冰块越多。',
+    confirmText: '好的，明白',
+    rotateTip: '请旋转设备至竖屏',
+    // 新游戏二次确认（web 的 shared/ConfirmDialog 三按钮版文案）
+    confirmTitle: '🔄 开始新游戏？',
+    confirmMsg: '会清除闯关记录并从第 1 关重新开始；只想重玩当前这一关，就点「重玩本关」。',
+    confirmOk: '确定重来',
+    confirmReplay: '重玩本关',
+    cancel: '取消',
+  },
+  en: {
+    gameTitle: 'Emoji Crush',
+    score: '✨ Score',
+    movesLabel: '🔄 Moves',
+    levelLabel: '🏁 Level',
+    targetLabel: '🎯 Target',
+    kindsLabel: '{n} kinds',
+    wallsLabel: '{n} walls',
+    start: '🎮 New Game',
+    replayLevel: '🔄 Replay Level',
+    nextLevel: '➡️ Next Level',
+    levelDone: 'Level {n} cleared!',
+    gameover: 'Target Missed',
+    niceBig: '{n} in One!',
+    niceCombo: 'Combo {n}!',
+    helpTip: 'Click for help!',
+    helpMsg: 'Swap two neighbouring emojis (tap or drag) into a line of three — they pop, the rest falls, new ones drop in. Chains score more!',
+    help1: 'Reach the target score before your moves run out. Higher levels bring a bigger board, more kinds, more walls, more ice and a higher target; from level 30 the rest is maxed out and only moves and target keep climbing.',
+    help2: 'No match: bounce back, free. Match: one move.',
+    help3: 'Scoring: a 3-match is 60, each extra emoji +35; each cascade adds +30% (up to double); a bomb is 12 per tile. Clearing 4+ at once or chaining a cascade triggers a celebration — the board flashes, your points pop up, and confetti bursts.',
+    help4: '💣 Bomb: never matches; a neighbouring clear sets it off, blowing up the 3×3 (12 each). Chains.',
+    help5: '💎 Wildcard: matches anything — it completes a line by itself and joins whichever line it touches. A line of only wildcards never clears.',
+    help6: '🧱 Wall: cannot be swapped or cleared; emojis fall through.',
+    help7: 'No match? The board reshuffles.',
+    help8: 'Stuck? After 6 idle seconds, the emojis worth swapping breathe and glow.',
+    help9: '❄️ Ice: a frozen emoji cannot be matched or swapped. Clear a neighbour (diagonals count) to thaw it — it stays put and becomes a normal emoji again. Ice always appears as one connected patch, and later levels have more of it.',
+    confirmText: 'OK, I See',
+    rotateTip: 'Please rotate your device to portrait',
+    // New-game confirmation (same copy as web's shared/ConfirmDialog.vue)
+    confirmTitle: '🔄 Start a new game?',
+    confirmMsg: 'This clears your level record and restarts from level 1. To retry just the level you are on, pick Replay Level.',
+    confirmOk: 'Yes, Restart',
+    confirmReplay: 'Replay Level',
+    cancel: 'Cancel',
+  },
+};
+
+// lang 是 ref：模板里调用 tt() 会自动建立依赖，切换语言后整页重渲染（与 core/i18n 的 t() 同款）
+export function tt(k) {
+  return dict[lang.value]?.[k] ?? dict.cn[k] ?? k;
+}

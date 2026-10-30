@@ -1,0 +1,30 @@
+{
+  "name": "games-hub-mp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "游戏合集 · 微信小程序版（独立工程，不参与 web 构建）",
+  "scripts": {
+    "dev:mp": "uni -p mp-weixin",
+    "build:mp": "uni build -p mp-weixin",
+    "dev:h5": "uni",
+    "build:h5": "uni build"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-5030320261023001",
+    "@dcloudio/uni-components": "3.0.0-5030320261023001",
+    "@dcloudio/uni-h5": "3.0.0-5030320261023001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-5030320261023001",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@dcloudio/uni-cli-shared": "3.0.0-5030320261023001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-5030320261023001",
+    "@iconify-json/carbon": "^1.2.29",
+    "@iconify-json/dinkie-icons": "^1.2.0",
+    "@iconify-json/mdi": "^1.2.3",
+    "sass": "^1.77.0",
+    "unocss": "^66.12.0",
+    "unocss-preset-weapp": "^66.0.2",
+    "vite": "5.2.8"
+  }
+}

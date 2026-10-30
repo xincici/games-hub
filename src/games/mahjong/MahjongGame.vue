@@ -236,9 +236,14 @@ const tileVars = (w, h) => ({ '--mj-w': `${w}px`, '--mj-h': `${h || Math.round(w
 // （见样式里的 --lip）。注意只留厚度、不留阴影的量，否则底部留白会明显大于上边。
 const LIP_RATIO = 0;             // 牌面改用雪碧图，底部厚度已画在图里
 
+// 棋盘占屏宽的比例：**与小程序一致**（mp 的 BOARD_MAX_W = 600rpx = 750 的 80%）。
+// 原来按「屏宽 − 页面左右 16 − 棋盘内边距 8×2」铺满，比小程序宽约 7%（390 宽时 343px vs 314px）。
+const BOARD_RATIO = 0.8;
+
 function computeMetrics() {
   const vw = Math.min(window.innerWidth, 480);
-  const availW = vw - 32 - 16;                       // 页面左右 16 + 棋盘内边距 8×2
+  // 用 80% 屏宽反算棋盘内可用宽度（棋盘的 8×2 内边距不在这 80% 里，要扣掉）
+  const availW = Math.round(vw * BOARD_RATIO) - 16;
   const byW = (availW - metrics.value.gap * (SIZE - 1)) / SIZE;
   // 先用宽度估一个格子宽，据此算出底部要预留的立体高度（用真实 cw 会循环依赖）
   const lip = 0;
