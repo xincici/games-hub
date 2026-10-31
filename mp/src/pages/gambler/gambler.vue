@@ -201,6 +201,7 @@ function save() {
     phase: phase.value, wrong: wrongKeys.value,
   }));
   setRaw(levelKeyFor(mode.value), String(level.value));
+  setRaw(bestKeyFor(mode.value), String(bestLevel.value));
   setRaw(streakKeyFor(mode.value), String(streak.value));
 }
 
@@ -237,6 +238,7 @@ const queryRect = (sel) => new Promise((resolve) => {
 });
 
 async function flyToAnswer(key) {
+  flyingCount.value += 1;          // 从查询开始就锁住模式切换，别让旧模式的异步收尾写到新模式
   const from = await queryRect(`#pick-${key}`);
   // ① 先落档：答案区立刻渲染这张牌（槽位隐身），这样下面能量到它**真实**的位置
   if (!picked.value.includes(key)) picked.value = [...picked.value, key];
@@ -246,10 +248,10 @@ async function flyToAnswer(key) {
   if (!from || !to) {
     // 量不到（首帧未布局 / 极端窄屏）：直接现身，绝不把牌卡在隐身态
     landingKeys.value = landingKeys.value.filter((k) => k !== key);
+    flyingCount.value = Math.max(0, flyingCount.value - 1);
     return;
   }
   const id = ++ghostSeq;
-  flyingCount.value += 1;
   flyGhosts.value = [...flyGhosts.value, {
     id, key,
     left: from.left, top: from.top, w: from.width, h: from.height,
@@ -288,6 +290,8 @@ async function flyToAnswer(key) {
       
       function pick(key) {
       if (phase.value !== 'play' || picked.value.includes(key) || picked.value.length >= 12) return;
+      // 牌组里已经有 4 张的牌不能再选（blocked 由当前手牌实时算出）；答错标红的牌也不可再点
+      if (blocked.value.includes(key) || wrongKeys.value.includes(key)) return;
       // 即时判断模式保持「一次一张」（与 web 同）；提交模式允许边飞边点
       if (mode.value !== 2 && flyingCount.value > 0) return;
       if (mode.value === 2) {
@@ -349,6 +353,7 @@ async function flyToAnswer(key) {
       hearts.value = 0;
       streak.value = 0;
       setRaw(streakKeyFor(mode.value), '0');
+      save();              // 先落档 0 心，飞行期间退出重进也会按失败处理
       finishRound();
       }
       
@@ -367,16 +372,27 @@ async function flyToAnswer(key) {
       function startNewRun() { streak.value = 0; deal(1); }
       
       function toggleMode() {
+      // 飞行 / 查看答案收尾期间不能切：旧模式的异步收尾会写到新模式的状态里
+      if (flyingCount.value > 0 || (phase.value === 'play' && hearts.value <= 0)) return;
+      save();                         // 先落档当前模式，再切
+      clearTimeout(shakeTimer);
+      clearTimeout(wonTimer);
+      flyGhosts.value = [];
+      landingKeys.value = [];
+      flyingCount.value = 0;
+      justWon.value = false;
+      confirming.value = false;
       mode.value = mode.value === 2 ? 1 : 2;
       setRaw(`${PREFIX}mode`, String(mode.value));
       bestLevel.value = +(getRaw(bestKeyFor(mode.value)) || 0);
-      const restored = restoreState();
-      deal(restored ? restored.level : +(getRaw(levelKeyFor(mode.value)) || 1));
+      streak.value = +(getRaw(streakKeyFor(mode.value)) || 0);
+      if (!restore()) deal(+(getRaw(levelKeyFor(mode.value)) || 1));
       }
       
       function restoreState() {
       const s = getJSON(stateKeyFor(mode.value));
       if (!s || !Array.isArray(s.hand) || s.hand.length !== 13) return null;
+      if (s.mode !== undefined && s.mode !== mode.value) return null;
       return s;
       }
       
@@ -391,11 +407,13 @@ async function flyToAnswer(key) {
       const { counts, jokers } = handCounts(hand.value);
       picks.value = winningPicks(counts, jokers);
       blocked.value = SELECT_KEYS.filter(k => isBlocked(k, counts));
-      picked.value = Array.isArray(s.picked) ? s.picked : [];
-      wrongKeys.value = Array.isArray(s.wrong) ? s.wrong : [];
-      hearts.value = Number.isFinite(s.hearts) ? s.hearts : 2;
+      picked.value = [...new Set((Array.isArray(s.picked) ? s.picked : []).filter(k => SELECT_KEYS.includes(k)))];
+      wrongKeys.value = [...new Set((Array.isArray(s.wrong) ? s.wrong : []).filter(k => SELECT_KEYS.includes(k)))];
+      hearts.value = Math.min(2, Math.max(0, Number.isFinite(+s.hearts) ? +s.hearts : 2));
       if (!picks.value.length) return false;       // 坏存档 / 死局 → 重开一关
       phase.value = s.phase === 'won' ? 'won' : s.phase === 'lost' ? 'lost' : 'play';
+      if (phase.value === 'play' && hearts.value <= 0) phase.value = 'lost';
+      justWon.value = false;
       return true;
       }
       
@@ -501,6 +519,7 @@ function showHelp() {
 .pick-tile.used { opacity: 0.35; }
 .pick-tile.muted { filter: grayscale(0.5); }
 .pick-tile.wrong { outline: 2rpx solid #d33; outline-offset: -2rpx; }
+.pick-tile.used, .pick-tile.muted, .pick-tile.wrong { pointer-events: none; }
 .stamp {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: rgba(255,255,255,0.55);

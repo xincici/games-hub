@@ -3,7 +3,22 @@
 > 这是一份**独立工程**的说明：`mp/` 不在 web 仓库的构建链里（根 `.gitignore` 已排除 `mp/`），
 > 目标是把它做成可单独抽走的仓库。**改 web（`src/`）永远不要为了让小程序好做而妥协** ——
 > 反过来，小程序这边一切以 **web 的实际效果为准**（用户会拿 web 截图逐项对比）。
->
+
+
+## 零之前：2026-10-31 扑克牌 / 赌神修复
+
+- **扑克牌背统一**：新增 `src/components/PokerBack.vue`，德州扑克、对对碰的扑克模式、侦探的扑克模式
+  都使用它。样式只有一份：浅色点阵 + 中央 `i-mdi-cards-playing`，圆角固定 8rpx。
+  以后不要再在页面里各写一套牌背。
+- **德州扑克猜大小的牌背**：`pages/poker/card.vue` 的 mini 牌原来在 `playFlip` 里无条件
+  `showFront = true`，`num=0` 的牌背就被画成了空白正面。现在 mini 牌也按 `isBack` 渲染。
+- **对对碰补扑克牌模式**：`pages/match/match.vue` 的 mode 2（`_2` 存档后缀）已补齐，循环为
+  emoji → 扑克 → 麻将；扑克用 2:3 牌、封顶 122rpx，牌面是点数 + 花色文字，牌背走 `PokerBack`。
+- **赌神状态**：切模式前先 `save()` 当前模式；切模式期间禁止飞行 / 查看答案收尾；
+  恢复时校验 `state.mode`，恢复 `picked` / `wrong` / `hearts`，0 心按失败处理；
+  `revealAnswer()` 立刻落档 0 心。四张同牌的 `blocked` 键在 UI 上 `pointer-events: none`，
+  `pick()` 里也再挡一道（答错的键同样不可再点）。
+
 > 用户对还原度的要求是**逐像素级**的：布局、间距、颜色、圆角、按钮比例、动画、文案，都要对得上 web；
 > 实在做不到的（3D 翻面、DOM 克隆飞牌等）**必须主动说明降级**，不能默默改掉。
 
@@ -120,7 +135,7 @@ mp/
 │   ├── pages.json     5 个页面；**navigationStyle 用默认值**（保留小程序原生导航栏）
 │   ├── manifest.json  appid（现在是 wx44d366fc7dc1dec1，真机预览/上传用它）
 │   ├── core/          平台适配层：storage / i18n / sfx
-│   ├── components/    FloatingActions（右下角悬浮按钮容器）/ MahjongTile（雪碧图牌面）
+│   ├── components/    FloatingActions（悬浮按钮）/ MahjongTile（雪碧图）/ PokerBack（统一扑克牌背）
 │   ├── shared/        mahjongTiles / mahjongFaces / emojis（从 web 复制，只改图片导入路径）
 │   ├── static/        音效 + 麻将雪碧图
 │   └── pages/         g2048 / point24 / match / gambler（已迁移 4 个）+ index 首页
@@ -238,7 +253,6 @@ mp/
 
 | 项 | web | 小程序 | 原因 |
 | --- | --- | --- | --- |
-| 对对碰牌面 | emoji / 扑克 / 麻将 | emoji / 麻将 | 扑克牌面（`CardItem`）未移植 |
 | 图标 | UnoCSS presetIcons（mask 渲染）| 同左，但小程序侧只 H5 验证过 mask | 需真机确认 `-webkit-mask` |
 | 赌神飞牌 | 克隆牌 `element.animate` 飞入 | fixed 替身 + `selectorQuery` 测量 + transition（拿不到位置时退化成 CSS 入场）| 已实现，非 DOM 克隆 |
 | 音频 | Web Audio 精确增益 + 淡入淡出 | `InnerAudioContext` 设音量 | 平台能力差异 |
@@ -462,6 +476,10 @@ flyGhost.value = { …flyGhost.value, left: to.left, top: to.top };
 | 麻将英雄 | `pages/mahjong/mahjong.vue` | 126 行（原样复制）| `__mahjong_hero__state` / `_level` / `_best_` / `_mode` |
 | 雀圣 | `pages/quesheng/quesheng.vue` | 537 行（逐字节相同）| `__quesheng__mode` / `_level[_2]` / `_state[_2]` |
 | 麻将传奇 | `pages/legend/legend.vue` | 203 行（逐字节相同）| `__mahjong_legend__state` / `_best_1` / `__legend__suit` |
+
+> **牌耗尽候选区（2026-10）**：麻将英雄 / 扑克炼金术的 `cursor` 可以等于 `pile.length`；
+> `restore()` 不能像原来那样钳到 `length - 1`，否则重进会多显示一张牌。`deckEmpty` 为真时候选区
+> 只显示「牌耗尽了」，不再画手牌 / 下两张。
 
 每个目录都是三件套：`<id>.vue` + `board.js`（从 web 原样复制，只允许改 import）+ `i18n.js`（局部字典 + `tt()`）。
 首页图标：`i-dinkie-icons-five-of-circles-mahjong` / `-white-dragon-mahjong` / `-seven-of-bamboos-mahjong`（都在 safelist 里）。
