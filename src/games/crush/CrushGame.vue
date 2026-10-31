@@ -52,11 +52,11 @@
             @click="onCellClick(idx)"
           ></div>
           <div
-            v-for="gem in gems"
+            v-for="gem in renderGems"
             :key="gem.id"
             class="gem"
             :class="gemClasses(gem)"
-            :style="gemStyle(gem.idx, gem.dealIdx)"
+            :style="gemStyle(gem)"
             @click="onCellClick(gem.idx)"
           >
             <span class="face">{{ faceOf(gem.value) }}</span>
@@ -142,6 +142,17 @@ const bestLevel = ref(Math.max(level.value, Math.floor(+(localStorage.getItem(BE
 const cells = ref([]);
 const gems = ref([]);
 let gemId = 0;
+// 渲染层最后一道保险：cells 里非墙的格子如果暂时没进 gems，直接渲染 fallback 节点。
+const renderGems = computed(() => {
+  const list = gems.value.slice();
+  const have = new Set(list.map(g => g.idx));
+  for (let i = 0; i < cells.value.length; i++) {
+    const v = cells.value[i];
+    if (v === null || v === undefined || v === WALL || have.has(i)) continue;
+    list.push({ id: 'gap-' + i, value: v, idx: i, fresh: false, fall: undefined });
+  }
+  return list;
+});
 
 const phase = ref(PLAY);
 const score = ref(0);
@@ -289,6 +300,7 @@ let busy = false;
 let dealing = false;
 let dealTimer = null;
 let stepTimer = null;
+let dropTimer = null;
 let resetTimer = null;
 let shakeTimer = null;
 let touchFrom = -1;
@@ -344,62 +356,155 @@ function gemClasses(gem) {
   if (blastSet.value.has(gem.idx)) out.push('blasting');
   if (isHinted(gem.idx)) out.push('hinting');
   if (gem.fresh) out.push('fresh');
+  if (gem.dropping) out.push('dropping');
   if (gem.fall != null) out.push('falling');
   if (gem.dealIdx != null) out.push('dealt');
   return out;
 }
 
-function gemStyle(idx, dealIdx) {
+function gemStyle(gem) {
   const cols = conf.value.cols;
-  const r = ~~(idx / cols);
-  const c = idx % cols;
+  const r = ~~(gem.idx / cols);
+  const c = gem.idx % cols;
   const pos = k => `calc(${k} * (var(--cell) + 4px))`;
   return {
     left: pos(c),
     top: pos(r),
-    ...(dealIdx !== undefined ? { animationDelay: `${dealIdx * 16}ms` } : null),
+    ...(gem.dropping ? { '--drop': pos(-(r + 1)) } : null),
+    ...(gem.dealIdx !== undefined ? { animationDelay: `${gem.dealIdx * 16}ms` } : null),
   };
 }
 
-// cells → gems 同步：下落只沿列发生——复用仅限「同列更上方」的同值 gem。
-// 关键：输出的顺序必须是「老 gem 保持原相对顺序 + 新 gem 追加在末尾」，
-// 不能按格子顺序重排——Vue 的 keyed diff 会为了满足新顺序去搬动 DOM 节点，
-// 而同一个父节点里被搬动的元素会丢掉正在跑的 left/top 过渡，下落就变成瞬移了。
+// cells → gems 同步：下落只沿列发生。
+// 关键：绝对不能按「同值」复用，否则同一列上下两个相同 emoji 时，下面那个会被
+// 当成原地不动。旧的移动牌按列内顺序从下往上对到新的非障碍格；只有顶部多出来的
+// 格子才生成新牌。输出的顺序仍然是「老 gem 保持原相对顺序 + 新 gem 追加在末尾」，
+// 不能按格子顺序重排——keyed diff 会搬动节点，正在跑的 left/top 过渡会丢失。
 function syncGems(prevGems, fresh = false) {
+  fillEmptyCells();
   const cols = conf.value.cols;
-  const available = new Map();
-  (prevGems || []).forEach(g => {
-    const col = g.idx % cols;
-    if (!available.has(col)) available.set(col, []);
-    available.get(col).push(g);
+  const rows = conf.value.rows;
+  const old = prevGems || [];
+  const oldByCol = new Map();
+  old.forEach((g) => {
+    const c = g.idx % cols;
+    if (!oldByCol.has(c)) oldByCol.set(c, []);
+    oldByCol.get(c).push(g);
   });
-  for (const list of available.values()) list.sort((a, b) => b.idx - a.idx);
   const next = new Map();
   const created = [];
+
+  for (let c = 0; c < cols; c++) {
+    const oldCol = oldByCol.get(c) || [];
+    const oldFrozenByIdx = new Map();
+    const oldMovable = [];
+    oldCol.forEach((g) => {
+      if (isFrozen(g.value)) oldFrozenByIdx.set(g.idx, g);
+      else oldMovable.push(g);
+    });
+
+    // 固定格（冰块）保持原位；刚化开的冰格也复用同一张牌，只是值变回普通 emoji
+    const targets = [];
+    for (let r = 0; r < rows; r++) {
+      const i = r * cols + c;
+      const v = cells.value[i];
+      if (v === null || v === undefined || v === WALL) continue;
+      const fixed = oldFrozenByIdx.get(i);
+      if (fixed) {
+        next.set(fixed.id, { ...fixed, idx: i, value: v, fresh: false, dropping: false, fall: undefined });
+        oldFrozenByIdx.delete(i);
+      } else if (isFrozen(v)) {
+        created.push({ id: ++gemId, value: v, idx: i, fresh: false });
+      } else {
+        targets.push(i);
+      }
+    }
+
+    oldMovable.sort((a, b) => b.idx - a.idx);
+    const targetBottomUp = targets.slice().sort((a, b) => b - a);
+    const paired = Math.min(oldMovable.length, targetBottomUp.length);
+    for (let k = 0; k < paired; k++) {
+      const g = oldMovable[k];
+      const idx = targetBottomUp[k];
+      next.set(g.id, {
+        ...g,
+        idx,
+        value: cells.value[idx],
+        fresh: false,
+        dropping: false,
+        fall: g.idx !== idx ? idx : undefined,
+      });
+    }
+    // 顶部补牌：DOM 直接落最终格，入场用 transform 从上方落下
+    const newTargets = targetBottomUp.slice(paired).sort((a, b) => a - b);
+    newTargets.forEach((idx) => {
+      created.push({
+        id: ++gemId,
+        value: cells.value[idx],
+        idx,
+        fresh: false,
+        dropping: fresh,
+      });
+    });
+  }
+
+  gems.value = [
+    ...old.map(g => next.get(g.id)).filter(Boolean),
+    ...created,
+  ];
+  repairGems(fresh);
+  if (created.some(g => g.dropping)) clearDropping();
+}
+
+// 极端兜底：正常重力不会留下 null，但炸弹 / 冰 / 切后台回来若出现空洞先补普通 emoji。
+function fillEmptyCells() {
+  let changed = false;
+  const next = cells.value.slice();
+  for (let i = 0; i < next.length; i++) {
+    const v = next[i];
+    if (v === null || v === undefined) {
+      next[i] = Math.floor(Math.random() * conf.value.kinds);
+      changed = true;
+    }
+  }
+  if (changed) cells.value = next;
+}
+
+// 每个有值格子必须恰好一张 gem；重复 id 重新编号，避免 Vue key 冲突复用节点。
+function repairGems(spawnNew = false) {
+  const wanted = new Set();
   for (let i = 0; i < cells.value.length; i++) {
     const v = cells.value[i];
     if (v === null || v === undefined || v === WALL) continue;
-    const col = i % cols;
-    const list = available.get(col) || [];
-    const at = list.findIndex(g => g.idx === i && g.value === v);
-    let pick;
-    if (at >= 0) {
-      pick = list[at];
-      list.splice(at, 1);
-    } else {
-      const upper = list.findIndex(g => g.idx < i && g.value === v);
-      if (upper >= 0) {
-        pick = list[upper];
-        list.splice(upper, 1);
-      }
-    }
-    if (pick) next.set(pick.id, { ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
-    else created.push({ id: ++gemId, value: v, idx: i, fresh });
+    wanted.add(i);
   }
-  gems.value = [
-    ...(prevGems || []).map(g => next.get(g.id)).filter(Boolean),
-    ...created,
-  ];
+  const seen = new Set();
+  const seenIds = new Set();
+  const kept = [];
+  for (const g of gems.value) {
+    if (!wanted.has(g.idx) || seen.has(g.idx)) continue;
+    let item = g.value === cells.value[g.idx] ? g : { ...g, value: cells.value[g.idx] };
+    if (seenIds.has(item.id)) item = { ...item, id: ++gemId };
+    seenIds.add(item.id);
+    seen.add(g.idx);
+    kept.push(item);
+  }
+  let addedDropping = false;
+  for (const idx of wanted) {
+    if (seen.has(idx)) continue;
+    if (spawnNew) addedDropping = true;
+    kept.push({ id: ++gemId, value: cells.value[idx], idx, fresh: false, dropping: spawnNew });
+  }
+  gems.value = kept;
+  if (addedDropping) clearDropping();
+}
+
+function clearDropping() {
+  clearTimeout(dropTimer);
+  dropTimer = setTimeout(() => {
+    if (!gems.value.some(g => g.dropping)) return;
+    gems.value = gems.value.map(g => (g.dropping ? { ...g, dropping: false } : g));
+  }, 350);
 }
 
 // ---------- 关卡流程 ----------
@@ -642,9 +747,7 @@ function resolveCascades(chain) {
     blastSet.value = new Set();
     // 冰下那颗 gem 保留自己的身份（不换 DOM 节点），只把值换成普通 emoji，
     // 这样 syncGems 还能复用同列上方的它，冰层是「化掉」而不是「换了一张牌」
-    const survivors = gems.value
-      .filter(g => !all.has(g.idx))
-      .map(g => (thawed.has(g.idx) ? { ...g, value: frozenKind(g.value) } : g));
+    const survivors = gems.value.filter(g => !all.has(g.idx));
     cells.value = applyThaw(cleared, thawed);
     cells.value = applyGravity(cells.value, cols, rows, kinds, spawnOpts());
     syncGems(survivors, true);
@@ -695,6 +798,9 @@ function clearCelebration() {
 function finishTurn() {
   busy = false;
   if (phase.value !== PLAY) { pokeIdle(); return; }
+  // 盘面稳定后清掉 fresh/falling/dropping，补空 cells / 缺 gem；
+  // 防止计时器或后台切换让牌停在棋盘外/半透明。
+  settleBoard();
   if (score.value >= target.value) { winLevel(); return; }
   if (moves.value <= 0) { loseLevel(); return; }
   if (!hasAnyMove(cells.value, conf.value.cols, conf.value.rows, conf.value.kinds)) {
@@ -704,6 +810,17 @@ function finishTurn() {
   }
   save();
   pokeIdle();       // 盘面稳定了，重新起 6s 空闲计时
+}
+
+function settleBoard() {
+  fillEmptyCells();
+  gems.value = gems.value.map(g => ({
+    ...g,
+    fresh: false,
+    fall: undefined,
+    dropping: false,
+  }));
+  repairGems(false);
 }
 
 function winLevel() {
@@ -790,6 +907,11 @@ function onScoreReset() {
 @keyframes drop-in {
   from { transform: translateY(-100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes drop-from-above {
+  from { transform: translateY(var(--drop, -100%)); }
+  to { transform: translateY(0); }
 }
 
 @keyframes land-bounce {
@@ -1015,6 +1137,7 @@ function onScoreReset() {
     grid-template-columns: repeat(var(--n), var(--cell));
     grid-auto-rows: var(--cell);
     gap: 4px;
+    overflow: hidden;
     // 大消 / 连锁时外圈闪一圈（动 box-shadow 不动 transform：不改变文档可滚动范围）
     &.celebrating {
       border-radius: var(--radius-tile);
@@ -1152,6 +1275,9 @@ function onScoreReset() {
     }
     &.falling {
       animation: land-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    &.dropping {
+      animation: drop-from-above 0.3s cubic-bezier(0.2, 0.8, 0.3, 1);
     }
     &.dealt {
       animation: deal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;

@@ -23,3 +23,14 @@ CrushGame.vue（emoji 消消乐 · 闯关制：限定步数内达到目标分过
 - 操作区左侧「盘面信息」：`列×行 · 种类 · 实际墙数`（0 面墙不显示）
 - 拖动换位走 **Pointer Events**（鼠标 / 触摸 / 笔一套事件），`touch-action: none` 加在 `.board-frame` 上；拖到相邻格即 `trySwap`。拖完浏览器还会补发一个 `click`，由 `touchHandled` 吃掉（否则会被当成「又选中一次」）——**这个标记必须在每次 `pointerdown` 复位**：鼠标拖动时按下 / 抬起落在不同 gem 上，补发的 click 目标是共同祖先 `.board`（没有 click 处理器），没人消费的话会把拖动后的第一次点击一起吞掉（实测抓到过）。点两下换位的老路径仍然可用。
 - 入场动画的错峰序号是 **`行 + 列`**（左上 → 右下的斜向波浪，同一斜线上的牌一起出现），每档 16ms，总时长 `(rows + cols) * 16 + 400`；原来是按 `idx` 排的行优先序号，看起来是「一行一行往下刷」。动画挂在 `.gem` 上（牌面缩放淡入），位置走 `left/top`，互不干扰。
+
+## 2026-10 下落 / 空格修复（web 与小程序同一方案）
+
+- `syncGems` 不再按 `idx + value` 复用老 gem：同列上下两个相同 emoji 时，下面那张会被当成原地不动。
+  现在按列内顺序从下往上配对，相邻牌真正下落；冰块按同 idx 固定复用，解冻保留原节点。
+- 新补进来的牌在 DOM 里直接落最终格，入场只做 `transform: translateY(var(--drop)) → 0`
+  （`.gem.dropping`），不再用「先放棋盘外、下一拍改 top」的两段式状态；动画 300ms 后摘类。
+- `fillEmptyCells()` / `repairGems()` / `renderGems` 兜底：补 null 格、保证每格恰好一张 gem、
+  重复 id 重新编号、模板缺牌时渲染 fallback，页面不会留下只有底色的空格。
+- `finishTurn()` 的 `settleBoard()` 清掉 fresh / falling / dropping 残留，防止动画状态卡在棋盘外。
+- 验证：注入 null 格、触发三连；补牌从上方落入，落定后 49 个 gem、无空格；`npm run build` 通过。
