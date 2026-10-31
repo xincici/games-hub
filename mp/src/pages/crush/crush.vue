@@ -62,7 +62,7 @@
             />
             <view
               v-for="gem in renderGems"
-              :key="gem.id"
+              :key="gem.id + '-' + gemPaintSeq"
               class="gem"
               :class="gemClasses(gem)"
               :style="gemStyle(gem)"
@@ -217,6 +217,7 @@ const level = ref(loadLevel());
 const bestLevel = ref(Math.max(level.value, Math.floor(+(getRaw(BEST_KEY) || 1)) || 1));
 const cells = ref([]);
 const gems = ref([]);
+const gemPaintSeq = ref(0);   // 盘面稳定后强制重建 gem 节点，绕过 WebView 的陈旧图层
 let gemId = 0;
 // 渲染层最后一道保险：cells 里非墙的格子如果暂时没进 gems（级联异常 / 动画状态未清），
 // 这里补一个只读的 fallback 节点，页面永远不会留下只有底色的格子。
@@ -998,6 +999,9 @@ function settleBoard() {
     dropping: false,
   }));
   repairGems(false);
+  // 微信 WebView 偶发把已经移动过的节点留在旧图层：数据/节点都在，但整张牌不画。
+  // 盘面稳定后换一次 key，让 Vue 重建这一批节点，强制重新绘制。
+  gemPaintSeq.value += 1;
 }
 
 // 连锁期间玩家点的交换：盘面一稳定就补上（不再锁住整块棋盘）

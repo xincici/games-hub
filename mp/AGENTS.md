@@ -34,6 +34,9 @@
   `syncGems()` 让新牌直接落在最终格，`gemStyle(gem)` 给 `.gem.dropping` 一个 `--drop` 距离，
   `@keyframes drop-from-above` 从上方 `translateY` 到 0；`.board` 的 `overflow: hidden` 裁掉上方部分。
   动画 300ms 后 `clearDropping()` 摘类，避免影响后续选中 / 提示动画。
+- **消消乐 WebView 陈旧图层**：数据与节点都在、重进 / 再操作才显示，是微信 WebView 没有重绘已移动的
+  `.gem` 节点。`settleBoard()` 在盘面稳定后把 `gemPaintSeq` 加一，模板 key 变成 `gem.id + '-' + gemPaintSeq`，
+  强制 Vue 重建这一批节点（不改变 cells / gems 数据）；这是针对小程序渲染 bug 的兜底，web 不需要。
 - **滚动锁定**：`pages.json` 给 `pages/link/link` 与 `pages/crush/crush` 都加 `disableScroll: true`。
 - **赌神不可选状态**：`.pick-tile.used` 与 `.pick-tile.muted` 共用 `opacity: .35; filter: grayscale(.5)`，
   四张同牌的候选牌和已经选走的牌视觉一致。
