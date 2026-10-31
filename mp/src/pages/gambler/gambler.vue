@@ -191,6 +191,8 @@ const phase = ref('play');
 const justWon = ref(false);
 let wonTimer = 0;
 let shakeTimer = null;
+let preparedNext = null;   // 胜利后预生成的下一关，点「下一关」立即落位
+let prepareSeq = 0;        // 预生成 / 新开局的竞态令牌
 
 const pickRows = computed(() => [SELECT_KEYS.slice(0, 9), SELECT_KEYS.slice(9, 18), SELECT_KEYS.slice(18, 27)]);
 const canSubmit = computed(() => mode.value === 2 && phase.value === 'play' && picked.value.length > 0);
@@ -205,20 +207,43 @@ function save() {
   setRaw(streakKeyFor(mode.value), String(streak.value));
 }
 
-function deal(lv) {
+function applyRound(round, lv) {
+  prepareSeq += 1;
+  preparedNext = null;
   roundSeq.value += 1;          // 手牌 key 换一批 → 发牌动画重播
   clearTimeout(shakeTimer);
+  clearTimeout(wonTimer);
+  justWon.value = false;
   level.value = Math.max(1, lv);
-  const r = newRound(level.value);
-  hand.value = r.hand;
-  picks.value = r.picks;
-  blocked.value = r.blocked;
+  hand.value = round.hand;
+  picks.value = round.picks;
+  blocked.value = round.blocked;
   picked.value = [];
   wrongKeys.value = [];
   hearts.value = 2;
   phase.value = 'play';
   if (level.value > bestLevel.value) { bestLevel.value = level.value; setRaw(bestKeyFor(mode.value), String(bestLevel.value)); }
   save();
+}
+
+function deal(lv) {
+  prepareSeq += 1;              // 作废已经排队的预生成，避免旧关卡盖到新局上
+  preparedNext = null;
+  applyRound(newRound(lv), lv);
+}
+
+// 胜利浮层出现后，在空闲时间把下一关算好（newRound 在手机上要 100~300ms）。
+// 玩家点「下一关」时直接落位，不再等同步生成；没算完时 nextLevel 自己兜底并加锁。
+function scheduleNextRound() {
+  const lv = level.value + 1;
+  if (preparedNext && preparedNext.level === lv) return;
+  const seq = ++prepareSeq;
+  setTimeout(() => {
+    if (seq !== prepareSeq || phase.value !== 'won') return;
+    const round = newRound(lv);
+    if (seq !== prepareSeq || phase.value !== 'won') return;
+    preparedNext = { level: lv, round };
+  }, 30);
 }
 
 // ---------- 选择区 → 答案区：飞牌动画（照 web 的 flyToAnswer）----------
@@ -365,10 +390,25 @@ async function flyToAnswer(key) {
       streak.value += 1;
       playWin();
       save();
+      setTimeout(scheduleNextRound, 30);
       }
       
       function replayLevel() { confirming.value = false; deal(level.value); }
-      function nextLevel() { deal(level.value + 1); }
+      let nextBusy = false;
+      function nextLevel() {
+      // 连续点击只认第一下；预生成命中时不再同步跑 newRound
+      if (phase.value !== 'won' || nextBusy) return;
+      nextBusy = true;
+      const lv = level.value + 1;
+      const cached = preparedNext && preparedNext.level === lv ? preparedNext.round : null;
+      if (cached) {
+      preparedNext = null;
+      applyRound(cached, lv);
+      } else {
+      applyRound(newRound(lv), lv);
+      }
+      nextBusy = false;
+      }
       function startNewRun() { streak.value = 0; deal(1); }
       
       function toggleMode() {
@@ -377,6 +417,8 @@ async function flyToAnswer(key) {
       save();                         // 先落档当前模式，再切
       clearTimeout(shakeTimer);
       clearTimeout(wonTimer);
+      prepareSeq += 1;             // 作废旧模式的预生成
+      preparedNext = null;
       flyGhosts.value = [];
       landingKeys.value = [];
       flyingCount.value = 0;
@@ -414,6 +456,7 @@ async function flyToAnswer(key) {
       phase.value = s.phase === 'won' ? 'won' : s.phase === 'lost' ? 'lost' : 'play';
       if (phase.value === 'play' && hearts.value <= 0) phase.value = 'lost';
       justWon.value = false;
+      if (phase.value === 'won') setTimeout(scheduleNextRound, 30);
       return true;
       }
       
@@ -516,8 +559,7 @@ function showHelp() {
 .submit[disabled] { background: #aaa; }
 .pick-row { display: flex; gap: 3rpx; justify-content: center; }
 .pick-tile { position: relative; width: 66rpx; height: 84rpx; border-radius: 8rpx; overflow: hidden; background: #f7f4ee; }
-.pick-tile.used { opacity: 0.35; }
-.pick-tile.muted { filter: grayscale(0.5); }
+.pick-tile.used, .pick-tile.muted { opacity: 0.35; filter: grayscale(0.5); }
 .pick-tile.wrong { outline: 2rpx solid #d33; outline-offset: -2rpx; }
 .pick-tile.used, .pick-tile.muted, .pick-tile.wrong { pointer-events: none; }
 .stamp {

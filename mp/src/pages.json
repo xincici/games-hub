@@ -151,7 +151,8 @@
         "navigationBarTitleText": "Emoji 连连看",
         "navigationBarBackgroundColor": "#f0f2f5",
         "navigationBarTextStyle": "black",
-        "backgroundColor": "#f0f2f5"
+        "backgroundColor": "#f0f2f5",
+        "disableScroll": true
       }
     },
     {
@@ -161,7 +162,8 @@
         "navigationBarTitleText": "Emoji 消消乐",
         "navigationBarBackgroundColor": "#f0f2f5",
         "navigationBarTextStyle": "black",
-        "backgroundColor": "#f0f2f5"
+        "backgroundColor": "#f0f2f5",
+        "disableScroll": true
       }
     },
     {

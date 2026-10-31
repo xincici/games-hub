@@ -18,6 +18,29 @@
   恢复时校验 `state.mode`，恢复 `picked` / `wrong` / `hearts`，0 心按失败处理；
   `revealAnswer()` 立刻落档 0 心。四张同牌的 `blocked` 键在 UI 上 `pointer-events: none`，
   `pick()` 里也再挡一道（答错的键同样不可再点）。
+- **消消乐 emoji 空白**：`shared/emojis.js` 里 19 个 Emoji 12+ / 带 VS16 的字符原位替换成
+  老设备也有的单码位 emoji（保持数组长度，旧存档的数字下标不失效）；`.gem .face` 显式声明
+  Apple/Segoe/Noto/Android 彩色 emoji 字体，`faceOf()` 对越界值回退 `❓`。
+  另有一类**下落之后偶发空白**：新牌入场用 `drop-in` / `deal-in` 的 `opacity: 0`，级联在动画中途清掉
+  `fresh` 时 WebView 可能留下没重绘的文字层。现在两条入场动画**只做 scale、不做 opacity**，
+  并给 `.gem .face` 加 `translateZ(0)` + `backface-visibility: hidden` 单独分层。
+- **消消乐下落动画**：`syncGems()` **不能按同值复用老 gem**（旧实现优先找 idx+value 完全相同的那张，
+  同列两个相同 emoji 时下面那张会被当成原地不动）。现在按列内顺序从下往上配对：
+  下方的老 gem 一定落到更下的目标格，只有顶部多出来的格子才生成新牌；冰块按同 idx 固定复用。
+- **消消乐空格兜底**：`syncGems()` 先 `fillEmptyCells()`（补 null / undefined），末尾 `repairGems()` 按 `cells`
+  检查「每个有值格子恰好一张 gem」；缺失补、重复/越界清、重复 `id` 重新编号。模板再用 `renderGems`
+  兜底：`cells` 里有值但 `gems` 暂时没这张牌时直接渲染一个 fallback 节点，页面不会只剩底色。
+- **消消乐补牌入场**：新牌不再在目标格原地缩放，也不再用「先放棋盘外、下一拍改 top」的两段式状态。
+  `syncGems()` 让新牌直接落在最终格，`gemStyle(gem)` 给 `.gem.dropping` 一个 `--drop` 距离，
+  `@keyframes drop-from-above` 从上方 `translateY` 到 0；`.board` 的 `overflow: hidden` 裁掉上方部分。
+  动画 300ms 后 `clearDropping()` 摘类，避免影响后续选中 / 提示动画。
+- **滚动锁定**：`pages.json` 给 `pages/link/link` 与 `pages/crush/crush` 都加 `disableScroll: true`。
+- **赌神不可选状态**：`.pick-tile.used` 与 `.pick-tile.muted` 共用 `opacity: .35; filter: grayscale(.5)`，
+  四张同牌的候选牌和已经选走的牌视觉一致。
+- **赌神「下一关」延迟 / 重复开新局**：`newRound()` 在手机上要 100~300ms，原来点「下一关」才同步生成，
+  浮层一直盖着；也没有点击锁，连点两次会 `deal(level+1)` 两次。现在胜利后 30ms 在后台预生成下一关
+  （`preparedNext`），`nextLevel()` 命中缓存立即落位；`nextBusy` + `phase === 'won'` 双重加锁，
+  第二次点击直接忽略。预生成用 `prepareSeq` 令牌，换模式 / 重玩 / 新游戏会作废旧关卡。
 
 > 用户对还原度的要求是**逐像素级**的：布局、间距、颜色、圆角、按钮比例、动画、文案，都要对得上 web；
 > 实在做不到的（3D 翻面、DOM 克隆飞牌等）**必须主动说明降级**，不能默默改掉。

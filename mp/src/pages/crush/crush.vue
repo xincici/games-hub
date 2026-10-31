@@ -61,11 +61,11 @@
               @click="onCellClick(idx)"
             />
             <view
-              v-for="gem in gems"
+              v-for="gem in renderGems"
               :key="gem.id"
               class="gem"
               :class="gemClasses(gem)"
-              :style="gemStyle(gem.idx, gem.dealIdx)"
+              :style="gemStyle(gem)"
               @click="onCellClick(gem.idx)"
             >
               <text class="face">{{ faceOf(gem.value) }}</text>
@@ -218,6 +218,18 @@ const bestLevel = ref(Math.max(level.value, Math.floor(+(getRaw(BEST_KEY) || 1))
 const cells = ref([]);
 const gems = ref([]);
 let gemId = 0;
+// 渲染层最后一道保险：cells 里非墙的格子如果暂时没进 gems（级联异常 / 动画状态未清），
+// 这里补一个只读的 fallback 节点，页面永远不会留下只有底色的格子。
+const renderGems = computed(() => {
+  const list = gems.value.slice();
+  const have = new Set(list.map(g => g.idx));
+  for (let i = 0; i < cells.value.length; i++) {
+    const v = cells.value[i];
+    if (v === null || v === undefined || v === WALL || have.has(i)) continue;
+    list.push({ id: 'gap-' + i, value: v, idx: i, fresh: false, fall: undefined });
+  }
+  return list;
+});
 
 const phase = ref(PLAY);
 const score = ref(0);
@@ -334,10 +346,10 @@ function cellStyle(idx) {
   };
 }
 
-function gemStyle(idx, dealIdx) {
+function gemStyle(gem) {
   const l = layout.value;
-  const c = idx % l.cols;
-  const r = ~~(idx / l.cols);
+  const c = gem.idx % l.cols;
+  const r = ~~(gem.idx / l.cols);
   const style = {
     width: l.cell + 'rpx',
     height: l.cell + 'rpx',
@@ -345,8 +357,11 @@ function gemStyle(idx, dealIdx) {
     top: r * (l.cell + l.gap) + 'rpx',
     fontSize: l.font + 'rpx',      // 字号内联给，不依赖 CSS 变量（--cell/--font）
   };
+  // 新牌始终渲染在最终格，只让 transform 从棋盘上方落下来：
+  // 这样即使动画被打断，牌也不会停在棋盘外/留下空格。
+  if (gem.dropping) style['--drop'] = `-${(r + 1) * (l.cell + l.gap)}rpx`;
   // 发牌：错峰序号 = 行 + 列（左上 → 右下的斜向波浪，每档 16ms）
-  if (dealIdx !== undefined) style.animationDelay = dealIdx * 16 + 'ms';
+  if (gem.dealIdx !== undefined) style.animationDelay = gem.dealIdx * 16 + 'ms';
   return style;
 }
 
@@ -429,6 +444,7 @@ let busy = false;          // 交换 / 连锁结算中（只影响交换，选�
 let dealing = false;       // 发牌入场动画中（只用来压住空闲提示）
 let dealTimer = null;
 let stepTimer = null;
+let dropTimer = null;
 let resetTimer = null;
 let shakeTimer = null;
 let shakeResetTimer = null;
@@ -442,8 +458,8 @@ let pendingSwap = null;    // 连锁期间玩家点的交换，盘面稳定后�
 function faceOf(value) {
   if (value === BOMB) return BOMB_FACE;
   if (value === WILD) return WILD_FACE;
-  if (isFrozen(value)) return EMOJIS[frozenKind(value)];   // 冰下那种 emoji 照常显示
-  return EMOJIS[value];
+  if (isFrozen(value)) return EMOJIS[frozenKind(value)] || '❓';   // 冰下那种 emoji 照常显示
+  return EMOJIS[value] || '❓';                              // 坏存档 / 越界值也不要留空白格
 }
 
 function gemClasses(gem) {
@@ -461,6 +477,7 @@ function gemClasses(gem) {
   if (blastSet.value.has(gem.idx)) out.push('blasting');
   if (isHinted(gem.idx)) out.push('hinting');
   if (gem.fresh) out.push('fresh');
+  if (gem.dropping) out.push('dropping');
   if (gem.fall != null) out.push('falling');
   if (gem.dealIdx != null) out.push('dealt');
   return out;
@@ -474,45 +491,145 @@ function showThaw(set) {
   thawTimer = setTimeout(() => { thawSet.value = new Set(); }, 560);
 }
 
-// cells → gems 同步：下落只沿列发生——复用仅限「同列更上方」的同值 gem。
-// 关键：输出的顺序必须是「老 gem 保持原相对顺序 + 新 gem 追加在末尾」，
+// 极端兜底：正常重力不会留下 null，但炸弹 / 冰 / 切后台回来若出现空洞，
+// 这里先补成普通 emoji，后面的 syncGems / repairGems 才能为它建牌，避免只剩底色。
+function fillEmptyCells() {
+  let changed = false;
+  const next = cells.value.slice();
+  for (let i = 0; i < next.length; i++) {
+    const v = next[i];
+    if (v === null || v === undefined) {
+      next[i] = Math.floor(Math.random() * conf.value.kinds);
+      changed = true;
+    }
+  }
+  if (changed) cells.value = next;
+}
+
+// cells → gems 同步：下落只沿列发生。
+// 关键：绝对不能按「同值」复用，否则同一列上下两个相同 emoji 时，下面那个会被
+// 当成原地不动（旧代码优先找 idx+value 完全相同的老 gem），玩家看到的就是
+// 「下面那张没有下落动画」。旧的移动牌按列内顺序从下往上对到新的非障碍格，
+// 下方的老 gem 一定会落到更下的目标格；只有顶部多出来的格子才生成新牌。
+// 输出的顺序仍然是「老 gem 保持原相对顺序 + 新 gem 追加在末尾」，
 // 不能按格子顺序重排——keyed diff 会为了满足新顺序去搬动节点，
 // 同一个父节点里被搬动的元素会丢掉正在跑的 left/top 过渡，下落就变成瞬移了。
+function clearDropping() {
+  clearTimeout(dropTimer);
+  dropTimer = setTimeout(() => {
+    if (!gems.value.some(g => g.dropping)) return;
+    gems.value = gems.value.map(g => (g.dropping ? { ...g, dropping: false } : g));
+  }, 350);
+}
+
 function syncGems(prevGems, fresh = false) {
+  fillEmptyCells();
   const cols = conf.value.cols;
-  const available = new Map();
-  (prevGems || []).forEach(g => {
-    const col = g.idx % cols;
-    if (!available.has(col)) available.set(col, []);
-    available.get(col).push(g);
+  const rows = conf.value.rows;
+  const old = prevGems || [];
+  const oldByCol = new Map();
+  old.forEach((g) => {
+    const c = g.idx % cols;
+    if (!oldByCol.has(c)) oldByCol.set(c, []);
+    oldByCol.get(c).push(g);
   });
-  for (const list of available.values()) list.sort((a, b) => b.idx - a.idx);
   const next = new Map();
   const created = [];
+
+  for (let c = 0; c < cols; c++) {
+    const oldCol = oldByCol.get(c) || [];
+    const oldFrozenByIdx = new Map();
+    const oldMovable = [];
+    oldCol.forEach((g) => {
+      if (isFrozen(g.value)) oldFrozenByIdx.set(g.idx, g);
+      else oldMovable.push(g);
+    });
+
+    // 固定格（冰块）保持原位；刚化开的冰格也复用同一张牌，只是值变回普通 emoji
+    const targets = [];
+    for (let r = 0; r < rows; r++) {
+      const i = r * cols + c;
+      const v = cells.value[i];
+      if (v === null || v === undefined || v === WALL) continue;
+      const fixed = oldFrozenByIdx.get(i);
+      if (fixed) {
+        next.set(fixed.id, { ...fixed, idx: i, value: v, fresh: false, dropping: false, fall: undefined });
+        oldFrozenByIdx.delete(i);
+      } else if (isFrozen(v)) {
+        created.push({ id: ++gemId, value: v, idx: i, fresh: false });
+      } else {
+        targets.push(i);
+      }
+    }
+
+    // 从下往上配对：老牌在列内的顺序不变，但每一张都真的落到更低的目标格
+    oldMovable.sort((a, b) => b.idx - a.idx);
+    const targetBottomUp = targets.slice().sort((a, b) => b - a);
+    const paired = Math.min(oldMovable.length, targetBottomUp.length);
+    for (let k = 0; k < paired; k++) {
+      const g = oldMovable[k];
+      const idx = targetBottomUp[k];
+      next.set(g.id, {
+        ...g,
+        idx,
+        value: cells.value[idx],
+        fresh: false,
+        dropping: false,
+        fall: g.idx !== idx ? idx : undefined,
+      });
+    }
+    // 顶部补进来的新牌：DOM 直接落在最终格，入场动画从上方 translate 下来。
+    // 不再用「先放棋盘外、下一拍改 top」的两段式状态，动画中断也不会留下空格。
+    const newTargets = targetBottomUp.slice(paired).sort((a, b) => a - b);
+    newTargets.forEach((idx) => {
+      created.push({
+        id: ++gemId,
+        value: cells.value[idx],
+        idx,
+        fresh: false,
+        dropping: fresh,
+      });
+    });
+  }
+
+  gems.value = [
+    ...old.map(g => next.get(g.id)).filter(Boolean),
+    ...created,
+  ];
+  repairGems(fresh);
+  if (created.some(g => g.dropping)) clearDropping();
+}
+
+// 兜底不变量：每个有值的格子必须恰好有一张 gem。正常路径的 syncGems 已经保证，
+// 但级联 / 重排 / 切后台回来时只要有一次 idx 对不上，就会留下一个只有底色的空格
+// （玩家看到的就是「格子空了」）。这里按 cells 再补一遍，重复/越界的 gem 一并清掉。
+function repairGems(spawnNew = false) {
+  const wanted = new Set();
   for (let i = 0; i < cells.value.length; i++) {
     const v = cells.value[i];
     if (v === null || v === undefined || v === WALL) continue;
-    const col = i % cols;
-    const list = available.get(col) || [];
-    const at = list.findIndex(g => g.idx === i && g.value === v);
-    let pick;
-    if (at >= 0) {
-      pick = list[at];
-      list.splice(at, 1);
-    } else {
-      const upper = list.findIndex(g => g.idx < i && g.value === v);
-      if (upper >= 0) {
-        pick = list[upper];
-        list.splice(upper, 1);
-      }
-    }
-    if (pick) next.set(pick.id, { ...pick, idx: i, fresh: false, fall: pick.idx !== i ? i : undefined });
-    else created.push({ id: ++gemId, value: v, idx: i, fresh });
+    wanted.add(i);
   }
-  gems.value = [
-    ...(prevGems || []).map(g => next.get(g.id)).filter(Boolean),
-    ...created,
-  ];
+  const seen = new Set();
+  const seenIds = new Set();
+  const kept = [];
+  for (const g of gems.value) {
+    if (!wanted.has(g.idx) || seen.has(g.idx)) continue;
+    let item = g.value === cells.value[g.idx] ? g : { ...g, value: cells.value[g.idx] };
+    // 极端情况：gemId 被重开后撞 key，Vue 会把两个格子复用一个节点，另一个格子就空了。
+    if (seenIds.has(item.id)) item = { ...item, id: ++gemId };
+    seenIds.add(item.id);
+    seen.add(g.idx);
+    kept.push(item);
+  }
+  let addedDropping = false;
+  for (const idx of wanted) {
+    if (seen.has(idx)) continue;
+    if (spawnNew) addedDropping = true;
+    kept.push({ id: ++gemId, value: cells.value[idx], idx, fresh: false, dropping: spawnNew });
+  }
+  gems.value = kept;
+  if (addedDropping) clearDropping();
 }
 
 // ---------- 关卡流程 ----------
@@ -797,11 +914,9 @@ function resolveCascades(chain) {
     matchedSet.value = new Set();
     hugeClear.value = false;
     blastSet.value = new Set();
-    // 冰下那颗 gem 保留自己的身份（不换节点），只把值换成普通 emoji，
-    // 这样 syncGems 还能复用同列上方的它，冰层是「化掉」而不是「换了一张牌」
-    const survivors = gems.value
-      .filter(g => !all.has(g.idx))
-      .map(g => (thawed.has(g.idx) ? { ...g, value: frozenKind(g.value) } : g));
+    // 冰下那颗 gem 保留自己的身份（不换节点）。这里保留冰冻值，交给 syncGems
+    // 按同 idx 固定复用后再写入新的普通 emoji —— 冰层是「化掉」而不是「换了一张牌」。
+    const survivors = gems.value.filter(g => !all.has(g.idx));
     cells.value = applyThaw(cleared, thawed);
     cells.value = applyGravity(cells.value, cols, rows, kinds, spawnOpts());
     syncGems(survivors, true);
@@ -857,6 +972,9 @@ function clearCelebration() {
 function finishTurn() {
   busy = false;
   if (phase.value !== PLAY) { pendingSwap = null; pokeIdle(); return; }
+  // 盘面稳定：把所有一次性动画状态收干净，再按 cells 补齐 gem。
+  // 这一步是「截图里只有底色、下一次点击才出现」的最后一道保险。
+  settleBoard();
   if (score.value >= target.value) { pendingSwap = null; winLevel(); return; }
   if (moves.value <= 0) { pendingSwap = null; loseLevel(); return; }
   if (!hasAnyMove(cells.value, conf.value.cols, conf.value.rows, conf.value.kinds)) {
@@ -867,6 +985,19 @@ function finishTurn() {
   save();
   pokeIdle();       // 盘面稳定了，重新起 6s 空闲计时
   flushPendingSwap();
+}
+
+// 盘面稳定后的收尾：清掉 fresh/falling/dropping 等一次性状态，补空 cells / 缺 gem。
+// 这些状态只应该存在于动画期间；如果因为计时器/后台切换漏清，牌会停在半透明或棋盘外。
+function settleBoard() {
+  fillEmptyCells();
+  gems.value = gems.value.map(g => ({
+    ...g,
+    fresh: false,
+    fall: undefined,
+    dropping: false,
+  }));
+  repairGems(false);
 }
 
 // 连锁期间玩家点的交换：盘面一稳定就补上（不再锁住整块棋盘）
@@ -959,6 +1090,7 @@ onUnmounted(() => {
   clearTimeout(stepTimer);
   clearTimeout(resetTimer);
   clearTimeout(dealTimer);
+  clearTimeout(dropTimer);
   clearTimeout(shakeTimer);
   clearTimeout(shakeResetTimer);
   clearTimeout(idleTimer);
@@ -998,8 +1130,13 @@ function showHelp() {
   100% { transform: scale(1.7); opacity: 0; }
 }
 @keyframes drop-in {
-  from { transform: translateY(-100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: scale(0.4); }
+  to { transform: scale(1); }
+}
+/* 补牌从棋盘上方落到最终格：DOM 位置不动，只动 transform */
+@keyframes drop-from-above {
+  from { transform: translateY(var(--drop, -100%)); }
+  to { transform: translateY(0); }
 }
 @keyframes land-bounce {
   0% { transform: translateY(-12%) scaleY(1.06); }
@@ -1007,8 +1144,8 @@ function showHelp() {
   100% { transform: translateY(0) scaleY(1); }
 }
 @keyframes deal-in {
-  from { transform: scale(0.2); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+  from { transform: scale(0); }
+  to { transform: scale(1); }
 }
 /* 提示时牌面呼吸：幅度比原来（1 → 1.2 → 0.8）大得多，还带一点摆动 */
 @keyframes breathe {
@@ -1221,6 +1358,7 @@ function showHelp() {
 .board {
   position: relative;
   border-radius: 15rpx;
+  overflow: hidden;              /* 新牌从棋盘上方（负 top）落下，超出部分裁掉 */
 }
 /* 大消 / 连锁时外圈闪一圈（动 box-shadow 不动 transform：不改变文档可滚动范围） */
 .board.celebrating { animation: board-celebrate 0.9s ease-out; }
@@ -1262,6 +1400,13 @@ function showHelp() {
 .gem .face {
   display: inline-block;
   line-height: 1;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  /* 显式指定彩色 emoji 字体：部分 Android / WebView 默认字体只覆盖文字，
+     会随机把较新的 emoji 画成空白或豆腐块 */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Android Emoji", sans-serif;
+  font-weight: normal;
 }
 .gem.selected {
   border-color: #23804e;
@@ -1345,6 +1490,7 @@ function showHelp() {
 }
 .gem.fresh { animation: drop-in 0.3s ease-out; }
 .gem.falling { animation: land-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.gem.dropping { animation: drop-from-above 0.3s cubic-bezier(0.2, 0.8, 0.3, 1); }
 .gem.dealt { animation: deal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
 /* 消除类动画写在最后：同一元素同时带 fresh/falling 与 matched/blasting 时，
    靠后的规则胜出（选择器权重相同），否则消除动画会被掉落 / 落格动画顶掉 */
