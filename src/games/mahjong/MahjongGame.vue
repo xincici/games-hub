@@ -47,19 +47,24 @@
 
     <div class="card opt-area">
       <div class="opt-half hand">
-        <div
-          class="tile-slot current"
-          :class="{ ghost: dragging }"
-          :style="slotVars(HAND_W)"
-          @pointerdown="onPointerDown"
-        >
-          <MahjongTile v-if="hand" :value="hand.value" :style="tileVars(HAND_W)" />
-          <span v-else class="slot-hint">{{ i18n('left') }}</span>
-        </div>
-        <div class="preview" :style="slotVars(HAND_W)">
-          <div class="tile-slot next" v-for="t in preview" :key="t.id" :style="{ transform: `scale(${PREVIEW_SCALE})` }">
-            <MahjongTile :value="t.value" :style="tileVars(HAND_W)" />
+        <template v-if="hand">
+          <div
+            class="tile-slot current"
+            :class="{ ghost: dragging }"
+            :style="slotVars(HAND_W)"
+            @pointerdown="onPointerDown"
+          >
+            <MahjongTile :value="hand.value" :style="tileVars(HAND_W)" />
           </div>
+          <div class="preview" :style="slotVars(HAND_W)">
+            <div class="tile-slot next" v-for="t in preview" :key="t.id" :style="{ transform: `scale(${PREVIEW_SCALE})` }">
+              <MahjongTile :value="t.value" :style="tileVars(HAND_W)" />
+            </div>
+          </div>
+        </template>
+        <span v-else-if="deckEmpty" class="deck-empty">{{ i18n('deckEmpty') }}</span>
+        <div v-else class="tile-slot current" :style="slotVars(HAND_W)">
+          <span class="slot-hint">{{ i18n('left') }}</span>
         </div>
       </div>
       <div class="opt-half">
@@ -211,6 +216,7 @@ const progress = computed(() => {
 const cardsLeft = computed(() => Math.max(0, pile.value.length - cursor.value));
 const hand = computed(() => pile.value[cursor.value] || null);
 const preview = computed(() => pile.value.slice(cursor.value + 1, cursor.value + 1 + PREVIEW));
+const deckEmpty = computed(() => pile.value.length > 0 && cursor.value >= pile.value.length);
 const canPlace = computed(() => phase.value === PLAY && !!hand.value);
 
 // ---------- 尺寸 ----------
@@ -411,7 +417,7 @@ function restore() {
     uidCounter = 0;
     board.value = saved.board.map(t => (t ? unpack(t) : null));
     pile.value = saved.pile.map(unpack).filter(Boolean);
-    cursor.value = Math.min(Math.max(0, +saved.cursor || 0), Math.max(0, pile.value.length - 1));
+    cursor.value = Math.min(Math.max(0, +saved.cursor || 0), pile.value.length);
     level.value = Math.max(1, +saved.level || 1);
     score.value = Math.max(0, +saved.score || 0);
     played.value = Math.max(0, +saved.played || 0);
@@ -795,6 +801,7 @@ onUnmounted(() => {
         gap: 2px;
       }
       .slot-hint { font-size: 12px; color: var(--muted-color); }
+      .deck-empty { font-size: 13px; color: var(--muted-color); white-space: nowrap; letter-spacing: 0.5px; }
     }
   }
 

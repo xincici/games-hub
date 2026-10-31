@@ -230,6 +230,9 @@
   只保留 `mode` 与 help 偏好，然后按当前模式回第 1 关。
 - **旧存档迁移**：旧版 `best_2` 是无尽模式的最高分，且没有 `level_2`。加载到模式 2 / 切到模式 2 时，
   若 `level_2` 不存在，就删除 `best_2` 与 `state_2`、从第 1 关重开（见「坑」第 4 条）。
+- ⚠️ **`cursor` 可以等于 `pile.length`**（最后一张打出去之后）。`restore()` 必须钳到 `pile.length`，
+  不能钳到 `length - 1`，否则退出重进会多显示一张牌。`deckEmpty` 为真时候选区显示「牌耗尽了」，
+  不再渲染手牌 / 下两张槽位（2026-10 修复）。
 
 ## 界面约定
 
@@ -252,6 +255,8 @@
 
 ## 候选区与格子高亮（本轮补充）
 
+- **牌耗尽**：`deckEmpty = pile.length > 0 && cursor >= pile.length`；模板只渲染 `.deck-empty`
+  （「牌耗尽了」），不再渲染 `.current` / `.preview`。初始还没发牌时仍显示原来的占位提示。
 - **候选区主次**：当前牌 `.card-slot.current` 套一圈主色描边（`outline: 2px solid var(--primary-bg)`，
   `outline-offset: 1px`），后面两张 `.card-slot.next` 压到 `opacity: 0.55`；缩放 `PREVIEW_SCALE = [0.8, 0.6]`
   （实测渲染宽 44 → 35 → 26，相对 0.8 / 0.6）。

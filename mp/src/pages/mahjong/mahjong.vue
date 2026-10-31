@@ -37,27 +37,32 @@
       <!-- 操作区：左手牌（当前 + 下一张），右「新游戏」 -->
       <view class="card opt-area">
         <view class="opt-half hand">
-          <view
-            class="tile-slot current"
-            :class="{ ghost: dragging }"
-            :style="slotStyle(HAND_W)"
-            @touchstart="onHandTouchStart"
-            @touchmove.stop.prevent="onHandTouchMove"
-            @touchend="onHandTouchEnd"
-            @touchcancel="onHandTouchCancel"
-          >
-            <MahjongTile v-if="hand" :value="hand.value" class="mj" :style="tileStyle(HAND_W)" />
-            <text v-else class="slot-hint">{{ tt('left') }}</text>
-          </view>
-          <view class="preview" :style="slotStyle(HAND_W)">
+          <template v-if="hand">
             <view
-              v-for="t in preview"
-              :key="t.id"
-              class="tile-slot next"
-              :style="{ transform: 'scale(' + PREVIEW_SCALE + ')' }"
+              class="tile-slot current"
+              :class="{ ghost: dragging }"
+              :style="slotStyle(HAND_W)"
+              @touchstart="onHandTouchStart"
+              @touchmove.stop.prevent="onHandTouchMove"
+              @touchend="onHandTouchEnd"
+              @touchcancel="onHandTouchCancel"
             >
-              <MahjongTile :value="t.value" class="mj" :style="tileStyle(HAND_W)" />
+              <MahjongTile :value="hand.value" class="mj" :style="tileStyle(HAND_W)" />
             </view>
+            <view class="preview" :style="slotStyle(HAND_W)">
+              <view
+                v-for="t in preview"
+                :key="t.id"
+                class="tile-slot next"
+                :style="{ transform: 'scale(' + PREVIEW_SCALE + ')' }"
+              >
+                <MahjongTile :value="t.value" class="mj" :style="tileStyle(HAND_W)" />
+              </view>
+            </view>
+          </template>
+          <text v-else-if="deckEmpty" class="deck-empty">{{ tt('deckEmpty') }}</text>
+          <view v-else class="tile-slot current" :style="slotStyle(HAND_W)">
+            <text class="slot-hint">{{ tt('left') }}</text>
           </view>
         </view>
         <view class="opt-half">
@@ -275,6 +280,7 @@ const progress = computed(() => {
 const cardsLeft = computed(() => Math.max(0, pile.value.length - cursor.value));
 const hand = computed(() => pile.value[cursor.value] || null);
 const preview = computed(() => pile.value.slice(cursor.value + 1, cursor.value + 1 + PREVIEW));
+const deckEmpty = computed(() => pile.value.length > 0 && cursor.value >= pile.value.length);
 const canPlace = computed(() => phase.value === PLAY && !!hand.value);
 
 const confirmTitle = computed(() => (mode.value === 2 ? tt('endlessTitle') : tt('confirmTitle')));
@@ -482,7 +488,7 @@ function restore() {
     uidCounter = 0;
     board.value = saved.board.map(t => (t ? unpack(t) : null));
     pile.value = saved.pile.map(unpack).filter(Boolean);
-    cursor.value = Math.min(Math.max(0, +saved.cursor || 0), Math.max(0, pile.value.length - 1));
+    cursor.value = Math.min(Math.max(0, +saved.cursor || 0), pile.value.length);
     level.value = Math.max(1, +saved.level || 1);
     score.value = Math.max(0, +saved.score || 0);
     played.value = Math.max(0, +saved.played || 0);
@@ -950,6 +956,7 @@ onUnmounted(() => {
   opacity: 0.55;
 }
 .slot-hint { font-size: 23rpx; color: #5f6b7a; }
+.deck-empty { font-size: 26rpx; color: #5f6b7a; white-space: nowrap; letter-spacing: 1rpx; }
 
 /* 操作按钮：web 的 .game-icon（8px 16px / 8px 圆角 / 14px 字号） */
 .game-icon {

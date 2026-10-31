@@ -31,50 +31,50 @@
       <!-- 操作区：左边手牌（当前一张 + 接下来两张），右边「新游戏」（web 的 opt-area，1.6 : 1.2 分格） -->
       <view class="card opt-area">
         <view class="opt-half hand">
-          <!-- 手牌：跟手拖动的起点（小程序没有 Pointer Events，用 touchstart/touchmove/touchend） -->
-          <view
-            id="hand-slot"
-            class="card-slot current"
-            :class="{ ghost: dragging }"
-            @touchstart="onHandTouchStart"
-            @touchmove.stop.prevent="onHandTouchMove"
-            @touchend="onHandTouchEnd"
-            @touchcancel="onHandTouchCancel"
-          >
-            <!-- 与 web 一致：card-in 挂在槽位上（页面进来播一次），换牌不重播 -->
+          <template v-if="hand">
+            <!-- 手牌：跟手拖动的起点（小程序没有 Pointer Events，用 touchstart/touchmove/touchend） -->
             <view
-              v-if="hand"
-              class="pcard"
-              :class="{ red: isRedCard(hand) }"
-              :style="handCard"
+              id="hand-slot"
+              class="card-slot current"
+              :class="{ ghost: dragging }"
+              @touchstart="onHandTouchStart"
+              @touchmove.stop.prevent="onHandTouchMove"
+              @touchend="onHandTouchEnd"
+              @touchcancel="onHandTouchCancel"
             >
-              <template v-if="isJokerCard(hand)">
-                <text class="pnum pnum-top jnum">JOKER</text>
-                <view class="ptype"><view class="pico i-mdi-account-cowboy-hat" /></view>
-              </template>
-              <template v-else>
-                <text class="pnum pnum-top">{{ pointOf(hand) }}</text>
-                <text class="pnum pnum-bot">{{ pointOf(hand) }}</text>
-                <view class="ptype"><text class="psuit">{{ suitOf(hand) }}</text></view>
-              </template>
-            </view>
-            <text v-else class="slot-hint">{{ tt('next') }}</text>
-          </view>
-          <!-- 下两张：槽位仍是手牌大小，牌本体按 PREVIEW_SCALE 缩小（web 用 transform scale，这里直接缩尺寸） -->
-          <view class="preview">
-            <view v-for="(c, i) in preview" :key="c.id" class="card-slot next">
-              <view class="pcard" :class="{ red: isRedCard(c) }" :style="previewCards[i]">
-                <template v-if="isJokerCard(c)">
+              <!-- 与 web 一致：card-in 挂在槽位上（页面进来播一次），换牌不重播 -->
+              <view class="pcard" :class="{ red: isRedCard(hand) }" :style="handCard">
+                <template v-if="isJokerCard(hand)">
                   <text class="pnum pnum-top jnum">JOKER</text>
                   <view class="ptype"><view class="pico i-mdi-account-cowboy-hat" /></view>
                 </template>
                 <template v-else>
-                  <text class="pnum pnum-top">{{ pointOf(c) }}</text>
-                  <text class="pnum pnum-bot">{{ pointOf(c) }}</text>
-                  <view class="ptype"><text class="psuit">{{ suitOf(c) }}</text></view>
+                  <text class="pnum pnum-top">{{ pointOf(hand) }}</text>
+                  <text class="pnum pnum-bot">{{ pointOf(hand) }}</text>
+                  <view class="ptype"><text class="psuit">{{ suitOf(hand) }}</text></view>
                 </template>
               </view>
             </view>
+            <!-- 下两张：槽位仍是手牌大小，牌本体按 PREVIEW_SCALE 缩小（web 用 transform scale，这里直接缩尺寸） -->
+            <view class="preview">
+              <view v-for="(c, i) in preview" :key="c.id" class="card-slot next">
+                <view class="pcard" :class="{ red: isRedCard(c) }" :style="previewCards[i]">
+                  <template v-if="isJokerCard(c)">
+                    <text class="pnum pnum-top jnum">JOKER</text>
+                    <view class="ptype"><view class="pico i-mdi-account-cowboy-hat" /></view>
+                  </template>
+                  <template v-else>
+                    <text class="pnum pnum-top">{{ pointOf(c) }}</text>
+                    <text class="pnum pnum-bot">{{ pointOf(c) }}</text>
+                    <view class="ptype"><text class="psuit">{{ suitOf(c) }}</text></view>
+                  </template>
+                </view>
+              </view>
+            </view>
+          </template>
+          <text v-else-if="deckEmpty" class="deck-empty">{{ tt('deckEmpty') }}</text>
+          <view v-else class="card-slot current">
+            <text class="slot-hint">{{ tt('next') }}</text>
           </view>
         </view>
         <view class="opt-half">
@@ -335,6 +335,7 @@ const progress = computed(() => {
 const cardsLeft = computed(() => Math.max(0, pile.value.length - cursor.value));
 const hand = computed(() => pile.value[cursor.value] || null);
 const preview = computed(() => pile.value.slice(cursor.value + 1, cursor.value + 1 + PREVIEW));
+const deckEmpty = computed(() => pile.value.length > 0 && cursor.value >= pile.value.length);
 const canPlace = computed(() => phase.value === PLAY && !!hand.value);
 const celebrationList = computed(() => (celebration.value ? [celebration.value] : []));
 
@@ -578,7 +579,7 @@ function restore() {
     uidCounter = 0;
     board.value = saved.board.map((c) => (c ? unpack(c) : null));
     pile.value = saved.pile.map(unpack);
-    cursor.value = Math.min(Math.max(0, +saved.cursor || 0), Math.max(0, pile.value.length - 1));
+    cursor.value = Math.min(Math.max(0, +saved.cursor || 0), pile.value.length);
     level.value = Math.max(1, +saved.level || 1);
     score.value = Math.max(0, +saved.score || 0);
     chain.value = Math.max(0, +saved.chain || 0);
@@ -1114,6 +1115,12 @@ function showHelp() {
 .slot-hint {
   font-size: 23rpx;
   color: #5f6b7a;
+}
+.deck-empty {
+  font-size: 26rpx;
+  color: #5f6b7a;
+  white-space: nowrap;
+  letter-spacing: 1rpx;
 }
 /* 当前这张：web 是 outline: 2px + offset 1px；小程序 outline 不稳，用同宽的双层 box-shadow 环 */
 .current .pcard {

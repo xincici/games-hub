@@ -140,6 +140,9 @@
 - `__mahjong_hero__level`：闯关模式当前关卡
 - `__mahjong_hero__best_1` / `__mahjong_hero__best_2`：闯关记录**最高关卡**、无尽记录**最高分**
 - `__mahjong_hero__help_showed`：帮助弹窗是否已弹过
+- ⚠️ **`cursor` 可以等于 `pile.length`**（最后一张打出去之后）。`restore()` 必须钳到 `pile.length`，
+  不能钳到 `length - 1`，否则退出重进会把最后一张牌又显示在候选区。`deckEmpty` 为真时整块候选区
+  显示「牌耗尽了」，不再渲染手牌 / 下一张槽位（2026-10 修复）。
 
 ## 界面约定
 
@@ -157,6 +160,8 @@
 
 ## 候选区与格子高亮（本轮补充）
 
+- **牌耗尽**：`deckEmpty = pile.length > 0 && cursor >= pile.length`；模板只渲染 `.deck-empty`
+  （「牌耗尽了」），不再渲染 `.current` / `.preview`。初始还没发牌时仍显示原来的占位提示。
 - **候选区主次**：当前牌 `.tile-slot.current .mj` 套一圈主色描边（`outline: 2px solid var(--primary-bg)`，
   `outline-offset: 1px`），下一张 `.preview` 压到 `opacity: 0.55`；缩放 `PREVIEW_SCALE = 0.8`
   （实测渲染宽 44 → 35）。
