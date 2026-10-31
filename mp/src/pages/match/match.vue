@@ -34,7 +34,7 @@
     <view class="phase-tip" :class="{ empty: !phaseHintText }">{{ phaseHintText }}</view>
 
     <view class="game-area" :style="{ width: boardW + 'rpx', height: boardH + 'rpx' }">
-      <view class="board" :class="{ 'no-deal': silentRestore }" :style="{ width: boardW + 'rpx', height: boardH + 'rpx' }">
+      <view class="board" :class="{ 'no-deal': silentRestore, poker: mode === MODE_POKER }" :style="{ width: boardW + 'rpx', height: boardH + 'rpx' }">
           <view
             v-for="(card, i) in cards"
             :key="card.id"
@@ -46,17 +46,36 @@
             <!-- 正反两面常驻（照 Emoji 镜像）：.flip 只负责 3D 舞台，
                  .tile 负责定位 + 发牌动画（两者分开，动画的 transform 不会污染 3D 上下文） -->
             <view class="flip">
-              <view class="face face-back">
+              <view class="face face-back" :class="{ 'poker-face': mode === MODE_POKER }">
                 <!-- ⚠️ 图标类必须放内层：i-xxx 会加 mask + background-color，
                      写在 .face-back 上会把整块牌背裁成灯泡形状（AGENTS 第八节同一个坑） -->
+                <PokerBack
+                  v-if="mode === MODE_POKER"
+                  :icon-size="Math.round(tileSize * 0.68)"
+                />
                 <view
-                  v-if="mode !== MODE_MAHJONG"
+                  v-else-if="mode !== MODE_MAHJONG"
                   class="back-ico i-mdi-lightbulb-on-50"
                   :style="{ fontSize: Math.round(tileSize * 0.56) + 'rpx' }"
                 />
               </view>
-              <view class="face face-front">
-                <text v-if="mode === 1" class="emoji" :style="{ fontSize: faceFont + 'rpx' }">{{ card.item }}</text>
+              <view class="face face-front" :class="{ 'poker-face': mode === MODE_POKER }">
+                <text v-if="mode === MODE_EMOJI" class="emoji" :style="{ fontSize: faceFont + 'rpx' }">{{ card.item }}</text>
+                <view
+                  v-else-if="mode === MODE_POKER"
+                  class="pcard"
+                  :class="{ red: isRedCard(card.item) }"
+                >
+                  <text
+                    class="pnum pnum-top"
+                    :style="{ fontSize: pokerRankFont + 'rpx', top: pokerRankPos + 'rpx', left: pokerRankPos + 'rpx' }"
+                  >{{ pointOf(card.item) }}</text>
+                  <text
+                    class="pnum pnum-bot"
+                    :style="{ fontSize: pokerRankFont + 'rpx', bottom: pokerRankPos + 'rpx', right: pokerRankPos + 'rpx' }"
+                  >{{ pointOf(card.item) }}</text>
+                  <text class="psuit" :style="{ fontSize: pokerSuitFont + 'rpx' }">{{ suitOf(card.item) }}</text>
+                </view>
                 <MahjongTile v-else :suit="card.item[0]" :value="+card.item.slice(1)" class="mj" />
               </view>
             </view>
@@ -95,7 +114,7 @@
     <!-- 连击小烟花：web 的 burstConfetti（喷发点统一在游戏区顶部中间） -->
     <FireworkBurst />
     <FloatingActions>
-      <view class="fab" @click="toggleMode"><view class="fab-ico" :class="mode === MODE_MAHJONG ? 'i-dinkie-icons-three-of-circles-mahjong' : 'i-mdi-emoticon-happy-outline'" /></view>
+      <view class="fab" @click="toggleMode"><view class="fab-ico" :class="mode === MODE_MAHJONG ? 'i-dinkie-icons-three-of-circles-mahjong' : mode === MODE_POKER ? 'i-mdi-cards-playing-outline' : 'i-mdi-emoticon-happy-outline'" /></view>
       <view class="fab" @click="showHelp"><view class="fab-ico i-carbon-help" /></view>
     </FloatingActions>
     <!-- 新游戏二次确认：自绘三按钮弹窗（web 的 shared/ConfirmDialog 同款） -->
@@ -117,10 +136,11 @@
 <script setup>
 // 对对碰 · 微信小程序版
 // 关卡曲线与发牌逻辑来自 web 的 board.js（原样复制）；这里重写视图。
-// v1 差异：没有 3D 翻面动画（牌背 → 牌面用淡入替代），扑克牌面暂未移植（emoji / 麻将两种）。
+// 三种牌面：emoji / 扑克 / 麻将；牌背统一用 PokerBack（与德州扑克同一个组件）。
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 import MahjongTile from '@/components/MahjongTile.vue';
+import PokerBack from '@/components/PokerBack.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import { EMOJIS } from '@/shared/emojis';
@@ -141,14 +161,16 @@ setNavTitle(() => t('mName'));
 
 const [PREVIEW, PLAY, WON, OVER] = ['preview', 'play', 'won', 'over'];
 const MODE_EMOJI = 1;
+const MODE_POKER = 2;
 const MODE_MAHJONG = 3;
+const FACE_TO_MODE = { emoji: MODE_EMOJI, poker: MODE_POKER, mahjong: MODE_MAHJONG };
 const PREFIX = '__emoji_match__';
 const COMBO_MS = 2500;
 const FLIP_BACK_MS = 700;
 // 翻面过渡 0.46s：配对成功要等第二张翻完再让两张一起闪 ✗（否则第一张已经在闪、第二张还在翻）
 const MATCH_FLIP_MS = 470;
 
-const modeSuffix = (m) => (m === MODE_MAHJONG ? '_3' : '');
+const modeSuffix = (m) => (m === MODE_POKER ? '_2' : m === MODE_MAHJONG ? '_3' : '');
 const levelKeyFor = (m) => `${PREFIX}level${modeSuffix(m)}`;
 const bestKeyFor = (m) => `${PREFIX}best_1${modeSuffix(m)}`;
 const stateKeyFor = (m) => `${PREFIX}state${modeSuffix(m)}`;
@@ -157,9 +179,9 @@ const rawMode = getRaw(`${PREFIX}mode`);          // 可能是 null（玩家没�
 const storedMode = +rawMode;
 // 牌面：玩家自己选过的（__emoji_match__mode）优先；没选过时用首页设置里的「默认牌面」
 const mode = ref(
-  storedMode === MODE_MAHJONG || (rawMode == null && face.value === 'mahjong')
-    ? MODE_MAHJONG
-    : MODE_EMOJI,
+  rawMode == null
+    ? (FACE_TO_MODE[face.value] || MODE_EMOJI)
+    : ([MODE_EMOJI, MODE_POKER, MODE_MAHJONG].includes(storedMode) ? storedMode : MODE_EMOJI),
 );
 const level = ref(1);
 const bestLevel = ref(1);
@@ -220,19 +242,35 @@ const BOARD_PAD = 8;          // 棋盘内边距（上下左右各 8）
 // 牌宽上限：web 用 EMOJI_MAX_W = 96px（麻将同一套）→ 96 × 1.908 ≈ 183rpx。
 // 不加这个上限时第一关只有 3 列 → 牌宽 218rpx（≈114px），比 web 大得多 ✗
 const MAX_TILE = 183;
+const POKER_MAX_TILE = 122;    // 与 web 的 CARD_MAX_W = 64px 对齐
+const POKER_RATIO = 1.5;       // 扑克牌 2:3
+const maxTile = computed(() => (mode.value === MODE_POKER ? POKER_MAX_TILE : MAX_TILE));
 const tileSize = computed(() => {
   const c = conf.value;
   const byW = Math.floor((BOARD_MAX_W - BOARD_GAP * (c.cols - 1) - BOARD_PAD * 2) / c.cols);
-  return Math.min(MAX_TILE, byW);
+  return Math.min(maxTile.value, byW);
 });
 // 棋盘宽度跟着牌走（不再固定 690）：3 列时 585rpx，靠 margin:auto 居中
 const boardW = computed(() => BOARD_PAD * 2 + conf.value.cols * tileSize.value + BOARD_GAP * (conf.value.cols - 1));
 // 麻将牌是竖牌（雪碧图 168/131 ≈ 1.282），emoji 是正方形
 const TILE_RATIO = 168 / 131;
-const tileH = computed(() => (mode.value === MODE_MAHJONG ? Math.round(tileSize.value * TILE_RATIO) : tileSize.value));
+const tileH = computed(() => (
+  mode.value === MODE_POKER ? Math.round(tileSize.value * POKER_RATIO)
+    : mode.value === MODE_MAHJONG ? Math.round(tileSize.value * TILE_RATIO)
+      : tileSize.value
+));
 // 上下各 8rpx 内边距，行与行之间才有 gap（最后一行后面不留），这样卡片在棋盘里垂直居中
 const boardH = computed(() => BOARD_PAD * 2 + conf.value.rows * tileH.value + BOARD_GAP * (conf.value.rows - 1));
 const faceFont = computed(() => Math.max(28, Math.round(tileSize.value * 0.42)));
+const pokerRankFont = computed(() => Math.max(16, Math.round(tileSize.value * 0.26)));
+const pokerSuitFont = computed(() => Math.max(22, Math.round(tileSize.value * 0.56)));
+const pokerRankPos = computed(() => Math.max(2, Math.round(tileSize.value * 0.07)));
+const POKER_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const POKER_SUITS = { spade: '♠', club: '♣', heart: '♥', diamond: '♦' };
+const isRedCard = (item) => !!item && (item.type === 'heart' || item.type === 'diamond');
+const pointOf = (item) => (item ? POKER_RANKS[item.num - 1] : '');
+const suitOf = (item) => (item ? POKER_SUITS[item.type] || '' : '');
+const keyOf = (item) => (typeof item === 'string' ? item : `${item.num}-${item.type}`);
 // 发牌时逐张错开（与麻将/扑克同一套「波浪式铺牌」）：延迟按「行 + 列」× 55ms。
 // 牌是按 card.id 重建的，所以重开一局 / 恢复记录都会重播；这里不要引入会变化的 flag，
 // 否则 animationDelay 一变动画就会整盘重播。
@@ -269,8 +307,15 @@ function shuffle(list) {
 }
 
 function drawPool(pairs) {
-  const pool = mode.value === MODE_MAHJONG ? MAHJONG_FACES : EMOJIS;
-  return shuffle(pool).slice(0, pairs);
+  if (mode.value === MODE_MAHJONG) return shuffle(MAHJONG_FACES).slice(0, pairs);
+  if (mode.value === MODE_POKER) {
+    const deck = [];
+    ['spade', 'club', 'heart', 'diamond'].forEach((type) => {
+      for (let num = 1; num <= 13; num++) deck.push({ num, type });
+    });
+    return shuffle(deck).slice(0, pairs);
+  }
+  return shuffle(EMOJIS).slice(0, pairs);
 }
 
 function save() {
@@ -287,6 +332,7 @@ function save() {
 function restore() {
   const s = getJSON(stateKeyFor(mode.value));
   if (!s || !Array.isArray(s.cards) || !s.cards.length) return null;
+  if (s.mode !== mode.value) return null;                 // 牌面换过了，这份存档不接
   if (s.phase !== WON && s.phase !== OVER) return null;   // 只接胜负结算，局中存档重开本关
   return s;
 }
@@ -353,7 +399,7 @@ function onCardClick(card) {
   if (phase.value !== PLAY || lock || card.matched || card.flipped) return;
   card.flipped = true;
   if (!firstCard) { firstCard = card; return; }
-  if (firstCard.item === card.item) {
+  if (keyOf(firstCard.item) === keyOf(card.item)) {
       // 配对成功：等第二张的翻面动画播完（≈470ms）再让两张一起闪。
       // ⚠️ **不要 lock**：玩家手很快，闪烁期间点别的卡片必须照常有反应 ——
       // 这两张牌已经 flipped=true（onCardClick 里本来就会挡住），不需要全局锁。
@@ -438,7 +484,7 @@ function startNewGame() {
 function nextLevel() { initLevel(level.value + 1); }
 
 function toggleMode() {
-  mode.value = mode.value === MODE_MAHJONG ? MODE_EMOJI : MODE_MAHJONG;
+  mode.value = mode.value === MODE_EMOJI ? MODE_POKER : mode.value === MODE_POKER ? MODE_MAHJONG : MODE_EMOJI;
   setRaw(`${PREFIX}mode`, String(mode.value));
   bestLevel.value = Math.max(1, +(getRaw(bestKeyFor(mode.value)) || 1));
   const restored = restore();
@@ -580,6 +626,47 @@ function showHelp() {
 }
 .tile.blink { opacity: 0.4; }
 .face-back { color: #fff; }   /* 与 web 的 .back-face 一致：绿底白图标 */
+/* 扑克牌背 / 牌面：牌背走共享 PokerBack（与德州扑克同一份），牌面用点数 + 花色文字 */
+.face-back.poker-face {
+  background: #fafafa;
+  border: 2rpx solid #dcdfe6;
+  box-sizing: border-box;
+  color: #111;
+  box-shadow: none;
+}
+.face-front.poker-face {
+  background: transparent;
+  border: 0 none;
+  box-shadow: none;
+}
+.pcard {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 2rpx solid #dcdfe6;
+  border-radius: 8rpx;
+  background: #fafafa;
+  color: #111;
+  overflow: hidden;
+}
+.pcard.red { color: #e00; }
+.pnum {
+  position: absolute;
+  font-weight: bold;
+  line-height: 1;
+}
+.pnum-bot { transform: rotate(180deg); }
+.psuit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  line-height: 1;
+}
 /* 麻将牌背：与 web 的 MahjongBack 一致的绿色纹理（没有图片就用渐变近似） */
 .tile.mjback .face-back {
   background: linear-gradient(145deg, #2f8f5b, #1d6b3f);

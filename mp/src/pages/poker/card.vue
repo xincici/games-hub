@@ -18,8 +18,7 @@
         </view>
       </template>
       <template v-else>
-        <view class="card-back" />
-        <view class="card-type"><view class="card-ico card-type-back i-mdi-cards-playing" /></view>
+        <PokerBack :icon-size="mini ? 50 : 80" />
       </template>
     </view>
   </view>
@@ -27,6 +26,8 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
+
+import PokerBack from '@/components/PokerBack.vue';
 
 // 牌点数对应的展示内容
 const NUMS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'JOKER'];
@@ -69,10 +70,11 @@ function clearTimers() {
   if (t2) { clearTimeout(t2); t2 = null; }
 }
 
-// 复刻 web 的 rotate 过渡；mini 牌（猜大小历史）不翻面，直接显示正面
+// 复刻 web 的 rotate 过渡；mini 牌（猜大小历史）不翻面，直接按当前正/背面渲染
 function playFlip(front) {
   if (props.mini) {
-    showFront.value = true;
+    // 猜大小的牌背也是真实牌背：不能无条件 showFront，否则 num=0 的牌背会渲染成空白正面
+    showFront.value = front;
     rot.value = '';
     return;
   }
@@ -201,9 +203,6 @@ function onTap() {
   font-size: var(--icon-size);
   font-weight: bold;
 }
-.card-type-back {
-  font-size: var(--back-size);
-}
 .card-suit {
   display: block;
   font-size: var(--icon-size);
@@ -212,19 +211,6 @@ function onTap() {
 }
 .card-ico {
   display: inline-block;
-}
-.card-back {
-  position: absolute;
-  width: 96%;
-  height: 96%;
-  left: 2%;
-  top: 2%;
-  box-sizing: border-box;
-  border: 2rpx dotted #eee;
-  border-radius: var(--radius);
-  /* 点阵比 web 的 #9a9a9a 更淡（用户要求） */
-  background: radial-gradient(circle, rgba(154, 154, 154, 0.55) 0.4rpx, transparent 0.9rpx) repeat;
-  background-size: 5% 5%;
 }
 </style>
 

@@ -77,8 +77,7 @@
                     :style="{ fontSize: backIcon + 'rpx' }"
                   />
                   <view v-else-if="mode === MODE_CARDS" class="pc-back">
-                    <view class="pc-back-fill" />
-                    <view class="pc-back-ico i-mdi-cards-playing" :style="{ fontSize: backIcon + 'rpx' }" />
+                    <PokerBack :icon-size="backIcon" />
                   </view>
                 </view>
                 <!-- 正面：三种牌面各自的内容；红标 / 绿框 / 弹一下都挂在这一层 -->
@@ -188,6 +187,7 @@ import Confetti from '@/components/Confetti.vue';
 import FloatingActions from '@/components/FloatingActions.vue';
 import HelpSheet from '@/components/HelpSheet.vue';
 import MahjongTile from '@/components/MahjongTile.vue';
+import PokerBack from '@/components/PokerBack.vue';
 import { setNavTitle } from '@/core/i18n';
 import { face } from '@/core/settings';
 import { playElimination, playFail, playLose, playWin } from '@/core/sfx';
@@ -975,25 +975,6 @@ onUnmounted(() => {
   top: 0;
   width: 100%;
   height: 100%;
-}
-.pc-back-fill {
-  position: absolute;
-  left: 2%;
-  top: 2%;
-  width: 96%;
-  height: 96%;
-  box-sizing: border-box;
-  border: 2rpx dotted #eee;
-  border-radius: 8rpx;
-  background-image: radial-gradient(circle, #9a9a9a 1rpx, transparent 1rpx);
-  background-size: 10rpx 10rpx;
-}
-.pc-back-ico {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  color: #9a9a9a;
 }
 .pcard {
   position: absolute;
