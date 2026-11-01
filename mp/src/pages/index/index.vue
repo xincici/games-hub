@@ -36,7 +36,7 @@
       v-if="dragGhost"
       class="hex ghost"
       :class="'acc-' + dragGhost.game.accent"
-      :style="{ left: (dragGhost.x - 80) + 'px', top: (dragGhost.y - 92) + 'px' }"
+      :style="{ left: dragGhost.left + 'px', top: dragGhost.top + 'px', width: dragGhost.w + 'px', height: dragGhost.h + 'px' }"
     >
       <view class="hex-body">
         <view class="hex-icon" :class="dragGhost.game.icon" />
@@ -194,11 +194,23 @@ function queryRects(cb) {
 }
 function startDrag(g) {
   if (!press || dragId.value || !press.x) return;
+  const index = orderedGames.value.findIndex(item => item.id === g.id);
+  const rect = hexRects[index];
+  const w = rect ? rect.width : 80;
+  const h = rect ? rect.height : 92;
   dragId.value = g.id;
-  dragGhost.value = { id: g.id, game: g, x: press.x, y: press.y };
+  // 从原卡片位置开始，按手指位移平移，避免出现时就跳到左上方。
+  dragGhost.value = {
+    id: g.id, game: g,
+    left: rect ? rect.left : press.x - w / 2,
+    top: rect ? rect.top : press.y - h / 2,
+    startX: press.x, startY: press.y,
+    ox: rect ? rect.left : press.x - w / 2,
+    oy: rect ? rect.top : press.y - h / 2,
+    w, h,
+  };
   suppressOpen = true;
   if (uni.vibrateShort) uni.vibrateShort({ type: 'light' });
-  queryRects();
 }
 function onTouchStart(g, e) {
   if (dragId.value) return;
@@ -206,6 +218,7 @@ function onTouchStart(g, e) {
   if (!t) return;
   press = { id: g.id, x: t.clientX, y: t.clientY };
   suppressOpen = false;
+  queryRects();
   if (pressTimer) clearTimeout(pressTimer);
   pressTimer = setTimeout(() => startDrag(g), 260);
 }
@@ -224,8 +237,8 @@ function onTouchMove(e) {
     return;
   }
   if (!dragGhost.value) return;
-  dragGhost.value.x = t.clientX;
-  dragGhost.value.y = t.clientY;
+  dragGhost.value.left = dragGhost.value.ox + (t.clientX - dragGhost.value.startX);
+  dragGhost.value.top = dragGhost.value.oy + (t.clientY - dragGhost.value.startY);
   const targetIndex = hexRects.findIndex(r => t.clientX >= r.left && t.clientX <= r.right
     && t.clientY >= r.top && t.clientY <= r.bottom);
   if (targetIndex < 0 || targetIndex >= orderedGames.value.length) return;

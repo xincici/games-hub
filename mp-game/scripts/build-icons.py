@@ -64,6 +64,7 @@ ICONS = {
     'quesheng': ('dinkie-icons', 'white-dragon-mahjong'),
     'legend': ('dinkie-icons', 'seven-of-bamboos-mahjong'),
     'gambler': ('dinkie-icons', 'eight-of-bamboos-mahjong'),
+    'cowboy': ('mdi', 'account-cowboy-hat'),
     'bulb': ('mdi', 'lightbulb-on-50'),
     'crush': ('mdi', 'star-four-points'),
     'sudoku': ('mdi', 'grid'),

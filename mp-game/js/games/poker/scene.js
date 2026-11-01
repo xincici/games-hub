@@ -69,6 +69,7 @@ class PokerScene extends Scene {
     this.cards = this.freshCards();
     this.bonus = 0;
     this.result = { times: 0, key: '' };
+    this.winMask = null;
     this.guesses = [];
     this.stats = { hands: 0, wins: 0, peak: 0 };
     this.anim = '';
@@ -164,6 +165,7 @@ class PokerScene extends Scene {
       this.stage = s.stage;
       this.bonus = s.stage === GUESS ? bonus : 0;
       this.result = s.stage === GUESS ? rule : { times: 0, key: '' };
+      this.winMask = s.stage === GUESS ? rule : null;
       this.cards = parsed.map(c => ({
         item: { num: c.num, type: c.type },
         hold: c.hold,
@@ -194,7 +196,7 @@ class PokerScene extends Scene {
       this.dealDoneAt = 0;
       this.drawDoneAt = 0;
       if (this.stage === GUESS && this.dice) {
-        this.guessCard = logic.randomCard();
+        this.guessCard = logic.randomGuessCard();
         this.nextGuessAt = Date.now() + GUESS_FLICKER;
       }
       // 恢复后必须重新布局（PITFALLS #9）：本场景布局只看 dice / 画布尺寸。
@@ -315,6 +317,7 @@ class PokerScene extends Scene {
     this.stats.hands += 1;
     this.bonus = 0;
     this.result = { times: 0, key: '' };
+    this.winMask = null;
     this.guesses = [];
     this.guessCard = null;
     this.guessScroll = 0;
@@ -403,13 +406,14 @@ class PokerScene extends Scene {
     }
     this.stage = GUESS;
     this.result = res;
+    this.winMask = res;
     this.bonus = this.bet * res.times;
     this.resultAt = now;
     this.bonusPulseAt = now;
     this.stats.wins += 1;
     this.stats.peak = Math.max(this.stats.peak, this.bonus);
     if (this.dice) {
-      this.guessCard = logic.randomCard();
+      this.guessCard = logic.randomGuessCard();
       this.nextGuessAt = now + GUESS_FLICKER;
     }
     if (!silent) {
@@ -433,7 +437,7 @@ class PokerScene extends Scene {
 
   guess(big) {
     if (this.stage !== GUESS || this.helpOpen || !this.dice) return;
-    const card = this.guessCard || logic.randomCard();
+    const card = this.guessCard || logic.randomGuessCard();
     const win = logic.guessResult(card, !!big);
     this.guesses = this.guesses.concat([{ num: card.num, type: card.type, big: !!big, win }]).slice(-MAX_HISTORY);
     this.guessScroll = 99999;
@@ -442,9 +446,8 @@ class PokerScene extends Scene {
       this.bonusPulseAt = Date.now();
       this.stats.peak = Math.max(this.stats.peak, this.bonus);
       this.app.audio.playElimination();
-      this.guessCard = logic.randomCard();
+      this.guessCard = logic.randomGuessCard();
       this.nextGuessAt = Date.now() + GUESS_FLICKER;
-      this.resultAt = Date.now();
     } else if (win < 0) {
       this.stage = GUESS_LOSE;
       this.bonus = 0;
@@ -464,6 +467,7 @@ class PokerScene extends Scene {
     this.stats.peak = Math.max(this.stats.peak, this.bonus);
     this.bonus = 0;
     this.result = { times: 0, key: '' };
+    this.winMask = null;   // 结算后牌型遮罩消失
     this.stage = WAIT;
     this.clearTable();
     // 结算落袋：这一下才是真正的游戏胜利反馈。
@@ -474,6 +478,7 @@ class PokerScene extends Scene {
 
   reset() {
     if ((this.stage !== LOSE && this.stage !== GUESS_LOSE) || this.helpOpen) return;
+    this.winMask = null;
     this.stage = WAIT;
     this.bonus = 0;
     this.result = { times: 0, key: '' };
@@ -494,7 +499,7 @@ class PokerScene extends Scene {
     this.dice = !this.dice;
     setRaw(KEYS.dice, this.dice ? '1' : '0');
     if (this.dice && this.stage === GUESS && !this.guessCard) {
-      this.guessCard = logic.randomCard();
+      this.guessCard = logic.randomGuessCard();
       this.nextGuessAt = Date.now() + GUESS_FLICKER;
     }
     // 开关会改变牌桌 / 操作卡的高度，必须重新布局
@@ -594,7 +599,7 @@ class PokerScene extends Scene {
     }
     if (this.toast && this.now >= this.toast.until) this.toast = null;
     if (this.stage === GUESS && this.dice && this.now >= this.nextGuessAt) {
-      this.guessCard = logic.randomCard();
+      this.guessCard = logic.randomGuessCard();
       this.nextGuessAt = this.now + GUESS_FLICKER;
     }
     if (this.now < this.confettiUntil && this.now - this.lastConfettiAt >= 80) {
@@ -757,9 +762,6 @@ class PokerScene extends Scene {
       const x = this.cx + 12 + col * (colW + colGap);
       const cy = top + row * this.ruleRowH + this.ruleRowH / 2;
       const win = !!(this.result && this.result.times && this.result.times === rule.times);
-      if (win) {
-        D.fillRoundRect(c, x - 6, cy - this.ruleRowH / 2 + 1, colW + 12, this.ruleRowH - 2, 6, T.enter);
-      }
       // 英文牌型名（Straight flush / Three of a kind）比中文长，按剩余宽度缩字号，避免和倍数撞上。
       const name = t('poker.' + rule.key);
       const timesText = `${rule.times} ${t('poker.times')}`;
@@ -777,7 +779,7 @@ class PokerScene extends Scene {
       });
       c.restore();
     });
-    if (this.stage === GUESS && this.result && this.result.times) this.drawRuleWin(c);
+    if (this.winMask && this.winMask.times) this.drawRuleWin(c);
   }
 
   drawRuleWin(c) {
@@ -792,10 +794,10 @@ class PokerScene extends Scene {
     D.strokeRoundRect(c, x + 1, y + 1, w - 2, h - 2, 13, T.god, 2);
     const cx = x + w / 2;
     const cy = y + h / 2;
-    D.text(c, t('poker.' + this.result.key), cx, cy - 18, {
+    D.text(c, t('poker.' + this.winMask.key), cx, cy - 18, {
       size: 24, weight: 'bold', color: '#f5c96b', align: 'center',
     });
-    D.text(c, `${this.result.times} ${t('poker.times')}`, cx, cy + 10, {
+    D.text(c, `${this.winMask.times} ${t('poker.times')}`, cx, cy + 10, {
       size: 13, color: '#f5c96b', align: 'center',
     });
     // 简单的五处小烟花：在牌型卡内部扩散，不另铺全屏粒子。
@@ -931,12 +933,15 @@ class PokerScene extends Scene {
   drawGuessCard(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.guessY, this.cw, this.guessH, T);
+    // 中间常驻规则文案（保留这一条）。
+    D.text(c, t('poker.guessTip'), this.cx + this.cw / 2, this.guessY + 11, {
+      size: 10.5, color: T.muted, align: 'center',
+    });
     const padX = 12;
-    const cy = this.guessY + this.guessH / 2;
     const showCurrent = this.stage === GUESS && !!this.guessCard;
     const curX = this.cx + this.cw - padX - this.curW;
-    const contentTop = this.guessY + 10;
-    const curY = contentTop + (this.guessH - 10 - this.curH) / 2;
+    const contentTop = this.guessY + 18;
+    const curY = contentTop + (this.guessH - 18 - this.curH) / 2;
     if (showCurrent) {
       cards.draw(c, this.guessCard, MODE_POKER, curX, curY, this.curW, this.curH, true, 'mode-poker', '🃏');
     } else {
@@ -950,12 +955,7 @@ class PokerScene extends Scene {
     const totalW = this.guesses.length * (this.miniW + 6);
     const maxScroll = Math.max(0, totalW - room);
     this.guessScroll = Math.max(0, Math.min(maxScroll, this.guessScroll));
-    if (!this.guesses.length) {
-      if (this.stage === GUESS) {
-        D.text(c, t('poker.guessHint'), histLeft, cy, { size: 11, color: T.muted });
-      }
-      return;
-    }
+    if (!this.guesses.length) return;
     const topY = contentTop + 2;
     c.save();
     D.roundRect(c, histLeft - 2, this.guessY + 2, room + 4, this.guessH - 4, 8);

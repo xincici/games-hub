@@ -129,8 +129,38 @@ function drawPoker(c, item, x, y, w, h) {
   D.fillRoundRect(c, x, y, w, h, radius, '#fafafa');
   D.strokeRoundRect(c, x, y, w, h, radius, '#c9d0da', 1);
   const pad = Math.max(2, w * 0.07);
-  const rs = Math.max(6, Math.round(w * 0.26));
-  const corner = joker ? 'J' : POKER_RANKS[card.num - 1];
+  const rs = Math.max(5, Math.round(w * 0.19));
+  if (joker) {
+    // web 同款：左上 / 右下的竖排 JOKER + 中央牛仔帽；小王黑、大王红。
+    const step = rs * 0.94;
+    c.save();
+    c.fillStyle = color;
+    c.font = `bold ${rs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    c.textAlign = 'left';
+    c.textBaseline = 'top';
+    for (let i = 0; i < 5; i++) {
+      c.fillText('JOKER'[i], x + pad, y + pad + i * step);
+    }
+    c.translate(x + w - pad, y + h - pad);
+    c.rotate(Math.PI);
+    for (let i = 0; i < 5; i++) {
+      c.fillText('JOKER'[i], 0, i * step);
+    }
+    c.restore();
+    const iw = Math.max(12, w * 0.48);
+    if (!icons.draw(c, 'cowboy', x + w / 2, y + h / 2, iw, color)) {
+      // 字体未加载时的兜底：一顶牛仔帽（帽檐 + 帽冠）
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      c.save();
+      c.fillStyle = color;
+      D.fillRoundRect(c, cx - iw / 2, cy + iw * 0.10, iw, iw * 0.20, iw * 0.08, color);
+      D.fillRoundRect(c, cx - iw * 0.26, cy - iw * 0.30, iw * 0.52, iw * 0.42, iw * 0.10, color);
+      c.restore();
+    }
+    return;
+  }
+  const corner = POKER_RANKS[card.num - 1];
   c.save();
   c.fillStyle = color;
   c.font = `bold ${rs}px "PingFang SC","Microsoft YaHei",sans-serif`;
@@ -141,15 +171,9 @@ function drawPoker(c, item, x, y, w, h) {
   c.rotate(Math.PI);
   c.fillText(corner, 0, 0);
   c.restore();
-  if (joker) {
-    D.text(c, 'JOKER', x + w / 2, y + h / 2 + h * 0.06, {
-      size: Math.max(7, Math.round(w * 0.20)), weight: 'bold', color, align: 'center',
-    });
-  } else {
-    D.text(c, POKER_SUITS[card.type], x + w / 2, y + h / 2, {
-      size: Math.max(9, Math.round(w * 0.56)), color, align: 'center',
-    });
-  }
+  D.text(c, POKER_SUITS[card.type], x + w / 2, y + h / 2, {
+    size: Math.max(9, Math.round(w * 0.56)), color, align: 'center',
+  });
 }
 
 function drawEmoji(c, item, cx, cy, size) {

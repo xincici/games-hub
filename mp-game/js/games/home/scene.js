@@ -181,7 +181,14 @@ class HomeScene extends Scene {
 
   startDrag() {
     if (!this.press) return;
-    this.drag = { id: this.press.id, x: this.press.x, y: this.press.y };
+    const item = this.hexes.find(h => h.id === this.press.id);
+    if (!item) return;
+    this.drag = {
+      id: this.press.id,
+      x: item.cx, y: item.cy,
+      ox: item.cx, oy: item.cy,
+      startX: this.press.x, startY: this.press.y,
+    };
     this.suppressOpen = true;
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' });
   }
@@ -210,8 +217,8 @@ class HomeScene extends Scene {
       }
       return;
     }
-    this.drag.x = p.x;
-    this.drag.y = p.y;
+    this.drag.x = this.drag.ox + (p.x - this.drag.startX);
+    this.drag.y = this.drag.oy + (p.y - this.drag.startY);
     const target = this.hexAt(p.x, p.y);
     if (!target || target.id === this.drag.id) return;
     const from = this.order.indexOf(this.drag.id);
