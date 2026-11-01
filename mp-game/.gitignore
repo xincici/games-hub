@@ -1,0 +1,3 @@
+# 微信开发者工具会生成；不纳入项目源
+project.private.config.json
+node_modules/

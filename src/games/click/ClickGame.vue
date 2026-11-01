@@ -534,27 +534,23 @@ function userRedo() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      width: 100%;            // 不限 max-width：与小程序一样，两格各占卡片一半
-      padding: 8px 16px;
-      font-size: 14px;
+      gap: 6px;
+      width: 100%;
+      padding: 8px 0;
+      font-size: 13px;
       font-weight: bold;
       color: var(--text-color);
       background: transparent;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-tile);
-      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+      border: 0;
+      border-radius: 0;
+      transition: opacity 0.15s;
+      > i { font-size: 18px; }
       &:not(:disabled) {
-        color: var(--primary-bg);
-        border-color: var(--primary-bg);
-        background: transparent;
+        color: var(--text-color);
       }
-      &:not(:disabled):active {
-        background: rgba(60, 160, 60, 0.25);
-      }
+      &:not(:disabled):active { opacity: 0.65; }
       &:disabled {
-        opacity: 0.5;
-        border-color: var(--text-color);
+        opacity: 0.4;
         cursor: not-allowed;
       }
     }

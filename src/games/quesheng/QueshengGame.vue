@@ -38,12 +38,12 @@
       <!-- 原来这里是一句「滑动合并 · 点组消除」的说明文案（用户要求去掉）；
            现在两半放「新游戏」与「上帝模式」两个按钮 -->
       <div class="start-wrapper">
-        <button class="game-icon" @click="confirming = true">{{ i18n('start') }}</button>
+        <button class="game-icon" @click="confirming = true"><span>{{ i18n('start') }}</span></button>
       </div>
       <div class="divider"></div>
       <div class="opt-half">
         <button class="game-icon god-btn" :disabled="!canGod && !godPlaying" @click="godPlay">
-          {{ godPlaying ? i18n('godStop') : i18n('godMode') }}
+          <span>{{ godPlaying ? i18n('godStop') : i18n('godMode') }}</span>
         </button>
       </div>
     </div>
@@ -760,6 +760,10 @@ function onScoreReset() {
   .game-icon.god-btn:not(:disabled) { background-color: var(--god-bg); }
   .game-icon {
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     padding: 8px 16px;
     border: 0;
     border-radius: var(--radius-tile);
@@ -793,28 +797,21 @@ function onScoreReset() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      width: 100%;            // 不限 max-width：与小程序一样，两格各占卡片一半
-      padding: 8px 16px;
-      font-size: 14px;
+      gap: 6px;
+      width: 100%;
+      padding: 8px 0;
+      font-size: 13px;
       font-weight: bold;
       color: var(--text-color);
       background: transparent;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-tile);
-      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-      &:not(:disabled) {
-        color: var(--primary-bg);
-        border-color: var(--primary-bg);
-      }
-      &:not(:disabled):active { background: rgba(60, 160, 60, 0.25); }
-      &:disabled {
-        opacity: 0.5;
-        border-color: var(--text-color);
-        cursor: not-allowed;
-      }
-    }
-  }
+      border: 0;
+      border-radius: 0;
+      transition: opacity 0.15s;
+      > i { font-size: 18px; }
+      &:not(:disabled) { color: var(--text-color); }
+      &:not(:disabled):active { opacity: 0.65; }
+      &:disabled { opacity: 0.4; cursor: not-allowed; }
+    }  }
 
   // 上帝模式播放期间挡输入的透明遮罩（点击游戏同款）。
   // 注意要写在能被匹配到的层级：它渲染在 .board 里，若跟着 .opt-area 一起嵌套就选不中了

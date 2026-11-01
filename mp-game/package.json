@@ -1,0 +1,7 @@
+{
+  "name": "games-hub-mp-game",
+  "private": true,
+  "version": "0.1.0",
+  "type": "commonjs",
+  "description": "游戏合集 · 微信小游戏版（独立工程，不参与 web / mp 构建）"
+}

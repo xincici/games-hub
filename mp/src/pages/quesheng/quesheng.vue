@@ -26,12 +26,12 @@
       <!-- 操作区：左「新游戏」、右「上帝模式」（与 web 一致） -->
       <view class="card opt-area">
         <view class="start-wrapper">
-          <button class="game-icon" @click="confirming = true">{{ tt('start') }}</button>
+          <button class="game-icon" @click="confirming = true"><text>{{ tt('start') }}</text></button>
         </view>
         <view class="divider" />
         <view class="opt-half">
           <button class="game-icon god-btn" :disabled="!canGod && !godPlaying" @click="godPlay">
-            {{ godPlaying ? tt('godStop') : tt('godMode') }}
+            <text>{{ godPlaying ? tt('godStop') : tt('godMode') }}</text>
           </button>
         </view>
       </view>
@@ -841,6 +841,10 @@ onUnmounted(() => {
 /* 操作按钮：web 的 .game-icon（8px 16px / 8px 圆角 / 14px 字号） */
 .game-icon {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
   padding: 0 31rpx;
   height: 74rpx;
   line-height: 74rpx;
@@ -886,25 +890,24 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 15rpx;
-  width: 100%;                  /* 不再限 max-width，两格各占一半 → 合计屏宽 75% */
+  gap: 12rpx;
+  width: 100%;
   height: 65rpx;
-  padding: 0 31rpx;
-  font-size: 27rpx;
+  padding: 0;
+  font-size: 25rpx;
   font-weight: bold;
   line-height: 1;
-  color: #23804e;
-  background: transparent;
-  border: 2rpx solid #23804e;
-  border-radius: 15rpx;
-  box-sizing: border-box;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-/* 不可用时 50% 透明 + not-allowed（background 显式写一遍，压过微信 button[disabled] 自带底色） */
-.undo[disabled] {
-  opacity: 0.5;
   color: #2c3e50;
-  border-color: #2c3e50;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  transition: opacity 0.15s;
+}
+.undo view { font-size: 36rpx; }
+.undo[disabled] {
+  opacity: 0.4;
+  color: #2c3e50;
   background: transparent;
 }
 
