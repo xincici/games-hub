@@ -497,7 +497,7 @@ class AlchemyScene extends Scene {
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
 
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 64;
 
     this.fabSize = 40;

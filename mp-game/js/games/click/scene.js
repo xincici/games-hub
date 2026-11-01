@@ -135,7 +135,7 @@ class ClickScene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -531,6 +531,7 @@ class ClickScene extends Scene {
         size: 22, weight: 'bold', color: T.primary, align: 'center',
       });
     }
+    this.addButton('help', this.fabX, this.fabY, this.fabSize, this.fabSize, () => { this.helpOpen = true; });
   }
 
   drawConfetti(c) {

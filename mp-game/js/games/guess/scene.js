@@ -244,7 +244,7 @@ class GuessScene extends Scene {
     this.fabSize = 40;
     this.helpFab = { x: W - 16 - 40, y: 0, w: 40, h: 40 };
     this.robotFab = { x: W - 16 - 40 - 48, y: 0, w: 40, h: 40 };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;

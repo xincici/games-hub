@@ -658,7 +658,7 @@ class GamblerScene extends Scene {
     this.homeRect = { ...HEADER.HOME_RECT };
 
     // 统计条：最高关卡 / 关卡 / 连胜 / 生命（生命在最右，图标单独画）
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 64;
     // 操作区：新游戏在左、查看答案（橙）在右，两格各 50%
     this.optY = this.scoreY + this.scoreH + 10;

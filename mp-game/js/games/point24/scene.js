@@ -210,7 +210,7 @@ class Point24Scene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 88;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -327,6 +327,10 @@ class Point24Scene extends Scene {
     const T = theme.tokens;
     // expr
     D.card(c, this.cx, this.exprY, this.cw, this.exprH, T);
+    // 算式区内部顶部常驻操作提示。
+    D.text(c, t('point24.exprTip'), W / 2, this.exprY + 11, {
+      size: 11.5, color: T.muted, align: 'center',
+    });
     const back = { x: this.cx + this.cw - 8 - 30, y: this.exprY + this.exprH / 2 - 15, w: 30, h: 30 };
     const canBack = this.phase === PLAY && this.tokens.length > 0;
     D.fillRoundRect(c, back.x, back.y, back.w, back.h, 8, T.enter);
@@ -337,7 +341,7 @@ class Point24Scene extends Scene {
     if (canBack) this.addButton('backspace', back.x, back.y, back.w, back.h, () => this.undo());
 
     const shown = this.phase === GAVEUP ? (parseExprText(this.revealed) || []) : this.tokens;
-    this.drawTokens(c, shown, W / 2, this.exprY + 12, this.cw - 80, this.exprH - 24);
+    this.drawTokens(c, shown, W / 2, this.exprY + 24, this.cw - 80, this.exprH - 34);
     const note = this.noteText();
     if (note) {
       D.text(c, note, this.cx + this.cw / 2, this.exprY + this.exprH - 9, {
@@ -390,12 +394,7 @@ class Point24Scene extends Scene {
 
   drawTokens(c, tokens, centerX, y, maxW, maxH) {
     const T = theme.tokens;
-    if (!tokens.length) {
-      D.text(c, t('point24.exprTip'), centerX, y + maxH / 2, {
-        size: 13, color: T.muted, align: 'center',
-      });
-      return;
-    }
+    if (!tokens.length) return;
     const gap = 6;
     const rows = [];
     let row = [];

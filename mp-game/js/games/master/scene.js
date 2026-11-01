@@ -222,7 +222,7 @@ class MasterScene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -289,8 +289,10 @@ class MasterScene extends Scene {
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
     const half = this.cw / 2;
     D.divider(c, this.cx + half, this.optY + this.optH / 2, 24, T.border, 1);
-    const info = this.cfg ? `${this.cfg.layers} · ${this.cfg.kinds}` : '';
-    D.text(c, info, this.cx + half / 2, this.optY + this.optH / 2, { size: 14, color: T.muted, align: 'center' });
+    const info = this.cfg
+      ? `${t('master.layersLabel').replace('{n}', this.cfg.layers)} · ${t('master.kindsLabel').replace('{n}', this.cfg.kinds)}`
+      : '';
+    D.text(c, info, this.cx + half / 2, this.optY + this.optH / 2, { size: 13, color: T.muted, align: 'center' });
     const label = t('master.start');
     const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
     const bx = this.cx + half + (half - bw) / 2;

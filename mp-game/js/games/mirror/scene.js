@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const confetti = require('../../core/confetti');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
@@ -72,6 +73,9 @@ class MirrorScene extends Scene {
     this.revealAt = 0;
     this.winAt = 0;
     this.playStart = 0;
+    this.confetti = [];
+    this.confettiUntil = 0;
+    this.lastConfettiAt = 0;
     this.now = Date.now();
     this.layout();
     this.boot();
@@ -88,6 +92,9 @@ class MirrorScene extends Scene {
     this.display = round.display;
     this.game = round.game;
     this.matches = 0;
+    this.confetti = [];
+    this.confettiUntil = 0;
+    this.lastConfettiAt = 0;
     this.selected = null;
     this.pendingSwap = null;
     this.swapAnim = null;
@@ -262,6 +269,16 @@ class MirrorScene extends Scene {
     if ((this.phase === PLAY || this.phase === CHECK) && this.playStart && !this.helpOpen) this.elapsed = Math.floor((now - this.playStart) / 1000);
     if (this.phase === SWAP && this.swapAnim && now >= this.swapAnim.at) this.finishSwap();
     if (this.phase === CHECK && now >= this.checkAt) this.finishCheck();
+    if (now < this.confettiUntil && now - this.lastConfettiAt >= 40) {
+      this.lastConfettiAt = now;
+      confetti.spawn(this.confetti, { W, H, startY: H * 0.58, scoreY: this.scoreY });
+    }
+    this.confetti = confetti.update(this.confetti, delta, H);
+  }
+  startConfetti() {
+    this.confetti = [];
+    this.confettiUntil = Date.now() + 1200;
+    this.lastConfettiAt = 0;
   }
   finishSwap() {
     const { a, b } = this.swapAnim;
@@ -290,6 +307,7 @@ class MirrorScene extends Scene {
         setRaw(this.bestKey(), String(this.best));
       }
       this.app.audio.playSuccess();
+      this.startConfetti();
     } else {
       this.phase = PLAY;
     }
@@ -315,7 +333,7 @@ class MirrorScene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -356,6 +374,7 @@ class MirrorScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawAreas(c);
+    confetti.draw(c, this.confetti);
     if (!this.helpOpen) this.drawFab(c);
     if (this.helpOpen) this.drawHelp(c);
   }

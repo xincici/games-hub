@@ -23,7 +23,16 @@ const PREFIX = '__emoji_link__';
 const LEVEL_KEY = `${PREFIX}level`;
 const BEST_KEY = `${PREFIX}best_1`;
 const STATE_KEY = `${PREFIX}state`;
+const DEAL_STEP = 7;
+const DEAL_MS = 200;
 const PLAY = 'play', WON = 'won', OVER = 'over';
+
+function allTiles(board) {
+  const out = [];
+  if (!Array.isArray(board)) return out;
+  board.forEach((row) => { if (Array.isArray(row)) row.forEach(v => { if (v) out.push(v); }); });
+  return out;
+}
 
 function fmt(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
@@ -63,7 +72,7 @@ class LinkScene extends Scene {
   get conf() { return boardLogic.levelConfig(this.level); }
   get rows() { return this.conf.rows; }
   get cols() { return this.conf.cols; }
-  get leftPairs() { return this.board.flat().filter(Boolean).length / 2; }
+  get leftPairs() { return allTiles(this.board).length / 2; }
   get timeLeft() { return Math.max(0, this.conf.time - this.elapsed); }
   boot() {
     if (!this.restore()) this.startLevel(this.level);
@@ -109,10 +118,13 @@ class LinkScene extends Scene {
       const s = JSON.parse(raw);
       if (!s || !Array.isArray(s.board) || !s.board.length) return false;
       const c = boardLogic.levelConfig(+(s.level || 1));
-      if (s.board.length !== c.rows || !Array.isArray(s.board[0]) || s.board[0].length !== c.cols) return false;
+      if (s.board.length !== c.rows) return false;
+      if (!s.board.every(row => Array.isArray(row) && row.length === c.cols)) return false;
       this.level = c.level;
       this.board = s.board.map(row => row.slice());
-      this.walls = Array.isArray(s.walls) && s.walls.length === c.rows ? s.walls.map(row => row.slice()) : [];
+      this.walls = Array.isArray(s.walls) && s.walls.length === c.rows
+        ? s.walls.map(row => (Array.isArray(row) ? row.slice(0, c.cols) : []))
+        : [];
       this.elapsed = Math.max(0, +s.time || 0);
       if (s.phase === WON && !this.leftPairs) this.phase = WON;
       else if (s.phase === OVER && this.leftPairs) this.phase = OVER;
@@ -146,7 +158,7 @@ class LinkScene extends Scene {
       this.shuffleAt = this.now;
       this.board = boardLogic.shuffleBoard(this.board, this.rows, this.cols, Math.random, this.walls);
       if (!boardLogic.hasMove(this.board, this.rows, this.cols, this.walls)) {
-        const remaining = this.board.flat().filter(Boolean);
+        const remaining = allTiles(this.board);
         this.board = boardLogic.generateBoard(this.rows, this.cols, remaining, Math.random, remaining.length / 2, this.walls);
       }
       this.save();
@@ -167,6 +179,7 @@ class LinkScene extends Scene {
   }
   onCell(r, c) {
     if (this.phase !== PLAY || this.helpOpen || this.confirming || this.shufflePlan) return;
+    if (!this.board[r]) return;
     const value = this.board[r][c];
     if (!value || (this.walls[r] && this.walls[r][c])) return;
     if (!this.selected) {
@@ -242,7 +255,7 @@ class LinkScene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -390,8 +403,8 @@ class LinkScene extends Scene {
       const value = this.board[r][col];
       const selected = this.selected && this.selected[0] === r && this.selected[1] === col;
       if (value) {
-        const delay = (r * this.cols + col) * 25;
-        const p = this.dealStart ? Math.max(0, Math.min(1, (now - this.dealStart - delay) / 350)) : 1;
+        const delay = (r * this.cols + col) * DEAL_STEP;
+        const p = this.dealStart ? Math.max(0, Math.min(1, (now - this.dealStart - delay) / DEAL_MS)) : 1;
         if (p > 0) {
           const alpha = 1;
           const sh = this.shake.some(([sr, sc]) => sr === r && sc === col) ? Math.sin(now / 24) * 3 : 0;

@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const confetti = require('../../core/confetti');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const i18nDict = require('./i18n');
@@ -48,6 +49,9 @@ class Game2048Scene extends Scene {
     this.tileId = 0;
     this.dealStart = 0;
     this.touch = null;
+    this.confetti = [];
+    this.confettiUntil = 0;
+    this.lastConfettiAt = 0;
     this.layout();
     this.boot();
   }
@@ -65,6 +69,9 @@ class Game2048Scene extends Scene {
     this.pending = null;
     this.confirming = false;
     this.tileId = 0;
+    this.confetti = [];
+    this.confettiUntil = 0;
+    this.lastConfettiAt = 0;
     this.spawnTile();
     this.spawnTile();
     this.score = Math.max(...this.tiles.map(t => t.value));
@@ -113,6 +120,16 @@ class Game2048Scene extends Scene {
     if (this.bg) this.bg.update(dt || 16);
     if (this.phase === PLAY && !this.helpOpen) this.seconds += Math.min(50, dt || 16) / 1000;
     if (this.pending && Date.now() >= this.pending.at) this.finishMove();
+    if (Date.now() < this.confettiUntil && Date.now() - this.lastConfettiAt >= 40) {
+      this.lastConfettiAt = Date.now();
+      confetti.spawn(this.confetti, { W, H, startY: H * 0.58, scoreY: this.scoreY });
+    }
+    this.confetti = confetti.update(this.confetti, dt || 16, H);
+  }
+  startConfetti() {
+    this.confetti = [];
+    this.confettiUntil = Date.now() + 1200;
+    this.lastConfettiAt = 0;
   }
   lines(dir) {
     const out = [];
@@ -185,6 +202,7 @@ class Game2048Scene extends Scene {
       this.winShown = true;
       this.phase = WON;
       this.app.audio.playSuccess();
+      this.startConfetti();
     } else if (this.isDead()) {
       this.phase = OVER;
       this.app.audio.playLose();
@@ -217,7 +235,7 @@ class Game2048Scene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -240,6 +258,7 @@ class Game2048Scene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
+    confetti.draw(c, this.confetti);
     if (!this.helpOpen && !this.confirming) this.drawFab(c);
     if (this.helpOpen) this.drawHelp(c);
     if (this.confirming) this.drawConfirm(c);

@@ -805,7 +805,7 @@ class QueshengScene extends Scene {
     this.undoX = (W - undoW) / 2;
     this.undoY = this.helpRect.y - 10 - this.undoH;
 
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 12;
     this.optH = 58;

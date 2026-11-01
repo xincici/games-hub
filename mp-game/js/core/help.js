@@ -85,14 +85,10 @@ function draw(c, scene) {
   }
 
   scene.addButton('help-mask', 0, 0, W, H, () => { scene.helpOpen = false; });
-  const closeText = (() => {
-    const id = scene && scene.app && scene.app.sceneId;
-    const key = id ? t(`${id}.confirmText`) : '';
-    if (key && key !== `${id}.confirmText`) return key;
-    return i18n.lang === 'cn' ? '知道了' : 'OK';
-  })();
-  const bw = Math.min(140, Math.max(96, D.measure(c, closeText, 13, 'bold') + 28));
-  const bx = W / 2 - bw / 2;
+  const closeText = i18n.lang === 'cn' ? '好的，明白' : 'OK, Got it';
+  const bw = Math.min(148, Math.max(104, D.measure(c, closeText, 13, 'bold') + 30));
+  // 统一右对齐到面板内边距（20px）。
+  const bx = x + w - 20 - bw;
   const by = y + h - 42;
   D.fillRoundRect(c, bx, by, bw, 30, 8, T.primary);
   D.text(c, closeText, bx + bw / 2, by + 15, { size: 13, weight: 'bold', color: '#fff', align: 'center' });

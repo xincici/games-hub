@@ -3,6 +3,8 @@ const Input = require('./input');
 const theme = require('./theme');
 const audio = require('./audio');
 const help = require('./help');
+const D = require('./draw');
+const { t } = require('./i18n');
 
 // 场景基类：一个游戏一个 Scene；app 负责输入、帧循环、前后台生命周期。
 class Scene {
@@ -49,19 +51,26 @@ class App {
     this.snapshot = null;
     this.snapshotCtx = null;
     this.paused = false;
+    this.edgeSwipe = null;
     this.last = Date.now();
     this.frame = this.frame.bind(this);
     this.resize = this.resize.bind(this);
     this.openScene(SceneClass, { id: 'home' });
     this.input.onStart = p => {
+      if (this.startEdgeSwipe(p)) return;
       if (this.scene.helpOpen && help.touch(this.scene, 'start', p)) return;
       if (this.scene.onTouchStart) this.scene.onTouchStart(p);
     };
     this.input.onMove = p => {
+      if (this.moveEdgeSwipe(p)) return;
       if (this.scene.helpOpen && help.touch(this.scene, 'move', p)) return;
       if (this.scene.onTouchMove) this.scene.onTouchMove(p);
     };
     this.input.onEnd = p => {
+      if (this.edgeSwipe) {
+        this.edgeSwipe = null;
+        return;
+      }
       if (this.scene.helpOpen && help.touch(this.scene, 'end', p)) return;
       if (this.scene.onTouchEnd) this.scene.onTouchEnd(p);
     };
@@ -82,6 +91,38 @@ class App {
       });
     }
     requestAnimationFrame(this.frame);
+  }
+
+  // 屏幕左右边缘向内滑动 = 返回首页（类似系统返回手势）。
+  // 只吃边缘 12px，避免和游戏内滑动 / 按钮抢触摸；阈值 72px、竖直偏移 40px 内。
+  startEdgeSwipe(p) {
+    this.edgeSwipe = null;
+    if (!p || this.transition || this.sceneId === 'home') return false;
+    const edge = 12;
+    if (p.x > edge && p.x < W - edge) return false;
+    this.edgeSwipe = {
+      side: p.x <= edge ? -1 : 1,
+      x: p.x, y: p.y, at: Date.now(),
+    };
+    return true;
+  }
+
+  moveEdgeSwipe(p) {
+    if (!this.edgeSwipe) return false;
+    if (!p || Date.now() - this.edgeSwipe.at > 700) {
+      this.edgeSwipe = null;
+      return false;
+    }
+    const dx = p.x - this.edgeSwipe.x;
+    const dy = p.y - this.edgeSwipe.y;
+    const inward = this.edgeSwipe.side < 0 ? dx : -dx;
+    if (inward >= 72 && Math.abs(dy) <= 40) {
+      this.edgeSwipe = null;
+      this.goHome();
+    } else if (Math.abs(dy) > 56 || inward < -20) {
+      this.edgeSwipe = null;
+    }
+    return true;
   }
 
   openScene(SceneClass, options) {
@@ -118,6 +159,7 @@ class App {
       const c = this.snapshotCtx;
       c.clearRect(0, 0, W, H);
       scene.render(c);
+      if (this.sceneId !== 'home') this.drawHomeLabel(c, scene, false);
       return true;
     } catch (e) {
       return false;
@@ -163,6 +205,27 @@ class App {
     if (this.input) this.input.cancel();
   }
 
+  // 首页图标 + 文案作为一个整体热区；各游戏不用再各自重复实现。
+  drawHomeLabel(c, scene, addButton) {
+    const r = scene && scene.homeRect;
+    if (!r) return;
+    const T = theme.tokens;
+    const label = t('backHome');
+    const size = 11;
+    const lw = D.measure(c, label, size, 'bold');
+    // 文字紧挨图标可视边缘；homeRect 本身比 24px 图标宽，向右收 5px。
+    D.text(c, label, r.x + r.w - 5, r.y + r.h / 2, {
+      size, weight: 'bold', color: T.muted, align: 'left',
+    });
+    if (addButton) {
+      scene.addButton('app-home', r.x - 2, r.y, r.w + lw + 2, r.h, () => this.goHome());
+    }
+  }
+
+  drawHomeAffordance(c) {
+    this.drawHomeLabel(c, this.scene, true);
+  }
+
   drawTransition(c) {
     const tr = this.transition;
     const p = Math.max(0, Math.min(1, (Date.now() - tr.start) / tr.duration));
@@ -181,6 +244,7 @@ class App {
       c.translate(-tr.origin.x, -tr.origin.y);
       tr.newScene.buttons = [];
       tr.newScene.render(c);
+      this.drawHomeLabel(c, tr.newScene, false);
       c.restore();
     } else {
       if (tr.newScene) {
@@ -228,6 +292,7 @@ class App {
         } else {
           help.reset(this.scene);
         }
+        if (!this.scene.helpOpen && this.sceneId !== 'home') this.drawHomeAffordance(ctx);
         this.scene._hasRendered = true;
         this.input.setButtons(this.scene.buttons);
       }

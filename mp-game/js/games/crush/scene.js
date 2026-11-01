@@ -747,7 +747,7 @@ class CrushScene extends Scene {
     this.headerY = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.headerY + this.headerH + 6;
+    this.scoreY = this.headerY + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;

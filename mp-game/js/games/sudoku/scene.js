@@ -53,8 +53,8 @@ const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji",sans-serif';
 
 // 数独专属色（对齐 web App.vue 的 --sudoku-*）：三档高亮 同行列宫 < 同数字 < 选中格
 const SUDOKU = {
-  light: { line: '#d3d8df', strong: '#5f7086', hl: '#c9d6e8', same: '#8fdcb2', sel: '#7ad0a4' },
-  dark: { line: '#545d6b', strong: '#92a3ba', hl: '#4a5462', same: 'rgba(78,201,138,0.42)', sel: 'rgba(78,201,138,0.62)' },
+  light: { line: '#d3d8df', strong: '#5f7086', hl: '#c9d6e8', same: '#8fdcb2', note: '#9fe3bf', sel: '#7ad0a4' },
+  dark: { line: '#545d6b', strong: '#92a3ba', hl: '#4a5462', same: 'rgba(78,201,138,0.42)', note: 'rgba(78,201,138,0.38)', sel: 'rgba(78,201,138,0.62)' },
 };
 function palette() { return SUDOKU[theme.dark ? 'dark' : 'light']; }
 
@@ -317,7 +317,7 @@ class SudokuScene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.scoreY = this.top + this.headerH + 6;
+    this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
@@ -503,6 +503,8 @@ class SudokuScene extends Scene {
     const s = this.selected;
     if (s >= 0 && this.cells[s] && this.cells[s].v) {
       if (cell.v === this.cells[s].v) return 'same';
+      // 带同数字候选的格子只高亮那个候选数字本身，不再给整格 peer 底色。
+      if (cell.notes && (cell.notes & (1 << this.cells[s].v))) return '';
       if (logic.PEERS[s].indexOf(i) >= 0) return 'hl';
     }
     return '';
@@ -593,10 +595,17 @@ class SudokuScene extends Scene {
       });
     } else if (cell.notes) {
       const s = this.noteSize;
+      const highlight = this.hlDigit;
       for (let d = 1; d <= 9; d++) {
         if (!(cell.notes & (1 << d))) continue;
         const nr = Math.floor((d - 1) / 3), nc = (d - 1) % 3;
-        D.text(c, String(d), (nc - 1) * q.w * 0.27, (nr - 1) * q.h * 0.27, {
+        const nx = (nc - 1) * q.w * 0.27;
+        const ny = (nr - 1) * q.h * 0.27;
+        // 只给与当前数字相同的候选数字本身铺背景，不整格高亮。
+        if (d === highlight) {
+          D.fillRoundRect(c, nx - s * 0.62, ny - s * 0.62, s * 1.24, s * 1.24, 3, palette().note);
+        }
+        D.text(c, String(d), nx, ny, {
           size: s, color: theme.tokens.muted, align: 'center',
         });
       }

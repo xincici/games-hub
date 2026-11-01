@@ -216,7 +216,7 @@ class PokerScene extends Scene {
     this.homeRect = { ...HEADER.HOME_RECT };
 
     // 严格按小程序顺序：牌型倍数区在上，金额区其次，然后手牌 / 猜大小 / 操作区。
-    this.rulesY = this.top + this.headerH + 6;
+    this.rulesY = this.top + this.headerH + 12;
     this.rulesCaption = 16;
     this.ruleRowH = 23;
     this.rulesH = this.rulesCaption + 4 * this.ruleRowH + 12;
