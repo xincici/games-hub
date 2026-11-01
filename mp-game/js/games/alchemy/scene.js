@@ -869,7 +869,7 @@ class AlchemyScene extends Scene {
 
     if (hand) {
       // 候选牌不画外部容器；牌堆背面作为「下一张从牌堆来」的暗示压在下面。
-      cards.draw(c, null, MODE_POKER, r.x - 3, r.y - 3, r.w, r.h, false, BACK_ICON, BACK_FALLBACK);
+      cards.draw(c, null, MODE_POKER, r.x + 1, r.y + 1, r.w - 2, r.h - 2, false, BACK_ICON, BACK_FALLBACK);
       const p = this.handAt ? Math.max(0, Math.min(1, (now - this.handAt) / HAND_IN_MS)) : 1;
       const scale = 0.24 + 0.76 * (1 - Math.pow(1 - p, 3));
       c.save();
@@ -877,8 +877,9 @@ class AlchemyScene extends Scene {
       c.translate(r.x + r.w / 2, r.y + r.h / 2);
       c.scale(scale, scale);
       cards.draw(c, this.cardItem(hand), MODE_POKER, -r.w / 2, -r.h / 2, r.w, r.h, true, BACK_ICON, BACK_FALLBACK);
+      // 边框跟着牌一起缩放，手牌入场动画期间也不会错位。
+      D.strokeRoundRect(c, -r.w / 2, -r.h / 2, r.w, r.h, cards.pokerRadius(r.w), T.primary, 2);
       c.restore();
-      D.strokeRoundRect(c, r.x - 1, r.y - 1, r.w + 2, r.h + 2, 9, T.primary, 1.5);
     } else {
       const msg = this.deckEmpty() ? t('alchemy.deckEmpty') : t('alchemy.next');
       D.text(c, msg, r.x + r.w / 2, r.y + r.h / 2, { size: 12, color: T.muted, align: 'center' });

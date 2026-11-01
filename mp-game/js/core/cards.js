@@ -84,8 +84,8 @@ function drawBack(c, mode, x, y, w, h, backIcon, backFallback) {
       c.setLineDash([]);
     }
     c.restore();
-    if (!icons.draw(c, 'mode-poker', x + w / 2, y + h / 2, Math.max(9, w * 0.34), '#777')) {
-      D.text(c, '♠', x + w / 2, y + h / 2, { size: Math.max(9, w * 0.3), color: '#777', align: 'center' });
+    if (!icons.draw(c, 'mode-poker', x + w / 2, y + h / 2, Math.max(16, w * 0.60), '#777')) {
+      D.text(c, '♠', x + w / 2, y + h / 2, { size: Math.max(14, w * 0.50), color: '#777', align: 'center' });
     }
     return;
   }
@@ -116,13 +116,18 @@ function drawBack(c, mode, x, y, w, h, backIcon, backFallback) {
   }
 }
 
+function pokerRadius(w) {
+  return Math.max(3, Math.min(8, w * 0.22));
+}
+
 function drawPoker(c, item, x, y, w, h) {
   const card = pokerItem(item);
   const joker = card.num === 14;
   const red = card.type === 'heart' || card.type === 'diamond';
   const color = red ? '#e00000' : '#111111';
-  D.fillRoundRect(c, x, y, w, h, 8, '#fafafa');
-  D.strokeRoundRect(c, x, y, w, h, 8, '#c9d0da', 1);
+  const radius = pokerRadius(w);
+  D.fillRoundRect(c, x, y, w, h, radius, '#fafafa');
+  D.strokeRoundRect(c, x, y, w, h, radius, '#c9d0da', 1);
   const pad = Math.max(2, w * 0.07);
   const rs = Math.max(6, Math.round(w * 0.26));
   const corner = joker ? 'J' : POKER_RANKS[card.num - 1];
@@ -169,18 +174,23 @@ function drawEmoji(c, item, cx, cy, size) {
   c.restore();
 }
 
+function mahjongRadius(w) {
+  return Math.max(3, Math.min(8, w * 0.18));
+}
+
 function drawMahjong(c, item, x, y, w, h) {
   const key = typeof item === 'string' ? item : `${item.suit}${item.value}`;
   // 雪碧图本身没有透明圆角，直接 drawImage 会带出方形底角。
   // 先按统一 8px 圆角裁切，再直接画牌面；不再额外套米色底和 1px 边框。
+  const radius = mahjongRadius(w);
   c.save();
-  D.roundRect(c, x, y, w, h, 8);
+  D.roundRect(c, x, y, w, h, radius);
   c.clip();
   const drawn = tiles.drawFace(c, key, x, y, w, h);
   c.restore();
   if (drawn) return;
-  D.fillRoundRect(c, x, y, w, h, 8, '#f7f4ee');
-  D.strokeRoundRect(c, x, y, w, h, 8, theme.tokens.tileBorder, 1);
+  D.fillRoundRect(c, x, y, w, h, radius, '#f7f4ee');
+  D.strokeRoundRect(c, x, y, w, h, radius, theme.tokens.tileBorder, 1);
   D.text(c, String(key).toUpperCase(), x + w / 2, y + h / 2, {
     size: Math.max(8, w * 0.3), weight: 'bold', color: '#1f7a4d', align: 'center',
   });
@@ -207,5 +217,4 @@ module.exports = {
   MODE_EMOJI, MODE_POKER, MODE_MAHJONG,
   EMOJIS, MAHJONG_FACES, CARD_TYPES, POKER_RANKS, POKER_SUITS,
   shuffle, poolFor, ratio, keyOf, pokerItem, pokerKey,
-  draw, drawBack, drawEmoji,
-};
+  draw, drawBack, drawEmoji, pokerRadius, mahjongRadius };

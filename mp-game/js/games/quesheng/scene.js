@@ -14,7 +14,6 @@ const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
-const motion = require('../../core/motion');
 const board = require('./board');
 const i18nDict = require('./i18n');
 
@@ -53,7 +52,7 @@ const SETTLE_MS = 130;         // 未过阈值弹回
 const DRAG_SLOP = 10;          // 10px 锁定方向（与 Threes 同一套参数）
 const DRAG_MIN = 0.5;          // 松手 ≥ 50% 格距提交
 const DRAG_COMMIT = 0.95;      // 拖到 95% 直接提交
-const CLEAR_MS = motion.TOTAL_MS; // 消除闪烁统一走 core/motion（最多两次明暗循环）
+const CLEAR_MS = 520;           // 与小程序 qs-blink 0.52s 一致
 const RESULT_DELAY = 250;      // 结算遮罩至少延迟（Scene.resultVisible）
 const RING_IN_MS = 160;
 const CONFETTI_MS = 1100;
@@ -1081,17 +1080,22 @@ class QueshengScene extends Scene {
     }
   }
 
-  ghostAlpha(age) {
-    // 雀圣的消除：先闪两下，再原地淡出；不缩小、不下落。
-    // 0~450ms 亮；450~900ms 两次明暗；900~1400ms 透明度 1→0。
-    if (age >= CLEAR_MS) return 0;
-    if (age < motion.FLASH_MS) return 1;
-    const blinkEnd = 900;
-    if (age < blinkEnd) {
-      const p = (age - motion.FLASH_MS) / (blinkEnd - motion.FLASH_MS);
-      return 0.15 + 0.85 * Math.abs(Math.cos(p * Math.PI * 2));
+  ghostMotion(age) {
+    // 严格照小程序 .tile.clearing 的 qs-blink 0.52s：
+    // 1 → .15 → 1 → .15 → 0，缩放 1 → .72，结束即移除。
+    const p = Math.max(0, Math.min(1, age / CLEAR_MS));
+    const frames = [[0, 1], [0.22, 0.15], [0.44, 1], [0.66, 0.15], [1, 0]];
+    let alpha = 0;
+    for (let i = 1; i < frames.length; i++) {
+      const [t1, a1] = frames[i - 1];
+      const [t2, a2] = frames[i];
+      if (p <= t2) {
+        const k = (p - t1) / (t2 - t1);
+        alpha = a1 + (a2 - a1) * (k * k * (3 - 2 * k));
+        break;
+      }
     }
-    return Math.max(0, 1 - (age - blinkEnd) / (CLEAR_MS - blinkEnd));
+    return { alpha, scale: 1 - 0.28 * p };
   }
 
   drawGhosts(c) {
@@ -1100,10 +1104,14 @@ class QueshengScene extends Scene {
     this.ghosts.forEach((ghost) => {
       const age = this.now - ghost.at;
       if (age >= CLEAR_MS) return;
+      const anim = this.ghostMotion(age);
       const pos = this.cellPos(ghost.cell);
+      const sw = w * anim.scale;
+      const sh = h * anim.scale;
       c.save();
-      c.globalAlpha = this.ghostAlpha(age);
-      cards.draw(c, faceOf(ghost.tile), MODE, pos.x, pos.y, w, h, true);
+      c.globalAlpha = anim.alpha;
+      cards.draw(c, faceOf(ghost.tile), MODE,
+        pos.x + (w - sw) / 2, pos.y + (h - sh) / 2, sw, sh, true);
       c.restore();
     });
   }

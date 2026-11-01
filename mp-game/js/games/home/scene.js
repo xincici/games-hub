@@ -11,6 +11,18 @@ const ParticleField = require('../../core/particles');
 const homeI18n = require('./i18n');
 const tiles = require('../../core/tiles');
 
+const ORDER_KEY = '__games_hub__home_order';
+const ROW_SIZES = [4, 3, 4, 3, 4, 3, 4];
+const DEFAULT_ORDER = [
+  'click', 'match', 'point24', 'guess',
+  'detective', 'hunter', 'master',
+  'g2048', 'three', 'snake', 'link',
+  'puzzle', 'mirror', 'down',
+  'crush', 'sudoku', 'sort', 'slide',
+  'poker', 'mahjong', 'solo',
+  'alchemy', 'quesheng', 'legend', 'gambler',
+];
+
 const coreI18n = require('../../core/i18n');
 if (!coreI18n.__homeRegistered) {
   coreI18n.register('home', homeI18n);
@@ -35,7 +47,29 @@ class HomeScene extends Scene {
     tiles.preload();
     this.settingsOpen = false;
     this.settingsAnim = 0;
+    this.order = this.loadOrder();
+    this.drag = null;
+    this.press = null;
+    this.pressTimer = null;
+    this.suppressOpen = false;
     this.layout();
+  }
+
+  loadOrder() {
+    let saved = [];
+    try {
+      const raw = getRaw(ORDER_KEY, '');
+      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(arr)) saved = arr.filter(id => typeof id === 'string');
+    } catch (e) { saved = []; }
+    const out = [];
+    saved.forEach((id) => { if (DEFAULT_ORDER.includes(id) && !out.includes(id)) out.push(id); });
+    DEFAULT_ORDER.forEach((id) => { if (!out.includes(id)) out.push(id); });
+    return out;
+  }
+
+  saveOrder() {
+    setRaw(ORDER_KEY, JSON.stringify(this.order));
   }
 
   layout() {
@@ -47,15 +81,14 @@ class HomeScene extends Scene {
     // 小程序蜂窝用 -40rpx 的负 margin 让两行咬合；折算到当前屏宽，
     // 让斜边间的视觉缝隙与水平 gap 一致，而不是把两行完全分开。
     const overlap = W * 40 / 750;
-    const rows = [
-      ['click', 'match', 'point24', 'guess'],
-      ['detective', 'hunter', 'master'],
-      ['g2048', 'three', 'snake', 'link'],
-      ['puzzle', 'mirror', 'down'],
-      ['crush', 'sudoku', 'sort', 'slide'],
-      ['poker', 'mahjong', 'solo'],
-      ['alchemy', 'quesheng', 'legend', 'gambler'],
-    ];
+    const rows = [];
+    let oi = 0;
+    ROW_SIZES.forEach((size) => {
+      const ids = this.order.slice(oi, oi + size);
+      if (ids.length) rows.push(ids);
+      oi += size;
+    });
+    if (oi < this.order.length) rows.push(this.order.slice(oi));
     // 25 格七行：水平宽度和「标题下沿 → 齿轮上沿」的竖向预算同时约束六边形半径。
     const topLimit = this.titleY + 42;
     const verticalRoom = Math.max(300, this.gearRect.y - 16 - topLimit);
@@ -112,66 +145,162 @@ class HomeScene extends Scene {
     this.bg.draw(c, theme.dark);
 
     this.hexes.forEach((item) => {
-      const cx = item.cx;
-      const cy = item.cy;
-      const accents = {
-        logic: ['#23804e', '#abc2c1'], number: ['#2c6aad', '#adbed2'],
-        memory: ['#7550ad', '#bab9d2'], action: ['#bd5420', '#c7bab9'],
-        card: ['#8f6419', '#bfbdb7'],
-      };
-      const [accent, border] = accents[item.accent] || accents.logic;
-      // 外层描边 + 内层白卡的双层六边形，与 web 首页蜂巢卡片同款
-      c.save();
+      if (this.drag && this.drag.id === item.id) return;
+      this.drawHex(c, item, item.cx, item.cy, false);
+    });
+    if (this.drag) {
+      const item = this.hexes.find(h => h.id === this.drag.id);
+      if (item) this.drawHex(c, item, this.drag.x, this.drag.y, true);
+    }
+    if (this.settingsAnim > 0) this.drawSettings(c);
+    else if (!this.settingsOpen) this.drawSettingsButton(c);
+  }
+
+  // ---------- 长按拖动排序 ----------
+  hexAt(x, y) {
+    const w = this.hexR * 1.55;
+    const h = this.hexR * 1.8;
+    for (let i = this.hexes.length - 1; i >= 0; i--) {
+      const item = this.hexes[i];
+      if (Math.abs(x - item.cx) <= w / 2 && Math.abs(y - item.cy) <= h / 2) return item;
+    }
+    return null;
+  }
+
+  startDrag() {
+    if (!this.press) return;
+    this.drag = { id: this.press.id, x: this.press.x, y: this.press.y };
+    this.suppressOpen = true;
+    if (wx.vibrateShort) wx.vibrateShort({ type: 'light' });
+  }
+
+  onTouchStart(p) {
+    if (!p || this.settingsOpen) return;
+    const item = this.hexAt(p.x, p.y);
+    if (!item) return;
+    this.suppressOpen = false;
+    this.press = { id: item.id, x: p.x, y: p.y };
+    if (this.pressTimer) clearTimeout(this.pressTimer);
+    this.pressTimer = setTimeout(() => { this.pressTimer = null; this.startDrag(); }, 260);
+  }
+
+  onTouchMove(p) {
+    if (!p) return;
+    if (!this.drag) {
+      if (this.press) {
+        const dx = p.x - this.press.x;
+        const dy = p.y - this.press.y;
+        if (dx * dx + dy * dy > 144) {
+          if (this.pressTimer) clearTimeout(this.pressTimer);
+          this.pressTimer = null;
+          this.press = null;
+        }
+      }
+      return;
+    }
+    this.drag.x = p.x;
+    this.drag.y = p.y;
+    const target = this.hexAt(p.x, p.y);
+    if (!target || target.id === this.drag.id) return;
+    const from = this.order.indexOf(this.drag.id);
+    const to = this.order.indexOf(target.id);
+    if (from < 0 || to < 0) return;
+    const arr = this.order.slice();
+    [arr[from], arr[to]] = [arr[to], arr[from]];
+    this.order = arr;
+    this.saveOrder();
+    this.layout();
+  }
+
+  onTouchEnd() {
+    if (this.pressTimer) clearTimeout(this.pressTimer);
+    this.pressTimer = null;
+    this.press = null;
+    if (this.drag) {
+      this.drag = null;
+      this.saveOrder();
+      setTimeout(() => { this.suppressOpen = false; }, 400);
+    }
+  }
+
+  onTouchCancel() {
+    if (this.pressTimer) clearTimeout(this.pressTimer);
+    this.pressTimer = null;
+    this.press = null;
+    this.drag = null;
+  }
+
+  onHide() {
+    if (this.pressTimer) clearTimeout(this.pressTimer);
+    this.pressTimer = null;
+    this.press = null;
+    this.drag = null;
+  }
+
+  drawHex(c, item, cx, cy, ghost) {
+    const T = theme.tokens;
+    const accents = {
+      logic: ['#23804e', '#abc2c1'], number: ['#2c6aad', '#adbed2'],
+      memory: ['#7550ad', '#bab9d2'], action: ['#bd5420', '#c7bab9'],
+      card: ['#8f6419', '#bfbdb7'],
+    };
+    const [accent, border] = accents[item.accent] || accents.logic;
+    c.save();
+    if (ghost) {
+      c.globalAlpha = 0.95;
+      c.shadowColor = 'rgba(0,0,0,0.22)';
+      c.shadowBlur = 24;
+      c.shadowOffsetY = 8;
+    } else {
       c.shadowColor = T.cardShadow;
       c.shadowBlur = 15;
       c.shadowOffsetY = 5;
-      hexPath(c, cx, cy, this.hexR);
-      c.fillStyle = border;
-      c.fill();
-      c.restore();
-      hexPath(c, cx, cy, this.hexR - 4);
-      c.fillStyle = T.card;
-      c.fill();
+    }
+    hexPath(c, cx, cy, this.hexR);
+    c.fillStyle = border;
+    c.fill();
+    c.restore();
+    hexPath(c, cx, cy, this.hexR - 4);
+    c.fillStyle = T.card;
+    c.fill();
 
-      const iconW = 30;
-      const iy = cy - this.hexR * 0.44;
-      const glyphs = {
-        click: 'idea', match: 'bulb', point24: 'calculator', guess: 'counter',
-        detective: 'incognito', hunter: 'target', master: 'layers',
-        g2048: 'calculator', three: 'numeric-3', snake: 'snake', link: 'link',
-        puzzle: 'puzzle', mirror: 'mirror', down: 'down',
-        crush: 'crush', sudoku: 'sudoku', sort: 'sort', slide: 'slide',
-        poker: 'mode-poker', mahjong: 'mode-mahjong', solo: 'mode-mahjong',
-        alchemy: 'alchemy', quesheng: 'quesheng', legend: 'legend', gambler: 'gambler',
-      };
-      const fallbacks = {
-        click: '💡', match: '💡', point24: '🧮', guess: '1A2B',
-        detective: '🕵', hunter: '🎯', master: '🧩',
-        g2048: '2048', three: '3', snake: '🐍', link: '🔗',
-        puzzle: '🧩', mirror: '🪞', down: '⬇️',
-        crush: '😄', sudoku: '数', sort: '🧃', slide: '↔',
-        poker: '🃏', mahjong: '🀄', solo: '🀄',
-        alchemy: '⚗', quesheng: '🀄', legend: '🀄', gambler: '🀄',
-      };
-      if (!icons.draw(c, glyphs[item.kind], cx, iy + iconW / 2, 25, accent)) {
-        D.text(c, fallbacks[item.kind], cx, iy + iconW / 2, {
-          size: fallbacks[item.kind] === '1A2B' ? 10 : 19,
-          weight: 'bold', color: accent, align: 'center',
-          family: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
-        });
-      }
-      D.text(c, item.title, cx, cy + this.hexR * 0.38, {
-        size: this.hexes.length >= 4 ? 12 : 14, weight: 'bold', color: T.text, align: 'center',
+    const iconW = 30;
+    const iy = cy - this.hexR * 0.44;
+    const glyphs = {
+      click: 'idea', match: 'bulb', point24: 'calculator', guess: 'counter',
+      detective: 'incognito', hunter: 'target', master: 'layers',
+      g2048: 'calculator', three: 'numeric-3', snake: 'snake', link: 'link',
+      puzzle: 'puzzle', mirror: 'mirror', down: 'down',
+      crush: 'crush', sudoku: 'sudoku', sort: 'sort', slide: 'slide',
+      poker: 'mode-poker', mahjong: 'mode-mahjong', solo: 'mode-mahjong',
+      alchemy: 'alchemy', quesheng: 'quesheng', legend: 'legend', gambler: 'gambler',
+    };
+    const fallbacks = {
+      click: '💡', match: '💡', point24: '🧮', guess: '1A2B',
+      detective: '🕵', hunter: '🎯', master: '🧩',
+      g2048: '2048', three: '3', snake: '🐍', link: '🔗',
+      puzzle: '🧩', mirror: '🪞', down: '⬇️',
+      crush: '😄', sudoku: '数', sort: '🧃', slide: '↔',
+      poker: '🃏', mahjong: '🀄', solo: '🀄',
+      alchemy: '⚗', quesheng: '🀄', legend: '🀄', gambler: '🀄',
+    };
+    if (!icons.draw(c, glyphs[item.kind], cx, iy + iconW / 2, 25, accent)) {
+      D.text(c, fallbacks[item.kind], cx, iy + iconW / 2, {
+        size: fallbacks[item.kind] === '1A2B' ? 10 : 19,
+        weight: 'bold', color: accent, align: 'center',
+        family: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
       });
-      const w = this.hexR * 1.55;
-      const h = this.hexR * 1.8;
-      this.addButton(item.id + '-game', cx - w / 2, cy - h / 2, w, h, () => {
-        this.app.openGame(item.id, { x: cx, y: cy });
-      });
+    }
+    D.text(c, item.title, cx, cy + this.hexR * 0.38, {
+      size: this.hexes.length >= 4 ? 12 : 14, weight: 'bold', color: T.text, align: 'center',
     });
-
-    if (this.settingsAnim > 0) this.drawSettings(c);
-    else if (!this.settingsOpen) this.drawSettingsButton(c);
+    if (ghost) return;
+    const w = this.hexR * 1.55;
+    const h = this.hexR * 1.8;
+    this.addButton(item.id + '-game', cx - w / 2, cy - h / 2, w, h, () => {
+      if (this.suppressOpen) { this.suppressOpen = false; return; }
+      this.app.openGame(item.id, { x: cx, y: cy });
+    });
   }
 
   getGameOrigin(id) {
@@ -298,9 +427,12 @@ class HomeScene extends Scene {
       ry += rowH;
     });
 
-    // 比照小程序设置面板：最底部留一句轻松的话（安全区之上）
-    D.text(c, t('home.footer'), W / 2, y + h - SAFE_BOTTOM - 20, {
-      size: 12, color: T.muted, align: 'center',
+    // 比照小程序设置面板：拖动提示 + 轻松的话同一行（安全区之上）。
+    const footText = `${t('home.dragTip')} · ${t('home.footer')}`;
+    let footSize = 11;
+    while (footSize > 8 && D.measure(c, footText, footSize) > this.cw - 16) footSize -= 0.5;
+    D.text(c, footText, W / 2, y + h - SAFE_BOTTOM - 20, {
+      size: footSize, color: T.muted, align: 'center',
     });
   }
 

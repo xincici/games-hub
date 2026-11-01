@@ -84,6 +84,8 @@
               <span class="switch" :class="{ on: sfxOn }" aria-hidden="true"><span class="knob" /></span>
             </button>
           </section>
+
+          <p class="sheet-foot">{{ i18n('homeDragTip') }} · {{ i18n('homeFooter') }}</p>
         </div>
       </div>
     </div>
@@ -225,6 +227,14 @@ onUnmounted(() => {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+.sheet-foot {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-color);
 }
 
 .hero {

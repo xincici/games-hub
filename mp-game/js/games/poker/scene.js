@@ -94,6 +94,8 @@ class PokerScene extends Scene {
     this.cardId = 0;
     this.layout();
     this.restore();
+    this._lastTotal = this.total;
+    this._lastBonus = this.bonus;
     // 和 web 一致：进游戏就把当前资产 / 下注落档。dice 不写 —— 「从没动过」和「主动关掉」要能区分。
     this.saveTotal();
     setRaw(KEYS.bet, String(this.bet));
@@ -213,8 +215,8 @@ class PokerScene extends Scene {
 
     // 严格按小程序顺序：牌型倍数区在上，金额区其次，然后手牌 / 猜大小 / 操作区。
     this.rulesY = this.top + this.headerH + 6;
-    this.rulesCaption = 14;
-    this.ruleRowH = 21;
+    this.rulesCaption = 16;
+    this.ruleRowH = 23;
     this.rulesH = this.rulesCaption + 4 * this.ruleRowH + 12;
     this.scoreY = this.rulesY + this.rulesH + 14;
     this.scoreH = 74;
@@ -238,8 +240,8 @@ class PokerScene extends Scene {
     this.curW = this.miniW;
     this.curH = this.miniH;
 
-    const natural = this.cardH + this.holdH + 18;
-    const extra = clamp((H - 667) * 0.35, 0, 60);
+    const natural = this.cardH + this.holdH + 12;
+    const extra = clamp((H - 667) * 0.35, 0, 40);
     let maxCards = this.maxCardsFor(this.guessH);
     // 带刘海 / 底部安全区的矮屏：猜大小卡换成紧凑尺寸，把高度让给牌桌。
     if (this.dice && maxCards < 120) {
@@ -411,7 +413,9 @@ class PokerScene extends Scene {
       this.nextGuessAt = now + GUESS_FLICKER;
     }
     if (!silent) {
-      this.app.audio.playSuccess();
+      // 中牌型属于「多消 / 连击」，不放游戏胜利音；只放消除音和奖金区烟花。
+      this.app.audio.playElimination();
+      this.startConfetti();
     }
     this.save();
   }
@@ -462,6 +466,9 @@ class PokerScene extends Scene {
     this.result = { times: 0, key: '' };
     this.stage = WAIT;
     this.clearTable();
+    // 结算落袋：这一下才是真正的游戏胜利反馈。
+    this.app.audio.playSuccess();
+    this.startConfetti(true);
     this.save();
   }
 
@@ -576,12 +583,21 @@ class PokerScene extends Scene {
     if (this.helpOpen) return;
     this.updateBetPress();
     this.updateCards(delta);
+    // 资产 / 奖金任何变化都让数字弹一下（下注、发牌扣款、猜中、清零、结算）。
+    if (this.total !== this._lastTotal) {
+      this._lastTotal = this.total;
+      this.totalPulseAt = this.now;
+    }
+    if (this.bonus !== this._lastBonus) {
+      this._lastBonus = this.bonus;
+      this.bonusPulseAt = this.now;
+    }
     if (this.toast && this.now >= this.toast.until) this.toast = null;
     if (this.stage === GUESS && this.dice && this.now >= this.nextGuessAt) {
       this.guessCard = logic.randomCard();
       this.nextGuessAt = this.now + GUESS_FLICKER;
     }
-    if (this.now < this.confettiUntil && this.now - this.lastConfettiAt >= 40) {
+    if (this.now < this.confettiUntil && this.now - this.lastConfettiAt >= 80) {
       this.lastConfettiAt = this.now;
       this.emitConfetti();
     }
@@ -617,13 +633,22 @@ class PokerScene extends Scene {
     else if (this.anim === 'draw' && now >= this.drawDoneAt) this.finishDraw();
   }
 
-  startConfetti() {
+  startConfetti(full) {
     this.confetti = [];
-    this.confettiUntil = Date.now() + 1200;
+    this.confettiFull = !!full;
+    this.confettiUntil = Date.now() + (full ? 1200 : 700);
     this.lastConfettiAt = 0;
   }
   emitConfetti() {
-    confetti.spawn(this.confetti, { W, H, startY: H * 0.58, scoreY: this.scoreY });
+    if (this.confettiFull) {
+      // 结算奖金：真正的全屏胜利烟花。
+      confetti.spawn(this.confetti, { W, H, count: 9, startY: H * 0.58 });
+      return;
+    }
+    // 小连击烟花只在奖金区上方炸开，不是全屏胜利礼炮。
+    confetti.spawn(this.confetti, {
+      W, H, count: 4, startY: this.scoreY + 8, scoreY: this.scoreY,
+    });
   }
 
   // ---------- 渲染 ----------
@@ -910,13 +935,17 @@ class PokerScene extends Scene {
     const cy = this.guessY + this.guessH / 2;
     const showCurrent = this.stage === GUESS && !!this.guessCard;
     const curX = this.cx + this.cw - padX - this.curW;
-    const curY = this.guessY + (this.guessH - this.curH) / 2;
+    const contentTop = this.guessY + 10;
+    const curY = contentTop + (this.guessH - 10 - this.curH) / 2;
     if (showCurrent) {
       cards.draw(c, this.guessCard, MODE_POKER, curX, curY, this.curW, this.curH, true, 'mode-poker', '🃏');
+    } else {
+      // 非猜大小阶段也常驻一张牌背（web 的 randomCard 初值就是 0 → 牌背），
+      // 不再画问号占位。
+      cards.draw(c, null, MODE_POKER, curX, curY, this.curW, this.curH, false, 'mode-poker', '🃏');
     }
     const histLeft = this.cx + padX;
-    // 没有当前牌时，历史区一直用到右边；不再保留问号占位卡。
-    const histRight = showCurrent ? curX - 12 : this.cx + this.cw - padX;
+    const histRight = curX - 12;
     const room = Math.max(0, histRight - histLeft);
     const totalW = this.guesses.length * (this.miniW + 6);
     const maxScroll = Math.max(0, totalW - room);
@@ -927,7 +956,7 @@ class PokerScene extends Scene {
       }
       return;
     }
-    const topY = this.guessY + 10;
+    const topY = contentTop + 2;
     c.save();
     D.roundRect(c, histLeft - 2, this.guessY + 2, room + 4, this.guessH - 4, 8);
     c.clip();

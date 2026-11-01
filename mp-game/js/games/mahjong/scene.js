@@ -728,7 +728,7 @@ class MahjongScene extends Scene {
     cards.draw(c, logic.tileFace(item.value), cards.MODE_MAHJONG, cur.x, cur.y, cur.w, cur.h, true);
     c.restore();
     // 当前牌：主色描边（下一张压暗 + 0.8 倍）
-    D.strokeRoundRect(c, cur.x - 1, cur.y - 1, cur.w + 2, cur.h + 2, 9, T.primary, 2);
+    D.strokeRoundRect(c, cur.x, cur.y, cur.w, cur.h, cards.mahjongRadius(cur.w), T.primary, 2);
     const pv = this.preview;
     if (pv) {
       c.save();
@@ -738,7 +738,7 @@ class MahjongScene extends Scene {
     } else {
       c.save();
       if (c.setLineDash) c.setLineDash([4, 3]);
-      D.strokeRoundRect(c, next.x, next.y, next.w, next.h, 8, T.tileBorder, 1);
+      D.strokeRoundRect(c, next.x, next.y, next.w, next.h, cards.mahjongRadius(next.w), T.tileBorder, 1);
       c.restore();
     }
   }

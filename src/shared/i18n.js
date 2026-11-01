@@ -24,6 +24,8 @@ const home = {
     dark: 'Dark',
     chinese: '中文',
     english: 'English',
+    homeDragTip: 'Long-press a home card to drag and reorder',
+    homeFooter: 'Have fun!',
   },
   cn: {
     gameTitle: '游戏合集',
@@ -45,6 +47,8 @@ const home = {
     dark: '深色',
     chinese: '中文',
     english: 'English',
+    homeDragTip: '长按首页卡片可拖动排序',
+    homeFooter: '玩得开心',
   },
 };
 

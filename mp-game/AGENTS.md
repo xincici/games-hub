@@ -154,7 +154,7 @@ game.js
 
 ## 首页（`js/games/home/`）
 
-- 当前二十五个入口，按 4+3+4+3+4+3+4 蜂窝；水平间距按小程序 6rpx 口径缩小，行间用负 overlap 咬合。
+- 当前二十五个入口，按 4+3+4+3+4+3+4 蜂窝；长按 260ms 可拖动排序，顺序存 `__games_hub__home_order`（与 web 同一个 key）。水平间距按小程序 6rpx 口径缩小，行间用负 overlap 咬合。
 - 每个入口按 accent 上色：logic `#23804e`、number `#2c6aad`、memory `#7550ad`、action `#bd5420`、card `#8f6419`；六边形外层用 18% 混色边框，图标用完整 accent。
 - 右下角齿轮（参考小程序 FloatingActions）打开底部抽屉：语言（system/cn/en）、默认牌面（emoji/poker/mahjong）、音效；选项按钮组靠右、即时生效，无保存按钮；展开 / 收起用 280/220ms 的 easeOut 位移。没有背景音乐资源，因此不展示音乐开关；小程序没有主题设置，这里也不提供主题入口。
 - 六边形用 `hexPath` 双层（外主色、内白卡），卡片区域整个可点。

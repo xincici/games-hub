@@ -41,7 +41,7 @@
       </view>
 
       <view class="sheet-footer">
-        <text class="footer-text">{{ t('setFooter') }}</text>
+        <text class="footer-hint">{{ t('setDragTip') }} · {{ t('setFooter') }}</text>
       </view>
     </view>
   </view>
@@ -170,9 +170,15 @@ const faceOpts = computed(() => [
 }
 .sheet-footer {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   padding-top: 26rpx;
+}
+.footer-hint {
+  font-size: 22rpx;
+  color: #b6bcc6;
+  white-space: nowrap;
 }
 .footer-text {
   font-size: 22rpx;

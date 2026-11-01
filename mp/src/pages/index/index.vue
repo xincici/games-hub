@@ -14,8 +14,12 @@
           v-for="g in row.list"
           :key="g.id"
           class="hex"
-          :class="['acc-' + g.accent, { 'no-intro': introDone }]"
+          :class="['acc-' + g.accent, { 'no-intro': introDone, dragging: dragId === g.id }]"
           :style="enterStyle(g.id)"
+          @touchstart="onTouchStart(g, $event)"
+          @touchmove.stop.prevent="onTouchMove($event)"
+          @touchend="onTouchEnd"
+          @touchcancel="onTouchCancel"
           @click="open(g)"
         >
           <view class="hex-body">
@@ -23,6 +27,20 @@
             <text class="game-name">{{ g.name || t(g.nameKey) }}</text>
           </view>
         </view>
+      </view>
+    </view>
+
+
+    <!-- 拖动跟手浮层：长按后出现，松手即保存顺序 -->
+    <view
+      v-if="dragGhost"
+      class="hex ghost"
+      :class="'acc-' + dragGhost.game.accent"
+      :style="{ left: (dragGhost.x - 80) + 'px', top: (dragGhost.y - 92) + 'px' }"
+    >
+      <view class="hex-body">
+        <view class="hex-icon" :class="dragGhost.game.icon" />
+        <text class="game-name">{{ dragGhost.game.name || t(dragGhost.game.nameKey) }}</text>
       </view>
     </view>
 
@@ -38,7 +56,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 
 import FloatingActions from '@/components/FloatingActions.vue';
@@ -82,18 +100,40 @@ const games = [
   { id: 'solo', icon: 'i-dinkie-icons-red-dragon-mahjong', accent: 'card', nameKey: 'game.solo', url: '/pages/solo/solo' },
 ];
 
+// 首页顺序：跟 web 共用同一个 key，数组元素是游戏 id；新增游戏自动接到末尾。
+const ORDER_KEY = '__games_hub__home_order';
+function readOrder() {
+  try {
+    const raw = uni.getStorageSync(ORDER_KEY);
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(arr) ? arr.filter(id => typeof id === 'string') : [];
+  } catch (e) { return []; }
+}
+function mergeOrder() {
+  const valid = games.map(g => g.id);
+  const out = [];
+  readOrder().forEach((id) => { if (valid.includes(id) && !out.includes(id)) out.push(id); });
+  games.forEach((g) => { if (!out.includes(g.id)) out.push(g.id); });
+  return out;
+}
+const order = ref(mergeOrder());
+const orderedGames = computed(() => order.value.map(id => games.find(g => g.id === id)).filter(Boolean));
+function saveOrder() {
+  try { uni.setStorageSync(ORDER_KEY, JSON.stringify(order.value)); } catch (e) { /* ignore */ }
+}
+
 // 每行格数：web 是 4/3/4/3…（25 个游戏正好铺满）。
 // 目前只迁移了 4 个游戏，若照 4/3 排就是「一排 4 个」，看不出蜂窝咬合 →
 // 游戏数 ≤ 4 时用 3 + 1（第二行半格错位），能直接看出蜂窝；超过 4 个自动回到 web 的 4/3/4/3…
-const ROW_SIZES = games.length <= 4 ? [3, 1] : [4, 3, 4, 3, 4, 3, 4];
+const ROW_SIZES = orderedGames.value.length <= 4 ? [3, 1] : [4, 3, 4, 3, 4, 3, 4];
 const rows = computed(() => {
   const groups = [];
   let i = 0;
   for (const size of ROW_SIZES) {
-    groups.push(games.slice(i, i + size));
+    groups.push(orderedGames.value.slice(i, i + size));
     i += size;
   }
-  if (i < games.length) groups.push(games.slice(i));
+  if (i < orderedGames.value.length) groups.push(orderedGames.value.slice(i));
   return groups
     .filter(group => group.length)
     .map((group, idx, arr) => ({
@@ -137,7 +177,91 @@ onMounted(() => {
 });
 onUnmounted(() => { if (introTimer) clearTimeout(introTimer); });
 
+// ---------- 拖动排序（参考 web：长按 260ms 后跟着手指，经过另一张卡就交换） ----------
+const dragId = ref('');
+const dragGhost = ref(null);
+let press = null;
+let pressTimer = null;
+let suppressOpen = false;
+let hexRects = [];
+
+function queryRects(cb) {
+  const q = uni.createSelectorQuery();
+  q.selectAll('.hex').boundingClientRect((rects) => {
+    hexRects = (rects || []).slice(0, orderedGames.value.length);
+    if (cb) cb();
+  }).exec();
+}
+function startDrag(g) {
+  if (!press || dragId.value || !press.x) return;
+  dragId.value = g.id;
+  dragGhost.value = { id: g.id, game: g, x: press.x, y: press.y };
+  suppressOpen = true;
+  if (uni.vibrateShort) uni.vibrateShort({ type: 'light' });
+  queryRects();
+}
+function onTouchStart(g, e) {
+  if (dragId.value) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  press = { id: g.id, x: t.clientX, y: t.clientY };
+  suppressOpen = false;
+  if (pressTimer) clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => startDrag(g), 260);
+}
+function onTouchMove(e) {
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  if (!dragId.value) {
+    if (press) {
+      const dx = t.clientX - press.x;
+      const dy = t.clientY - press.y;
+      if (dx * dx + dy * dy > 120) {
+        clearTimeout(pressTimer);
+        press = null;
+      }
+    }
+    return;
+  }
+  if (!dragGhost.value) return;
+  dragGhost.value.x = t.clientX;
+  dragGhost.value.y = t.clientY;
+  const targetIndex = hexRects.findIndex(r => t.clientX >= r.left && t.clientX <= r.right
+    && t.clientY >= r.top && t.clientY <= r.bottom);
+  if (targetIndex < 0 || targetIndex >= orderedGames.value.length) return;
+  const target = orderedGames.value[targetIndex];
+  if (!target || target.id === dragId.value) return;
+  const from = order.value.indexOf(dragId.value);
+  const to = order.value.indexOf(target.id);
+  if (from < 0 || to < 0) return;
+  const arr = order.value.slice();
+  [arr[from], arr[to]] = [arr[to], arr[from]];
+  order.value = arr;
+  saveOrder();
+  nextTick(() => queryRects());
+}
+function onTouchEnd() {
+  if (pressTimer) clearTimeout(pressTimer);
+  pressTimer = null;
+  press = null;
+  if (dragId.value) {
+    dragId.value = '';
+    dragGhost.value = null;
+    saveOrder();
+    // 让紧接着的 click 不进入游戏；下一次触摸开始会复位。
+    setTimeout(() => { suppressOpen = false; }, 400);
+  }
+}
+function onTouchCancel() {
+  if (pressTimer) clearTimeout(pressTimer);
+  pressTimer = null;
+  press = null;
+  dragId.value = '';
+  dragGhost.value = null;
+}
+
 function open(g) {
+  if (suppressOpen) { suppressOpen = false; return; }
   uni.navigateTo({ url: g.url });
 }
 </script>
@@ -225,6 +349,19 @@ $tile-border: #c9d0da;    /* web: --tile-border-color */
 /* 首次入场动画播完后永久关闭：从游戏返回首页不再重播 */
 .hex.no-intro {
   animation: none;
+}
+.hex.dragging { opacity: 0.18; }
+.hex.ghost {
+  position: fixed;
+  z-index: 80;
+  width: $hex-w;
+  height: $hex-h;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.95;
+  transform: none;
+  animation: none;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.22);
 }
 .hex-row {
   display: flex;

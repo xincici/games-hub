@@ -39,6 +39,7 @@ const dict = {
     setOn: '开',
     setOff: '关',
     setFooter: 'Have fun! 祝你玩得开心 🎉',
+    setDragTip: '长按首页卡片可拖动排序',
     more: '更多游戏陆续上线',
     play: '开始游戏',
     g2048: '2048',
@@ -158,6 +159,7 @@ const dict = {
     setOn: 'On',
     setOff: 'Off',
     setFooter: 'Have fun!',
+    setDragTip: 'Long-press a home card to drag and reorder',
 
     helpShort: 'Clear the objective in the play area to pass; swipe is the main control.',
     more: 'More games coming',

@@ -54,6 +54,7 @@ const dict = {
     on: '开',
     off: '关',
     footer: '玩得开心，享受游戏吧',
+    dragTip: '长按卡片可拖动排序',
     tapHint: '点击开始',
   },
   en: {
@@ -100,6 +101,7 @@ const dict = {
     on: 'On',
     off: 'Off',
     footer: 'Have fun, enjoy your games',
+    dragTip: 'Long-press a card to drag and reorder',
     tapHint: 'Tap to play',
   },
 };

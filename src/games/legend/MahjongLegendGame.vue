@@ -66,15 +66,16 @@ const nextFrame = () => new Promise(res => requestAnimationFrame(() => requestAn
 function clearTimers() { timers.forEach(clearTimeout); timers.length = 0; }
 
 // ---------- 尺寸 ----------
+const BOARD_PAD = 6;                  // 与小程序棋盘内边距一致：牌不能贴边框
 const vw = ref(window.innerWidth);
 const vh = ref(window.innerHeight);
 const onResize = () => { vw.value = window.innerWidth; vh.value = window.innerHeight; };
 // 8 行很高：高度预算要扣掉顶栏/统计卡（262）与下方候选区那一行（96）
 const metrics = computed(() => {
-  const byW = (Math.min(vw.value, 480) - 32 - GAP * (COLS - 1)) / COLS;
-  const byH = (vh.value - 262 - 96 - GAP * (ROWS - 1)) / ROWS / TILE_RATIO;
+  const byW = (Math.min(vw.value, 480) - 32 - BOARD_PAD * 2 - GAP * (COLS - 1)) / COLS;
+  const byH = (vh.value - 262 - 96 - BOARD_PAD * 2 - GAP * (ROWS - 1)) / ROWS / TILE_RATIO;
   const cw = Math.max(24, Math.min(byW, byH, 92));
-  return { cw: Math.round(cw), ch: Math.round(cw * TILE_RATIO), gap: GAP };
+  return { cw: Math.round(cw), ch: Math.round(cw * TILE_RATIO), gap: GAP, pad: BOARD_PAD };
 });
 const boardVars = computed(() => {
   const { cw, ch, gap } = metrics.value;
@@ -83,8 +84,8 @@ const boardVars = computed(() => {
     '--ch': `${ch}px`,
     '--gap': `${gap}px`,
     '--move-ms': `${moveMs.value}ms`,
-    width: `${COLS * cw + (COLS - 1) * gap}px`,
-    height: `${ROWS * ch + (ROWS - 1) * gap}px`,
+    width: `${COLS * cw + (COLS - 1) * gap + BOARD_PAD * 2}px`,
+    height: `${ROWS * ch + (ROWS - 1) * gap + BOARD_PAD * 2}px`,
   };
 });
 const tileVars = computed(() => ({ '--mj-w': `${metrics.value.cw}px`, '--mj-h': `${metrics.value.ch}px` }));
@@ -95,8 +96,8 @@ const slotVars = { width: `${HAND_W}px`, height: `${Math.round(HAND_W * TILE_RAT
 const handTileVars = { '--mj-w': `${HAND_W}px`, '--mj-h': `${Math.round(HAND_W * TILE_RATIO)}px` };
 const stepX = computed(() => metrics.value.cw + metrics.value.gap);
 const stepY = computed(() => metrics.value.ch + metrics.value.gap);
-const posOf = (row, col) => ({ left: `${col * stepX.value}px`, top: `${row * stepY.value}px` });
-const cellStyle = i => ({ left: `${(i % COLS) * stepX.value}px`, top: `${Math.floor(i / COLS) * stepY.value}px` });
+const posOf = (row, col) => ({ left: `${BOARD_PAD + col * stepX.value}px`, top: `${BOARD_PAD + row * stepY.value}px` });
+const cellStyle = i => ({ left: `${BOARD_PAD + (i % COLS) * stepX.value}px`, top: `${BOARD_PAD + Math.floor(i / COLS) * stepY.value}px` });
 
 // 棋盘上的牌（带行列，供模板定位）
 const tiles = computed(() => {
