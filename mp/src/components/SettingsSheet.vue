@@ -173,11 +173,15 @@ const faceOpts = computed(() => [
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  padding-top: 26rpx;
+  margin-top: 18rpx;
+  padding: 18rpx 16rpx;
+  border-radius: 14rpx;
+  background: #f7f8fa;
 }
 .footer-hint {
   font-size: 22rpx;
-  color: #b6bcc6;
+  line-height: 1.5;
+  color: #5f6b7a;
   white-space: nowrap;
 }
 .footer-text {

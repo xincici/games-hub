@@ -13,6 +13,13 @@ const tiles = require('../../core/tiles');
 
 const ORDER_KEY = '__games_hub__home_order';
 const ROW_SIZES = [4, 3, 4, 3, 4, 3, 4];
+let homeIntroPlayed = false;
+function entryHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
 const DEFAULT_ORDER = [
   'click', 'match', 'point24', 'guess',
   'detective', 'hunter', 'master',
@@ -52,6 +59,10 @@ class HomeScene extends Scene {
     this.press = null;
     this.pressTimer = null;
     this.suppressOpen = false;
+    this.now = Date.now();
+    // 与小程序一致：首次进入首页播一次逐格跳动，返回首页不重播。
+    this.enterStart = homeIntroPlayed ? 0 : Date.now();
+    homeIntroPlayed = true;
     this.layout();
   }
 
@@ -132,6 +143,7 @@ class HomeScene extends Scene {
   }
 
   update(dt) {
+    this.now = Date.now();
     this.bg.update(dt);
     const step = Math.min(50, dt || 16);
     if (this.settingsOpen) this.settingsAnim = Math.min(1, this.settingsAnim + step / 280);
@@ -237,8 +249,52 @@ class HomeScene extends Scene {
     this.drag = null;
   }
 
+  entryAnim(id) {
+    if (!this.enterStart) return null;
+    const elapsed = this.now - this.enterStart;
+    const h = entryHash(id);
+    const delay = 350 + (h % 400);
+    const dur = 520 + (h % 160);
+    const p = (elapsed - delay) / dur;
+    if (p <= 0) return { scale: 0.82, alpha: 0, skip: true };
+    if (p >= 1) return null;
+    let scale;
+    let alpha = 1;
+    if (p < 0.55) {
+      const t = p / 0.55;
+      const e = 1 - Math.pow(1 - t, 2);
+      scale = 0.82 + 0.27 * e;
+      alpha = t;
+    } else if (p < 0.78) {
+      const t = (p - 0.55) / 0.23;
+      scale = 1.09 - 0.12 * t;
+    } else {
+      const t = (p - 0.78) / 0.22;
+      scale = 0.97 + 0.03 * t;
+    }
+    return { scale, alpha };
+  }
+
   drawHex(c, item, cx, cy, ghost) {
     const T = theme.tokens;
+    const anim = ghost ? null : this.entryAnim(item.id);
+    if (anim && anim.skip) {
+      // 小程序入场延迟期间虽然透明，卡片仍然可点；按钮也照常存在。
+      const bw = this.hexR * 1.55;
+      const bh = this.hexR * 1.8;
+      this.addButton(item.id + '-game', cx - bw / 2, cy - bh / 2, bw, bh, () => {
+        if (this.suppressOpen) { this.suppressOpen = false; return; }
+        this.app.openGame(item.id, { x: cx, y: cy });
+      });
+      return;
+    }
+    c.save();
+    if (anim) {
+      c.globalAlpha = anim.alpha;
+      c.translate(cx, cy);
+      c.scale(anim.scale, anim.scale);
+      c.translate(-cx, -cy);
+    }
     const accents = {
       logic: ['#23804e', '#abc2c1'], number: ['#2c6aad', '#adbed2'],
       memory: ['#7550ad', '#bab9d2'], action: ['#bd5420', '#c7bab9'],
@@ -294,6 +350,7 @@ class HomeScene extends Scene {
     D.text(c, item.title, cx, cy + this.hexR * 0.38, {
       size: this.hexes.length >= 4 ? 12 : 14, weight: 'bold', color: T.text, align: 'center',
     });
+    c.restore();
     if (ghost) return;
     const w = this.hexR * 1.55;
     const h = this.hexR * 1.8;
