@@ -129,13 +129,14 @@ function drawPoker(c, item, x, y, w, h) {
   D.fillRoundRect(c, x, y, w, h, radius, '#fafafa');
   D.strokeRoundRect(c, x, y, w, h, radius, '#c9d0da', 1);
   const pad = Math.max(2, w * 0.07);
-  const rs = Math.max(5, Math.round(w * 0.19));
+  const jokerRs = Math.max(5, Math.round(w * 0.19));
+  const rankRs = Math.max(7, Math.round(w * 0.30));
   if (joker) {
     // web 同款：左上 / 右下的竖排 JOKER + 中央牛仔帽；小王黑、大王红。
-    const step = rs * 0.94;
+    const step = jokerRs * 0.94;
     c.save();
     c.fillStyle = color;
-    c.font = `bold ${rs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    c.font = `bold ${jokerRs}px "PingFang SC","Microsoft YaHei",sans-serif`;
     c.textAlign = 'left';
     c.textBaseline = 'top';
     for (let i = 0; i < 5; i++) {
@@ -163,7 +164,7 @@ function drawPoker(c, item, x, y, w, h) {
   const corner = POKER_RANKS[card.num - 1];
   c.save();
   c.fillStyle = color;
-  c.font = `bold ${rs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  c.font = `bold ${rankRs}px "PingFang SC","Microsoft YaHei",sans-serif`;
   c.textAlign = 'left';
   c.textBaseline = 'top';
   c.fillText(corner, x + pad, y + pad);

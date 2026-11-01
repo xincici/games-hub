@@ -416,14 +416,14 @@ class SoloScene extends Scene {
     this.handH = this.handTileH * 2 + HAND_GAP + 16;
 
     let wallH = 88;
-    let discardH = 90;
+    let discardH = 100;
     let gap = 12;
     const gameTop = this.optY + this.optH + 12;
     const contentBottom = H - SAFE_BOTTOM - 72;   // 给右下 FAB 留一行
     const totalHeight = () => wallH + gap + discardH + gap + this.handH;
     if (gameTop + totalHeight() > contentBottom) {
       wallH = 80;
-      discardH = 86;
+      discardH = 96;
       gap = 10;
     }
     // 极窄 / 极矮的机器：只缩手牌，不挤掉卡片。
@@ -461,7 +461,7 @@ class SoloScene extends Scene {
     const row = Math.floor(index / this.discardPerRow);
     return {
       x: this.cx + 8 + col * (DISCARD_W + DISCARD_GAP),
-      y: this.discardY + 7 + row * (DISCARD_H + DISCARD_GAP),
+      y: this.discardY + 18 + row * (DISCARD_H + DISCARD_GAP),
       w: DISCARD_W,
       h: DISCARD_H,
     };
@@ -599,15 +599,10 @@ class SoloScene extends Scene {
 
   drawDiscards(c, T) {
     D.card(c, this.cx, this.discardY, this.cw, this.discardH, T);
-    if (!this.discards.length) {
-      const lines = D.wrapText(c, t('solo.hint'), this.cw - 32, 12);
-      const lineH = 17;
-      const startY = this.discardY + this.discardH / 2 - (lines.length - 1) * lineH / 2;
-      lines.forEach((line, i) => {
-        D.text(c, line, W / 2, startY + i * lineH, { size: 12, color: T.muted, align: 'center' });
-      });
-      return;
-    }
+    // 文案在出牌区内部顶部常驻。
+    D.text(c, t('solo.hint'), W / 2, this.discardY + 11, {
+      size: 10.5, color: T.muted, align: 'center',
+    });
     this.discards.forEach((tile, i) => {
       if (this.isDiscardFlying(tile.id)) return;
       const r = this.discardSlotRect(i);

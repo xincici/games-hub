@@ -3,7 +3,7 @@
 // 控制类字符一律不带 variation selector（U+FE0F）；牌面 emoji 不在此文件。
 module.exports = {
   en: {
-    gameTitle: 'Mahjong Legend',
+    gameTitle: 'Legend',
     best: '🏆 Best',
     score: '✨ Score',
     level: '⭐ Level',

@@ -4,7 +4,7 @@
 // 2. 按钮里的方向箭头用不带 U+FE0F 的 `➡`（真机 canvas 会画出小方框）。
 module.exports = {
   en: {
-    gameTitle: 'God of Gamblers',
+    gameTitle: 'Gamblers',
     level: '🏁 Level',
     best: '🏆 Best',
     streak: '🔥 Streak',

@@ -1,6 +1,6 @@
 module.exports = {
   en: {
-    gameTitle: 'Elimination Master',
+    gameTitle: 'Elimination',
     level: '🏁 Level',
     remain: '🃏 Tiles Left',
     layersLabel: '{n} layers',

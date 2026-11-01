@@ -694,11 +694,7 @@ class LegendScene extends Scene {
     const cells = [
       [t('legend.best'), String(this.best), T.text],
       [t('legend.score'), String(this.score), T.primary],
-      [t('legend.level'), String(this.level),
-        this.now - this.levelFlashAt < LEVEL_FLASH_MS ? T.primary : T.text],
       [t('legend.cleared'), String(this.cleared), T.text],
-      [t('legend.combo'), this.maxChain > 1 ? `x${this.maxChain}` : '—',
-        this.maxChain > 1 ? T.primary : T.muted],
     ];
     const q = this.cw / cells.length;
     cells.forEach(([label, value, color], i) => {

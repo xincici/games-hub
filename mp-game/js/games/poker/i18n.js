@@ -44,7 +44,7 @@ const dict = {
     confirmText: '好的，明白',
   },
   en: {
-    gameTitle: 'Video Poker',
+    gameTitle: 'Poker',
     total: '💰 Total',
     bonus: '🏆 Bonus',
     bet: '🎲 Bet',

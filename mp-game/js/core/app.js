@@ -2,6 +2,7 @@ const { ctx, W, H, DPR, canvas } = require('./canvas');
 const Input = require('./input');
 const theme = require('./theme');
 const audio = require('./audio');
+const help = require('./help');
 
 // 场景基类：一个游戏一个 Scene；app 负责输入、帧循环、前后台生命周期。
 class Scene {
@@ -52,9 +53,18 @@ class App {
     this.frame = this.frame.bind(this);
     this.resize = this.resize.bind(this);
     this.openScene(SceneClass, { id: 'home' });
-    this.input.onStart = p => { if (this.scene.onTouchStart) this.scene.onTouchStart(p); };
-    this.input.onMove = p => { if (this.scene.onTouchMove) this.scene.onTouchMove(p); };
-    this.input.onEnd = p => { if (this.scene.onTouchEnd) this.scene.onTouchEnd(p); };
+    this.input.onStart = p => {
+      if (this.scene.helpOpen && help.touch(this.scene, 'start', p)) return;
+      if (this.scene.onTouchStart) this.scene.onTouchStart(p);
+    };
+    this.input.onMove = p => {
+      if (this.scene.helpOpen && help.touch(this.scene, 'move', p)) return;
+      if (this.scene.onTouchMove) this.scene.onTouchMove(p);
+    };
+    this.input.onEnd = p => {
+      if (this.scene.helpOpen && help.touch(this.scene, 'end', p)) return;
+      if (this.scene.onTouchEnd) this.scene.onTouchEnd(p);
+    };
 
     wx.onHide(() => {
       this.paused = true;
@@ -207,7 +217,17 @@ class App {
         this.input.setButtons([]);
       } else {
         this.scene.buttons = [];
+        const drawHelp = this.scene.helpOpen && typeof this.scene.drawHelp === 'function'
+          ? this.scene.drawHelp : null;
+        if (drawHelp) this.scene.drawHelp = () => {};
         this.scene.render(ctx);
+        if (drawHelp) {
+          this.scene.drawHelp = drawHelp;
+          this.scene.buttons = [];
+          help.draw(ctx, this.scene);
+        } else {
+          help.reset(this.scene);
+        }
         this.scene._hasRendered = true;
         this.input.setButtons(this.scene.buttons);
       }

@@ -264,11 +264,11 @@ class SnakeScene extends Scene {
     D.text(c, label, bx + bw / 2, mid, { size: 12, weight: 'bold', color: '#fff', align: 'center' });
     this.addButton('new', bx, mid - 16, bw, 32, () => { this.startGame(); });
     const pauseLabel = this.paused ? t('snake.resume') : t('snake.pause');
-    const pw = Math.min(100, D.measure(c, pauseLabel, 12, 'bold') + 18);
+    const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, D.measure(c, pauseLabel, 13, 'bold') + 22));
     const px = (x2 + this.cx + this.cw) / 2 - pw / 2;
     // 与 Emoji 下坠的暂停 / 继续按钮统一：主色实心 + 白字。
-    D.fillRoundRect(c, px, mid - 16, pw, 32, 8, this.phase === LOSE ? T.border : T.primary);
-    D.text(c, pauseLabel, px + pw / 2, mid, { size: 12, weight: 'bold', color: this.phase === LOSE ? T.muted : '#fff', align: 'center' });
+    D.fillRoundRect(c, px, mid - 16, pw, 32, 8, this.phase === LOSE ? T.disabled : T.god);
+    D.text(c, pauseLabel, px + pw / 2, mid, { size: 12, weight: 'bold', color: this.phase === LOSE ? '#f3f3f3' : '#fff', align: 'center' });
     if (this.phase !== LOSE) this.addButton('pause', px, mid - 16, pw, 32, () => this.togglePause());
   }
   drawMiniButton(c, r, label, enabled, onTap) {

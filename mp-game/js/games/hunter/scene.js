@@ -199,7 +199,15 @@ class HunterScene extends Scene {
     } else if (this.phase === ANSWER) {
       if (this.playStart) this.time = Math.floor((this.now - this.playStart) / 1000);
       if (this.lock && this.settleAt && this.now >= this.settleAt) {
-        if (this.hearts <= 0) { this.phase = LOST; this.app.audio.playLose(); this.saveState(); }
+        if (this.hearts <= 0) {
+          // 失败：把上方答案区还没找到的目标牌全部翻正。
+          this.stageTargets = this.stageTargets.map(() => 1);
+          this.stageFlipStart = this.now;
+          this.stageFlipDelays = this.stageTargets.map((_, i) => i * 20);
+          this.phase = LOST;
+          this.app.audio.playLose();
+          this.saveState();
+        }
         else if (this.found.size === this.stage.length) {
           this.phase = WON;
           this.best = Math.max(this.best, this.level + 1);

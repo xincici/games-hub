@@ -49,6 +49,7 @@ class DownScene extends Scene {
     this.clearAnim = null;
     this.moveAnim = null;
     this.fallAnim = null;
+    this.queuedCol = null;
     this.lastSaveAt = 0;
     this.now = Date.now();
     this.layout();
@@ -73,6 +74,7 @@ class DownScene extends Scene {
     this.clearAnim = null;
     this.moveAnim = null;
     this.fallAnim = null;
+    this.queuedCol = null;
     this.col = 3;
     this.stack = [this.newRow(), this.newRow()];
     const row = this.stack[0].cells;
@@ -108,6 +110,7 @@ class DownScene extends Scene {
       this.clearAnim = null;
       this.moveAnim = null;
       this.fallAnim = null;
+      this.queuedCol = null;
       this.paused = this.phase === PLAY;
       this.layout();
       return true;
@@ -124,36 +127,35 @@ class DownScene extends Scene {
       }
       return;
     }
-    if (this.moveAnim) {
-      if (Date.now() >= this.moveAnim.at) {
-        this.col = this.moveAnim.to;
-        this.moveAnim = null;
-        this.resolveLanding();
-      }
-      return;
+    const now = Date.now();
+    if (this.moveAnim && now >= this.moveAnim.at) {
+      this.col = this.moveAnim.to;
+      this.moveAnim = null;
+      this.resolveLanding();
+      // 滑动落定、判定完立刻处理排队的新目标列。
+      this.startQueuedMove();
     }
-    if (this.clearAnim) {
-      if (Date.now() >= this.clearAnim.at) this.finishClearRow();
-      return;
+    if (this.clearAnim && now >= this.clearAnim.at) this.finishClearRow();
+    if (this.fallAnim && now >= this.fallAnim.at + 180) {
+      this.fallAnim = null;
+      if (this.top - 1 <= 0) this.lose();
+      else this.resolveLanding();
+      this.startQueuedMove();
     }
-    if (this.fallAnim) {
-      if (Date.now() >= this.fallAnim.at + 180) {
-        this.fallAnim = null;
-        if (this.top - 1 <= 0) this.lose();
-        else this.resolveLanding();
-      }
-      return;
-    }
+    if (this.phase !== PLAY) return;
+    // 上升不受移动 / 消除 / 下落动画影响：只有暂停或失败才停。
     const d = Math.min(0.05, (dt || 16) / 1000);
     this.elapsed += d;
     this.top -= logic.speedFor(this.cleared) * d;
     this.fillPile();
-    if (this.top - 1 <= 0) this.lose();
+    if (this.top - 1 <= 0) { this.lose(); return; }
     if (Date.now() - this.lastSaveAt > 500) { this.lastSaveAt = Date.now(); this.save(); }
   }
+
   lose() {
     if (this.phase !== PLAY) return;
     this.phase = OVER;
+    this.queuedCol = null;
     this.paused = false;
     this.app.audio.playLose();
     this.save();
@@ -175,8 +177,24 @@ class DownScene extends Scene {
     if (row && row.cells[this.col] === this.glyph) this.clearRow();
   }
   pick(idx) {
-    if (this.phase !== PLAY || this.paused || this.clearAnim || this.fallAnim || this.moveAnim) return;
+    if (this.phase !== PLAY || this.paused || this.helpOpen) return;
     const target = Math.max(0, Math.min(logic.COLS - 1, idx));
+    if (this.moveAnim || this.clearAnim || this.fallAnim) {
+      this.queuedCol = target;
+      return;
+    }
+    if (target === this.col) {
+      this.resolveLanding();
+      return;
+    }
+    this.moveAnim = { from: this.col, to: target, start: Date.now(), at: Date.now() + 150 };
+  }
+
+  startQueuedMove() {
+    if (this.phase !== PLAY || this.paused || this.helpOpen || this.moveAnim) return;
+    if (this.queuedCol == null) return;
+    const target = this.queuedCol;
+    this.queuedCol = null;
     if (target === this.col) {
       this.resolveLanding();
       return;
@@ -266,23 +284,32 @@ class DownScene extends Scene {
   drawOptions(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
-    const half = this.cw / 2;
-    D.divider(c, this.cx + half, this.optY + this.optH / 2, 24, T.border, 1);
-    drawTimer(c, 'stopwatch', this.cx + half / 2, this.optY + this.optH / 2, fmt(this.elapsed), { size: 15, color: T.text });
+    const third = this.cw / 3;
+    D.divider(c, this.cx + third, this.optY + this.optH / 2, 24, T.border, 1);
+    D.divider(c, this.cx + third * 2, this.optY + this.optH / 2, 24, T.border, 1);
+    drawTimer(c, 'stopwatch', this.cx + third / 2, this.optY + this.optH / 2, fmt(this.elapsed), { size: 15, color: T.text });
+
+    const by = this.optY + (this.optH - 32) / 2;
+    const startLabel = t('down.start');
+    const startW = Math.min(third - 16, Math.max(80, D.measure(c, startLabel, 13, 'bold') + 22));
+    const startX = this.cx + third + (third - startW) / 2;
+    D.fillRoundRect(c, startX, by, startW, 32, 8, T.primary);
+    D.text(c, startLabel, startX + startW / 2, by + 16, {
+      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
+    });
+    this.addButton('new', startX, by, startW, 32, () => this.startGame());
+
     const label = this.paused ? t('down.resume') : t('down.pause');
-    const bw = Math.min(106, D.measure(c, label, 13, 'bold') + 24);
-    const bx = this.cx + half + (half - bw) / 2;
-    const by = this.optY + 20;
-    D.fillRoundRect(c, bx, by, bw, 32, 8, this.phase === PLAY ? T.primary : T.border);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    if (this.phase === PLAY) this.addButton('pause', bx, by, bw, 32, () => this.togglePause());
-    // 新游戏放在暂停左侧的小按钮
-    const nw = 34;
-    D.fillRoundRect(c, this.cx + half - nw - 10, by, nw, 32, 8, T.card);
-    D.strokeRoundRect(c, this.cx + half - nw - 10, by, nw, 32, 8, T.border, 1);
-    D.text(c, '+', this.cx + half - nw / 2 - 10, by + 16, { size: 20, weight: 'bold', color: T.text, align: 'center' });
-    this.addButton('new', this.cx + half - nw - 10, by, nw, 32, () => this.startGame());
+    const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, D.measure(c, label, 13, 'bold') + 22));
+    const px = this.cx + third * 2 + (third - pw) / 2;
+    const canPause = this.phase === PLAY;
+    D.fillRoundRect(c, px, by, pw, 32, 8, canPause ? T.god : T.disabled);
+    D.text(c, label, px + pw / 2, by + 16, {
+      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
+    });
+    if (canPause) this.addButton('pause', px, by, pw, 32, () => this.togglePause());
   }
+
   drawBoard(c) {
     const T = theme.tokens;
     D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.boardBg);
