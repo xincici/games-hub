@@ -513,16 +513,26 @@ class DetectiveScene extends Scene {
     D.card(c, x, y, w, h, T);
     D.text(c, t('detective.start'), x + 20, y + 34, { size: 17, weight: 'bold', color: T.text });
     D.text(c, t('detective.start'), x + 20, y + 66, { size: 14, color: T.muted });
-    const gap = 12;
-    const bw = (w - 40 - gap) / 2;
+    const gap = 10;
+    const bw = (w - 40 - gap * 2) / 3;
     const by = y + h - 48;
     this.addButton('confirm-mask', 0, 0, W, H, () => { this.confirming = false; });
-    D.fillRoundRect(c, x + 20, by, bw, 32, 8, T.enter);
-    D.text(c, '取消', x + 20 + bw / 2, by + 16, { size: 13, weight: 'bold', color: T.text, align: 'center' });
-    this.addButton('confirm-cancel', x + 20, by, bw, 32, () => { this.confirming = false; });
-    D.fillRoundRect(c, x + 20 + bw + gap, by, bw, 32, 8, T.primary);
-    D.text(c, '确定', x + 20 + bw + gap + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    this.addButton('confirm-ok', x + 20 + bw + gap, by, bw, 32, () => this.startNewGame());
+    const button = (bx, label, kind, onTap) => {
+      if (kind === 'primary') D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
+      else if (kind === 'replay') {
+        D.fillRoundRect(c, bx, by, bw, 32, 8, T.card);
+        D.strokeRoundRect(c, bx, by, bw, 32, 8, T.god, 1);
+      } else D.fillRoundRect(c, bx, by, bw, 32, 8, T.enter);
+      D.text(c, label, bx + bw / 2, by + 16, {
+        size: label.length > 8 ? 11 : 12.5, weight: 'bold',
+        color: kind === 'primary' ? '#fff' : kind === 'replay' ? T.god : T.enterColor,
+        align: 'center',
+      });
+      this.addButton(`confirm-${kind}`, bx, by, bw, 32, onTap);
+    };
+    button(x + 20, t('cancel'), 'cancel', () => { this.confirming = false; });
+    button(x + 20 + bw + gap, t('detective.replayLevel'), 'replay', () => this.retryLevel());
+    button(x + 20 + (bw + gap) * 2, t('confirmOk'), 'ok', () => this.startNewGame());
   }
 
   onTheme() { this.layout(); }

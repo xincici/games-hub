@@ -527,6 +527,25 @@
 - 所有游戏的 `scoreY` / 扑克 `rulesY` 从 `headerH + 6` 统一改为 `+ 12`；header 本身仍与右上胶囊对齐，只把内容整体下移 6px。
 - 改这个间距要同时看 375×667 的底部：棋盘 / 键盘 / FAB 必须仍能放下。
 
+### 75. 模式切换图标
+
+- 雀圣：模式 1 用 `arrow-right`（实心箭头），模式 2 用 `arrow-right-outline`；不要再用 `mode-mahjong`。
+- 赌神：即时判断用 `bolt`（闪电），提交判断用 `check-all`（双勾）；与小程序一致。
+
+### 76. 消消乐 FAB
+
+- 帮助 FAB 右边 / 左边不要再放新游戏或撤销 FAB；消消乐只保留最右侧一个帮助按钮，新游戏走操作卡。
+
+### 77. 闯关游戏新游戏确认
+
+- 所有有「关卡 / 重玩本关」语义的游戏，新游戏确认必须三颗按钮：取消 / 重玩本关 / 确定重来；已覆盖 link、detective、hunter、master、quesheng，以及原有 match / crush / slide / sort / alchemy / gambler / mahjong。
+- 取消用 `T.enter`，重玩用白底橙描边，确定用主色；宽度三等分。没有关卡语义的 guess / g2048 / sudoku / solo 不强行加重玩按钮。
+
+### 78. 统一三按钮新游戏确认
+
+- `core/confirm.js` 只接管同时有 `startNewGame` 和 `replayLevel|retryLevel` 的闯关场景：标题「开始新游戏？」、正文统一、按钮「取消 / 重玩本关 / 确定重来」，重玩按钮不带图标。
+- `App.frame` 在渲染时临时把场景自己的 `drawConfirm` 置空，再画统一弹窗；避免两套弹窗叠加。没有关卡语义的 2048 / 1A2B / 数独 / 单人麻将仍走自己的两按钮确认。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

@@ -1158,11 +1158,11 @@ class GamblerScene extends Scene {
     const T = theme.tokens;
     const size = this.fabSize;
     this.drawFab(c, this.helpX, this.fabY, 'help', '?', T.text, true, () => this.openHelp(), 'help');
-    // 模式切换：即时判断 = ⚡、提交判断 = ✓（icon font 里没有这两个 glyph，用文字兜底）
+    // 模式切换：即时判断 = 闪电、提交判断 = 双勾（与小程序一致）。
     const busy = this.revealing || this.flights.length > 0 || this.pendingLoss;
     const isEmoji = this.mode === MODE_INSTANT;
     this.drawFab(c, this.modeX, this.fabY, 'mode', isEmoji ? '⚡' : '✓', T.primary,
-      !busy, () => this.toggleMode(), 'mode', isEmoji ? 17 : 22);
+      !busy, () => this.toggleMode(), isEmoji ? 'bolt' : 'check-all', isEmoji ? 17 : 22);
   }
 
   drawFab(c, x, y, id, fallback, color, enabled, onTap, name, fallbackSize) {

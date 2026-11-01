@@ -1226,8 +1226,7 @@ class CrushScene extends Scene {
   }
 
   drawFabs(c) {
-    // 操作 FAB = 新游戏（与操作卡里的按钮同一入口）；帮助 FAB 在最右
-    this.drawRoundFab(c, this.opX, this.fabY, 'undo', '↺', () => this.openConfirm());
+    // 帮助按钮旁不再放操作 FAB（新游戏在操作卡里已有入口）。
     this.drawRoundFab(c, this.helpX, this.fabY, 'help', '?', () => this.openHelp());
   }
 

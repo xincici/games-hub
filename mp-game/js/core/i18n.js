@@ -4,6 +4,11 @@ const { getRaw, setRaw } = require('./storage');
 const globalDict = {
   cn: {
     backHome: '首页',
+    cancel: '取消',
+    confirmOk: '确定重来',
+    confirmReplay: '重玩本关',
+    confirmNewTitle: '开始新游戏？',
+    confirmNewMsg: '确定重来 会清除当前模式的关卡记录，并从第 1 关重新开始。只想重玩当前关卡，请点「重玩本关」。',
     help: '帮助',
     close: '关闭',
     confirm: '好的，明白',
@@ -11,6 +16,11 @@ const globalDict = {
   },
   en: {
     backHome: 'Home',
+    cancel: 'Cancel',
+    confirmOk: 'Start Over',
+    confirmReplay: 'Replay Level',
+    confirmNewTitle: 'Start a new game?',
+    confirmNewMsg: 'Start over - this clears the current mode\'s level records and restarts from level 1. To retry only this level, choose Replay Level.',
     help: 'Help',
     close: 'Close',
     confirm: 'OK, I See',

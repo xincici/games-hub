@@ -983,7 +983,8 @@ class QueshengScene extends Scene {
       }
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
-    one(this.modeRect, 'mode-mahjong', '⇄', T.primary, 'mode', () => this.toggleMode());
+    const modeIcon = this.mode === 1 ? 'arrow-right' : 'arrow-right-outline';
+    one(this.modeRect, modeIcon, this.mode === 1 ? '→' : '⇢', T.primary, 'mode', () => this.toggleMode());
     one(this.helpRect, 'help', '?', T.primary, 'help-fab', () => {
       if (this.confirming) return;
       this.stopGod();
@@ -1294,19 +1295,25 @@ class QueshengScene extends Scene {
     });
     // 全屏遮罩先加，面板按钮后加（PITFALLS #12）
     this.addButton('confirm-mask', 0, 0, W, H, () => { this.confirming = false; });
-    const gap = 12;
-    const bw = (w - 40 - gap) / 2;
+    const gap = 10;
+    const bw = (w - 40 - gap * 2) / 3;
     const by = y + h - 48;
-    D.fillRoundRect(c, x + 20, by, bw, 32, 8, T.enter);
-    D.text(c, t('quesheng.cancel'), x + 20 + bw / 2, by + 16, {
-      size: 13, weight: 'bold', color: T.enterColor, align: 'center',
-    });
-    this.addButton('confirm-cancel', x + 20, by, bw, 32, () => { this.confirming = false; });
-    D.fillRoundRect(c, x + 20 + bw + gap, by, bw, 32, 8, T.primary);
-    D.text(c, t('quesheng.confirmOk'), x + 20 + bw + gap + bw / 2, by + 16, {
-      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
-    });
-    this.addButton('confirm-ok', x + 20 + bw + gap, by, bw, 32, () => this.startNewGame());
+    const button = (bx, label, kind, onTap) => {
+      if (kind === 'primary') D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
+      else if (kind === 'replay') {
+        D.fillRoundRect(c, bx, by, bw, 32, 8, T.card);
+        D.strokeRoundRect(c, bx, by, bw, 32, 8, T.god, 1);
+      } else D.fillRoundRect(c, bx, by, bw, 32, 8, T.enter);
+      D.text(c, label, bx + bw / 2, by + 16, {
+        size: label.length > 8 ? 11 : 12.5, weight: 'bold',
+        color: kind === 'primary' ? '#ffffff' : kind === 'replay' ? T.god : T.enterColor,
+        align: 'center',
+      });
+      this.addButton(`confirm-${kind}`, bx, by, bw, 32, onTap);
+    };
+    button(x + 20, t('quesheng.cancel'), 'cancel', () => { this.confirming = false; });
+    button(x + 20 + bw + gap, t('quesheng.replayLevel'), 'replay', () => this.replayLevel());
+    button(x + 20 + (bw + gap) * 2, t('quesheng.confirmOk'), 'ok', () => this.startNewGame());
   }
 
   // ---------- lifecycle ----------

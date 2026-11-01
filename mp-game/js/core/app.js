@@ -3,6 +3,7 @@ const Input = require('./input');
 const theme = require('./theme');
 const audio = require('./audio');
 const help = require('./help');
+const confirm = require('./confirm');
 const D = require('./draw');
 const { t } = require('./i18n');
 
@@ -283,16 +284,23 @@ class App {
         this.scene.buttons = [];
         const drawHelp = this.scene.helpOpen && typeof this.scene.drawHelp === 'function'
           ? this.scene.drawHelp : null;
+        const drawConfirm = !drawHelp && confirm.canOverride(this.scene) && typeof this.scene.drawConfirm === 'function'
+          ? this.scene.drawConfirm : null;
         if (drawHelp) this.scene.drawHelp = () => {};
+        if (drawConfirm) this.scene.drawConfirm = () => {};
         this.scene.render(ctx);
         if (drawHelp) {
           this.scene.drawHelp = drawHelp;
           this.scene.buttons = [];
           help.draw(ctx, this.scene);
+        } else if (drawConfirm) {
+          this.scene.drawConfirm = drawConfirm;
+          this.scene.buttons = [];
+          confirm.draw(ctx, this.scene);
         } else {
           help.reset(this.scene);
         }
-        if (!this.scene.helpOpen && this.sceneId !== 'home') this.drawHomeAffordance(ctx);
+        if (!this.scene.helpOpen && !this.scene.confirming && this.sceneId !== 'home') this.drawHomeAffordance(ctx);
         this.scene._hasRendered = true;
         this.input.setButtons(this.scene.buttons);
       }
