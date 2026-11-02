@@ -5,7 +5,7 @@
 module.exports = {
   en: {
     gameTitle: 'Gamblers',
-    level: '🏁 Level',
+    level: '🏁 Current Level',
     best: '🏆 Best',
     streak: '🔥 Streak',
     lives: 'Lives',
@@ -42,7 +42,7 @@ module.exports = {
   },
   cn: {
     gameTitle: '赌神',
-    level: '🏁 关卡',
+    level: '🏁 当前关卡',
     best: '🏆 最高关卡',
     streak: '🔥 连胜',
     lives: '生命',

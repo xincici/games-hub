@@ -81,6 +81,7 @@ class HunterScene extends Scene {
     this.playStart = 0;
     this.settleAt = 0;
     this.lock = false;
+    this.keepBestOnNewGame = true;
     this.confirming = false;
     this.helpOpen = false;
     this.confetti = [];
@@ -252,7 +253,7 @@ class HunterScene extends Scene {
   }
   nextLevel() { if (this.level < this.levels.length - 1) this.level++; this.startLevel(); }
   retryLevel() { this.confirming = false; this.startLevel(); }
-  startNewGame() { this.confirming = false; removeRaw(bestKey(this.mode)); this.best = 0; this.level = 0; this.startLevel(); }
+  startNewGame() { this.confirming = false; this.level = 0; this.startLevel(); }
   toggleMode() { this.mode = this.mode === 1 ? 2 : this.mode === 2 ? 3 : 1; setRaw(MODE_KEY, String(this.mode)); this.loadRecords(); this.boot(); }
   startConfetti() { this.confetti = []; this.confettiUntil = Date.now() + 1200; this.lastConfettiAt = 0; }
   emitConfetti() {

@@ -2,7 +2,7 @@ module.exports = {
   en: {
     gameTitle: 'Detective',
     bestScore: '🏆 Best Level',
-    levelLabel: '🏁 Level',
+    levelLabel: '🏁 Current Level',
     livesLabel: 'Lives',
     start: '🎮 New Game',
     nextLevel: '➡ Next Level',
@@ -31,7 +31,7 @@ module.exports = {
   cn: {
     gameTitle: '侦探',
     bestScore: '🏆 最高关卡',
-    levelLabel: '🏁 关卡',
+    levelLabel: '🏁 当前关卡',
     livesLabel: '生命',
     start: '🎮 新游戏',
     nextLevel: '➡ 下一关',

@@ -6,9 +6,9 @@
 module.exports = {
   en: {
     gameTitle: 'Mahjong Master',
-    level: 'Level',
-    left: 'Left',
-    moves: 'Moves',
+    level: '🏁 Current Level',
+    left: '🧩 Left',
+    moves: '👣 Moves',
     start: '🎮 New Game',
     undo: 'Undo',
     redo: 'Redo',
@@ -32,9 +32,9 @@ module.exports = {
   },
   cn: {
     gameTitle: '雀圣',
-    level: '关卡',
-    left: '剩余',
-    moves: '步数',
+    level: '🏁 当前关卡',
+    left: '🧩 剩余',
+    moves: '👣 步数',
     start: '🎮 新游戏',
     undo: '撤销',
     redo: '重做',

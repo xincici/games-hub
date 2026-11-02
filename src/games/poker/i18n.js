@@ -1,7 +1,7 @@
 export default {
   en: {
     bankrupt: 'You are broke — start over!',
-    gameTitle: 'Poker',
+    gameTitle: 'Poker Hero',
     helpTip: 'Click for help!',
     helpMsg: 'Click Roll to deal. Click cards to hold them, then Change swaps the rest. A straight flush, four of a kind, full house, flush, straight, three of a kind, two pairs or a pair of 8s or better wins. You can then guess big or small: right doubles the bonus, wrong clears it. Settle any time to bank it.',
     help1: 'Bet from 1 to 100.',
@@ -35,7 +35,7 @@ export default {
   },
   cn: {
     bankrupt: '破产了，请重新来过！',
-    gameTitle: '德州扑克',
+    gameTitle: '扑克英雄',
     helpTip: '查看帮助',
     helpMsg: '点「发牌」，点牌保留，「换牌」替换未保留的牌。凑出同花顺、四条、葫芦、同花、顺子、三条、两对或大于 8 的一对即胜；可猜大小，猜对奖金加倍、猜错清零，也可随时「结算」。',
     help1: '下注 1-100',

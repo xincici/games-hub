@@ -3,7 +3,7 @@
 // 注意：控制类图标一律不带 U+FE0F（♻ 而不是 ♻️），否则部分真机 canvas 会在图标旁画出小方框。
 const dict = {
   cn: {
-    gameTitle: '德州扑克',
+    gameTitle: '扑克英雄',
     total: '💰 资产',
     bonus: '🏆 奖金',
     bet: '🎲 下注',
@@ -44,7 +44,7 @@ const dict = {
     confirmText: '好的，明白',
   },
   en: {
-    gameTitle: 'Poker',
+    gameTitle: 'Poker Hero',
     total: '💰 Total',
     bonus: '🏆 Bonus',
     bet: '🎲 Bet',

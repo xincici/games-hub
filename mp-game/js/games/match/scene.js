@@ -57,6 +57,7 @@ class MatchScene extends Scene {
     this.cards = [];
     this.conf = levelConfig(this.level, this.mode);
     this.helpOpen = false;
+    this.keepBestOnNewGame = true;
     this.confirming = false;
     this.firstCard = null;
     this.lock = false;
@@ -419,8 +420,7 @@ class MatchScene extends Scene {
   }
   startNewGame() {
     this.confirming = false;
-    removeRaw(bestKeyFor(this.mode));
-    this.best = 1;
+    // 只把当前关重置到第 1 关，最高关卡记录保留。
     this.initLevel(1);
   }
   toggleMode() {

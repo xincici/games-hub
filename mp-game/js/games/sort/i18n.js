@@ -3,7 +3,7 @@
 module.exports = {
   en: {
     gameTitle: 'Emoji Sort',
-    levelLabel: '🏁 Level',
+    levelLabel: '🏁 Current Level',
     doneLabel: '✅ Sorted',
     movesLabel: '👣 Moves',
     start: '🎮 New Game',
@@ -36,7 +36,7 @@ module.exports = {
   },
   cn: {
     gameTitle: 'Emoji 排序',
-    levelLabel: '🏁 关卡',
+    levelLabel: '🏁 当前关卡',
     doneLabel: '✅ 已归位',
     movesLabel: '👣 步数',
     start: '🎮 新游戏',

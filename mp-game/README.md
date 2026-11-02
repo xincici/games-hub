@@ -41,7 +41,7 @@
 | 数独 | ✅ 已移植 | `SudokuScene` |
 | Emoji 排序 | ✅ 已移植 | `SortScene` |
 | Emoji 滑行 | ✅ 已移植 | `SlideScene` |
-| 德州扑克 | ✅ 已移植 | `PokerScene` |
+| 扑克英雄 | ✅ 已移植 | `PokerScene` |
 | 麻将英雄 | ✅ 已移植 | `MahjongScene` |
 | 单人麻将 | ✅ 已移植 | `SoloScene` |
 | 扑克炼金术 | ✅ 已移植 | `AlchemyScene` |
@@ -83,7 +83,7 @@ mp-game/
         ├── sudoku/         数独（sudoku + scene + i18n）
         ├── sort/           Emoji 排序（board + scene + i18n）
         ├── slide/          Emoji 滑行（board + scene + i18n）
-        ├── poker/          德州扑克（rules + scene + i18n）
+        ├── poker/          扑克英雄（rules + scene + i18n）
         ├── mahjong/        麻将英雄（board + scene + i18n）
         ├── solo/           单人麻将（board + scene + i18n）
         ├── alchemy/        扑克炼金术（board + scene + i18n）
@@ -157,9 +157,9 @@ mp-game/
 - **Emoji 排序**：水排序，经典/紧凑两种模式；抬起整摞同种水果、自动搬运、暗牌翻面、死局判定；存档按模式独立 `__emoji_sort__*`。
 - **Emoji 滑行**：棋盘成对消除，点按找同款 / 拖动整段滑行；限时、连击、自动重排、胜利礼炮；存档 `__emoji_slide__state`。
 
-## 已实现：德州扑克 / 麻将英雄 / 单人麻将
+## 已实现：扑克英雄 / 麻将英雄 / 单人麻将
 
-- **德州扑克**：单人视频扑克，下注 → 发牌 → 选牌保留 → 换牌 → 结算，支持加成/猜大小与资金记录；存档 `__poker__*`。
+- **扑克英雄**：单人视频扑克，下注 → 发牌 → 选牌保留 → 换牌 → 结算，支持加成/猜大小与资金记录；存档 `__poker__*`。
 - **麻将英雄**：3×3 麻将落子，一行/列/对角线凑顺子或刻子消除，支持闯关/无尽、连击与关卡曲线；存档 `__mahjong__*`。
 - **单人麻将**：14 张手牌摸打，四组+将或七对子胡牌；有限牌墙、缺一门、连胜难度与最佳连胜；存档 `__solo__*`。
 

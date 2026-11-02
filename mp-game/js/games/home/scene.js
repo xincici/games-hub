@@ -10,6 +10,7 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const homeI18n = require('./i18n');
 const tiles = require('../../core/tiles');
+const HEADER = require('../../core/header');
 
 const ORDER_KEY = '__games_hub__home_order';
 const ROW_SIZES = [4, 3, 4, 3, 4, 3, 4];
@@ -84,7 +85,8 @@ class HomeScene extends Scene {
   }
 
   layout() {
-    this.titleY = SAFE_TOP + 32;
+    // 与微信右上角胶囊按钮同一水平线。
+    this.titleY = HEADER.TITLE_Y;
     this.gearRect = { x: W - 16 - 48, y: H - SAFE_BOTTOM - 16 - 48, w: 48, h: 48 };
     const gap = Math.max(2, W * 0.008);
     const avail = W - 32;
@@ -101,7 +103,7 @@ class HomeScene extends Scene {
     });
     if (oi < this.order.length) rows.push(this.order.slice(oi));
     // 25 格七行：水平宽度和「标题下沿 → 齿轮上沿」的竖向预算同时约束六边形半径。
-    const topLimit = this.titleY + 42;
+    const topLimit = this.titleY + 32;
     const verticalRoom = Math.max(300, this.gearRect.y - 16 - topLimit);
     const maxByHeight = (verticalRoom + (rows.length - 1) * overlap) / (2 * rows.length);
     this.hexR = Math.min(52, hexW / 1.732, maxByHeight);
@@ -155,6 +157,10 @@ class HomeScene extends Scene {
     c.fillStyle = T.bg;
     c.fillRect(0, 0, W, H);
     this.bg.draw(c, theme.dark);
+    // 首页顶部固定展示小游戏名称；中英文使用同一个名字。
+    D.text(c, t('home.homeTitle'), W / 2, this.titleY, {
+      size: 16, weight: 'bold', color: T.muted, align: 'center',
+    });
 
     this.hexes.forEach((item) => {
       if (this.drag && this.drag.id === item.id) return;

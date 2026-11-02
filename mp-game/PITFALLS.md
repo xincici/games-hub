@@ -621,6 +621,32 @@
 
 - 镜像每次进入都 `removeRaw(STATE_KEY)` 后 `startRound()`，不恢复旧棋盘；删除 `save()` / `restore()` / `onHide save`，但保留按难度的最佳用时 `__emoji_mirror__best_*`。
 
+### 96. 对对碰 / 猎手 / 侦探最高关卡
+
+- 三个游戏的最高历史记录文案统一为「🏆 最高关卡」/「🏆 Best Level」（对碰的 `bestLevel` 原来少了「卡」字）。
+- 「新游戏」只重置当前关到第 1 关：match 的 `startNewGame` 不再 `removeRaw(bestKeyFor)`；hunter / detective 不再 `removeRaw(bestKey)` / 清零 best。
+- 三场景标记 `keepBestOnNewGame=true`，统一确认弹窗改用 `confirmNewMsgKeepBest`，不再说「清除关卡记录」。
+
+### 97. 数字迷宫移动次数
+
+- 统计卡标签从「点击次数 / Click Count」改为「移动次数 / Moves」；胜利结算也改用 `puzzle.movesDone` 的「N 步 / N moves」，不再写死「N 次」。
+
+### 98. 对对碰 / 猎手 / 侦探当前关卡
+
+- 三个游戏的统计卡 `levelLabel` 统一为「🏁 当前关卡」/「🏁 Current Level」，和「🏆 最高关卡」区分开。
+
+### 99. 全部当前关卡文案
+
+- 所有用「关卡」作为统计卡标签的游戏统一为「当前关卡」/「Current Level」：炼金术、消消乐、赌神、连连看、麻将英雄、消除大师、雀圣、滑行、排序，以及此前的对对碰 / 猎手 / 侦探。Legend 显示的是「等级 / Level」，不属于关卡语义，保持不动。
+
+### 100. 炼金术 / 雀圣分数区图标
+
+- 炼金术四项：`🏁 当前关卡`、`🎴 剩余`、`⭐ 得分`、`🎯 目标`；雀圣三项：`🏁 当前关卡`、`🧩 剩余`、`👣 步数`。英文同步。标签字号小，加图标后仍要按四等分 / 三等分居中。
+
+### 101. 首页小游戏名称
+
+- 首页顶部固定绘制 `home.homeTitle`，中英文都写「蜂窝益智二十五」；`titleY = HEADER.TITLE_Y` 与微信右上胶囊同一水平线，字号 16、颜色 `T.muted`，与蜂窝第一行保留约 32px。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

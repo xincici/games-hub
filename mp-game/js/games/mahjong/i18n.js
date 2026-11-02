@@ -4,7 +4,7 @@
 module.exports = {
   en: {
     gameTitle: 'Mahjong Hero',
-    level: '🏁 Level',
+    level: '🏁 Current Level',
     left: '🀄 Left',
     used: '🀄 Used',
     score: '✨ Score',
@@ -41,7 +41,7 @@ module.exports = {
   },
   cn: {
     gameTitle: '麻将英雄',
-    level: '🏁 关卡',
+    level: '🏁 当前关卡',
     left: '🀄 剩余',
     used: '🀄 已用',
     score: '✨ 得分',

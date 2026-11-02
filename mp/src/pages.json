@@ -83,7 +83,7 @@
       "path": "pages/poker/poker",
       "style": {
         "navigationStyle": "default",
-        "navigationBarTitleText": "德州扑克",
+        "navigationBarTitleText": "扑克英雄",
         "navigationBarBackgroundColor": "#f0f2f5",
         "navigationBarTextStyle": "black",
         "backgroundColor": "#f0f2f5",

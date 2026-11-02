@@ -17,7 +17,8 @@ function draw(c, scene) {
   c.fillRect(0, 0, W, H);
   const w = W - 56;
   const x = (W - w) / 2;
-  const lines = D.wrapText(c, t('confirmNewMsg'), w - 40, 13);
+  const msgKey = scene.keepBestOnNewGame ? 'confirmNewMsgKeepBest' : 'confirmNewMsg';
+  const lines = D.wrapText(c, t(msgKey), w - 40, 13);
   const h = 84 + lines.length * 20 + 58;
   const y = (H - h) / 2;
   D.card(c, x, y, w, h, T);

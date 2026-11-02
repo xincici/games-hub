@@ -1,7 +1,7 @@
 // 小游戏首页文案。当前 25 个游戏入口，结构按「游戏选择页」搭。
 const dict = {
   cn: {
-    homeTitle: '游戏合集',
+    homeTitle: '蜂窝益智二十五',
     homeSubtitle: '选择一个游戏',
     clickTitle: '关灯游戏',
     matchTitle: '对对碰',
@@ -31,7 +31,7 @@ const dict = {
     sudokuTitle: '数独',
     sortTitle: 'Emoji 排序',
     slideTitle: 'Emoji 滑行',
-    pokerTitle: '德州扑克',
+    pokerTitle: '扑克英雄',
     mahjongTitle: '麻将英雄',
     soloTitle: '单人麻将',
     alchemyTitle: '扑克炼金术',
@@ -58,7 +58,7 @@ const dict = {
     tapHint: '点击开始',
   },
   en: {
-    homeTitle: 'Games Hub',
+    homeTitle: '蜂窝益智二十五',
     homeSubtitle: 'Choose a game',
     clickTitle: 'Lights Out',
     matchTitle: 'Match',
@@ -78,7 +78,7 @@ const dict = {
     sudokuTitle: 'Sudoku',
     sortTitle: 'Emoji Sort',
     slideTitle: 'Emoji Slide',
-    pokerTitle: 'Poker',
+    pokerTitle: 'Poker Hero',
     mahjongTitle: 'Mahjong Hero',
     soloTitle: 'Solo Mahjong',
     alchemyTitle: 'Poker Alchemy',

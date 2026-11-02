@@ -2,7 +2,8 @@ module.exports = {
   en: {
     gameTitle: 'Puzzle',
     bestScore: '🏆 Best Score',
-    availableClicks: '👆 Click Count',
+    availableClicks: '👣 Moves',
+    movesDone: '{n} moves',
     start: '🎮 New Game',
     boardHint: 'Tap or swipe to put all numbers in order',
     helpTip: 'Click for help!',
@@ -18,7 +19,8 @@ module.exports = {
   cn: {
     gameTitle: '数字迷宫',
     bestScore: '🏆 最佳得分',
-    availableClicks: '👆 点击次数',
+    availableClicks: '👣 移动次数',
+    movesDone: '{n} 步',
     start: '🎮 新游戏',
     boardHint: '点击或滑动，让所有数字按顺序排列',
     helpTip: '查看帮助',

@@ -1,7 +1,7 @@
 module.exports = {
   en: {
     gameTitle: 'Emoji Link',
-    levelLabel: '🏁 Level',
+    levelLabel: '🏁 Current Level',
     timeLeft: 'Time',
     leftPairs: '🧩 Pairs Left',
     leftPairsShort: 'pairs left',
@@ -29,7 +29,7 @@ module.exports = {
   },
   cn: {
     gameTitle: 'Emoji 连连看',
-    levelLabel: '🏁 关卡',
+    levelLabel: '🏁 当前关卡',
     timeLeft: '剩余时间',
     leftPairs: '🧩 剩余对数',
     leftPairsShort: '对未消除',

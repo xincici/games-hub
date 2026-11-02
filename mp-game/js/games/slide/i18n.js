@@ -4,7 +4,7 @@
 module.exports = {
   en: {
     gameTitle: 'Emoji Slide',
-    levelLabel: '🏁 Level',
+    levelLabel: '🏁 Current Level',
     timeLabel: 'Time',
     timeUsed: 'Time',
     leftPairs: '🧩 Left',
@@ -35,7 +35,7 @@ module.exports = {
   },
   cn: {
     gameTitle: 'Emoji 滑行',
-    levelLabel: '🏁 关卡',
+    levelLabel: '🏁 当前关卡',
     timeLabel: '时间',
     timeUsed: '用时',
     leftPairs: '🧩 剩余',

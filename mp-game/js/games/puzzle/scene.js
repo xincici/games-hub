@@ -321,7 +321,7 @@ class PuzzleScene extends Scene {
     D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, 'rgba(250,248,239,0.9)');
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     D.text(c, `🎉🎉 ${t('puzzle.tipWin')} 🎉🎉`, cx, cy - 22, { size: 20, weight: 'bold', color: T.win, align: 'center' });
-    D.text(c, `${this.clicks} 次`, cx, cy + 8, { size: 15, color: T.muted, align: 'center' });
+    D.text(c, t('puzzle.movesDone').replace('{n}', String(this.clicks)), cx, cy + 8, { size: 15, color: T.muted, align: 'center' });
     if (this.newBest) D.text(c, t('puzzle.newBest'), cx, cy + 32, { size: 13, color: T.muted, align: 'center' });
     const bw = 110;
     D.fillRoundRect(c, cx - bw / 2, cy + 52, bw, 32, 8, T.primary);

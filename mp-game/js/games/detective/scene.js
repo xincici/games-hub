@@ -86,6 +86,7 @@ class DetectiveScene extends Scene {
     this.playStart = 0;
     this.settleAt = 0;
     this.lock = false;
+    this.keepBestOnNewGame = true;
     this.confirming = false;
     this.helpOpen = false;
     this.confetti = [];
@@ -173,8 +174,7 @@ class DetectiveScene extends Scene {
   retryLevel() { this.confirming = false; this.startLevel(); }
   startNewGame() {
     this.confirming = false;
-    removeRaw(bestKey(this.mode));
-    this.best = 0;
+    // 只把当前关重置到第 1 关，最高关卡记录保留。
     this.level = 0;
     this.startLevel();
   }

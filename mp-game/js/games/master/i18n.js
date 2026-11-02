@@ -1,7 +1,7 @@
 module.exports = {
   en: {
     gameTitle: 'Elimination',
-    level: '🏁 Level',
+    level: '🏁 Current Level',
     remain: '🃏 Tiles Left',
     layersLabel: '{n} layers',
     kindsLabel: '{n} kinds',
@@ -23,7 +23,7 @@ module.exports = {
   },
   cn: {
     gameTitle: '消除大师',
-    level: '🏁 关卡',
+    level: '🏁 当前关卡',
     remain: '🃏 剩余卡片',
     layersLabel: '{n} 层',
     kindsLabel: '{n} 种',

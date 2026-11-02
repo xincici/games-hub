@@ -7,7 +7,7 @@
 | 💡 [关灯游戏](src/games/click/README.md) | 点一盏灯，它和四邻一起变亮一档；把所有灯熄灭 |
 | 🧩 [数字迷宫](src/games/puzzle/README.md) | 数字华容道，按顺序排好 |
 | 🔢 [1A2B](src/games/guess/README.md) | 8 次机会猜出 4 位数 |
-| 🃏 [德州扑克](src/games/poker/README.md) | 单人视频扑克，选牌换牌 |
+| 🃏 [扑克英雄](src/games/poker/README.md) | 单人视频扑克，选牌换牌 |
 | 3️⃣ [Threes](src/games/three/README.md) | 1 + 2 = 3 的合成消除 |
 | 🔢 [2048](src/games/g2048/README.md) | 经典 2048，凑出 2048 |
 | 🐍 [贪吃蛇](src/games/snake/README.md) | 控制蛇吃食物，别撞到自己 |

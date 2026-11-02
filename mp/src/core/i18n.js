@@ -9,7 +9,7 @@ const dict = {
     'game.quesheng': '雀圣',
     'game.legend': '麻将传奇',
     'game.snake': '贪吃蛇',
-    'game.poker': '德州扑克',
+    'game.poker': '扑克英雄',
     'game.guess': '1A2B',
     'game.three': 'Threes',
     'game.sudoku': '数独',
