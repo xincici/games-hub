@@ -84,7 +84,9 @@ class MirrorScene extends Scene {
   get rows() { return logic.rowsOf(this.count); }
   bestKey() { return `__emoji_mirror__best_${this.difficulty}`; }
   boot() {
-    if (!this.restore()) this.startRound(this.difficulty);
+    // 镜像不保存局面：每次进入都清掉旧状态并开新一局；最佳用时仍按难度保留。
+    removeRaw(STATE_KEY);
+    this.startRound(this.difficulty);
   }
   startRound(difficulty) {
     this.difficulty = Math.max(1, Math.min(5, difficulty || 1));
@@ -124,58 +126,10 @@ class MirrorScene extends Scene {
     this.playStart = 0;
     const raw = getRaw(this.bestKey(), '');
     this.best = +raw || 0;
-    removeRaw(STATE_KEY);
     this.layout();
-    this.save();
   }
-  save() {
-    setRaw(STATE_KEY, JSON.stringify({
-      difficulty: this.difficulty, display: this.display, game: this.game,
-      matches: this.matches, elapsed: this.elapsed, phase: this.phase,
-    }));
-  }
-  restore() {
-    try {
-      const raw = getRaw(STATE_KEY, '');
-      if (!raw) return false;
-      const s = JSON.parse(raw);
-      if (!s || !Array.isArray(s.display) || !Array.isArray(s.game) || s.display.length !== s.game.length) return false;
-      const d = Math.max(1, Math.min(5, +s.difficulty || 1));
-      const expected = logic.emojiCount(d);
-      if (s.display.length !== expected || s.game.length !== expected) return false;
-      this.difficulty = d;
-      this.display = s.display;
-      this.game = s.game;
-      this.matches = +s.matches || 0;
-      this.elapsed = +s.elapsed || 0;
-      this.phase = s.phase === WON ? WON : PLAY;
-      this.playStart = this.phase === PLAY && this.elapsed ? Date.now() - this.elapsed * 1000 : 0;
-      // PLAY 恢复时展示区必须是背面；只有 WON 才把展示区翻开。
-      const displayFace = this.phase === WON ? 1 : 0;
-      this.displayFlips = s.display.map(() => displayFace);
-      this.displayTargets = s.display.map(() => displayFace);
-      this.gameFlips = s.display.map(() => 1);
-      this.gameTargets = s.display.map(() => 1);
-      this.displayOffsets = s.display.map(() => ({ x: 0, y: 0 }));
-      this.displayOffsetTargets = s.display.map(() => ({ x: 0, y: 0 }));
-      this.displayScales = s.display.map(() => 1);
-      this.displayGatherFrom = s.display.map(() => ({ x: 0, y: 0 }));
-      this.displayFlyFrom = s.display.map(() => ({ x: 0, y: 0 }));
-      this.displayGatherStart = 0;
-      this.displayFlyDelays = s.display.map(() => 0);
-      this.displayFlyStart = 0;
-      this.displayFlipStart = 0;
-      this.displayFlipDelays = s.display.map(() => 0);
-      this.gameFlipStart = 0;
-      this.gameFlipDelays = s.display.map(() => 0);
-      this.swapAnim = null;
-      this.pendingSwap = null;
-      this.winAt = 0;
-      this.best = +(getRaw(this.bestKey(), '') || 0);
-      this.layout();
-      return true;
-    } catch (e) { return false; }
-  }
+
+
   update(dt) {
     if (this.bg) this.bg.update(dt || 16);
     const now = Date.now();
@@ -235,7 +189,6 @@ class MirrorScene extends Scene {
     } else if (this.phase === GAME_FLIP && now >= this.phaseEnd) {
       this.phase = PLAY;
       this.playStart = now;
-      this.save();
     }
     // 洗牌位移全部按时间缓动，不用逐帧指数插值；缩放也一起过渡，避免飞出瞬间从 0.82 跳到 1。
     if (this.phase === GATHER) {
@@ -288,7 +241,6 @@ class MirrorScene extends Scene {
     this.phase = CHECK;
     this.checkAt = Date.now() + CHECK_MS;
     this.app.audio.playElimination();
-    this.save();
   }
   finishCheck() {
     if (this.matches === this.count) {
@@ -311,7 +263,6 @@ class MirrorScene extends Scene {
     } else {
       this.phase = PLAY;
     }
-    this.save();
   }
   onCard(i) {
     if (this.phase !== PLAY || this.swapAnim) return;
@@ -536,7 +487,6 @@ class MirrorScene extends Scene {
     this.addButton('help-ok', bx, by, bw, 28, () => { this.helpOpen = false; });
   }
   onTheme() { this.layout(); }
-  onHide() { this.save(); }
   onShow() {}
 }
 module.exports = MirrorScene;

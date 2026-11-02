@@ -29,7 +29,7 @@ module.exports = {
     runName: 'Run',
     tripletName: 'Triplet',
     comboName: 'Combo x{n}',
-    boardHint: 'Rows, columns or diagonals make scoring sets; multi-clears and combos add extra points',
+    boardHint: 'Rows, columns or diagonals make scoring sets;\nmulti-clears and combos add extra points',
     chainName: 'Combo streak x{n}',
     helpTip: 'Click for help!',
     helpMsg: 'Mahjong Hero: drop 1-9 dot tiles onto a 3x3 board and line three of them up into a mahjong set.',

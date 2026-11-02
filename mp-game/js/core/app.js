@@ -18,12 +18,11 @@ class Scene {
   addButton(id, x, y, w, h, onTap) {
     this.buttons.push({ id, x, y, w, h, onTap });
   }
-  // 结算遮罩至少等 250ms 再出现；若场景已经把 phase 推迟到动画结束，
-  // 这里只再补一个短延时，避免“最后一帧突然糊脸”。
+  // 所有胜利 / 失败遮罩统一延迟 200ms 出现；恢复存档时场景首帧就是结算态，
+  // 直接展示，不补这段延时。场景传入的 ms 只做兼容，不再允许拉长。
   resultVisible(ms, key) {
     const now = Date.now();
     const gateKey = key != null ? String(key) : String(this.phase);
-    // 恢复存档时场景首帧就是结算态：直接展示，不再补 250ms 延时。
     if (!this._hasRendered) {
       this._resultGateKey = gateKey;
       this._resultGateAt = now;
@@ -31,7 +30,7 @@ class Scene {
     }
     if (this._resultGateKey !== gateKey) {
       this._resultGateKey = gateKey;
-      this._resultGateAt = now + (ms == null ? 250 : ms);
+      this._resultGateAt = now + 200;
       return false;
     }
     return now >= this._resultGateAt;
@@ -132,6 +131,19 @@ class App {
     this.globalConfetti = confetti.update(this.globalConfetti, dt || 16, H);
   }
 
+  // 模式切换会复用同一个场景实例：恢复到的胜利 / 失败记录要让 resultVisible
+  // 走「首帧」分支立即显示，而不是把上一个模式的 gate 再延时 200ms。
+  wrapSceneModeSwitch(scene) {
+    if (!scene || typeof scene.toggleMode !== 'function') return;
+    const original = scene.toggleMode;
+    scene.toggleMode = (...args) => {
+      const before = scene.mode;
+      const result = original.apply(scene, args);
+      if (scene.mode !== before) scene._hasRendered = false;
+      return result;
+    };
+  }
+
   // 屏幕左右边缘向内滑动 = 返回首页（类似系统返回手势）。
   // 只吃边缘 12px，避免和游戏内滑动 / 按钮抢触摸；阈值 72px、竖直偏移 40px 内。
   startEdgeSwipe(p) {
@@ -220,6 +232,7 @@ class App {
     this.scene = new SceneClass(this);
     this.sceneId = id;
     this.wrapSceneConfetti(this.scene);
+    this.wrapSceneModeSwitch(this.scene);
     if (this.transition) this.transition.newScene = this.scene;
     this.last = Date.now();
     if (this.input) this.input.cancel();

@@ -584,7 +584,7 @@
 
 ### 87. 麻将英雄底部提示
 
-- 棋盘下方常驻 `mahjong.boardHint`：中文「行、列、斜线成牌组得分，多消连击额外加分」；布局在 `reserve` 里多留 18px，提示画在 `boardY + boardH + 9`，375×667 下与 FAB 仍有约 18px。
+- 棋盘下方常驻 `mahjong.boardHint`：中文「行、列、斜线成牌组得分，多消连击额外加分」；英文在分号后加 `\n`，用 `D.wrapText` 按行画。布局 `reserve` 多留 26px、提示中心 `boardY + boardH + 15`，两行不会压棋盘 / FAB。
 
 ### 88. 贪吃蛇穿墙边框
 
@@ -606,6 +606,20 @@
 
 - 单次消除只要 `blast.size > 0`（炸弹被触发），即使匹配不足 3 个、没有连击，也播 `playFirework()` 连击音，不播普通 elimination；`announce` 仍只按真实大消 / 连击显示中央提示。
 - 不要在 `announce` 内部叠播烟花音：由 `resolve` 根据 `bombBlast || celebrated` 统一播一次。
+
+### 93. 结算遮罩统一 200ms
+
+- `Scene.resultVisible` 统一在 `key` 变化的下一帧起 200ms 后显示；场景传入的 250/300/420 等 ms 只保留签名、不再生效。
+- 首帧 `!this._hasRendered` 时直接返回 true，所以恢复胜利 / 失败存档时遮罩立刻出现；不要改成也等 200ms。
+
+### 94. 模式切换恢复结算立即显示
+
+- 模式切换复用同一场景实例，`_hasRendered` 还是 true，单靠 `resultVisible` 首帧判断会多等 200ms。
+- `App` 在 `openGame` 时包装场景 `toggleMode`：调用后若 `mode` 变了，把 `_hasRendered=false`，下一帧 render 的 `resultVisible` 直接返回 true。@ 对对碰 / 猎手 / 侦探 / 消除大师 / 赌神 / 炼金术 / 麻将英雄 / 雀圣 / 排序都覆盖。
+
+### 95. Emoji 镜像不存局面
+
+- 镜像每次进入都 `removeRaw(STATE_KEY)` 后 `startRound()`，不恢复旧棋盘；删除 `save()` / `restore()` / `onHide save`，但保留按难度的最佳用时 `__emoji_mirror__best_*`。
 
 ## 迁移前检查清单
 

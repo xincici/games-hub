@@ -555,7 +555,7 @@ class MahjongScene extends Scene {
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
 
     // 底部给 FAB 留一条：棋盘底边不能压到 FAB 行
-    const reserve = Math.max(SAFE_BOTTOM + 66, H - this.fabY + 8) + 18;
+    const reserve = Math.max(SAFE_BOTTOM + 66, H - this.fabY + 8) + 26;
     const availH = Math.max(200, H - boardTop - reserve);
 
     this.pad = 8;
@@ -570,7 +570,7 @@ class MahjongScene extends Scene {
     this.boardH = this.cellH * logic.SIZE + this.gap * (logic.SIZE - 1) + this.pad * 2;
     this.boardX = (W - this.boardW) / 2;
     this.boardY = boardTop;
-    this.boardHintY = this.boardY + this.boardH + 9;
+    this.boardHintY = this.boardY + this.boardH + 15;
     this.tileW = this.cellW - 6;
     this.tileH = Math.round(this.tileW * logic.TILE_RATIO);
 
@@ -638,8 +638,13 @@ class MahjongScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
-    D.text(c, t('mahjong.boardHint'), W / 2, this.boardHintY, {
-      size: 10.5, color: T.muted, align: 'center',
+    const hintSize = 10.5;
+    const hintLines = D.wrapText(c, t('mahjong.boardHint'), W - 24, hintSize);
+    const hintLineH = 13;
+    hintLines.forEach((line, i) => {
+      D.text(c, line, W / 2, this.boardHintY + (i - (hintLines.length - 1) / 2) * hintLineH, {
+        size: hintSize, color: T.muted, align: 'center',
+      });
     });
     // 结算层先画、得分浮字后画：过关那一手 0.5s 后出结算层，而浮字还要再飞一会儿，
     // 浮字必须压在结算层上面（与 web 的 .celebrate z-index:3 一致）。
