@@ -713,6 +713,9 @@ class SortScene extends Scene {
     this.drawScore(c, T, piles);
     this.drawOptions(c, T);
     this.drawBoard(c, T);
+    D.text(c, t('sort.boardHint'), W / 2, this.boardY + this.boardH + 14, {
+      size: 11.5, color: T.muted, align: 'center',
+    });
     if (!this.helpOpen && !this.confirming) this.drawFabs(c, T);
     confetti.draw(c, this.confetti);
     if (this.helpOpen) this.drawHelp(c, T);

@@ -260,16 +260,10 @@ class GuessScene extends Scene {
     this.robotFab.y = this.fabY;
   }
 
-  historyRowH() { return 38; }
-  historyContentH() {
-    return 24 + (this.history.length + (this.result === GAMING ? 1 : 0)) * this.historyRowH();
-  }
-  maxScroll() {
-    return Math.max(0, this.historyContentH() - this.historyH);
-  }
-  scrollToBottom() {
-    this.historyScroll = this.maxScroll();
-  }
+  historyRowH() { return 40; }
+  historyContentH() { return this.historyH; }
+  maxScroll() { return 0; }
+  scrollToBottom() { this.historyScroll = 0; }
   historyRect() {
     return { x: this.cx, y: this.historyY, w: this.cw, h: this.historyH };
   }
@@ -364,39 +358,74 @@ class GuessScene extends Scene {
     c.save();
     D.roundRect(c, r.x, r.y, r.w, r.h, 14);
     c.clip();
-    const max = this.maxScroll();
-    this.historyScroll = Math.max(0, Math.min(max, this.historyScroll));
-    let y = r.y + 12 - this.historyScroll;
-    const rowH = this.historyRowH();
-    const colW = 30;
-    const gap = 4;
-    const resultW = 76;
-    const lineW = 4 * colW + 3 * gap + 10 + resultW;
-    const lineX = r.x + (r.w - lineW) / 2;
-    this.history.forEach((one) => {
-      let x = lineX;
-      one.nums.forEach((n) => {
-        D.fillRoundRect(c, x, y + 4, colW, 26, 6, T.keyBg);
-        D.text(c, String(n), x + colW / 2, y + 17, { size: 15, weight: 'bold', color: T.text, align: 'center' });
-        x += colW + gap;
-      });
-      D.fillRoundRect(c, x + 6, y + 4, resultW, 26, 6, T.keyActive);
-      D.text(c, one.res, x + 6 + resultW / 2, y + 17, { size: 13, weight: 'bold', color: T.text, align: 'center' });
-      y += rowH;
+    const headerH = 18;
+    // 记录区内部上方的规则提示。
+    D.text(c, t('guess.historyHint'), r.x + r.w / 2, r.y + 10, {
+      size: 10.5, weight: 'bold', color: T.muted, align: 'center',
     });
-    if (this.result === GAMING) {
-      let x = lineX;
-      for (let i = 0; i < GAME_SIZE; i++) {
-        D.fillRoundRect(c, x, y + 4, colW, 26, 6, T.enter);
-        if (this.current[i]) D.text(c, this.current[i], x + colW / 2, y + 17, { size: 15, weight: 'bold', color: T.text, align: 'center' });
-        if (i === this.current.length) {
-          c.fillStyle = 'rgba(140,140,140,0.6)';
-          c.fillRect(x + colW * 0.28, y + 25, colW * 0.44, 2);
+    const padX = 8;
+    const padY = 4;
+    const gapX = 8;
+    const gapY = 3;
+    const colW = (r.w - padX * 2 - gapX) / 2;
+    const rowH = (r.h - headerH - padY * 2 - gapY * 3) / 4;
+    const indexW = 18;
+    const indexGap = 3;
+    const digitW = 28;
+    const digitGap = 2;
+    const digitsW = 4 * digitW + 3 * digitGap;
+    const groupW = indexW + indexGap + digitsW;
+    const boxH = 28;
+    const resultW = 58;
+    const resultH = 16;
+    const maxRows = 8;
+    for (let idx = 0; idx < maxRows; idx++) {
+      const row = Math.floor(idx / 2);
+      const col = idx % 2;
+      const cellX = r.x + padX + col * (colW + gapX);
+      const cellY = r.y + headerH + padY + row * (rowH + gapY);
+      const one = this.history[idx];
+      if (!one && !(this.result === GAMING && idx === this.history.length)) continue;
+      const x0 = cellX + (colW - groupW) / 2;
+      const top = cellY + Math.max(0, (rowH - boxH - resultH - 1) / 2);
+      D.text(c, `#${idx + 1}`, x0, top + boxH / 2, {
+        size: 11, weight: 'bold', color: T.primary, align: 'left',
+      });
+      let x = x0 + indexW + indexGap;
+      if (one) {
+        for (let i = 0; i < GAME_SIZE; i++) {
+          D.fillRoundRect(c, x, top, digitW, boxH, 6, T.keyBg);
+          D.text(c, String(one.nums[i]), x + digitW / 2, top + boxH / 2, {
+            size: 18, weight: 'bold', color: T.text, align: 'center',
+          });
+          x += digitW + digitGap;
         }
-        x += colW + gap;
+        // 结果是记录区最关键的信息：主色块 + 白字，放在数字右下角。
+        const rx = x0 + indexW + indexGap + digitsW - resultW;
+        D.fillRoundRect(c, rx, top + boxH + 1, resultW, resultH, 7, T.primary);
+        D.text(c, one.res, rx + resultW / 2, top + boxH + 1 + resultH / 2, {
+          size: 14, weight: 'bold', color: '#fff', align: 'center',
+        });
+      } else {
+        for (let i = 0; i < GAME_SIZE; i++) {
+          D.fillRoundRect(c, x, top, digitW, boxH, 6, T.enter);
+          if (this.current[i]) {
+            D.text(c, this.current[i], x + digitW / 2, top + boxH / 2, {
+              size: 18, weight: 'bold', color: T.text, align: 'center',
+            });
+          }
+          if (i === this.current.length) {
+            c.fillStyle = 'rgba(140,140,140,0.6)';
+            c.fillRect(x + digitW * 0.28, top + boxH - 5, digitW * 0.44, 2);
+          }
+          x += digitW + digitGap;
+        }
+        const rx = x0 + indexW + indexGap + digitsW - resultW;
+        D.fillRoundRect(c, rx, top + boxH + 1, resultW, resultH, 7, T.keyActive);
+        D.text(c, '_A_B', rx + resultW / 2, top + boxH + 1 + resultH / 2, {
+          size: 14, weight: 'bold', color: T.muted, align: 'center',
+        });
       }
-      D.fillRoundRect(c, x + 6, y + 4, resultW, 26, 6, T.keyActive);
-      D.text(c, '_A_B', x + 6 + resultW / 2, y + 17, { size: 13, weight: 'bold', color: T.muted, align: 'center' });
     }
     c.restore();
   }

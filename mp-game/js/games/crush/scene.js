@@ -723,6 +723,7 @@ class CrushScene extends Scene {
     if (big) lines.push(t('crush.niceBig').replace('{n}', String(count)));
     this.celebrate = { lines, gained, tier, at: this.clock, dur: 1100 + tier * 220 };
     this.glowAt = this.clock;
+    this.app.audio.playFirework();
     // 小庆祝复用统一 confetti，不另写一套粒子模板（PITFALLS #46）
     confetti.spawn(this.confetti, {
       W, H, count: Math.min(14, 6 + tier * 3), startY: this.boardY + this.boardH * 0.55,
@@ -1067,7 +1068,7 @@ class CrushScene extends Scene {
         ? (theme.dark ? 'rgba(229,127,121,0.16)' : 'rgba(200,70,60,0.12)')
         : (theme.dark ? 'rgba(78,201,138,0.16)' : 'rgba(35,128,78,0.10)');
       D.fillRoundRect(c, dx + 0.5, dy + 0.5, w - 1, w - 1, 7, tint);
-      cards.drawEmoji(c, face, 0, 0, Math.max(10, Math.round(w * 0.42)));
+      cards.drawEmoji(c, face, 0, 0, Math.max(10, Math.round(w * 0.58)));
       D.strokeRoundRect(c, dx + 1, dy + 1, w - 2, w - 2, 8,
         value === logic.BOMB ? T.del : T.primary, 1.5);
     }

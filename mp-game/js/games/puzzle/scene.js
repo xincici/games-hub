@@ -199,6 +199,9 @@ class PuzzleScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
+    D.text(c, t('puzzle.boardHint'), W / 2, this.boardY + this.boardSize + 14, {
+      size: 11.5, color: T.muted, align: 'center',
+    });
     confetti.draw(c, this.confetti);
     if (!this.helpOpen) this.drawFab(c);
     if (this.helpOpen) this.drawHelp(c);

@@ -482,6 +482,7 @@ class SlideScene extends Scene {
     if (this.combo >= 2) {
       this.comboAt = now;
       this.comboUntil = now + COMBO_TIP_MS;
+      this.app.audio.playFirework();
       this.spawnBurst();
     }
   }
@@ -689,6 +690,9 @@ class SlideScene extends Scene {
     this.drawOptions(c);
     this.drawComboTip(c);
     this.drawBoard(c);
+    D.text(c, t('slide.boardHint'), W / 2, this.boardY + this.boardH + 14, {
+      size: 11.5, color: theme.tokens.muted, align: 'center',
+    });
     if (!this.helpOpen && !this.confirming) this.drawFab(c);
     this.drawParticles(c);
     if (this.helpOpen) this.drawHelp(c);

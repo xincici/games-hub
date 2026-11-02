@@ -310,6 +310,10 @@ class SnakeScene extends Scene {
       D.circle(c, fx - this.cell * 0.1, fy - this.cell * 0.1, this.cell * 0.1, '#ffb3a6');
     }
     c.restore();
+    // 关闭穿墙时，用明显的红色边框提示「边界不可穿过」；开启后边框消失。
+    if (!this.throughWall) {
+      D.strokeRoundRect(c, x0 + 1.5, y0 + 1.5, this.boardSize - 3, this.boardSize - 3, 13, T.delColor, 3);
+    }
     if (this.paused && this.phase === GAMING) {
       D.fillRoundRect(c, x0, y0, this.boardSize, this.boardSize, 14, 'rgba(250,248,239,0.88)');
       if (this.resumeCount) {

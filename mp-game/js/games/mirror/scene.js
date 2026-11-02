@@ -480,6 +480,10 @@ class MirrorScene extends Scene {
       if (this.selected === i) D.strokeRoundRect(c, r.x + dx + 1, r.y + dy + 1, r.w - 2, r.h - 2, 8, T.primary, 2);
       if (this.phase === PLAY && !this.swapAnim) this.addButton('card-' + i, r.x + dx, r.y + dy, r.w, r.h, () => this.onCard(i));
     });
+    const tipY = this.gameY + this.displayH + 14;
+    D.text(c, t('mirror.swapHint'), W / 2, tipY, {
+      size: 11.5, color: T.muted, align: 'center',
+    });
     if (this.phase === WON) this.drawResult(c, displayRects, gameRects);
   }
   drawResult(c, displayRects, gameRects) {

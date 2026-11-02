@@ -417,8 +417,8 @@ class PokerScene extends Scene {
       this.nextGuessAt = now + GUESS_FLICKER;
     }
     if (!silent) {
-      // 中牌型属于「多消 / 连击」，不放游戏胜利音；只放消除音和奖金区烟花。
-      this.app.audio.playElimination();
+      // 中牌型属于「多消 / 连击」：连击（烟花）音 + 奖金区小烟花。
+      this.app.audio.playFirework();
       this.startConfetti();
     }
     this.save();
@@ -445,7 +445,8 @@ class PokerScene extends Scene {
       this.bonus *= 2;
       this.bonusPulseAt = Date.now();
       this.stats.peak = Math.max(this.stats.peak, this.bonus);
-      this.app.audio.playElimination();
+      this.app.audio.playFirework();
+      this.startConfetti();
       this.guessCard = logic.randomGuessCard();
       this.nextGuessAt = Date.now() + GUESS_FLICKER;
     } else if (win < 0) {

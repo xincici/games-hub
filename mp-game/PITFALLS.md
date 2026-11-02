@@ -546,6 +546,58 @@
 - `core/confirm.js` 只接管同时有 `startNewGame` 和 `replayLevel|retryLevel` 的闯关场景：标题「开始新游戏？」、正文统一、按钮「取消 / 重玩本关 / 确定重来」，重玩按钮不带图标。
 - `App.frame` 在渲染时临时把场景自己的 `drawConfirm` 置空，再画统一弹窗；避免两套弹窗叠加。没有关卡语义的 2048 / 1A2B / 数独 / 单人麻将仍走自己的两按钮确认。
 
+### 79. 连击 / 多消音效
+
+- 小游戏新增 `audio/firework-success.mp3` 和 `audio.playFirework()`；`playElimination()` 在烟花后 240ms 内静音，与小程序 `sfx.js` 同一套替换规则。
+- 连击 / 多消落点：link、match、slide 在 combo≥2；crush 在 announce；mahjong 在 special 或 FX_MIN；alchemy 在 ≥FX_MIN；legend 在 multi/chain。不要先播 elimination 再播 firework，否则两个声音会叠在一起。
+
+### 80. 全局胜利烟花
+
+- 胜利烟花不再归场景所有：`App` 在 `openGame` 时接管场景 `startConfetti`，写入 `globalConfetti`；首页 / 转场 / 新游戏都继续 update + draw，直到粒子自然消失。
+- 德州扑克要区分：`startConfetti(true)` 才是全屏胜利礼炮；无参 = 奖金区小连击，继续走场景局部 confetti。
+- 转场分支也必须画一次 global confetti，否则回首页的 320ms 转场里烟花会消失一截再出现。
+
+### 81. Emoji 镜像底部提示
+
+- 游戏区下方常驻一行小字 `mirror.swapHint`：中文「点击交换，根据提示让他们位置全部相同」，英文对应；位置 `gameY + displayH + 14`，居中、11.5px、muted。
+
+### 82. 数字迷宫底部提示
+
+- 棋盘下方常驻 `puzzle.boardHint` 小字：中文「点击或滑动，让所有数字按顺序排列」，位置 `boardY + boardSize + 14`，居中、11.5px、muted；375×667 下与帮助 FAB 仍留约 20px。
+
+### 83. Emoji 排序底部提示
+
+- 棋盘下方常驻 `sort.boardHint`：中文「把相同的水果放到同一个桶里」，位置 `boardY + boardH + 14`，居中、11.5px、muted。
+
+### 84. Emoji 滑行底部提示
+
+- 棋盘下方常驻 `slide.boardHint`：中文「点击对子消除，滑动使相邻的配对消除」，位置 `boardY + boardH + 14`，居中、11.5px、muted；375×667 下与帮助 FAB 留约 12px。
+
+### 85. 德州扑克牌型 / 猜大小胜利
+
+- 中牌型（`resolveHand`）和猜大小猜对（`guess` win>0）都改播 `playFirework()` 连击音 + `startConfetti()` 奖金区小烟花，不再播 elimination。
+- 只有 `settle()` 落袋才播 `playSuccess()` + `startConfetti(true)` 全屏胜利礼炮。
+
+### 86. 雀圣底部提示
+
+- 棋盘下方常驻 `quesheng.boardHint`：中文「滑动、点击消除所有的牌组获胜」；布局要先预留 `hintH=18`（从 `availH` 扣掉），提示画在 `boardY + boardH + 9`，否则会和撤销卡只差 10px、放不下。
+
+### 87. 麻将英雄底部提示
+
+- 棋盘下方常驻 `mahjong.boardHint`：中文「行、列、斜线成牌组得分，多消连击额外加分」；布局在 `reserve` 里多留 18px，提示画在 `boardY + boardH + 9`，375×667 下与 FAB 仍有约 18px。
+
+### 88. 贪吃蛇穿墙边框
+
+- `throughWall === false` 时棋盘外圈画 3px `T.delColor` 圆角边框（`x0+1.5 / size-3`），开启穿墙后完全不画边框；边框在棋盘内容之后、暂停 / 结算遮罩之前画。
+
+### 89. 1A2B 记录区
+
+- 记录区改为固定 4 行 × 2 列网格（最多 8 条），行优先填充；内部顶部常驻 `historyHint`；每条左侧 `#n` 编号，数字框 28px / 字号 18，结果 `1A2B` 用 58×16 主色块白字（字号 14），占位 `_A_B` 同尺寸灰块，均放在数字右下角。
+
+### 90. Emoji 牌面占比
+
+- 所有 emoji 牌的统一字号从牌宽 `0.42` 提到 `0.58`（`core/cards.js` 的 `draw` + 消消乐自绘的 `drawEmoji` 两处）；扑克 / 麻将牌面和牌背不要跟着改。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

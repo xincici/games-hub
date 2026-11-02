@@ -2,6 +2,7 @@
 const dict = {
   cn: {
     gameTitle: '1A2B',
+    historyHint: '8 次机会猜中一个 4 位数',
     availableClicks: '剩余点击',
     start: '🎮 新游戏',
     bestStreak: '🏆 最长连胜',
@@ -28,6 +29,7 @@ const dict = {
   },
   en: {
     gameTitle: '1A2B',
+    historyHint: '8 chances to guess a 4-digit number',
     availableClicks: 'Available Clicks',
     start: '🎮 New Game',
     bestStreak: '🏆 Best Streak',

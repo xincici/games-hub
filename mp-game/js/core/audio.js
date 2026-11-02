@@ -6,6 +6,7 @@ const sources = {
   lose: '/audio/lose.mp3',
   fail: '/audio/fail.mp3',
   elimination: '/audio/elimination.mp3',
+  firework: '/audio/firework-success.mp3',
 };
 const cache = {};
 
@@ -22,6 +23,9 @@ function get(name) {
   }
   return cache[name];
 }
+
+let lastFireworkAt = 0;
+const ELIM_REPLACE_MS = 240;
 
 function play(name) {
   if (!enabled()) return;
@@ -44,6 +48,10 @@ module.exports = {
   playSuccess: () => play('success'),
   playLose: () => play('lose'),
   playFail: () => play('fail'),
-  playElimination: () => play('elimination'),
+  playFirework: () => { lastFireworkAt = Date.now(); play('firework'); },
+  playElimination: () => {
+    if (Date.now() - lastFireworkAt < ELIM_REPLACE_MS) return;
+    play('elimination');
+  },
   setEnabled,
 };

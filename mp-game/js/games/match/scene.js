@@ -396,6 +396,7 @@ class MatchScene extends Scene {
     if (this.combo >= 2) {
       this.comboAt = now;
       this.comboUntil = now + 1500;
+      this.app.audio.playFirework();
       this.spawnBurst();
     }
   }

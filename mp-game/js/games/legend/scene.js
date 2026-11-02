@@ -402,7 +402,9 @@ class LegendScene extends Scene {
     this.falls = [];
     this.flashCell = -1;
 
-    this.app.audio.playElimination();
+    const special = groups.length > 1 || turn.chain > 1;
+    if (special) this.app.audio.playFirework();
+    else this.app.audio.playElimination();
     this.celebrate = {
       title: groups.length > 1
         ? t('legend.multiName').replace('{n}', groups.length)

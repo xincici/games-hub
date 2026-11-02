@@ -367,7 +367,10 @@ class AlchemyScene extends Scene {
         gained = taken.reduce((sum, h) => sum + h.combo.score, 0);
       }
       this.score += gained;
-      if (!silent) this.sfx('playElimination');
+      if (!silent) {
+        if (gained >= FX_MIN) this.app.audio.playFirework();
+        else this.sfx('playElimination');
+      }
 
       // 局面**立刻**清空，消除动画交给 clears 浮影层；否则动画期间再落一子会把同一条线重复计分。
       const cleared = new Set();

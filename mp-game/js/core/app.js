@@ -4,6 +4,7 @@ const theme = require('./theme');
 const audio = require('./audio');
 const help = require('./help');
 const confirm = require('./confirm');
+const confetti = require('./confetti');
 const D = require('./draw');
 const { t } = require('./i18n');
 
@@ -53,6 +54,9 @@ class App {
     this.snapshotCtx = null;
     this.paused = false;
     this.edgeSwipe = null;
+    this.globalConfetti = [];
+    this.globalConfettiUntil = 0;
+    this.lastGlobalConfettiAt = 0;
     this.last = Date.now();
     this.frame = this.frame.bind(this);
     this.resize = this.resize.bind(this);
@@ -92,6 +96,40 @@ class App {
       });
     }
     requestAnimationFrame(this.frame);
+  }
+
+  // 胜利烟花统一由 App 持有：场景的 startConfetti 被接管后写全局数组，
+  // 因此回首页 / 转场时仍然继续播放，不会随场景销毁。
+  startCelebration() {
+    this.globalConfetti = [];
+    this.globalConfettiUntil = Date.now() + 1200;
+    this.lastGlobalConfettiAt = 0;
+  }
+
+  wrapSceneConfetti(scene) {
+    if (!scene || typeof scene.startConfetti !== 'function') return;
+    const original = scene.startConfetti;
+    const id = this.sceneId;
+    scene.startConfetti = (full) => {
+      // 德州扑克的 false / 无参是奖金区小连击，不是胜利烟花。
+      if (id === 'poker' && full !== true) {
+        original.call(scene, full);
+        return;
+      }
+      this.startCelebration();
+      scene.confetti = [];
+      scene.confettiUntil = 0;
+      scene.lastConfettiAt = 0;
+    };
+  }
+
+  updateGlobalConfetti(dt) {
+    const now = Date.now();
+    if (now < this.globalConfettiUntil && now - this.lastGlobalConfettiAt >= 40) {
+      this.lastGlobalConfettiAt = now;
+      confetti.spawn(this.globalConfetti, { W, H, startY: H * 0.58 });
+    }
+    this.globalConfetti = confetti.update(this.globalConfetti, dt || 16, H);
   }
 
   // 屏幕左右边缘向内滑动 = 返回首页（类似系统返回手势）。
@@ -181,6 +219,7 @@ class App {
     } : null;
     this.scene = new SceneClass(this);
     this.sceneId = id;
+    this.wrapSceneConfetti(this.scene);
     if (this.transition) this.transition.newScene = this.scene;
     this.last = Date.now();
     if (this.input) this.input.cancel();
@@ -277,8 +316,10 @@ class App {
       const dt = Math.min(50, now - this.last);
       this.last = now;
       if (this.scene.update) this.scene.update(dt);
+      this.updateGlobalConfetti(dt);
       if (this.transition) {
         this.drawTransition(ctx);
+        confetti.draw(ctx, this.globalConfetti);
         this.input.setButtons([]);
       } else {
         this.scene.buttons = [];
@@ -301,6 +342,7 @@ class App {
           help.reset(this.scene);
         }
         if (!this.scene.helpOpen && !this.scene.confirming && this.sceneId !== 'home') this.drawHomeAffordance(ctx);
+        confetti.draw(ctx, this.globalConfetti);
         this.scene._hasRendered = true;
         this.input.setButtons(this.scene.buttons);
       }

@@ -521,6 +521,7 @@ class LinkScene extends Scene {
     confetti.spawn(this.confetti, { W, H, startY: H * 0.58, scoreY: this.scoreY });
   }
   spawnBurst() {
+    if (this.app && this.app.audio) this.app.audio.playFirework();
     const cx = W / 2;
     const cy = this.tipY + this.tipH + 26;
     const colors = ['#5D8C7B', '#F2D091', '#F2A679', '#D9695F', '#8C4646'];

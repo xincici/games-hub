@@ -813,8 +813,9 @@ class QueshengScene extends Scene {
     this.gap = CELL_GAP;
     this.pad = BOARD_PAD;
     const topMin = this.optY + this.optH + 12;
-    // 底部留出撤销卡 + FAB 行，棋盘不能压到它们。
-    const availH = Math.max(140, this.undoY - 12 - topMin);
+    // 底部留出撤销卡 + FAB 行，棋盘不能压到它们；再预留一行棋盘提示。
+    const hintH = 18;
+    const availH = Math.max(140, this.undoY - 12 - hintH - topMin);
     const byW = (this.cw - this.pad * 2 - this.gap * (SIZE - 1)) / SIZE;
     const byH = ((availH - this.pad * 2 - this.gap * (SIZE - 1)) / SIZE) / RATIO;
     this.cellW = Math.max(30, Math.floor(Math.min(byW, byH, 78)));
@@ -825,6 +826,7 @@ class QueshengScene extends Scene {
     this.boardH = this.cellH * SIZE + this.gap * (SIZE - 1) + this.pad * 2;
     this.boardX = (W - this.boardW) / 2;
     this.boardY = topMin + Math.max(0, (availH - this.boardH) / 2);
+    this.boardHintY = this.boardY + this.boardH + 9;
 
     // 尺寸变化后旧的像素级补间失效，直接收掉（避免 NaN / 错位）
     this.drag = null;
@@ -854,6 +856,9 @@ class QueshengScene extends Scene {
     this.drawScore(c, T);
     this.drawOptions(c, T);
     this.drawBoard(c, T);
+    D.text(c, t('quesheng.boardHint'), W / 2, this.boardHintY, {
+      size: 10.5, color: T.muted, align: 'center',
+    });
     this.drawUndoCard(c, T);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     if (this.phase === WON || this.phase === OVER) this.drawResult(c, T);

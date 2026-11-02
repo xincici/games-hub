@@ -234,7 +234,7 @@ function draw(c, item, mode, x, y, w, h, faceUp, backIcon, backFallback) {
   } else {
     D.fillRoundRect(c, x, y, w, h, 8, '#fffdf7');
     D.strokeRoundRect(c, x, y, w, h, 8, T.tileBorder, 1);
-    drawEmoji(c, item, x + w / 2, y + h / 2, Math.max(10, Math.round(w * 0.42)));
+    drawEmoji(c, item, x + w / 2, y + h / 2, Math.max(10, Math.round(w * 0.58)));
   }
 }
 

@@ -381,7 +381,9 @@ class MahjongScene extends Scene {
         + logic.chainBonus(this.combo);
       const top = hits.reduce((a, b) => (b.trio.score > a.trio.score ? b : a));
       this.score += gained;
-      this.app.audio.playElimination();
+      const special = hits.length > 1 || this.combo > 1;
+      if (gained >= FX_MIN || special) this.app.audio.playFirework();
+      else this.app.audio.playElimination();
       const cleared = new Set();
       hits.forEach(hit => hit.indices.forEach(i => cleared.add(i)));
       const ghost = [];
@@ -553,7 +555,7 @@ class MahjongScene extends Scene {
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
 
     // 底部给 FAB 留一条：棋盘底边不能压到 FAB 行
-    const reserve = Math.max(SAFE_BOTTOM + 66, H - this.fabY + 8);
+    const reserve = Math.max(SAFE_BOTTOM + 66, H - this.fabY + 8) + 18;
     const availH = Math.max(200, H - boardTop - reserve);
 
     this.pad = 8;
@@ -568,6 +570,7 @@ class MahjongScene extends Scene {
     this.boardH = this.cellH * logic.SIZE + this.gap * (logic.SIZE - 1) + this.pad * 2;
     this.boardX = (W - this.boardW) / 2;
     this.boardY = boardTop;
+    this.boardHintY = this.boardY + this.boardH + 9;
     this.tileW = this.cellW - 6;
     this.tileH = Math.round(this.tileW * logic.TILE_RATIO);
 
@@ -635,6 +638,9 @@ class MahjongScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
+    D.text(c, t('mahjong.boardHint'), W / 2, this.boardHintY, {
+      size: 10.5, color: T.muted, align: 'center',
+    });
     // 结算层先画、得分浮字后画：过关那一手 0.5s 后出结算层，而浮字还要再飞一会儿，
     // 浮字必须压在结算层上面（与 web 的 .celebrate z-index:3 一致）。
     if (this.phase === WON || this.phase === OVER) this.drawResult(c);
