@@ -517,9 +517,12 @@ class CrushScene extends Scene {
     const gained = logic.scoreForMatches(matched.size, chain) + logic.scoreForBlast(blast.size, chain);
     this.score += gained;
     if (blast.size) this.shakeAt = this.clock;
+    const bombBlast = blast.size > 0;
     this.clearFx = { matched, blast, at: this.clock, huge: matched.size > 3 };
-    this.announce(matched.size, chain, gained);
-    this.app.audio.playElimination();
+    const celebrated = this.announce(matched.size, chain, gained);
+    // 炸弹触发的那次消除即使不足 3 个、没有连击，也播连击（烟花）音。
+    if (bombBlast || celebrated) this.app.audio.playFirework();
+    else this.app.audio.playElimination();
     this.schedule(CLEAR_MS, () => {
       if (this.phase !== PLAY) { this.clearFx = null; this.busy = false; return; }
       let cleared = this.cells.map((v, i) => (all.has(i) ? null : v));
@@ -716,18 +719,19 @@ class CrushScene extends Scene {
   announce(count, chain, gained) {
     const big = count > 3;
     const combo = chain > 1;
-    if (!big && !combo) return;
+    if (!big && !combo) return false;
     const tier = big && combo ? 3 : combo ? 2 : 1;
     const lines = [];
     if (combo) lines.push(t('crush.niceCombo').replace('{n}', String(chain)));
     if (big) lines.push(t('crush.niceBig').replace('{n}', String(count)));
-    this.celebrate = { lines, gained, tier, at: this.clock, dur: 1100 + tier * 220 };
+    // 与 web 的 celebrate-pop 动画时长对齐：0.95s 内完成弹出 → 上飘 → 淡出。
+    this.celebrate = { lines, gained, tier, at: this.clock, dur: 950 };
     this.glowAt = this.clock;
-    this.app.audio.playFirework();
     // 小庆祝复用统一 confetti，不另写一套粒子模板（PITFALLS #46）
     confetti.spawn(this.confetti, {
       W, H, count: Math.min(14, 6 + tier * 3), startY: this.boardY + this.boardH * 0.55,
     });
+    return true;
   }
 
   startConfetti() {

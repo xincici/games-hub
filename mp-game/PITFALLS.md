@@ -598,6 +598,15 @@
 
 - 所有 emoji 牌的统一字号从牌宽 `0.42` 提到 `0.58`（`core/cards.js` 的 `draw` + 消消乐自绘的 `drawEmoji` 两处）；扑克 / 麻将牌面和牌背不要跟着改。
 
+### 91. 消消乐多消提示时长
+
+- 多消 / 连击中央提示固定 `dur=950ms`，对齐 web `.celebrate` 的 `celebrate-pop 0.95s forwards`（web 的 1100+tier×220 只是 DOM 回收时间，0.95s 后已透明）；外圈闪光保持 web 的 900ms。
+
+### 92. 消消乐炸弹强制连击音
+
+- 单次消除只要 `blast.size > 0`（炸弹被触发），即使匹配不足 3 个、没有连击，也播 `playFirework()` 连击音，不播普通 elimination；`announce` 仍只按真实大消 / 连击显示中央提示。
+- 不要在 `announce` 内部叠播烟花音：由 `resolve` 根据 `bombBlast || celebrated` 统一播一次。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？
