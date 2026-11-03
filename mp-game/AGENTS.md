@@ -152,6 +152,17 @@ game.js
 - 过渡期间 `input` 按钮数组清空，不能误触；动画结束下一帧恢复正常输入。
 - 首页卡片通过 `HomeScene.getGameOrigin(id)` 提供卡片中心，游戏内 home 按钮统一调用 `app.goHome()`，不要直接 `openScene(home)`。
 
+## 微信分享 / 转发
+
+- 右上角菜单统一接 `js/core/share.js`：好友转发走 `onShareAppMessage`，朋友圈分享走 `onShareTimeline`；
+  回到前台、切换语言、冷启动后都由 `App` 重新同步，不要在单个游戏场景里重复注册。
+- 朋友圈分享注册只判断 `wx.onShareTimeline` 是否存在，不做 iOS / Android 平台分支；
+  客户端不支持时由微信置灰入口，不要主动隐藏可升级平台的能力。
+- 分享标题从 `home.<id>Title` 派生；首页不带 `query`，游戏场景带 `game=<sceneId>`。
+  `App` 冷启动会校验白名单并直接打开对应场景；`referrerInfo.extraData.game` 供将来消息卡片 / 群场景复用。
+- 朋友圈分享的落地参数由微信折叠成启动 `query`；分享卡片当前使用小游戏默认截图，如以后加自定义 `imageUrl`，
+  必须确认该图已进包内且不显著增加包体。
+
 ## 首页（`js/games/home/`）
 
 - 当前二十五个入口，按 4+3+4+3+4+3+4 蜂窝；长按 260ms 可拖动排序，顺序存 `__games_hub__home_order`（与 web 同一个 key）。水平间距按小程序 6rpx 口径缩小，行间用负 overlap 咬合。

@@ -8,6 +8,7 @@ const confetti = require('./confetti');
 const D = require('./draw');
 const { t } = require('./i18n');
 const i18n = require('./i18n');
+const share = require('./share');
 
 // 场景基类：一个游戏一个 Scene；app 负责输入、帧循环、前后台生命周期。
 class Scene {
@@ -60,7 +61,10 @@ class App {
     this.last = Date.now();
     this.frame = this.frame.bind(this);
     this.resize = this.resize.bind(this);
+    this.launchGame = share.getQueryGame(wx.getLaunchOptionsSync ? wx.getLaunchOptionsSync() : null);
     this.openScene(SceneClass, { id: 'home' });
+    if (this.launchGame) this.openGame(this.launchGame);
+    share.syncMenu(this.sceneId);
     this.input.onStart = p => {
       if (this.startEdgeSwipe(p)) return;
       if (this.scene.helpOpen && help.touch(this.scene, 'start', p)) return;
@@ -88,6 +92,7 @@ class App {
       this.paused = false;
       this.last = Date.now();
       if (this.scene.onShow) this.scene.onShow();
+      share.syncMenu(this.sceneId);
     });
     if (wx.onWindowResize) wx.onWindowResize(this.resize);
     theme.onChange(() => {
@@ -95,6 +100,7 @@ class App {
     });
     i18n.onChange(() => {
       if (this.scene && this.scene.onTheme) this.scene.onTheme();
+      share.syncMenu(this.sceneId);
     });
     requestAnimationFrame(this.frame);
   }

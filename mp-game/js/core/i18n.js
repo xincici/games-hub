@@ -14,6 +14,8 @@ const globalDict = {
     close: '关闭',
     confirm: '好的，明白',
     rotateTip: '请旋转设备至竖屏',
+    shareHomeTitle: '蜂窝益智二十五',
+    shareGamePrefix: '一起来玩',
   },
   en: {
     backHome: 'Home',
@@ -27,6 +29,8 @@ const globalDict = {
     close: 'Close',
     confirm: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait',
+    shareHomeTitle: 'Hex Puzzle 25',
+    shareGamePrefix: 'Play',
   },
 };
 
@@ -49,6 +53,8 @@ const listeners = [];
 function register(namespace, dict) {
   dicts[namespace] = dict;
 }
+
+register('app', globalDict);
 
 function t(key) {
   const parts = String(key).split('.');
