@@ -213,7 +213,7 @@ game.js
 ## 数字迷宫 / Emoji 镜像 / Emoji 下坠
 
 - **数字迷宫**：`__number_puzzle__difficulty` + `__number_puzzle__<n>`（按难度记最少点击）；从完成态随机走合法步生成，保证有解；难度 3~6，新游戏不确认。
-- **Emoji 镜像**：`__emoji_mirror__state`、`__emoji_mirror__best_<d>`；阶段：展示 1.2s → 逐张翻背 → 聚中 → 重叠停留 240ms → 随机延迟散射回位 → 游戏区逐张翻正 → PLAY；操作区难度 / 新游戏各 50%；每局 `startRound()` 必须按 `round.display.length` 重建 flips / offsets 数组；点两张先做 300ms 对向交换动画，再 CHECK 450ms 统计位置正确数；计时用秒表。
+- **Emoji 镜像**：`__emoji_mirror__difficulty`、`__emoji_mirror__state`、`__emoji_mirror__best_<d>`；每次进入清掉局面并开新局，但回读上次所选难度；阶段：展示 1.2s → 逐张翻背 → 聚中 → 重叠停留 240ms → 随机延迟散射回位 → 游戏区逐张翻正 → PLAY；操作区难度 / 新游戏各 50%；每局 `startRound()` 必须按 `round.display.length` 重建 flips / offsets 数组；点两张先做 300ms 对向交换动画，再 CHECK 450ms 统计位置正确数；计时用秒表。
 - **Emoji 下坠**：`__emoji_down__best_1`、`__emoji_down__state`；8×6，牌堆上升，点列滑到同款上方消排；`fillPile()` 必须保证堆始终铺到棋盘底；暂停/恢复、失败结算、状态恢复。
 - 三者都从首页进入、`app.goHome()` 返回；文字 / 按钮遵循统一约定。
 

@@ -20,6 +20,7 @@ if (!coreI18n.__mirrorRegistered) {
 }
 
 const STATE_KEY = '__emoji_mirror__state';
+const DIFFICULTY_KEY = '__emoji_mirror__difficulty';
 const REVEAL_MS = 1200;
 const FLIP_MS = 350;
 const FLIP_STEP = 65;
@@ -40,7 +41,7 @@ class MirrorScene extends Scene {
   constructor(app) {
     super(app);
     this.bg = new ParticleField();
-    this.difficulty = 1;
+    this.difficulty = Math.max(1, Math.min(5, Math.round(+getRaw(DIFFICULTY_KEY, 1)) || 1));
     this.display = [];
     this.game = [];
     this.matches = 0;
@@ -84,12 +85,13 @@ class MirrorScene extends Scene {
   get rows() { return logic.rowsOf(this.count); }
   bestKey() { return `__emoji_mirror__best_${this.difficulty}`; }
   boot() {
-    // 镜像不保存局面：每次进入都清掉旧状态并开新一局；最佳用时仍按难度保留。
+    // 镜像不保存局面：每次进入都清掉旧状态并开新一局；难度和最佳用时仍保留。
     removeRaw(STATE_KEY);
     this.startRound(this.difficulty);
   }
   startRound(difficulty) {
     this.difficulty = Math.max(1, Math.min(5, difficulty || 1));
+    setRaw(DIFFICULTY_KEY, String(this.difficulty));
     const round = logic.newRound(this.difficulty);
     this.display = round.display;
     this.game = round.game;
