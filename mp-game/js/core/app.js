@@ -7,6 +7,7 @@ const confirm = require('./confirm');
 const confetti = require('./confetti');
 const D = require('./draw');
 const { t } = require('./i18n');
+const i18n = require('./i18n');
 
 // 场景基类：一个游戏一个 Scene；app 负责输入、帧循环、前后台生命周期。
 class Scene {
@@ -89,11 +90,12 @@ class App {
       if (this.scene.onShow) this.scene.onShow();
     });
     if (wx.onWindowResize) wx.onWindowResize(this.resize);
-    if (wx.onThemeChange) {
-      wx.onThemeChange(() => {
-        if (this.scene.onTheme) this.scene.onTheme();
-      });
-    }
+    theme.onChange(() => {
+      if (this.scene && this.scene.onTheme) this.scene.onTheme();
+    });
+    i18n.onChange(() => {
+      if (this.scene && this.scene.onTheme) this.scene.onTheme();
+    });
     requestAnimationFrame(this.frame);
   }
 

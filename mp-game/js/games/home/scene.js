@@ -174,6 +174,10 @@ class HomeScene extends Scene {
     else if (!this.settingsOpen) this.drawSettingsButton(c);
   }
 
+  onTheme() {
+    this.layout();
+  }
+
   // ---------- 长按拖动排序 ----------
   hexAt(x, y) {
     const w = this.hexR * 1.55;
@@ -309,11 +313,10 @@ class HomeScene extends Scene {
       c.translate(-cx, -cy);
     }
     const accents = {
-      logic: ['#23804e', '#abc2c1'], number: ['#2c6aad', '#adbed2'],
-      memory: ['#7550ad', '#bab9d2'], action: ['#bd5420', '#c7bab9'],
-      card: ['#8f6419', '#bfbdb7'],
+      logic: '#23804e', number: '#2c6aad', memory: '#7550ad',
+      action: '#bd5420', card: '#8f6419',
     };
-    const [accent, border] = accents[item.accent] || accents.logic;
+    const accent = accents[item.accent] || accents.logic;
     c.save();
     if (ghost) {
       c.globalAlpha = 0.95;
@@ -326,10 +329,10 @@ class HomeScene extends Scene {
       c.shadowOffsetY = 5;
     }
     hexPath(c, cx, cy, this.hexR);
-    c.fillStyle = border;
+    c.fillStyle = accent;
     c.fill();
     c.restore();
-    hexPath(c, cx, cy, this.hexR - 4);
+    hexPath(c, cx, cy, this.hexR - 2.5);
     c.fillStyle = T.card;
     c.fill();
 
@@ -433,7 +436,7 @@ class HomeScene extends Scene {
     c.fillRect(0, 0, W, H);
     const x = 0;
     const w = W;
-    const h = 280 + SAFE_BOTTOM;
+    const h = 336 + SAFE_BOTTOM;
     const y = H - h + h * (1 - ease);
     D.card(c, x, y, w, h, T);
     this.addButton('settings-mask', 0, 0, W, H, () => { this.settingsOpen = false; });
@@ -456,6 +459,16 @@ class HomeScene extends Scene {
           ['en', t('home.english')],
         ],
         onPick: value => { i18n.setLangMode(value); this.refreshLabels(); },
+      },
+      {
+        label: t('home.theme'),
+        current: theme.mode,
+        options: [
+          ['system', t('home.followSystem')],
+          ['light', t('home.light')],
+          ['dark', t('home.dark')],
+        ],
+        onPick: value => theme.setMode(value),
       },
       {
         label: t('home.face'),

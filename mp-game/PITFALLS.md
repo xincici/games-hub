@@ -647,6 +647,12 @@
 
 - 首页顶部固定绘制 `home.homeTitle`，中英文都写「蜂窝益智二十五」；`titleY = HEADER.TITLE_Y` 与微信右上胶囊同一水平线，字号 16、颜色 `T.muted`，与蜂窝第一行保留约 32px。
 
+### 102. 手动主题切换不触发游戏场景 `onTheme`
+
+- 小游戏版本的系统主题由 `wx.onThemeChange` 触发，但设置抽屉里手动选择 light / dark 只改 `theme.mode`；只改状态会导致当前场景继续沿用旧 token，回首页或重进游戏才恢复。
+- 修法是 `theme.refresh()` 切 token 后通知当前场景 `onTheme()`；`App` 只挂一份 `theme.onChange` / `i18n.onChange`，不要让每个场景重复注册。
+- **规则**：所有主题 / 语言相关变化都必须通过当前场景的 `onTheme()` 重排 / 重绘；游戏内后续新增主题相关缓存量时，也要在 `onTheme()` 里重算。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？
@@ -660,3 +666,4 @@
 - [ ] 切模式 / 退出前是否保存当前状态？各模式 key 是否独立？
 - [ ] 转场是否走 `app.openGame` / `app.goHome`？modal mask 是否先加？
 - [ ] 动画是否有结束态、是否会被旧回调覆盖新局？
+- [ ] 主题 / 语言切换后当前场景是否通过 `onTheme()` 立即重排 / 重绘？

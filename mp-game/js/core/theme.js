@@ -102,7 +102,7 @@ function refresh() {
 }
 
 function setMode(next) {
-  mode = next;
+  mode = next === 'light' || next === 'dark' ? next : 'system';
   try { wx.setStorageSync(modeKey, next); } catch (e) { /* ignore */ }
   refresh();
 }

@@ -156,7 +156,7 @@ game.js
 
 - 当前二十五个入口，按 4+3+4+3+4+3+4 蜂窝；长按 260ms 可拖动排序，顺序存 `__games_hub__home_order`（与 web 同一个 key）。水平间距按小程序 6rpx 口径缩小，行间用负 overlap 咬合。
 - 每个入口按 accent 上色：logic `#23804e`、number `#2c6aad`、memory `#7550ad`、action `#bd5420`、card `#8f6419`；六边形外层用 18% 混色边框，图标用完整 accent。
-- 右下角齿轮（参考小程序 FloatingActions）打开底部抽屉：语言（system/cn/en）、默认牌面（emoji/poker/mahjong）、音效；选项按钮组靠右、即时生效，无保存按钮；展开 / 收起用 280/220ms 的 easeOut 位移。没有背景音乐资源，因此不展示音乐开关；小程序没有主题设置，这里也不提供主题入口。
+- 右下角齿轮（参考小程序 FloatingActions）打开底部抽屉：主题（system/light/dark）、语言（system/cn/en）、默认牌面（emoji/poker/mahjong）、音效；选项按钮组靠右、即时生效，无保存按钮；展开 / 收起用 280/220ms 的 easeOut 位移。没有背景音乐资源，因此不展示音乐开关。
 - 六边形用 `hexPath` 双层（外主色、内白卡），卡片区域整个可点。
 - 首页构造时 `tiles.preload()` 预加载麻将雪碧图，进对对碰麻将模式不再先闪空白。
 - 二十五个游戏场景左上角自绘 home 图标返回首页；小游戏没有原生导航栏。
@@ -281,6 +281,7 @@ game.js
 - **重绘频率**：场景 update 每帧都跑，灯色插值 / 蒙层 / 彩带都依赖帧循环；不要用 setInterval 做动画。
 - **文字换行**：中文按字符测量，英文按字符也可；帮助内容可能超屏，面板要 clip。
 - **requestAnimationFrame** 在小游戏里是全局的，不要当成浏览器 window API。
+- **主题切换**：`theme.setMode()` 是唯一入口；改 token 后只通知当前场景 `onTheme()` 重排 / 重绘，不要在各场景另建全局监听。
 - **音效路径**：小游戏本地文件用 `/audio/xxx.mp3`；不要写 `../`。
 
 ## 验收

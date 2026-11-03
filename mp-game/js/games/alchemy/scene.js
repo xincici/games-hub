@@ -54,6 +54,7 @@ const FX_MIN = 300;
 const RESULT_DELAY_MS = 500;
 const CELEBRATE_MS = 950;
 const FLIGHT_MS = 210;
+const LAND_MS = 220;
 const FLASH_MS = 450;
 const HAND_IN_MS = 260;
 const DEAL_MS = 300;
@@ -90,6 +91,7 @@ class AlchemyScene extends Scene {
     this.glowAt = 0;
     this.flashCell = -1;
     this.flashAt = 0;
+    this.landing = null;
     this.dealStart = 0;
     this.handAt = 0;
     this.endAt = 0;
@@ -229,6 +231,7 @@ class AlchemyScene extends Scene {
     this.glowAt = 0;
     this.flashCell = -1;
     this.flashAt = 0;
+    this.landing = null;
     this.dealStart = 0;
     this.endAt = 0;
     this.flying = null;
@@ -440,8 +443,10 @@ class AlchemyScene extends Scene {
 
   finishFlight(silent) {
     const had = !!this.flying;
+    const idx = had ? this.flying.idx : -1;
     this.flying = null;
     this.busy = false;
+    if (had) this.landing = { idx, at: Date.now() };
     if (had) this.settle(silent);
   }
 
@@ -588,6 +593,7 @@ class AlchemyScene extends Scene {
     if (this.bg) this.bg.update(step);
 
     if (this.flying && this.now >= this.flying.start + this.flying.duration) this.finishFlight();
+    if (this.landing && this.now - this.landing.at >= LAND_MS) this.landing = null;
     if (this.endAt && this.now >= this.endAt) {
       this.endAt = 0;
       this.checkEnd();
@@ -616,6 +622,7 @@ class AlchemyScene extends Scene {
     this.drawScore(c);
     this.drawRow(c);
     this.drawBoard(c);
+    this.drawFlying(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     this.drawConfetti(c);
     if (this.drag && this.drag.active) this.drawDragGhost(c);
@@ -711,7 +718,10 @@ class AlchemyScene extends Scene {
       let alpha = 1;
       let dx = 0;
       let dy = 0;
-      if (this.dealStart) {
+      if (this.landing && this.landing.idx === idx) {
+        const lp = Math.max(0, Math.min(1, (now - this.landing.at) / LAND_MS));
+        scale = 1 + 0.10 * Math.sin(Math.PI * lp);
+      } else if (this.dealStart) {
         const p = Math.max(0, Math.min(1, (now - this.dealStart - idx * DEAL_STEP) / DEAL_MS));
         if (p <= 0) return;
         const e = 1 - Math.pow(1 - p, 3);
@@ -754,6 +764,29 @@ class AlchemyScene extends Scene {
 
     this.drawCelebrate(c);
     this.drawResult(c);
+  }
+
+  drawFlying(c) {
+    const f = this.flying;
+    if (!f) return;
+    const p = Math.max(0, Math.min(1, (this.now - f.start) / f.duration));
+    const ex = 1 - Math.pow(1 - p, 3);
+    const ey = p * p;
+    const fx = f.from.x + f.from.w / 2;
+    const fy = f.from.y + f.from.h / 2;
+    const tx = f.to.x + f.to.w / 2;
+    const ty = f.to.y + f.to.h / 2;
+    const scale = 1 + (f.to.w / f.from.w - 1) * ex;
+    const w = f.from.w * scale;
+    const h = f.from.h * scale;
+    const cx = fx + (tx - fx) * ex;
+    const cy = fy + (ty - fy) * ey;
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.22)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 4;
+    cards.draw(c, this.cardItem(f.card), MODE_POKER, cx - w / 2, cy - h / 2, w, h, true, BACK_ICON, BACK_FALLBACK);
+    c.restore();
   }
 
   // 中央得分浮字：牌型名 + 本次得分（炸金花再带连消 / 连击两行）。

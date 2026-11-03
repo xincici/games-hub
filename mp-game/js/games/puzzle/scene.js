@@ -308,7 +308,9 @@ class PuzzleScene extends Scene {
   }
   drawNumber(c, value, x, y, w, h) {
     const T = theme.tokens;
-    D.fillRoundRect(c, x, y, w, h, 8, value % 2 === 0 ? '#f2f4f7' : '#d8f0e2');
+    const evenBg = theme.dark ? 'rgba(255,255,255,0.06)' : '#f2f4f7';
+    const oddBg = theme.dark ? 'rgba(78,201,138,0.22)' : '#d8f0e2';
+    D.fillRoundRect(c, x, y, w, h, 8, value % 2 === 0 ? evenBg : oddBg);
     D.strokeRoundRect(c, x, y, w, h, 8, T.tileBorder, 1);
     D.text(c, String(value), x + w / 2, y + h / 2, {
       size: Math.max(12, Math.round(w * 0.38)), weight: 'bold', color: T.text, align: 'center',
@@ -318,7 +320,7 @@ class PuzzleScene extends Scene {
     if (this.winAt && Date.now() < this.winAt) return;
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, 'rgba(250,248,239,0.9)');
+    D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, theme.dark ? 'rgba(38,38,38,0.92)' : 'rgba(250,248,239,0.9)');
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     D.text(c, `🎉🎉 ${t('puzzle.tipWin')} 🎉🎉`, cx, cy - 22, { size: 20, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, t('puzzle.movesDone').replace('{n}', String(this.clicks)), cx, cy + 8, { size: 15, color: T.muted, align: 'center' });
