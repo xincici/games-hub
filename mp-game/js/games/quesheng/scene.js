@@ -54,6 +54,11 @@ const DRAG_SLOP = 10;          // 10px 锁定方向（与 Threes 同一套参数
 const DRAG_MIN = 0.5;          // 松手 ≥ 50% 格距提交
 const DRAG_COMMIT = 0.95;      // 拖到 95% 直接提交
 const CLEAR_MS = 520;           // 与小程序 qs-blink 0.52s 一致
+// 上帝模式每一步的停留：web 是 GOD_SLIDE_MS 620 / GOD_CLEAR_MS 600，
+// 小程序原来滑动一步只有 SLIDE_MS + 110 = 260ms，看不清「哪一排滑到了哪里」，放慢到 640 / 700。
+const GOD_SLIDE_MS = 640;
+const GOD_CLEAR_MS = 700;
+const GOD_LEAD_MS = 420;        // 点下上帝模式到第一步之间的准备时间
 const RESULT_DELAY = 250;      // 结算遮罩至少延迟（Scene.resultVisible）
 const RING_IN_MS = 160;
 const CONFETTI_MS = 1100;
@@ -625,17 +630,17 @@ class QueshengScene extends Scene {
       const item = solution[i];
       if (item.type === 'slide') {
         this.applySlide(item.dir, 0);
-        const id = setTimeout(() => step(i + 1), SLIDE_MS + 110);
+        const id = setTimeout(() => step(i + 1), GOD_SLIDE_MS);
         this.godTimers.push(id);
       } else {
         const key = item.cells.slice().sort((a, b) => a - b).join(',');
         const group = this.groups.find(g => g.cells.slice().sort((a, b) => a - b).join(',') === key);
         if (group) this.clearGroup(group);
-        const id = setTimeout(() => step(i + 1), CLEAR_MS + 80);
+        const id = setTimeout(() => step(i + 1), GOD_CLEAR_MS);
         this.godTimers.push(id);
       }
     };
-    const id = setTimeout(() => step(0), 280);
+    const id = setTimeout(() => step(0), GOD_LEAD_MS);
     this.godTimers.push(id);
   }
 

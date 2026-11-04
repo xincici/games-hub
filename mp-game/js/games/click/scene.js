@@ -23,8 +23,10 @@ const MIN_DIFFICULTY = 3;
 const MAX_DIFFICULTY = 10;
 const DIFFICULTY_KEY = '__easy_click_game__difficulty';
 const INIT_DIFFICULTY = 6;
-const VIRTUAL_CLICK_EFFECT_DURATION = 220;
-const VIRTUAL_CLICK_WAIT_DURATION = 300;
+// 上帝模式单步节奏：高亮 + 停顿。放慢到 320 / 420（每步 740ms）；
+// 原来 220 / 300 太快，看不清这一步改了哪几个灯。
+const VIRTUAL_CLICK_EFFECT_DURATION = 320;
+const VIRTUAL_CLICK_WAIT_DURATION = 420;
 const REVEAL_STEP_MS = 16;
 const GAP = 4;
 const PAD = 10;
@@ -141,8 +143,10 @@ class ClickScene extends Scene {
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
     this.legendY = this.optY + this.optH + 8;
-    // 两行提示：第一行是状态循环（上方还有一条回到「灭」的箭头），第二行是点击说明
-    this.legendH = 34;
+    // 两行提示：第一行是状态循环（上方还有一条回到「灭」的箭头），第二行是点击说明。
+    // 高度里额外留 12px：第二行文字（baseline 下方还有 5px）与棋盘之间要有明显间距，
+    // 否则胜利 / 失败遮罩（正好铺满棋盘）会压住文字下半截。
+    this.legendH = 46;
     this.boardY = this.legendY + this.legendH;
     const undoH = 48;
     const fabBottom = SAFE_BOTTOM + 16;

@@ -306,6 +306,15 @@ game.js
 - 连击窗口 2500ms；配对成功 `playElimination()`；连击提示条和烟花落在棋盘上方提示带。胜利撒花与关灯游戏同一套左右礼炮，最高点按分数区反算。
 - 右下：mode FAB 循环牌面，help FAB 打开帮助；模式图标走 icon font（emoji / 扑克 / 麻将）。
 
+## 雀圣（`js/games/quesheng/`）
+
+- 上帝模式用 `board.solveBeam()` / `solvePuzzle()` 求整条解，再用 `setTimeout` 链逐步执行；
+  每一步的停留由常数量决定，**不要复用操作动画的时长**（`SLIDE_MS + 110` 只有 260ms，太快）：
+  `GOD_SLIDE_MS = 640`、`GOD_CLEAR_MS = 700`、`GOD_LEAD_MS = 420`（点下去到第一步的准备时间）。
+- 对照 web：`src/games/quesheng/QueshengGame.vue` 的 `GOD_SLIDE_MS = 620` / `GOD_CLEAR_MS = 600`。
+  小游戏版故意再慢一点（640 / 700）；改速度时两边一起想一想，别只改一边。
+- 上帝模式播放期间禁用拖拽 / 帮助 / 模式切换；`stopGod()` 会清掉全部 `godTimers`。
+
 ## 关灯游戏（`js/games/click/`）
 
 - `logic.js`：纯逻辑，可直接用 Node `require` 做单元测试；不依赖 wx / canvas。
@@ -318,16 +327,20 @@ game.js
   housing / bulb / glow / rim；不能直接跳色。
 - **开局蒙层**：按 16ms 一格的节奏掀开；`onHide` 停、`onShow` 续；未掀开的格子不响应点击。
 - **上帝模式**：`logic.solutionOps()` 从开局随机操作的 `history` 取解；播放中再点只 `stopAutoplay()`，
-  清高亮、交还操作权；不提供「继续」。
+  清高亮、交还操作权；不提供「继续」。节奏是
+  `VIRTUAL_CLICK_EFFECT_DURATION = 320`（高亮）+ `VIRTUAL_CLICK_WAIT_DURATION = 420`（停顿）= 每步 740ms；
+  原来是 220/300（520ms），看着太快、看不清这一步改了哪几个灯。
 - **撤销 / 重做**：只回滚玩家操作，`undoIndex` 与 `clickCount` 同步；上帝模式播放中禁用。
 - **最佳成绩**：胜利时 `maxClick - clickCount`，按难度存 `__easy_click_game__${n}`；破纪录时 `NB`。
-- **棋盘上方两行提示**（`drawLegend`，`legendH = 34`）：
+- **棋盘上方两行提示**（`drawLegend`，`legendH = 46`，其中 12px 是给棋盘的净空）：
   第一行 `● 灭 → ● 全亮 → ● 半亮`，上方再画一条**圆角拱桥**（竖→圆角→横→圆角→竖，1.3px、圆头）：
   右端起笔在「半亮」文字的中点正上方、左端收在「灭」小圆圆心，末端接一个 6.5px 朝下箭头指向「灭」，
   末端接一个 6.5px 的朝下箭头指向「灭」；不要再用扁平二次曲线（跨度 120px、高 6px 会像一条歪掉的横线），
   表示三档循环回到关灯；第二行 `点击一个灯，灯本身和它四周的灯全部都会切换状态`（`click.lampHint2`）。
   第一行不再带末尾的「四邻一起变」（旧 `lampTip` 已删）。给提示加行时记得同步 `legendH`，
-  否则棋盘会被压小（375×667、6×6 时 cell 只有 34px）。
+  否则棋盘会被压小（375×667、6×6 时 cell 只有 32px）。
+  ⚠️ 第二行文字下沿（`line2Y + 5`）与 `boardY` 至少留 10px：胜利 / 失败遮罩正好铺满棋盘，
+  贴太近会把文字下半截盖住（踩过：`legendH = 34` 时文字下沿 272、棋盘顶 270，遮罩压住半行）。
 - **按钮命中**：全屏 help 的关闭遮罩必须最后加入 buttons，面板按钮要比它更晚加入，否则会被遮罩吞掉。
 - **操作区横向居中**：`x1/x2` 是绝对坐标，算新游戏 / 上帝模式中心时不能再加一次 `cx`；
   图例要先量总宽，再用 `(W - total) / 2` 整体居中。
