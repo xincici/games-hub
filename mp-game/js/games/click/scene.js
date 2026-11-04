@@ -8,6 +8,7 @@ const { ClickLogic, GAMING, LOSE, WIN, NB } = require('./logic');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const i18nDict = require('./i18n');
 
 // 注册本游戏文案，键前缀 click.*
@@ -139,8 +140,9 @@ class ClickScene extends Scene {
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
     this.optH = 72;
-    this.legendY = this.optY + this.optH + 10;
-    this.legendH = 24;
+    this.legendY = this.optY + this.optH + 8;
+    // 两行提示：第一行是状态循环（上方还有一条回到「灭」的箭头），第二行是点击说明
+    this.legendH = 34;
     this.boardY = this.legendY + this.legendH;
     const undoH = 48;
     const fabBottom = SAFE_BOTTOM + 16;
@@ -386,38 +388,75 @@ class ClickScene extends Scene {
 
   drawLegend(c) {
     const T = theme.tokens;
-    const y = this.legendY + 12;
+    const line1Y = this.legendY + 17;
+    const line2Y = this.legendY + 31;
     const items = [
       { level: 0, label: t('click.lampOff') },
       { level: 1, label: t('click.lampFull') },
       { level: 2, label: t('click.lampHalf') },
     ];
-    const tip = t('click.lampTip');
+    // 第一行：灭 → 全亮 → 半亮（不再带末尾那句提示）
     const widths = items.map(item => 18 + D.measure(c, item.label, 11));
     const arrowW = D.measure(c, '→', 12);
-    const loopW = D.measure(c, '↺', 12);
-    const tipW = D.measure(c, tip, 10);
-    const total = widths[0] + widths[1] + widths[2] + arrowW * 3 + loopW + tipW + 26;
+    const total = widths[0] + widths[1] + widths[2] + arrowW * 2 + 10;
     let x = (W - total) / 2;
-    items.forEach((item, i) => {
+    const rowLeft = x;
+    let lastLabelCx = x;                          // 「半亮」文字的中点 x（拱桥右端从它正上方起笔）
+    items.forEach((item, i2) => {
       const off = item.level === 0;
       const half = item.level === 2;
       const color = off ? T.lamp.bulbOff : half ? T.lamp.bulbHalf : T.lamp.bulbFull;
       c.save();
       c.shadowColor = off ? 'transparent' : rgba(half ? T.lamp.glowHalf : T.lamp.glowFull);
       c.shadowBlur = off ? 0 : half ? 6 : 8;
-      D.circle(c, x + 7, y, 7, rgba(color));
+      D.circle(c, x + 7, line1Y, 7, rgba(color));
       c.restore();
-      D.text(c, item.label, x + 18, y, { size: 11, color: T.muted, align: 'left' });
-      x += widths[i] + 4;
-      if (i < items.length - 1) {
-        D.text(c, '→', x, y, { size: 12, color: T.muted, align: 'center' });
+      D.text(c, item.label, x + 18, line1Y, { size: 11, color: T.muted, align: 'left' });
+      if (i2 === items.length - 1) lastLabelCx = x + 18 + D.measure(c, item.label, 11) / 2;
+      x += widths[i2] + 4;
+      if (i2 < items.length - 1) {
+        D.text(c, '→', x, line1Y, { size: 12, color: T.muted, align: 'center' });
         x += arrowW + 2;
       }
     });
-    D.text(c, '↺', x, y, { size: 12, color: T.muted, align: 'center' });
-    x += loopW + 4;
-    D.text(c, tip, x, y, { size: 10, color: T.muted, align: 'left' });
+
+    // 循环箭头：从最右（半亮）上方绕一条**圆角拱桥**回到最左（灭），箭头尖朝下指进「灭」。
+    // 之前用一条扁平二次曲线画，跨度 120px 高只有 6px，看起来像歪掉的横线；
+    // 改成「竖 → 圆角 → 横 → 圆角 → 竖 → 箭头」的拱形，两端都垂直收口，干净利落。
+    const lampX = rowLeft + 7;                    // 「灭」小圆的圆心 x
+    const rightX = lastLabelCx;                   // 起点在「半亮」文字的中点上（两端对称收口）
+    const topY = this.legendY - 1;                // 拱顶（离上方选项卡还有 7px）
+    const cornerR = 5;
+    const headH = 6.5;
+    const headW = 6.5;
+    // 竖线下端 = 箭头底边：不能高于左圆角终点，否则左竖线会「往上折」一小段；
+    // 现在正好等于圆角终点，箭头从拐角处直接吊下来，尖端落在「灭」小圆上沿。
+    const endY = Math.max(topY + cornerR, line1Y - 14);
+    c.save();
+    c.strokeStyle = T.muted;                      // T.muted 是十六进制字符串，别再套 rgba()
+    c.fillStyle = T.muted;
+    c.lineWidth = 1.3;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.beginPath();
+    c.moveTo(rightX, line1Y - 10);
+    c.lineTo(rightX, topY + cornerR);
+    c.quadraticCurveTo(rightX, topY, rightX - cornerR, topY);       // 右上圆角
+    c.lineTo(lampX + cornerR, topY);
+    c.quadraticCurveTo(lampX, topY, lampX, topY + cornerR);         // 左上圆角
+    c.lineTo(lampX, endY);
+    c.stroke();
+    // 箭头：底边贴着竖线下端，尖端朝下
+    c.beginPath();
+    c.moveTo(lampX, endY + headH);
+    c.lineTo(lampX - headW / 2, endY);
+    c.lineTo(lampX + headW / 2, endY);
+    c.closePath();
+    c.fill();
+    c.restore();
+
+    // 第二行：点一下会同时切换自己和四周
+    D.text(c, t('click.lampHint2'), W / 2, line2Y, { size: 10, color: T.muted, align: 'center' });
   }
 
   drawBoard(c) {
@@ -532,6 +571,7 @@ class ClickScene extends Scene {
       });
     }
     this.addButton('help', this.fabX, this.fabY, this.fabSize, this.fabSize, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot({ x: this.fabX, y: this.fabY, w: this.fabSize, h: this.fabSize }));
   }
 
   drawConfetti(c) {

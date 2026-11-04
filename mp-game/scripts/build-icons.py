@@ -74,6 +74,8 @@ ICONS = {
     'sudoku': ('mdi', 'grid'),
     'sort': ('mdi', 'test-tube'),
     'slide': ('mdi', 'arrow-all'),
+    'volume': ('mdi', 'volume-high'),
+    'volume-off': ('mdi', 'volume-off'),
 }
 
 FAMILY = 'Games Hub Icons'

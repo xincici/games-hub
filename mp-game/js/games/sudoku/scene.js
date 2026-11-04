@@ -17,6 +17,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const confetti = require('../../core/confetti');
 const { wrongShake, popScale } = require('../../core/fx');
 const logic = require('./sudoku');
@@ -683,6 +684,7 @@ class SudokuScene extends Scene {
       D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 18, color: T.text, align: 'center' });
     }
     this.addButton('fab-help', r.x, r.y, r.w, r.h, () => this.openHelp());
+    fabKit.drawMute(this, c, fabKit.leftSlot(r));
   }
 
   drawResult(c) {

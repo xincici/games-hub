@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const board = require('./board');
@@ -228,9 +229,14 @@ class MasterScene extends Scene {
     this.optH = 72;
     this.boardY = this.optY + this.optH + 16;
     const trayH = 60;
-    const bottom = SAFE_BOTTOM + 90;
+    this.trayH = trayH;
+    // 暂存槽下方还要放一句玩法提示；提示是居中的短句，和右下 FAB 只在**横向**上分开，
+    // 所以底部预留维持 90 即可（加大会把棋盘压小 30px，不值得）。
+    const bottom = SAFE_BOTTOM + 96;   // 暂存槽 + 玩法提示 + 右下 FAB
+    // 棋盘尺寸 = unit × UNITS + 16（内边距），所以可用高度要先扣掉这 16，否则盘底会比预留区多出 16px
     const availH = Math.max(160, H - this.boardY - trayH - bottom);
-    this.unit = Math.min((this.cw - 16) / board.UNITS, availH / board.UNITS);
+    const usableH = availH - 16;
+    this.unit = Math.min((this.cw - 16) / board.UNITS, usableH / board.UNITS);
     this.boardSize = this.unit * board.UNITS + 16;
     this.boardX = (W - this.boardSize) / 2;
     this.trayY = this.boardY + this.boardSize + 12;
@@ -238,7 +244,6 @@ class MasterScene extends Scene {
     this.trayX = (W - this.trayW) / 2;
     this.fabSize = 40;
     this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
-    this.modeFab = { x: W - 16 - 40 - 48, y: this.helpFab.y, w: 40, h: 40 };
   }
   render(c) {
     this.buttons = [];
@@ -251,10 +256,16 @@ class MasterScene extends Scene {
     this.drawBoard(c);
     this.drawTray(c);
     this.drawFlights(c);
+    this.drawPlayHint(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     this.drawConfetti(c);
     if (this.helpOpen) this.drawHelp(c);
     if (this.confirming) this.drawConfirm(c);
+  }
+
+  // 游戏区下方的一句玩法提示（统一样式见 core/draw.js 的 hintLine）
+  drawPlayHint(c) {
+    D.hintLine(c, t('master.playHint'), this.trayY + this.trayH + 16, theme.tokens.muted);
   }
 
   drawHeader(c) {
@@ -421,9 +432,11 @@ class MasterScene extends Scene {
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
     drawOne(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
+    const muteRect = fabKit.muteSlot(this.helpFab);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
     const key = this.mode === 'poker' ? 'mode-poker' : this.mode === 'mahjong' ? 'mode-mahjong' : 'mode-emoji';
     const fallback = this.mode === 'poker' ? '🃏' : this.mode === 'mahjong' ? '🀄' : '😀';
-    drawOne(this.modeFab, key, fallback, T.primary, () => this.toggleMode(), 'mode');
+    drawOne(fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1), key, fallback, T.primary, () => this.toggleMode(), 'mode');
   }
   drawHelp(c) {
     const T = theme.tokens;

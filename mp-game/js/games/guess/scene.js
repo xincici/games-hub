@@ -8,6 +8,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
@@ -243,7 +244,6 @@ class GuessScene extends Scene {
     this.homeRect = { ...HEADER.HOME_RECT };
     this.fabSize = 40;
     this.helpFab = { x: W - 16 - 40, y: 0, w: 40, h: 40 };
-    this.robotFab = { x: W - 16 - 40 - 48, y: 0, w: 40, h: 40 };
     this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
@@ -257,7 +257,8 @@ class GuessScene extends Scene {
     // 与退格/提交行垂直居中对齐（不在键盘最底部）。
     this.fabY = this.keyboardY + 12 + 2 * (48 + 8) + (48 - 40) / 2;
     this.helpFab.y = this.fabY;
-    this.robotFab.y = this.fabY;
+    // 右下角是「静音 / 机器人 / 帮助」三枚 FAB 一行；静音隐藏（全局音效关闭）时机器人自动顶上，
+    // 坐标在 drawFab / drawKeyboard 里按当前状态现算。
   }
 
   historyRowH() { return 40; }
@@ -358,10 +359,25 @@ class GuessScene extends Scene {
     c.save();
     D.roundRect(c, r.x, r.y, r.w, r.h, 14);
     c.clip();
-    const headerH = 18;
-    // 记录区内部上方的规则提示。
-    D.text(c, t('guess.historyHint'), r.x + r.w / 2, r.y + 10, {
-      size: 10.5, weight: 'bold', color: T.muted, align: 'center',
+    // 记录区内部上方的规则提示：第一行「8 次机会…」，第二行解释 A / B 与目标 4A0B。
+    // 文字超宽时按卡片内宽折行，headerH 跟着行数长，下面的记录行照旧等分剩余高度。
+    const hintSize = 10;
+    // 行高 12：375×667 下记录区只有 225px，两行提示多占 3px/行会让 4 行记录卡到边界
+    const hintLineH = 12;
+    const hintMaxW = r.w - 16;
+    const hintLines = [];
+    [t('guess.historyHint'), t('guess.historyHint2')].forEach((text) => {
+      // 第二行较长：10px 放不下就整行降到 9px（仍然一行），再放不下才折行 ——
+      // 折行会让 headerH 变大、挤压 4 行记录（375 下每行刚好 45px）。
+      let size = hintSize;
+      if (D.measure(c, text, size, 'bold') > hintMaxW) size = 9;
+      D.wrapText(c, text, hintMaxW, size, 'bold').forEach((line) => hintLines.push({ line, size }));
+    });
+    const headerH = hintLines.length * hintLineH + 4;
+    hintLines.forEach((item, i) => {
+      D.text(c, item.line, r.x + r.w / 2, r.y + 3 + i * hintLineH + hintLineH / 2, {
+        size: item.size, weight: 'bold', color: T.muted, align: 'center',
+      });
     });
     const padX = 8;
     const padY = 4;
@@ -460,7 +476,10 @@ class GuessScene extends Scene {
       });
     });
     const y = ky + pad + 2 * (bh + gap);
-    const optW = kw * 0.68;
+    // 三个 FAB（静音 / 机器人 / 帮助）排在右边：退格+提交最多画到**最左那枚**左边 8px，
+    // 否则整行会从机器人 FAB 底下穿过去。
+    const fabRowLeft = fabKit.slotLeft(this.helpFab, fabKit.muteSlot(this.helpFab) ? 2 : 1).x;
+    const optW = Math.min(kw * 0.68, fabRowLeft - (kx + pad) - 8);
     const halfW = (optW - pad * 2 - gap) / 2;
     const del = { x: kx + pad, y, w: halfW, h: bh };
     const enter = { x: kx + pad + halfW + gap, y, w: halfW, h: bh };
@@ -513,6 +532,8 @@ class GuessScene extends Scene {
 
   drawFab(c) {
     const T = theme.tokens;
+    const muteRect = fabKit.muteSlot(this.helpFab);
+    const robotRect = fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1);
     const drawOne = (rect, iconKey, fallback, color, onTap, id) => {
       c.save();
       c.shadowColor = 'rgba(0,0,0,0.12)';
@@ -525,8 +546,9 @@ class GuessScene extends Scene {
       }
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
-    drawOne(this.robotFab, this.robot ? 'robot' : 'robot-off', '🤖', this.robot ? T.primary : T.muted, () => this.toggleRobot(), 'robot');
+    drawOne(robotRect, this.robot ? 'robot' : 'robot-off', '🤖', this.robot ? T.primary : T.muted, () => this.toggleRobot(), 'robot');
     drawOne(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
   }
 
   drawConfetti(c) {

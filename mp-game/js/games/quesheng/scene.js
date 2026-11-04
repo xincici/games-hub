@@ -10,6 +10,7 @@ const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
@@ -798,7 +799,6 @@ class QueshengScene extends Scene {
 
     this.fabSize = 40;
     this.helpRect = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
-    this.modeRect = { x: this.helpRect.x - 48, y: this.helpRect.y, w: 40, h: 40 };
     const undoW = Math.min(this.cw, W * 0.8293);
     this.undoW = undoW;
     this.undoH = 52;
@@ -989,7 +989,9 @@ class QueshengScene extends Scene {
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
     const modeIcon = this.mode === 1 ? 'arrow-right' : 'arrow-right-outline';
-    one(this.modeRect, modeIcon, this.mode === 1 ? '→' : '⇢', T.primary, 'mode', () => this.toggleMode());
+    const muteRect = fabKit.muteSlot(this.helpRect);
+    one(fabKit.slotLeft(this.helpRect, muteRect ? 2 : 1), modeIcon, this.mode === 1 ? '→' : '⇢', T.primary, 'mode', () => this.toggleMode());
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
     one(this.helpRect, 'help', '?', T.primary, 'help-fab', () => {
       if (this.confirming) return;
       this.stopGod();

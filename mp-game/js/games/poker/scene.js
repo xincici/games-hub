@@ -12,6 +12,7 @@ const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const confetti = require('../../core/confetti');
 const fx = require('../../core/fx');
@@ -1032,7 +1033,10 @@ class PokerScene extends Scene {
       this.addButton(id, x, this.fabY, this.fabSize, this.fabSize, onTap);
     };
     // 猜大小开关放在帮助左侧，均贴底。
-    drawOne(this.fabX - this.fabSize - 12, this.dice ? 'dice-5' : 'dice-5-off', '🎲',
+    const helpRect = { x: this.fabX, y: this.fabY, w: this.fabSize, h: this.fabSize };
+    const muteRect = fabKit.muteSlot(helpRect);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
+    drawOne(fabKit.slotLeft(helpRect, muteRect ? 2 : 1, 12).x, this.dice ? 'dice-5' : 'dice-5-off', '🎲',
       this.dice ? T.primary : T.muted, 'dice-fab', () => this.toggleDice());
     drawOne(this.fabX, 'help', '?', T.primary, 'help', () => { this.helpOpen = true; });
   }

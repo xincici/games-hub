@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
@@ -292,7 +293,6 @@ class HunterScene extends Scene {
     this.candY = this.stageY + this.stageH + pad * 2 + 16;
     this.fabSize = 40;
     this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
-    this.modeFab = { x: W - 16 - 40 - 48, y: this.helpFab.y, w: 40, h: 40 };
   }
   render(c) {
     this.buttons = [];
@@ -455,9 +455,11 @@ class HunterScene extends Scene {
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
     drawOne(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
+    const muteRect = fabKit.muteSlot(this.helpFab);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
     const key = this.mode === 2 ? 'mode-poker' : this.mode === 3 ? 'mode-mahjong' : 'mode-emoji';
     const fallback = this.mode === 2 ? '🃏' : this.mode === 3 ? '🀄' : '😀';
-    drawOne(this.modeFab, key, fallback, T.primary, () => this.toggleMode(), 'mode');
+    drawOne(fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1), key, fallback, T.primary, () => this.toggleMode(), 'mode');
   }
   drawHelp(c) {
     const T = theme.tokens;

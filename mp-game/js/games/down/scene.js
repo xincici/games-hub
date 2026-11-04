@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
@@ -259,9 +260,15 @@ class DownScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
+    this.drawPlayHint(c);
     if (!this.helpOpen) this.drawFab(c);
     if (this.helpOpen) this.drawHelp(c);
   }
+  // 游戏区下方的一句玩法提示（统一样式见 core/draw.js 的 hintLine）
+  drawPlayHint(c) {
+    D.hintLine(c, t('down.playHint'), this.boardY + this.boardH + 16, theme.tokens.muted);
+  }
+
   drawHeader(c) {
     const T = theme.tokens;
     D.text(c, t('down.gameTitle'), W / 2, this.topY + this.headerH / 2, { size: 15, weight: 'bold', color: T.text, align: 'center' });
@@ -387,6 +394,7 @@ class DownScene extends Scene {
     D.circle(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, T.card); c.restore();
     if (!icons.draw(c, 'help', r.x + r.w / 2, r.y + r.h / 2, 20, T.text)) D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 18, color: T.text, align: 'center' });
     this.addButton('help', r.x, r.y, r.w, r.h, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot(r));
   }
   drawHelp(c) {
     const T = theme.tokens;

@@ -9,6 +9,7 @@ const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
@@ -699,6 +700,7 @@ class SoloScene extends Scene {
       D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 22, weight: 'bold', color: T.text, align: 'center' });
     }
     this.addButton('fab-help', r.x, r.y, r.w, r.h, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot(r));
   }
 
   drawConfetti(c) {

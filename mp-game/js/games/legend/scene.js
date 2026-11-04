@@ -11,6 +11,7 @@ const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
@@ -590,7 +591,8 @@ class LegendScene extends Scene {
       h: FAB_SIZE,
     };
     // 底部给 FAB 留一条：棋盘底边不能压到 FAB 行
-    const reserve = Math.max(SAFE_BOTTOM + 64, H - this.helpRect.y + 8);
+    // 棋盘下方还要放一句玩法提示：底部预留再 +18，棋盘底边与提示都落在 FAB 行上方
+    const reserve = Math.max(SAFE_BOTTOM + 82, H - this.helpRect.y + 26);
     const availH = Math.max(220, H - boardTop - reserve);
 
     this.pad = 6;
@@ -660,6 +662,7 @@ class LegendScene extends Scene {
     this.drawStats(c);
     this.drawHandCard(c);
     this.drawBoard(c);
+    this.drawPlayHint(c);
     this.drawDrops(c);
     this.drawCelebrate(c);
     if (this.phase === OVER) this.drawResult(c);
@@ -674,6 +677,11 @@ class LegendScene extends Scene {
   drawTile(c, v, x, y, w, h) {
     cards.draw(c, { suit: logic.suitOf(v), value: logic.faceOf(v) },
       cards.MODE_MAHJONG, x, y, w, h, true);
+  }
+
+  // 游戏区下方的一句玩法提示（统一样式见 core/draw.js 的 hintLine）
+  drawPlayHint(c) {
+    D.hintLine(c, t('legend.playHint'), this.boardY + this.boardH + 16, theme.tokens.muted);
   }
 
   drawHeader(c) {
@@ -1022,6 +1030,7 @@ class LegendScene extends Scene {
         { size: 22, weight: 'bold', color: T.text, align: 'center' });
     }
     this.addButton('fab-help', r.x, r.y, r.w, r.h, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot(r));
   }
 
   drawHelp(c) {

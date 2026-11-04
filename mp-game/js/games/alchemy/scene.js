@@ -17,6 +17,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
@@ -510,14 +511,15 @@ class AlchemyScene extends Scene {
 
     this.fabSize = 40;
     this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
-    this.modeFab = { x: this.helpFab.x - 48, y: this.helpFab.y, w: 40, h: 40 };
 
     this.rowH = 66;
     const n = this.size;
     const pad = 8;
     const gap = 8;
     const availTop = this.scoreY + this.scoreH + 10;
-    const availBottom = this.helpFab.y - 12;
+    // 棋盘下方还要放一句玩法提示：底部再让 16px，棋盘不会压到提示和 FAB
+    const hintGap = 16;
+    const availBottom = this.helpFab.y - 12 - hintGap;
     const maxGroupH = Math.max(150, availBottom - availTop);
     const maxBoardH = Math.max(120, maxGroupH - 12 - this.rowH);
     const byW = (this.cw - pad * 2 - gap * (n - 1)) / n;
@@ -622,12 +624,18 @@ class AlchemyScene extends Scene {
     this.drawScore(c);
     this.drawRow(c);
     this.drawBoard(c);
+    this.drawPlayHint(c);
     this.drawFlying(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     this.drawConfetti(c);
     if (this.drag && this.drag.active) this.drawDragGhost(c);
     if (this.helpOpen) this.drawHelp(c);
     if (this.confirming) this.drawConfirm(c);
+  }
+
+  // 游戏区下方的一句玩法提示（统一样式见 core/draw.js 的 hintLine）
+  drawPlayHint(c) {
+    D.hintLine(c, t('alchemy.playHint'), this.boardY + this.boardH + 16, theme.tokens.muted);
   }
 
   drawHeader(c) {
@@ -959,7 +967,9 @@ class AlchemyScene extends Scene {
     const modeKey = this.mode === 2 ? 'mode-poker' : 'alchemy';
     const modeFallback = this.mode === 2 ? '🃏' : '⚗';
     fab(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
-    fab(this.modeFab, modeKey, modeFallback, T.primary, () => this.toggleMode(), 'mode');
+    const muteRect = fabKit.muteSlot(this.helpFab);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
+    fab(fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1), modeKey, modeFallback, T.primary, () => this.toggleMode(), 'mode');
   }
 
   drawConfetti(c) {

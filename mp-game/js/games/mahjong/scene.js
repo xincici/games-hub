@@ -10,6 +10,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
@@ -551,7 +552,6 @@ class MahjongScene extends Scene {
 
     this.fabSize = 40;
     this.helpX = W - 16 - this.fabSize;
-    this.modeX = this.helpX - this.fabSize - 10;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
 
     // 底部给 FAB 留一条：棋盘底边不能压到 FAB 行
@@ -1027,10 +1027,13 @@ class MahjongScene extends Scene {
 
   drawFabs(c) {
     this.drawRoundFab(c, this.helpX, this.fabY, 'help', '?', () => this.openHelp(), 'help');
+    const helpRect = { x: this.helpX, y: this.fabY, w: this.fabSize, h: this.fabSize };
+    const muteRect = fabKit.muteSlot(helpRect);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
     const levelMode = this.mode === MODE_LEVEL;
     // 闯关 = 奖杯、无尽 = 无限（web 顶栏同款语义）。图标字体里暂时没有这两个 glyph，
     // 字体是共享资源、不在本游戏改动范围内，所以先用文字兜底；以后补 glyph 会自动走图标。
-    this.drawRoundFab(c, this.modeX, this.fabY, levelMode ? 'trophy' : 'infinity',
+    this.drawRoundFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, levelMode ? 'trophy' : 'infinity',
       levelMode ? '🏆' : '∞', () => this.toggleMode(), 'mode');
   }
 

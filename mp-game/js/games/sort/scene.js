@@ -17,6 +17,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
@@ -381,7 +382,6 @@ class SortScene extends Scene {
     this.metrics = { cell, stepX, stepY, hoverStep, offsetX, slotTop, slotH, headH, height };
 
     this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
-    this.modeFab = { x: W - 16 - 40 - 48, y: this.helpFab.y, w: 40, h: 40 };
     this.helpScroll = Math.min(this.helpScroll, this.helpScrollMax || 0);
     if (this.fruits.length) this.syncPositions();
   }
@@ -991,6 +991,8 @@ class SortScene extends Scene {
 
   // ---------- FAB ----------
   drawFabs(c, T) {
+    const muteRect = fabKit.muteSlot(this.helpFab);
+    const modeRect = fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1);
     const fab = (rect, onTap, id, paint) => {
       c.save();
       c.shadowColor = 'rgba(0,0,0,0.12)';
@@ -1008,9 +1010,10 @@ class SortScene extends Scene {
     });
     // 模式 FAB：icon font 里没有 test-tube glyph，且玩法差异是「空槽数」，
     // 所以这里画矢量试管本身当指示器（经典 2 根 / 紧凑 1 根），而不是复用首页的 sort 图标。
-    fab(this.modeFab, () => this.toggleMode(), 'mode', (cx, cy) => {
+    fab(modeRect, () => this.toggleMode(), 'mode', (cx, cy) => {
       this.drawModeIcon(c, cx, cy, T.primary);
     });
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
   }
 
   // 经典 = 两个空槽（画两根试管），紧凑 = 一个空槽（画一根）

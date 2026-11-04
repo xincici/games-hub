@@ -15,6 +15,7 @@ const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
@@ -974,6 +975,7 @@ class SlideScene extends Scene {
       D.text(c, '?', cx, cy, { size: 20, weight: 'bold', color: T.text, align: 'center' });
     }
     this.addButton('help', r.x, r.y, r.w, r.h, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot(r));
   }
 
   drawParticles(c) {

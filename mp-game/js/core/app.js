@@ -189,6 +189,8 @@ class App {
     if (this.scene && this.scene.onHide) this.scene.onHide();
     this.scene = new SceneClass(this);
     this.sceneId = (options && options.id) || null;
+    // 音效按场景记住各自的静音（__games_hub__mute__<sceneId>）；首页也走这里，但首页没有静音 FAB
+    audio.setGame(this.sceneId);
     this.transition = null;
     this.last = Date.now();
     if (this.input) this.input.cancel();

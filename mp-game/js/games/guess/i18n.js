@@ -3,6 +3,7 @@ const dict = {
   cn: {
     gameTitle: '1A2B',
     historyHint: '8 次机会猜中一个 4 位数',
+    historyHint2: 'A 代表数字对且位置对，B 代表数字对但位置不对，目标 4A0B 取胜',
     availableClicks: '剩余点击',
     start: '🎮 新游戏',
     bestStreak: '🏆 最长连胜',
@@ -30,6 +31,7 @@ const dict = {
   en: {
     gameTitle: '1A2B',
     historyHint: '8 chances to guess a 4-digit number',
+    historyHint2: 'A = right digit and right place, B = right digit but wrong place. 4A0B wins.',
     availableClicks: 'Available Clicks',
     start: '🎮 New Game',
     bestStreak: '🏆 Best Streak',

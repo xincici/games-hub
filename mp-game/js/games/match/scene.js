@@ -8,6 +8,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const { matchedMotion } = require('../../core/motion');
 const { levelConfig, shuffle } = require('./board');
@@ -257,7 +258,6 @@ class MatchScene extends Scene {
     this.boardX = (W - this.boardW) / 2;
     this.fabSize = 48;
     this.helpX = W - 16 - this.fabSize;
-    this.modeX = this.helpX - 60;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
   }
 
@@ -722,9 +722,13 @@ class MatchScene extends Scene {
 
   drawFabs(c) {
     this.drawRoundFab(c, this.helpX, this.fabY, 'help', '?', () => { this.helpOpen = true; });
+    // 静音 FAB 隐藏（全局音效关闭）时，模式按钮顶上它那一格
+    const helpRect = { x: this.helpX, y: this.fabY, w: this.fabSize, h: this.fabSize };
+    const muteRect = fabKit.muteSlot(helpRect);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
     const modeKey = this.mode === MODE_POKER ? 'mode-poker' : this.mode === MODE_MAHJONG ? 'mode-mahjong' : 'mode-emoji';
     const fallback = this.mode === MODE_POKER ? '🃏' : this.mode === MODE_MAHJONG ? '🀄' : '😀';
-    this.drawRoundFab(c, this.modeX, this.fabY, modeKey, fallback, () => this.toggleMode());
+    this.drawRoundFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, modeKey, fallback, () => this.toggleMode());
   }
 
   drawRoundFab(c, x, y, iconKey, fallback, onTap) {

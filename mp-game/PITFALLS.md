@@ -653,6 +653,92 @@
 - 修法是 `theme.refresh()` 切 token 后通知当前场景 `onTheme()`；`App` 只挂一份 `theme.onChange` / `i18n.onChange`，不要让每个场景重复注册。
 - **规则**：所有主题 / 语言相关变化都必须通过当前场景的 `onTheme()` 重排 / 重绘；游戏内后续新增主题相关缓存量时，也要在 `onTheme()` 里重算。
 
+### 104. 1A2B 记录区的规则提示从一行变两行
+
+- **需求**：记录区顶部再补一行 `A 代表数字对且位置对，B 代表数字对但位置不对，目标 4A0B 取胜`。
+- **改法**：`guess.historyHint` + `guess.historyHint2`（cn/en 都加），`drawHistory()` 里用 `D.wrapText` 折行，
+  `headerH = 行数 × 12 + 4`（原来是写死 18）；记录行按剩余高度等分，不用另算。
+- **坑**：375×667 的记录区只有 225px，两行提示后每行只剩 **45px**，而一行的内容是「数字格 28 + 结果行 16」= 45，
+  所以行高只能给 12、header 边距只能给 4；再大一点就会出现记录行互相压住（325 以下直接不够用）。
+- **规则**：记录区顶部提示增删行时，必须同步 `headerH` 并复核「行数 × 行内容高度」是否还装得下。
+
+### 103. 每个游戏独立的静音按钮（帮助 FAB 左边一格）
+
+- **需求**：25 个小游戏都要有自己的静音开关；全局音效关闭时不展示。声音拦截必须做在 `core/audio`，
+  不能每个场景自己 `if (!muted)` 一遍 —— 25 处漏一处就是「静音了还响」。
+- **实现**：`core/audio.js` 两级开关：全局 `__games_hub__sfx` + 每场景 `__games_hub__mute__<sceneId>`；
+  `App.openScene` 里 `audio.setGame(sceneId)`，`play()` 先判全局再判当前场景静音。
+  `core/fab.js` 统一画圆形 FAB / 静音 FAB（`drawMute` 在全局关闭时直接 return，不画也不注册命中区）。
+- **位置**：静音 FAB 永远在**帮助 FAB 左边**、同尺寸、同 y；原本就在帮助左边的
+  模式 / 机器人 / 穿墙 / 骰子 FAB 整体再左移一格。
+- **静音隐藏时不能占位**：全局音效关闭后静音 FAB 不画，若坐标在 `layout()` 里写死，就会留下一个空槽
+  （用户报过「按钮不见了但还占着位置，中间空一截」）。坐标必须**绘制时现算**：
+  `const muteRect = fabKit.muteSlot(helpRect)`（关闭 → null）、
+  `fabKit.slotLeft(helpRect, muteRect ? 2 : 1)`（邻居自动右移一格顶上）。
+  冒烟脚本会在「全局关闭」那一轮断言邻居与帮助的间距 ≤16px，防止又退回写死坐标。
+- **踩坑 1（同名遮蔽）**：`alchemy` / `sort` 的 `drawFabs` 里有局部 `const fab = (rect, ...) => {}`，
+  又与顶部 `const fab = require('../../core/fab')` 撞名 → 运行时 `fab.drawMute is not a function`。
+  **共享模块一律用 `fabKit` 导入**。
+- **踩坑 2（算早了）**：1A2B 的 `helpFab` 先建 `{y: 0}`、`layout()` 末尾才补 `helpFab.y = fabY`，
+  在其之前 `leftSlot(this.helpFab)` 会让静音 FAB 停在 y=0。**先建 rect 再补坐标的场景，补坐标时把新 FAB 一起补**。
+- **踩坑 3（横向让位）**：1A2B「退格 / 提交」固定 68% 宽、右侧只留两个 FAB；加第三枚 FAB 后整行会从
+  **机器人 FAB 底下穿过去**（实测 375 宽时行右沿 239 vs FAB 组左沿 223，压住 16px）。
+  让位必须减到**最左那枚 FAB**（`this.fabRowLeft = min(静音, 机器人, …)`），不是只减到静音左沿：
+  `optW = min(kw * 0.68, fabRowLeft - (kx + pad) - 8)`。改完 375 宽时行右沿 191，与 FAB 组留 32px 间隙。
+  以后任何右下角固定 FAB 组的游戏，底部整行控件都要按 FAB 组**最左沿**让位（冒烟脚本会断言）。
+- **验证**：`node scripts/smoke.js 390 844` / `node scripts/smoke.js 375 667`（假 wx + canvas 渲染 25 个场景，
+  断言渲染无异常、静音 FAB 与帮助同行同尺寸且紧邻、不压任何命中区、全局关闭时不出现、点静音后 `play()` 不出声）。
+
+### 105. `rgba()` 只吃 `[r,g,b,a]` 数组，别把十六进制 token 塞进去
+
+- **症状**：关灯游戏新画的循环箭头颜色不对（或干脆不显示），控制台没有报错。
+- **根因**：`draw.js` 的 `rgba(arr)` 会拼成 `rgba(NaN,NaN,NaN,undefined)`，canvas 直接忽略这次赋值，
+  于是沿用上一次的 strokeStyle。`T.muted` 是 `'#5f6b7a'` 字符串（灯色 token 才是数组）。
+- **修法**：字符串 token 直接 `c.strokeStyle = T.muted`；只有灯光的 `T.lamp.*`（数组）才走 `rgba()`。
+- **规则**：新增颜色用法前先看 token 类型（`theme.js` 里 `lamp.*` 是数组，其余是十六进制字符串）。
+
+### 106. 游戏区下方的一句玩法提示（七款游戏）
+
+- **需求**：2048 / Threes / 消除大师 / 贪吃蛇 / Emoji 下坠，在游戏区下方各放一句很短的玩法说明。
+- **实现**：`core/draw.js` 的 `D.hintLine(c, text, y, color)`（10px、弱色、水平居中）；
+  文案 key 统一叫 `<gameId>.playHint`；y 取各自的「游戏区底部 + 16」：
+  2048 / Threes / 贪吃蛇 = `boardY + boardSize + 16`，Emoji 下坠 = `boardY + boardH + 16`，
+  消除大师 = `trayY + trayH + 16`（它的游戏区是「棋盘 + 暂存槽」，提示要放在槽下面）。
+- **踩坑 1（i18n 段序）**：mp-game 的 `i18n.js` 是 **`en` 段在前、`cn` 段在后**（和 web 一样），
+  按 `helpMsg:` 出现顺序批量插 key，会把中文塞进 en 段、英文塞进 cn 段 —— 界面上就是「切英文显示中文」。
+  **加 key 必须显式分辨段位**，并在冒烟里断言两种语言都不含另一种语言的字形（见 `scripts/smoke.js`）。
+- **踩坑 2（不占棋盘的地方）**：消除大师的暂存槽下面只剩约 60px、右下角还有 FAB，
+  为了让提示离 FAB 远一点而加大底部预留（90 → 120）会把棋盘压小 30px —— **不值得**。
+  提示是居中短句，只要「文字右沿 < FAB 左沿」就不会撞按钮（375 宽：273 < 319），保持底部预留不变。
+- **踩坑 3（冒烟顺序）**：断言块一度被追加到脚本末尾、也就是「成功/失败」判定**之后**，
+  于是反向测试（故意写错文案）仍然报绿。断言必须放在最终 `if (failures.length)` 之前。
+- **踩坑 4（文字宽度）**：英文比中文长得多（炼金术 67 字符 ≈ 368px > 375-32），
+  一行会被屏幕切掉。按 10px/汉字、5.5px/拉丁估算，**英文控制在 58 字符内**，并在冒烟里断言。
+- **踩坑 5（「不撞 FAB」要按文字框量）**：开始只比了「文字右沿 vs 帮助 FAB 左沿」，
+  漏了它左边的静音 FAB；正确做法是把提示当矩形，与**每一颗** FAB 做矩形相交（含 y）。
+  判完发现：提示离 FAB 行 12px 以上时横向再宽也不撞；仅消除大师因为贴着槽底，才需要靠 12px 的竖直间隙。
+- **踩坑 6（棋盘比预留区高 16px）**：消除大师的 `boardSize = unit × UNITS + 16`（内边距），
+  但 `unit` 是按 `availH / UNITS` 算的 → 棋盘实际比 `availH` 高 16px，一直悄悄吃掉了底部预留。
+  加提示时暴露成「提示压在 FAB 上」；修法是先 `usableH = availH - 16` 再算 `unit`。
+- **踩坑 7（legend 的 i18n 没有 helpMsg）**：legend 只有 `help1..5`，批量「在 helpMsg 后插 key」会失败；
+  必须按段（en / cn）在各自的 `help1:` 之后插入。
+
+
+
+### 107. 上传报 `invalid file: scripts/smoke.js, 1:0 SyntaxError`
+
+- **症状**：开发者工具「上传」报
+  `Error: invalid file: scripts/smoke.js, 1:0 / SyntaxError: Invalid or unexpected token`，
+  指向文件第一行的 `#!/usr/bin/env node`。
+- **根因**：小游戏上传器会把**项目目录下的所有 `.js` 当源码解析**（不只是运行时用到的那些），
+  Node 的 shebang（`#!`）不是合法 JS → 整包上传失败。`packOptions.ignore` 当时是空的。
+- **修法**（两层都做）：
+  1. `project.config.json` 的 `packOptions.ignore` 加 `{ "type": "folder", "value": "scripts" }`
+     —— 开发脚本不进包（`build-icons.py` 也一起被排除）；
+  2. 冒烟脚本**不写 shebang**，统一用 `node scripts/smoke.js 375 667` 调用。
+- **规则**：`mp-game/` 里新增任何「只在开发机上跑」的文件（Node 脚本、tsv/json 数据源、截图工具），
+  都要放进 `scripts/` 并确认它仍在 `packOptions.ignore` 覆盖范围内；不要给项目内的 `.js` 加 shebang。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？
@@ -662,6 +748,7 @@
 - [ ] 有计时的游戏是否用秒表 / 沙漏 `drawTimer`？
 - [ ] 有难度的游戏是否用关灯同款步进器？
 - [ ] 结算遮罩是否只盖游戏区？FAB 是否仍然显示？
+- [ ] 静音 FAB 是否在帮助左边同一行？全局音效关闭时是否不画？`scripts/smoke.js` 是否通过？
 - [ ] 恢复局面后是否重新 `layout()`？
 - [ ] 切模式 / 退出前是否保存当前状态？各模式 key 是否独立？
 - [ ] 转场是否走 `app.openGame` / `app.goHome`？modal mask 是否先加？

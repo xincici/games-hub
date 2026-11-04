@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
 const i18nDict = require('./i18n');
 
@@ -211,7 +212,6 @@ class SnakeScene extends Scene {
     this.boardX = (W - this.boardSize) / 2;
     this.cell = this.boardSize / GRID;
     this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
-    this.wallFab = { x: W - 16 - 40 - 48, y: this.helpFab.y, w: 40, h: 40 };
   }
   render(c) {
     this.buttons = [];
@@ -223,10 +223,16 @@ class SnakeScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
+    this.drawPlayHint(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     if (this.helpOpen) this.drawHelp(c);
     if (this.confirming) this.drawConfirm(c);
   }
+  // 游戏区下方的一句玩法提示（统一样式见 core/draw.js 的 hintLine）
+  drawPlayHint(c) {
+    D.hintLine(c, t('snake.playHint'), this.boardY + this.boardSize + 16, theme.tokens.muted);
+  }
+
   drawHeader(c) {
     const T = theme.tokens;
     D.text(c, t('snake.gameTitle'), W / 2, this.top + this.headerH / 2, { size: 15, weight: 'bold', color: T.text, align: 'center' });
@@ -345,7 +351,10 @@ class SnakeScene extends Scene {
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
     drawOne(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
-    drawOne(this.wallFab, 'wall', '穿', this.throughWall ? T.primary : T.muted, () => this.toggleWall(), 'wall');
+    // 静音 FAB 隐藏（全局音效关闭）时，穿墙按钮顶上它那一格，中间不留空
+    const muteRect = fabKit.muteSlot(this.helpFab);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
+    drawOne(fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1), 'wall', '穿', this.throughWall ? T.primary : T.muted, () => this.toggleWall(), 'wall');
   }
   drawHelp(c) {
     const T = theme.tokens;

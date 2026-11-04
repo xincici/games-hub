@@ -7,6 +7,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const {
   appendable, evalTokens, isComplete, usedIndexes, newPuzzle, parseExprText,
   solveAll, scorePuzzle, NUM_COUNT,
@@ -467,6 +468,7 @@ class Point24Scene extends Scene {
       });
     }
     this.addButton('help', this.fabX, this.fabY, this.fabSize, this.fabSize, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot({ x: this.fabX, y: this.fabY, w: this.fabSize, h: this.fabSize }));
   }
 
   drawConfetti(c) {

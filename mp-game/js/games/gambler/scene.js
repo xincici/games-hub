@@ -16,6 +16,7 @@ const { getRaw, setRaw, clearPrefix } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
@@ -668,7 +669,6 @@ class GamblerScene extends Scene {
     this.fabSize = FAB_SIZE;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
     this.helpX = W - 16 - this.fabSize;
-    this.modeX = this.helpX - this.fabSize - 10;
 
     // 手牌 13 张排一行；选择区每行 9 张。宽度定高（高 = 宽 × 168/131，不能被「两边减 2」拉偏）
     const pad = 8;
@@ -1158,10 +1158,13 @@ class GamblerScene extends Scene {
     const T = theme.tokens;
     const size = this.fabSize;
     this.drawFab(c, this.helpX, this.fabY, 'help', '?', T.text, true, () => this.openHelp(), 'help');
+    const helpRect = { x: this.helpX, y: this.fabY, w: this.fabSize, h: this.fabSize };
+    const muteRect = fabKit.muteSlot(helpRect);
+    if (muteRect) fabKit.drawMute(this, c, muteRect);
     // 模式切换：即时判断 = 闪电、提交判断 = 双勾（与小程序一致）。
     const busy = this.revealing || this.flights.length > 0 || this.pendingLoss;
     const isEmoji = this.mode === MODE_INSTANT;
-    this.drawFab(c, this.modeX, this.fabY, 'mode', isEmoji ? '⚡' : '✓', T.primary,
+    this.drawFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, 'mode', isEmoji ? '⚡' : '✓', T.primary,
       !busy, () => this.toggleMode(), isEmoji ? 'bolt' : 'check-all', isEmoji ? 17 : 22);
   }
 

@@ -40,6 +40,12 @@ function text(c, value, x, y, opts) {
   c.restore();
 }
 
+// 游戏区下方的一句玩法提示：10px、弱色、水平居中 —— 2048 / Threes / 消除大师 / 贪吃蛇 / Emoji 下坠共用。
+function hintLine(c, value, y, color) {
+  if (!value) return;
+  text(c, value, require('./canvas').W / 2, y, { size: 10, color: color || '#5f6b7a', align: 'center' });
+}
+
 function measure(c, value, size, weight, family) {
   c.save();
   c.font = font(size, weight, family);
@@ -130,6 +136,7 @@ function wrapText(c, value, maxWidth, size, weight) {
 }
 
 module.exports = {
+  hintLine,
   divider,
   progressBar,
   ctx,

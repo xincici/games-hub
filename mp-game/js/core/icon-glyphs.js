@@ -50,4 +50,6 @@ module.exports = {
   'sudoku': 0xE02F,
   'sort': 0xE030,
   'slide': 0xE031,
+  'volume': 0xE032,
+  'volume-off': 0xE033,
 };

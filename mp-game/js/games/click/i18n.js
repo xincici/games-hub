@@ -11,7 +11,7 @@ const dict = {
     lampOff: '灭',
     lampFull: '全亮',
     lampHalf: '半亮',
-    lampTip: '四邻一起变',
+    lampHint2: '点击一个灯，灯本身和它四周的灯全部都会切换状态',
     helpMsg: `灯有三档：灭、全亮、半亮。点一盏灯，它和上下左右的邻灯都变到下一档 —— 全亮变半亮、半亮熄灭、熄灭的直接全亮。
 把所有灯都熄灭即获胜；点击次数用尽仍未获胜则失败。`,
     help1: '难度 3~10',
@@ -39,7 +39,7 @@ const dict = {
     lampOff: 'Off',
     lampFull: 'Full',
     lampHalf: 'Dim',
-    lampTip: 'neighbours too',
+    lampHint2: 'Tap a lamp: it and its four neighbours all flip.',
     helpMsg: `Lamps have three levels: off, full and dim. Tapping a lamp changes it and its four neighbours to the next level - full becomes dim, dim goes off, off becomes full.
 Switch every lamp off to win. If your taps run out first, you lose.`,
     help1: 'Difficulty 3~10.',

@@ -7,6 +7,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
 const i18nDict = require('./i18n');
 
@@ -336,6 +337,7 @@ class PuzzleScene extends Scene {
     D.circle(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, T.card); c.restore();
     if (!icons.draw(c, 'help', r.x + r.w / 2, r.y + r.h / 2, 20, T.text)) D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 18, color: T.text, align: 'center' });
     this.addButton('help', r.x, r.y, r.w, r.h, () => { this.helpOpen = true; });
+    fabKit.drawMute(this, c, fabKit.leftSlot(r));
   }
   drawHelp(c) {
     const T = theme.tokens;

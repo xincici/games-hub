@@ -8,6 +8,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
@@ -1233,6 +1234,7 @@ class CrushScene extends Scene {
   drawFabs(c) {
     // 帮助按钮旁不再放操作 FAB（新游戏在操作卡里已有入口）。
     this.drawRoundFab(c, this.helpX, this.fabY, 'help', '?', () => this.openHelp());
+    fabKit.drawMute(this, c, fabKit.leftSlot({ x: this.helpX, y: this.fabY, w: this.fabSize, h: this.fabSize }));
   }
 
   drawRoundFab(c, x, y, iconKey, fallback, onTap) {
