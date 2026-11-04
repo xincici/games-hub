@@ -101,6 +101,8 @@ game.js
   实现：坐标不要在 `layout()` 里算死，绘制时用 `fabKit.muteSlot(helpRect)`（关闭时返回 null）
   与 `fabKit.slotLeft(helpRect, muteRect ? 2 : 1)` 现算。
 - 声音拦截只在 `core/audio.js`：`play()` 先判全局开关，再判当前场景的 `__games_hub__mute__<sceneId>`。
+  「当前场景」由 `App.setSceneId()`（`openScene` / `openGame` / `goHome` 共用）同步给 audio ——
+  别只在 `openScene` 里同步，进游戏走的是 `openGame`（踩过：全都写到 `mute__home`，一处静音处处静音）。
   场景里**不要**再写 `if (muted) return`。
 - `App.openScene` 负责 `audio.setGame(sceneId)`；新增游戏只要在 FAB 组里调用 `fabKit.drawMute`，
   并把原有左侧 FAB 用 `fabKit.leftSlot` 串起来（顺序：最左 → … → 静音 → 帮助）。
@@ -203,7 +205,13 @@ game.js
 
 - 当前二十五个入口，按 4+3+4+3+4+3+4 蜂窝；长按 260ms 可拖动排序，顺序存 `__games_hub__home_order`（与 web 同一个 key）。水平间距按小程序 6rpx 口径缩小，行间用负 overlap 咬合。
 - 每个入口按 accent 上色：logic `#23804e`、number `#2c6aad`、memory `#7550ad`、action `#bd5420`、card `#8f6419`；六边形外层用 18% 混色边框，图标用完整 accent。
-- 右下角齿轮（参考小程序 FloatingActions）打开底部抽屉：主题（system/light/dark）、语言（system/cn/en）、默认牌面（emoji/poker/mahjong）、音效；选项按钮组靠右、即时生效，无保存按钮；展开 / 收起用 280/220ms 的 easeOut 位移。没有背景音乐资源，因此不展示音乐开关。
+- 右下角齿轮打开**整屏设置面板**（照 web `src/shared/SettingsSheet.vue` 的排版）：
+  顶部绿色渐变徽章 + 「设置」标题；三张分组卡（主题 / 语言 / 偏好设置），卡内是「h3 + 分段控件」，
+  选中态是一块**绿色滑块**（`(宽 − 8 − 两处 gap)/3`，圆角 11），主题的三个选项带图标
+  （`monitor` / `sun` / `moon`）；最后一张卡是开关行（iOS 风格轨道 + 白色圆钮，选中绿色渐变图标块）。
+  展开 / 收起照 web 的 `clip-path: circle()`：**以右下角齿轮中心为圆心、半径 0 → 到最远屏幕角**（600/480ms，ease-in-out），
+  做法是把面板内容画到离屏画布，再 `arc + clip + drawImage` 到主画布（内容比圆形晚一点显形）；完全展开后直接画主画布、不再走离屏。内容比屏高时可拖动滚动。关闭按钮就画在齿轮那一格（圆形 ✕）。
+  没有背景音乐资源，因此**不画「背景音乐」开关**（web 有）；音效开关即时生效，无保存按钮。
 - 六边形用 `hexPath` 双层（外主色、内白卡），卡片区域整个可点。
 - 首页构造时 `tiles.preload()` 预加载麻将雪碧图，进对对碰麻将模式不再先闪空白。
 - 二十五个游戏场景左上角自绘 home 图标返回首页；小游戏没有原生导航栏。

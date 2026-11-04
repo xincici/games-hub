@@ -52,4 +52,7 @@ module.exports = {
   'slide': 0xE031,
   'volume': 0xE032,
   'volume-off': 0xE033,
+  'monitor': 0xE034,
+  'sun': 0xE035,
+  'moon': 0xE036,
 };

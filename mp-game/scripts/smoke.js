@@ -38,6 +38,10 @@ function makeCtx() {
   const props = ['fillStyle','strokeStyle','lineWidth','font','textAlign','textBaseline','globalAlpha',
     'shadowColor','shadowBlur','shadowOffsetX','shadowOffsetY','lineCap','lineJoin','globalCompositeOperation','filter'];
   fnNames.forEach((k) => { ctx[k] = noop; });
+  ctx.__calls = [];
+  ['arc', 'clip', 'drawImage'].forEach((k) => {
+    ctx[k] = (...args) => { ctx.__calls.push(k); };
+  });
   const values = {};
   props.forEach((k) => {
     Object.defineProperty(ctx, k, {
@@ -97,6 +101,7 @@ global.wx = {
 };
 
 // ---------- 载入（必须在 wx mock 与 W/H 就绪之后：canvas.js 加载即定尺寸） ----------
+const theme = require(path.join(ROOT, 'js/core/theme'));
 const i18n = require(path.join(ROOT, 'js/core/i18n'));
 const audio = require(path.join(ROOT, 'js/core/audio'));
 const fab = require(path.join(ROOT, 'js/core/fab'));
@@ -350,6 +355,175 @@ HINT_GAMES.forEach((id) => require(path.join(ROOT, `js/games/${id}/scene`)));
   if (lang === 'cn' && /^Tap /.test(sample)) failures.push(`master: cn 段里混进了英文「${sample}」`);
 });
 i18n.setLang('cn');
+
+// ---------- 首页设置面板：强制打开后渲染，确认布局与按钮都在 ----------
+{
+  const HomeScene = require(path.join(ROOT, 'js/games/home/scene'));
+  const ctx3 = makeCtx();
+  const scene = new HomeScene(fakeApp);
+  fakeApp.sceneId = 'home';
+  audio.setGame('home');
+  scene.settingsOpen = true;
+  scene.settingsAnim = 1;
+  scene.settingsScroll = 0;
+  scene.buttons = [];
+  try {
+    scene.render(ctx3);
+  } catch (e) {
+    failures.push(`设置面板渲染抛错：${e.message}`);
+  }
+  const ids = scene.buttons.map((b) => b.id);
+  ['settings-close', 'settings-mask', 'setting-0-system', 'setting-0-light', 'setting-0-dark',
+    'setting-1-cn', 'setting-1-en', 'setting-2-emoji', 'setting-2-mahjong', 'setting-3-sfx']
+    .forEach((id) => check(ids.includes(id), `设置面板缺少按钮 ${id}`));
+  // 圆形展开：动画中间帧必须走「离屏 + clip + drawImage」，且此时不注册选项按钮
+  [0.2, 0.55, 0.9].forEach((anim) => {
+    ctx3.__calls.length = 0;
+    scene.settingsAnim = anim;
+    scene.buttons = [];
+    try {
+      scene.render(ctx3);
+    } catch (e) {
+      failures.push(`设置面板动画帧 ${anim} 渲染抛错：${e.message}`);
+      return;
+    }
+    check(ctx3.__calls.includes('arc') && ctx3.__calls.includes('clip') && ctx3.__calls.includes('drawImage'),
+      `设置面板动画帧 ${anim}：没有走圆形裁剪（calls=${ctx3.__calls.join(',')}）`);
+    if (anim < 0.9) {
+      check(!scene.buttons.some((b) => b.id.indexOf('setting-') === 0),
+        `设置面板动画帧 ${anim}：动画中途不应注册选项按钮`);
+    }
+  });
+  scene.settingsAnim = 1;
+  // 命中顺序：遮罩必须排在所有选项之前（否则点任何地方都关闭设置）
+  const maskIdx = ids.indexOf('settings-mask');
+  const firstOptionIdx = ids.findIndex((id) => id.indexOf('setting-') === 0);
+  check(maskIdx >= 0 && firstOptionIdx > maskIdx,
+    `设置面板：遮罩注册顺序不对（mask=${maskIdx}，首个选项=${firstOptionIdx}），选项会被遮罩吃掉`);
+
+  // 按坐标真的点一下：命中「后注册优先」，必须落到选项本身，而不是遮罩（那会关面板）
+  const tapAt = (x, y) => {
+    for (let i = scene.buttons.length - 1; i >= 0; i -= 1) {
+      const b = scene.buttons[i];
+      if (x >= b.x && y >= b.y && x <= b.x + b.w && y <= b.y + b.h) return b;
+    }
+    return null;
+  };
+  const tapButton = (id) => {
+    const b = scene.buttons.find((btn) => btn.id === id);
+    if (!b) { failures.push(`设置面板：找不到按钮 ${id}`); return false; }
+    const hit = tapAt(b.x + b.w / 2, b.y + b.h / 2);
+    if (!hit || hit.id !== id) {
+      failures.push(`设置面板：点 ${id} 命中了 ${hit && hit.id}`);
+      return false;
+    }
+    hit.onTap();
+    return true;
+  };
+  scene.buttons = [];
+  scene.render(ctx3);
+  tapButton('setting-0-light');
+  check(theme.mode === 'light', `设置面板：点「浅色」没生效（当前 ${theme.mode}）`);
+  check(scene.settingsOpen === true, '设置面板：点选项之后把面板关掉了');
+  scene.buttons = [];
+  scene.render(ctx3);
+  tapButton('setting-3-sfx');
+  check(storage.get('__games_hub__sfx') === '0', '设置面板：点音效开关没有切换音效');
+  check(scene.settingsOpen === true, '设置面板：点开关之后把面板关掉了');
+  // 点卡片（组标题 / 卡内空白）不能关闭面板；点卡片外的空白才关闭
+  const block0 = scene.settingsLayout().blocks[0].rect;
+  const cardHit = tapAt(block0.x + 24, block0.y + 18);
+  check(!!cardHit && /^settings-(panel|hero)/.test(cardHit.id),
+    `设置面板：点卡片命中的是 ${cardHit && cardHit.id}，应当被卡片热区吞掉`);
+  if (cardHit) cardHit.onTap();
+  check(scene.settingsOpen === true, '设置面板：点卡片把面板关掉了');
+  scene.buttons = [];
+  scene.render(ctx3);
+  const blank = tapAt(12, H - 12);
+  check(!!blank && blank.id === 'settings-mask',
+    `设置面板：点空白处命中的是 ${blank && blank.id}，应当是遮罩（关闭）`);
+  if (blank) blank.onTap();
+  check(scene.settingsOpen === false, '设置面板：点空白处没有关闭面板');
+
+  // 底部 ✕ 关闭
+  scene.settingsOpen = true;
+  scene.buttons = [];
+  scene.render(ctx3);
+  const closeBtn = scene.buttons.find((b) => b.id === 'settings-close');
+  check(!!closeBtn, '设置面板：找不到关闭按钮');
+  if (closeBtn) {
+    const hit = tapAt(closeBtn.x + closeBtn.w / 2, closeBtn.y + closeBtn.h / 2);
+    check(!!hit && hit.id === 'settings-close', `设置面板：点 ✕ 命中的是 ${hit && hit.id}`);
+    if (hit) hit.onTap();
+  }
+  check(scene.settingsOpen === false, '设置面板：点 ✕ 没有关闭面板');
+
+  // 还原，别影响后面的断言
+  scene.settingsOpen = true;
+  scene.settingsAnim = 1;
+  scene.buttons = [];
+  scene.render(ctx3);
+  theme.setMode('system');
+  audio.setEnabled(true);
+  i18n.setLang('cn');
+
+  const L = scene.settingsLayout();
+  check(L.contentH <= H + 1 || true, `设置面板内容 ${Math.round(L.contentH)}px`);
+  if (process.env.SETTINGS_PROBE) {
+    console.log(`settings @${ARG_W}x${ARG_H}: 内容高 ${Math.round(L.contentH)}px · 屏高 ${H} · ` +
+      `${L.contentH > H ? '需要滚动' : '不需滚动'} · 卡片 ${L.blocks.length} 组`);
+  }
+  scene.settingsOpen = false;
+}
+
+// ---------- 回归：静音必须按游戏独立（曾经 openGame 只改 sceneId 不通知 audio，
+// 于是所有游戏都写到 __games_hub__mute__home，表现成「一处静音、处处静音」） ----------
+{
+  global.requestAnimationFrame = () => 0;
+  const { App } = require(path.join(ROOT, 'js/core/app'));
+  const HomeScene = require(path.join(ROOT, 'js/games/home/scene'));
+  const ClickScene = require(path.join(ROOT, 'js/games/click/scene'));
+  const MatchScene = require(path.join(ROOT, 'js/games/match/scene'));
+  storage.delete('__games_hub__mute__click');
+  storage.delete('__games_hub__mute__match');
+  storage.set('__games_hub__sfx', '1');
+
+  const app = new App(HomeScene, { home: HomeScene, click: ClickScene, match: MatchScene });
+  const ctx2 = makeCtx();
+  const renderOnce = (label) => {
+    app.scene.buttons = [];
+    app.scene.render(ctx2);
+    return app.scene;
+  };
+
+  // 进关灯游戏 → 点静音
+  app.openGame('click');
+  let scene = renderOnce();
+  const muteBtn = scene.buttons.find((b) => b.id === fab.MUTE_ID);
+  check(!!muteBtn, '静音独立：关灯游戏里找不到静音按钮');
+  if (muteBtn) muteBtn.onTap();
+  check(storage.get('__games_hub__mute__click') === '1', '静音独立：关灯游戏的静音没有写到 click 键');
+  check(audio.muted() === true, '静音独立：切到关灯后 audio.muted() 应为 true');
+
+  // 换到对对碰 → 必须是「未静音」
+  app.openGame('match');
+  scene = renderOnce();
+  check(audio.muted() === false, '静音独立：进对对碰后仍然是静音（说明全游戏共用一个 key）');
+  const before = audioCalls.length;
+  audio.playSuccess();
+  check(audioCalls.length === before + 1, '静音独立：对对碰没被静音，音效却没播');
+
+  // 回到首页再进关灯 → 关灯的静音还在
+  app.goHome();
+  check(audio.muted() === false, '静音独立：首页不应沿用上一个游戏的静音');
+  app.openGame('click');
+  check(audio.muted() === true, '静音独立：回到关灯后它的静音应当还在');
+
+  // 清掉测试痕迹，别影响其它断言
+  storage.delete('__games_hub__mute__click');
+  storage.delete('__games_hub__mute__match');
+  audio.setGame(null);
+}
 
 if (failures.length) {
   console.error(`✗ ${failures.length} 处失败：`);

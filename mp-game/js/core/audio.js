@@ -7,7 +7,11 @@
 const { getRaw, setRaw } = require('./storage');
 
 const MUTE_PREFIX = '__games_hub__mute__';
-let gameId = null;          // 当前场景 id（App.openScene 设置），为空时只受全局开关控制
+let gameId = null;          // 当前场景 id（App.setSceneId 同步），为空时只受全局开关控制
+
+// 兼容清理：早期版本切场景没同步 gameId，所有游戏的静音都写进了 __games_hub__mute__home。
+// 首页本来就没有静音 FAB，把这个残留键删掉，免得它继续影响同一个 key 的读取。
+try { require('./storage').removeRaw(`${MUTE_PREFIX}home`); } catch (e) { /* ignore */ }
 
 const sources = {
   success: '/audio/success.mp3',

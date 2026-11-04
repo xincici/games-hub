@@ -184,13 +184,17 @@ class App {
     return true;
   }
 
+  // 唯一改 sceneId 的地方：同时告诉 audio 当前是哪个场景（静音按游戏独立）
+  setSceneId(id) {
+    this.sceneId = id || null;
+    audio.setGame(this.sceneId);
+  }
+
   openScene(SceneClass, options) {
     if (!SceneClass) return;
     if (this.scene && this.scene.onHide) this.scene.onHide();
     this.scene = new SceneClass(this);
-    this.sceneId = (options && options.id) || null;
-    // 音效按场景记住各自的静音（__games_hub__mute__<sceneId>）；首页也走这里，但首页没有静音 FAB
-    audio.setGame(this.sceneId);
+    this.setSceneId((options && options.id) || null);
     this.transition = null;
     this.last = Date.now();
     if (this.input) this.input.cancel();
@@ -240,7 +244,7 @@ class App {
       oldSnapshot: this.snapshot, newScene: null,
     } : null;
     this.scene = new SceneClass(this);
-    this.sceneId = id;
+    this.setSceneId(id);
     this.wrapSceneConfetti(this.scene);
     this.wrapSceneModeSwitch(this.scene);
     if (this.transition) this.transition.newScene = this.scene;
@@ -259,7 +263,7 @@ class App {
     const origin = home.getGameOrigin ? home.getGameOrigin(oldId) : { x: W / 2, y: H / 2 };
     if (old && old.onHide) old.onHide();
     this.scene = home;
-    this.sceneId = 'home';
+    this.setSceneId('home');
     this.transition = ok ? {
       direction: 'close', start: Date.now(), duration: 320, origin: origin || { x: W / 2, y: H / 2 },
       oldSnapshot: this.snapshot, newScene: home,

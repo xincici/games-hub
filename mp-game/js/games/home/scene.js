@@ -1,4 +1,4 @@
-const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const { W, H, DPR, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const i18n = require('../../core/i18n');
@@ -55,6 +55,7 @@ class HomeScene extends Scene {
     tiles.preload();
     this.settingsOpen = false;
     this.settingsAnim = 0;
+    this.settingsSurface = null;   // 圆形展开用的离屏画布（懒创建）
     this.order = this.loadOrder();
     this.drag = null;
     this.press = null;
@@ -148,8 +149,9 @@ class HomeScene extends Scene {
     this.now = Date.now();
     this.bg.update(dt);
     const step = Math.min(50, dt || 16);
-    if (this.settingsOpen) this.settingsAnim = Math.min(1, this.settingsAnim + step / 280);
-    else if (this.settingsAnim > 0) this.settingsAnim = Math.max(0, this.settingsAnim - step / 220);
+    // 与 web 的 clip-path 0.6s 对齐：展开 600ms、收拢 480ms
+    if (this.settingsOpen) this.settingsAnim = Math.min(1, this.settingsAnim + step / 600);
+    else if (this.settingsAnim > 0) this.settingsAnim = Math.max(0, this.settingsAnim - step / 480);
   }
 
   render(c) {
@@ -204,7 +206,12 @@ class HomeScene extends Scene {
   }
 
   onTouchStart(p) {
-    if (!p || this.settingsOpen) return;
+    if (!p) return;
+    if (this.settingsOpen) {
+      // 设置面板内容比屏幕高时可以拖动滚动；拖过 6px 就不再触发点击
+      this.settingsDrag = { y: p.y, scroll: this.settingsScroll || 0 };
+      return;
+    }
     const item = this.hexAt(p.x, p.y);
     if (!item) return;
     this.suppressOpen = false;
@@ -215,6 +222,12 @@ class HomeScene extends Scene {
 
   onTouchMove(p) {
     if (!p) return;
+    if (this.settingsDrag) {
+      const L = this.settingsLayout();
+      const maxScroll = Math.max(0, L.contentH - H);
+      this.settingsScroll = Math.min(maxScroll, Math.max(0, this.settingsDrag.scroll - (p.y - this.settingsDrag.y)));
+      return;
+    }
     if (!this.drag) {
       if (this.press) {
         const dx = p.x - this.press.x;
@@ -242,6 +255,10 @@ class HomeScene extends Scene {
   }
 
   onTouchEnd() {
+    if (this.settingsDrag) {
+      this.settingsDrag = null;
+      return;
+    }
     if (this.pressTimer) clearTimeout(this.pressTimer);
     this.pressTimer = null;
     this.press = null;
@@ -425,99 +442,291 @@ class HomeScene extends Scene {
     if (!icons.draw(c, 'settings', cx, cy, 22, T.text)) {
       D.text(c, '⚙', cx, cy, { size: 20, color: T.text, align: 'center' });
     }
-    this.addButton('settings', r.x, r.y, r.w, r.h, () => { this.settingsOpen = true; this.settingsAnim = 0; });
+    this.addButton('settings', r.x, r.y, r.w, r.h, () => {
+      this.settingsOpen = true;
+      this.settingsAnim = 0;
+      this.settingsScroll = 0;
+    });
+  }
+
+  // 设置面板：整屏、标题徽章 + 每组一张卡、卡内是「分段控件 + 绿色滑块」、
+  // 开关行用 iOS 风格开关 —— 与 web 的 shared/SettingsSheet.vue 同一套观感。
+  // （web 是点击处圆形扩张；canvas 里改成淡入 + 轻微上移，内容布局保持一致。）
+  settingsLayout() {
+    const pad = 16;
+    const blockGap = 14;
+    const segPad = 4;
+    const segItemH = 40;
+    const segH = segItemH + segPad * 2;
+    const blockHeadH = 24;        // h3（14px）+ 间距
+    const blockPadY = 12;
+    const switchRowH = 56;
+    const heroH = 38;
+    const top = SAFE_TOP + 18;
+    const blocks = [
+      { kind: 'seg', title: t('home.theme'), key: 'theme' },
+      { kind: 'seg', title: t('home.language'), key: 'lang' },
+      { kind: 'seg', title: t('home.face'), key: 'face' },
+      { kind: 'switch', title: '', key: 'switch' },
+    ];
+    let y = top;
+    const hero = { x: pad, y, w: heroH, h: heroH };
+    y += heroH + 20;
+    const laid = blocks.map((b) => {
+      const h = b.kind === 'seg'
+        ? blockPadY * 2 + blockHeadH + segH
+        : blockPadY * 2 + switchRowH;
+      const rect = { x: pad, y, w: W - pad * 2, h };
+      y += h + blockGap;
+      return Object.assign({}, b, { rect });
+    });
+    const footY = y + 6;
+    const contentH = footY + 18 + SAFE_BOTTOM + 12;
+    return { pad, segPad, segItemH, segH, blockPadY, blockHeadH, switchRowH, hero, blocks: laid, footY, contentH };
+  }
+
+  settingSegOptions(key) {
+    if (key === 'theme') {
+      return {
+        current: theme.mode,
+        options: [
+          ['system', t('home.followSystem'), 'monitor'],
+          ['light', t('home.light'), 'sun'],
+          ['dark', t('home.dark'), 'moon'],
+        ],
+        onPick: (value) => theme.setMode(value),
+      };
+    }
+    if (key === 'lang') {
+      return {
+        current: i18n.langMode,
+        options: [
+          ['system', t('home.followSystem'), 'monitor'],
+          ['cn', t('home.chinese'), null],
+          ['en', t('home.english'), null],
+        ],
+        onPick: (value) => { i18n.setLangMode(value); this.refreshLabels(); },
+      };
+    }
+    return {
+      current: getRaw('__games_hub__face', 'emoji'),
+      options: [
+        ['emoji', t('home.faceEmoji'), null],
+        ['poker', t('home.facePoker'), null],
+        ['mahjong', t('home.faceMahjong'), null],
+      ],
+      onPick: (value) => setRaw('__games_hub__face', value),
+    };
+  }
+
+  // 设置面板的内容：只画内容（不含展开动画 / 遮罩 / 关闭按钮）。
+  // drawSettings 决定直接画到主画布（完全展开）还是画到离屏画布再按圆形裁剪。
+  // interactive 为真时才注册按钮 —— 动画过程中不响应点击（和 web 一致）。
+  drawSettingsContent(c, opts) {
+    const T = theme.tokens;
+    const L = opts.L;
+    const scroll = opts.scroll || 0;
+    const interactive = !!opts.interactive;
+    const addBtn = (id, x, y, w, h, onTap) => {
+      if (!interactive) return;
+      this.addButton(id, x, y - scroll, w, h, onTap);
+    };
+
+    // 标题：绿色徽章 + 「设置」
+    const hero = L.hero;
+    const hg = c.createLinearGradient(hero.x, hero.y, hero.x + hero.w, hero.y + hero.h);
+    hg.addColorStop(0, T.primary);
+    hg.addColorStop(1, '#37a06a');
+    c.fillStyle = hg;
+    D.fillRoundRect(c, hero.x, hero.y, hero.w, hero.h, 12);
+    if (!icons.draw(c, 'settings', hero.x + hero.w / 2, hero.y + hero.h / 2, 21, '#fff')) {
+      D.text(c, '⚙', hero.x + hero.w / 2, hero.y + hero.h / 2, { size: 20, color: '#fff', align: 'center' });
+    }
+    D.text(c, t('home.settings'), hero.x + hero.w + 12, hero.y + hero.h / 2 + 1, {
+      size: 21, weight: 'bold', color: T.text,
+    });
+
+    // 卡片（含组标题、卡内空白）先注册一个空热区：点它不关闭面板；
+    // 只有点卡片之外的空白处才会落到遮罩（关闭）。选项按钮随后注册，仍优先于这里。
+    if (interactive) {
+      const titleW = D.measure(c, t('home.settings'), 21, 'bold');
+      addBtn('settings-hero', hero.x - 6, hero.y - 6, hero.w + 12 + titleW + 12, hero.h + 12, () => {});
+      L.blocks.forEach((blk, bi2) => {
+        addBtn(`settings-panel-${bi2}`, blk.rect.x, blk.rect.y, blk.rect.w, blk.rect.h, () => {});
+      });
+    }
+
+    L.blocks.forEach((block, bi) => {
+      const r = block.rect;
+      D.card(c, r.x, r.y, r.w, r.h, T);
+      if (block.kind === 'seg') {
+        D.text(c, block.title, r.x + 16, r.y + 12 + 7, { size: 14, weight: 'bold', color: T.muted });
+        const seg = { x: r.x + 12, y: r.y + 12 + L.blockHeadH, w: r.w - 24, h: L.segH };
+        // 分段容器用页面底色（web 的 .seg 也是 --bg-color）
+        D.fillRoundRect(c, seg.x, seg.y, seg.w, seg.h, 14, T.bg);
+        const meta = this.settingSegOptions(block.key);
+        const n = meta.options.length;
+        const gap = 6;
+        const itemW = (seg.w - L.segPad * 2 - gap * (n - 1)) / n;
+        const index = Math.max(0, meta.options.findIndex(o => o[0] === meta.current));
+        // 选中态是一块绿色滑块（web 的 .seg-slider）
+        D.fillRoundRect(c, seg.x + L.segPad + index * (itemW + gap), seg.y + L.segPad, itemW, L.segItemH, 11, T.primary);
+        meta.options.forEach((opt, oi) => {
+          const value = opt[0];
+          const label = opt[1];
+          const icon = opt[2];
+          const cx = seg.x + L.segPad + oi * (itemW + gap);
+          const cy = seg.y + L.segPad + L.segItemH / 2;
+          const on = meta.current === value;
+          const color = on ? '#fff' : T.text;
+          const iconSize = 16;
+          const textW = D.measure(c, label, 13, 'bold');
+          const groupW = icon ? iconSize + 6 + textW : textW;
+          let gx = cx + (itemW - groupW) / 2;
+          if (icon) {
+            if (!icons.draw(c, icon, gx + iconSize / 2, cy, iconSize, color)) {
+              D.text(c, '▫', gx + iconSize / 2, cy, { size: 14, color, align: 'center' });
+            }
+            gx += iconSize + 6;
+          }
+          D.text(c, label, gx, cy, { size: 13, weight: 'bold', color });
+          addBtn(`setting-${bi}-${value}`, cx, seg.y + L.segPad, itemW, L.segItemH,
+            () => meta.onPick(value));
+        });
+      } else {
+        // 开关卡：小游戏没有背景音乐资源，只画「游戏音效」（与 web 同样的行样式）
+        const row = { x: r.x + 12, y: r.y + 12, w: r.w - 24, h: L.switchRowH };
+        D.fillRoundRect(c, row.x, row.y, row.w, row.h, 14, T.bg);
+        const on = audio.enabled;
+        const tile = { x: row.x + 12, y: row.y + (row.h - 34) / 2, w: 34, h: 34 };
+        if (on) {
+          const tg = c.createLinearGradient(tile.x, tile.y, tile.x + tile.w, tile.y + tile.h);
+          tg.addColorStop(0, T.primary);
+          tg.addColorStop(1, '#37a06a');
+          c.fillStyle = tg;
+          D.fillRoundRect(c, tile.x, tile.y, tile.w, tile.h, 11);
+        } else {
+          D.fillRoundRect(c, tile.x, tile.y, tile.w, tile.h, 11, T.card);
+        }
+        const iconColor = on ? '#fff' : T.muted;
+        if (!icons.draw(c, on ? 'volume' : 'volume-off', tile.x + tile.w / 2, tile.y + tile.h / 2, 19, iconColor)) {
+          D.text(c, on ? '♪' : '×', tile.x + tile.w / 2, tile.y + tile.h / 2, { size: 17, color: iconColor, align: 'center' });
+        }
+        D.text(c, t('home.sfx'), tile.x + tile.w + 12, row.y + row.h / 2, { size: 14, weight: 'bold', color: T.text });
+        const sw = { x: row.x + row.w - 12 - 46, y: row.y + (row.h - 28) / 2, w: 46, h: 28 };
+        D.fillRoundRect(c, sw.x, sw.y, sw.w, sw.h, 14, on ? T.primary : T.border);
+        D.circle(c, sw.x + (on ? 33 : 14), sw.y + 14, 11, '#fff');
+        addBtn(`setting-${bi}-sfx`, row.x, row.y, row.w, row.h, () => audio.setEnabled(!audio.enabled));
+      }
+    });
+
+    // 底部提示（web 的 .sheet-foot）
+    const footText = `${t('home.dragTip')} · ${t('home.footer')}`;
+    let footSize = 11.5;
+    while (footSize > 9 && D.measure(c, footText, footSize) > W - L.pad * 2) footSize -= 0.5;
+    D.text(c, footText, W / 2, L.footY, { size: footSize, color: T.muted, align: 'center' });
+  }
+
+  // 离屏画布：拿不到第二块画布时返回 null，调用方退化成「直接显示」
+  ensureSettingsSurface() {
+    if (this.settingsSurface) return this.settingsSurface;
+    try {
+      if (!wx.createCanvas) return null;
+      const surface = wx.createCanvas();
+      if (!surface) return null;
+      // DPR 封顶 2：这块画布只在 0.6s 展开动画里用，没必要按 3x 占内存
+      const dpr = Math.min(DPR, 2);
+      surface.width = Math.round(W * dpr);
+      surface.height = Math.round(H * dpr);
+      const ctx = surface.getContext('2d');
+      ctx.scale(dpr, dpr);
+      this.settingsSurface = { canvas: surface, ctx, dpr };
+      return this.settingsSurface;
+    } catch (e) {
+      return null;
+    }
   }
 
   drawSettings(c) {
-    const T = theme.tokens;
     const anim = this.settingsAnim;
-    const ease = 1 - Math.pow(1 - anim, 3);
-    c.fillStyle = `rgba(0,0,0,${0.45 * ease})`;
-    c.fillRect(0, 0, W, H);
-    const x = 0;
-    const w = W;
-    const h = 336 + SAFE_BOTTOM;
-    const y = H - h + h * (1 - ease);
-    D.card(c, x, y, w, h, T);
-    this.addButton('settings-mask', 0, 0, W, H, () => { this.settingsOpen = false; });
-    D.text(c, t('home.settings'), x + 32, y + 30, { size: 20, weight: 'bold', color: T.text });
-    const close = { x: x + w - 48, y: y + 14, w: 32, h: 32 };
-    D.fillRoundRect(c, close.x, close.y, close.w, close.h, 8, T.enter);
-    if (!icons.draw(c, 'close', close.x + 16, close.y + 16, 17, T.text)) {
-      D.text(c, '×', close.x + 16, close.y + 16, { size: 18, color: T.text, align: 'center' });
+    // 与 web 的 clip-path 0.6s ease-in-out 同一节奏
+    const ease = anim < 0.5 ? 2 * anim * anim : 1 - Math.pow(-2 * anim + 2, 2) / 2;
+    const L = this.settingsLayout();
+    const maxScroll = Math.max(0, L.contentH - H);
+    const scroll = Math.min(Math.max(0, this.settingsScroll || 0), maxScroll);
+    const open = ease >= 0.995;
+
+    // 圆心 = 右下角齿轮的中心；半径 = 到最远屏幕角
+    const gear = this.gearRect;
+    const cx = gear.x + gear.w / 2;
+    const cy = gear.y + gear.h / 2;
+    const maxR = Math.max(
+      Math.hypot(cx, cy), Math.hypot(W - cx, cy),
+      Math.hypot(cx, H - cy), Math.hypot(W - cx, H - cy),
+    );
+
+    if (open) {
+      // ⚠️ 遮罩必须**先注册**：命中判定是「后注册优先」，晚注册会把所有选项按钮全压掉
+      //（踩过：点任何地方都变成关闭设置）
+      this.addButton('settings-mask', 0, 0, W, H, () => { this.settingsOpen = false; });
+      c.save();
+      c.fillStyle = theme.tokens.bg;
+      c.fillRect(0, 0, W, H);
+      c.translate(0, -scroll);
+      this.drawSettingsContent(c, { L, scroll, interactive: true });
+      c.restore();
+    } else {
+      const surface = this.ensureSettingsSurface();
+      if (!surface) {
+        c.save();
+        c.fillStyle = theme.tokens.bg;
+        c.fillRect(0, 0, W, H);
+        c.translate(0, -scroll);
+        this.drawSettingsContent(c, { L, scroll, interactive: false });
+        c.restore();
+      } else {
+        const off = surface.ctx;
+        off.save();
+        off.setTransform(surface.dpr, 0, 0, surface.dpr, 0, 0);
+        off.clearRect(0, 0, W, H);
+        off.translate(0, -scroll);
+        this.drawSettingsContent(off, { L, scroll: 0, interactive: false });
+        off.restore();
+        c.save();
+        c.beginPath();
+        c.arc(cx, cy, Math.max(0.1, maxR * ease), 0, Math.PI * 2);
+        c.clip();
+        // 圆形里先铺**不透明**面板底色：离屏画布只装内容（透明底），
+        // 底色跟着圆形一起长出来，否则展开过程中会透出首页蜂窝。
+        c.fillStyle = theme.tokens.bg;
+        c.fillRect(0, 0, W, H);
+        // 只有「内容」比圆形晚一点显形（web：opacity .28s delay .16s）
+        c.globalAlpha = Math.min(1, Math.max(0, (ease - 0.18) / 0.5));
+        c.drawImage(surface.canvas, 0, 0, W, H);
+        c.restore();
+      }
     }
-    this.addButton('settings-close', close.x, close.y, close.w, close.h, () => { this.settingsOpen = false; });
 
-    const face = getRaw('__games_hub__face', 'emoji');
-    const rows = [
-      {
-        label: t('home.language'),
-        current: i18n.langMode,
-        options: [
-          ['system', t('home.followSystem')],
-          ['cn', t('home.chinese')],
-          ['en', t('home.english')],
-        ],
-        onPick: value => { i18n.setLangMode(value); this.refreshLabels(); },
-      },
-      {
-        label: t('home.theme'),
-        current: theme.mode,
-        options: [
-          ['system', t('home.followSystem')],
-          ['light', t('home.light')],
-          ['dark', t('home.dark')],
-        ],
-        onPick: value => theme.setMode(value),
-      },
-      {
-        label: t('home.face'),
-        current: face,
-        options: [
-          ['emoji', t('home.faceEmoji')],
-          ['poker', t('home.facePoker')],
-          ['mahjong', t('home.faceMahjong')],
-        ],
-        onPick: value => setRaw('__games_hub__face', value),
-      },
-      {
-        label: t('home.sfx'),
-        current: audio.enabled ? 'on' : 'off',
-        options: [['on', t('home.on')], ['off', t('home.off')]],
-        onPick: value => audio.setEnabled(value === 'on'),
-      },
-    ];
-
-    const rowH = 58;
-    let ry = y + 62;
-    rows.forEach((row, ri) => {
-      D.text(c, row.label, x + 32, ry + 18, { size: 14, color: T.muted });
-      const gap = 6;
-      const widths = row.options.map(([, label]) => Math.max(44, D.measure(c, label, 12) + 20));
-      const total = widths.reduce((a, b) => a + b, 0) + gap * (widths.length - 1);
-      let bx = x + w - 32 - total;
-      row.options.forEach(([value, label], oi) => {
-        const on = row.current === value;
-        const bw = widths[oi];
-        D.fillRoundRect(c, bx, ry, bw, 36, 8, on ? T.primary : T.enter);
-        D.text(c, label, bx + bw / 2, ry + 18, {
-          size: 12, weight: on ? 'bold' : 'normal', color: on ? '#fff' : T.text, align: 'center',
-        });
-        this.addButton(`setting-${ri}-${value}`, bx, ry, bw, 36, () => row.onPick(value));
-        bx += bw + gap;
-      });
-      if (ri < rows.length - 1) D.line(c, x + 32, ry + 50, x + w - 32, ry + 50, T.border, 1);
-      ry += rowH;
-    });
-
-    // 比照小程序设置面板：拖动提示 + 轻松的话同一行（安全区之上）。
-    const footText = `${t('home.dragTip')} · ${t('home.footer')}`;
-    let footSize = 11;
-    while (footSize > 8 && D.measure(c, footText, footSize) > this.cw - 16) footSize -= 0.5;
-    D.text(c, footText, W / 2, y + h - SAFE_BOTTOM - 20, {
-      size: footSize, color: T.muted, align: 'center',
-    });
+    // 关闭按钮：画在齿轮那一格，展开过半后才可点
+    const closeAlpha = Math.min(1, Math.max(0, (ease - 0.45) / 0.4));
+    c.save();
+    c.globalAlpha = closeAlpha;
+    c.shadowColor = 'rgba(0,0,0,0.12)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 2;
+    D.circle(c, gear.x + gear.w / 2, gear.y + gear.h / 2, gear.w / 2, theme.tokens.card);
+    c.restore();
+    c.save();
+    c.globalAlpha = closeAlpha;
+    if (!icons.draw(c, 'close', gear.x + gear.w / 2, gear.y + gear.h / 2, 20, theme.tokens.text)) {
+      D.text(c, '×', gear.x + gear.w / 2, gear.y + gear.h / 2, { size: 20, color: theme.tokens.text, align: 'center' });
+    }
+    c.restore();
+    if (ease > 0.75) {
+      this.addButton('settings-close', gear.x, gear.y, gear.w, gear.h, () => { this.settingsOpen = false; });
+    }
   }
+
 
 }
 

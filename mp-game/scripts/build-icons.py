@@ -76,6 +76,9 @@ ICONS = {
     'slide': ('mdi', 'arrow-all'),
     'volume': ('mdi', 'volume-high'),
     'volume-off': ('mdi', 'volume-off'),
+    'monitor': ('mdi', 'monitor'),
+    'sun': ('mdi', 'white-balance-sunny'),
+    'moon': ('mdi', 'moon-waning-crescent'),
 }
 
 FAMILY = 'Games Hub Icons'
