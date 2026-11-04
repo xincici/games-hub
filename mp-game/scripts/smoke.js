@@ -420,6 +420,31 @@ i18n.setLang('cn');
     hit.onTap();
     return true;
   };
+  // 滑块要有弹性滑动（web 的 .seg-slider：320ms + cubic-bezier(0.34,1.25,0.5,1)）
+  {
+    scene.settingsOpen = true;
+    scene.settingsAnim = 1;
+    scene.buttons = [];
+    scene.now = Date.now();
+    scene.render(ctx3);
+    const fromIndex = scene.segIndex('theme');
+    tapButton('setting-0-light');
+    const slide = scene.segSlide.theme;
+    check(!!slide, '设置面板：切换主题后没有启动滑块动画');
+    if (slide) {
+      scene.now = slide.at + 90;
+      const mid = scene.segIndex('theme');
+      check(mid !== fromIndex && mid !== slide.to,
+        `设置面板：滑块中点应当还在路上（from=${fromIndex} to=${slide.to} mid=${mid}）`);
+      check(scene.springEase(0.55) > 1, '设置面板：弹性曲线没有过冲（cubic-bezier(0.34,1.25,0.5,1)）');
+      scene.now = slide.at + 400;
+      const end = scene.segIndex('theme');
+      check(Math.abs(end - slide.to) < 0.001, `设置面板：滑块没有停在目标位置（${end} vs ${slide.to}）`);
+      check(!scene.segSlide.theme, '设置面板：滑块动画结束后没有清理状态');
+    }
+    theme.setMode('system');
+  }
+
   scene.buttons = [];
   scene.render(ctx3);
   tapButton('setting-0-light');

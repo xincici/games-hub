@@ -10,6 +10,9 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const homeI18n = require('./i18n');
 const tiles = require('../../core/tiles');
+
+// 分段控件滑块动画时长（web 的 .seg-slider 是 0.32s）
+const SEG_SLIDE_MS = 320;
 const HEADER = require('../../core/header');
 
 const ORDER_KEY = '__games_hub__home_order';
@@ -56,6 +59,7 @@ class HomeScene extends Scene {
     this.settingsOpen = false;
     this.settingsAnim = 0;
     this.settingsSurface = null;   // 圆形展开用的离屏画布（懒创建）
+    this.segSlide = {};            // 分段控件滑块的弹性动画：key → { from, to, at }
     this.order = this.loadOrder();
     this.drag = null;
     this.press = null;
@@ -446,6 +450,7 @@ class HomeScene extends Scene {
       this.settingsOpen = true;
       this.settingsAnim = 0;
       this.settingsScroll = 0;
+      this.segSlide = {};
     });
   }
 
@@ -485,6 +490,60 @@ class HomeScene extends Scene {
     return { pad, segPad, segItemH, segH, blockPadY, blockHeadH, switchRowH, hero, blocks: laid, footY, contentH };
   }
 
+  // 与 web 的 .seg-slider 同一节奏：320ms，cubic-bezier(0.34, 1.25, 0.5, 1)（会轻微过冲，有弹性）
+
+  // 三次贝塞尔求值：给定 x 反解 t，再算 y（浏览器就是这么做 easing 的）
+  bezier(t, p1, p2) {
+    const u = 1 - t;
+    return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;
+  }
+
+  springEase(t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    // 二分找 x(t) = t 的参数
+    let lo = 0;
+    let hi = 1;
+    let mid = t;
+    for (let i = 0; i < 12; i += 1) {
+      mid = (lo + hi) / 2;
+      const x = this.bezier(mid, 0.34, 0.5);
+      if (x < t) lo = mid; else hi = mid;
+    }
+    return this.bezier(mid, 1.25, 1);
+  }
+
+  // 当前视觉上的滑块位置（可能是小数，正在滑动）
+  segIndexFloat(key) {
+    const slide = this.segSlide[key];
+    const now = this.now || Date.now();
+    if (!slide) return null;
+    const t = Math.min(1, Math.max(0, (now - slide.at) / SEG_SLIDE_MS));
+    if (t >= 1) {
+      delete this.segSlide[key];
+      return slide.to;
+    }
+    return slide.from + (slide.to - slide.from) * this.springEase(t);
+  }
+
+  segIndex(key, itemW, gap) {
+    const sliding = this.segIndexFloat(key);
+    if (sliding != null) return sliding;
+    const meta = this.settingSegOptions(key);
+    return Math.max(0, meta.options.findIndex(o => o[0] === meta.current));
+  }
+
+  slideSeg(key, value) {
+    const meta = this.settingSegOptions(key);
+    const to = Math.max(0, meta.options.findIndex(o => o[0] === value));
+    if (to < 0) return;
+    const sliding = this.segIndexFloat(key);
+    const from = sliding != null ? sliding : Math.max(0, meta.options.findIndex(o => o[0] === meta.current));
+    if (Math.abs(to - from) < 0.001) return;
+    this.segSlide[key] = { from, to, at: Date.now() };
+    this.now = this.now || Date.now();
+  }
+
   settingSegOptions(key) {
     if (key === 'theme') {
       return {
@@ -494,7 +553,7 @@ class HomeScene extends Scene {
           ['light', t('home.light'), 'sun'],
           ['dark', t('home.dark'), 'moon'],
         ],
-        onPick: (value) => theme.setMode(value),
+        onPick: (value) => { this.slideSeg('theme', value); theme.setMode(value); },
       };
     }
     if (key === 'lang') {
@@ -505,7 +564,7 @@ class HomeScene extends Scene {
           ['cn', t('home.chinese'), null],
           ['en', t('home.english'), null],
         ],
-        onPick: (value) => { i18n.setLangMode(value); this.refreshLabels(); },
+        onPick: (value) => { this.slideSeg('lang', value); i18n.setLangMode(value); this.refreshLabels(); },
       };
     }
     return {
@@ -515,7 +574,7 @@ class HomeScene extends Scene {
         ['poker', t('home.facePoker'), null],
         ['mahjong', t('home.faceMahjong'), null],
       ],
-      onPick: (value) => setRaw('__games_hub__face', value),
+      onPick: (value) => { this.slideSeg('face', value); setRaw('__games_hub__face', value); },
     };
   }
 
@@ -568,8 +627,9 @@ class HomeScene extends Scene {
         const n = meta.options.length;
         const gap = 6;
         const itemW = (seg.w - L.segPad * 2 - gap * (n - 1)) / n;
-        const index = Math.max(0, meta.options.findIndex(o => o[0] === meta.current));
-        // 选中态是一块绿色滑块（web 的 .seg-slider）
+        // 选中态是一块绿色滑块（web 的 .seg-slider）：切换时带弹性滑过去，而不是瞬移
+        // 过冲时最多溢出 0.12 个格子，避免滑块顶出分段容器
+        const index = Math.min(n - 1 + 0.12, Math.max(-0.12, this.segIndex(block.key, itemW, gap)));
         D.fillRoundRect(c, seg.x + L.segPad + index * (itemW + gap), seg.y + L.segPad, itemW, L.segItemH, 11, T.primary);
         meta.options.forEach((opt, oi) => {
           const value = opt[0];
