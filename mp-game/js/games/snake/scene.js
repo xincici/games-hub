@@ -321,7 +321,7 @@ class SnakeScene extends Scene {
       D.strokeRoundRect(c, x0 + 1.5, y0 + 1.5, this.boardSize - 3, this.boardSize - 3, 13, T.delColor, 3);
     }
     if (this.paused && this.phase === GAMING) {
-      D.fillRoundRect(c, x0, y0, this.boardSize, this.boardSize, 14, 'rgba(250,248,239,0.88)');
+      D.fillRoundRect(c, x0, y0, this.boardSize, this.boardSize, 14, T.overlay);
       if (this.resumeCount) {
         D.text(c, String(this.resumeCount), W / 2, y0 + this.boardSize / 2 - 12, { size: 56, weight: 'bold', color: T.primary, align: 'center' });
         D.text(c, t('snake.readyTip'), W / 2, y0 + this.boardSize / 2 + 34, { size: 14, weight: 'bold', color: T.text, align: 'center' });
@@ -332,7 +332,7 @@ class SnakeScene extends Scene {
       this.addButton('resume-board', x0, y0, this.boardSize, this.boardSize, () => this.togglePause());
     }
     if (this.phase === LOSE && this.resultVisible()) {
-      D.fillRoundRect(c, x0, y0, this.boardSize, this.boardSize, 14, 'rgba(250,248,239,0.9)');
+      D.fillRoundRect(c, x0, y0, this.boardSize, this.boardSize, 14, T.overlay);
       const cy = y0 + this.boardSize / 2;
       D.text(c, `👻👻 ${t('snake.tipLost')} 👻👻`, W / 2, cy - 28, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
       if (this.newBest) D.text(c, t('snake.newBest'), W / 2, cy + 2, { size: 13, color: T.muted, align: 'center' });

@@ -367,7 +367,7 @@ class DownScene extends Scene {
       this.addButton('col-' + col, this.boardX + col * this.cell, this.boardY, this.cell, this.boardH, () => this.pick(col));
     }
     if (this.paused && this.phase === PLAY) {
-      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, 'rgba(250,248,239,0.9)');
+      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
       if (this.resumeCount) {
         D.text(c, String(this.resumeCount), W / 2, this.boardY + this.boardH / 2 - 10, { size: 56, weight: 'bold', color: T.primary, align: 'center' });
         D.text(c, t('down.readyTip'), W / 2, this.boardY + this.boardH / 2 + 36, { size: 14, weight: 'bold', color: T.text, align: 'center' });
@@ -378,7 +378,7 @@ class DownScene extends Scene {
       this.addButton('resume', this.boardX, this.boardY, this.boardW, this.boardH, () => this.togglePause());
     }
     if (this.phase === OVER && this.resultVisible()) {
-      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, 'rgba(250,248,239,0.9)');
+      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
       const cy = this.boardY + this.boardH / 2;
       D.text(c, `🏁 ${t('down.tipOver')} 🏁`, W / 2, cy - 20, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, String(this.score), W / 2, cy + 12, { size: 30, weight: 'bold', color: T.text, align: 'center' });

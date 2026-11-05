@@ -401,7 +401,7 @@ class ThreeScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, 'rgba(250,248,239,0.9)');
+    D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, T.overlay);
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     D.text(c, `👻👻 ${t('three.tipLost')} 👻👻`, cx, cy - 22, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
     D.text(c, `${t('three.score')} ${this.score}`, cx, cy + 8, { size: 14, color: T.muted, align: 'center' });

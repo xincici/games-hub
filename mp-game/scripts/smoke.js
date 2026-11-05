@@ -619,6 +619,25 @@ i18n.setLang('cn');
   require(path.join(ROOT, 'js/core/platform')).resetCache();
 }
 
+// ---------- 结算遮罩必须跟随主题：不允许写死浅色 ——
+// 踩过：three / link / g2048 / down / snake / mirror 的胜负遮罩写死 rgba(250,248,239,...)，
+// 暗黑模式下整个遮罩是白的、文字（T.win / T.lose 是亮色）几乎看不清。
+{
+  const fs = require('fs');
+  const dir = path.join(ROOT, 'js/games');
+  fs.readdirSync(dir).forEach((id) => {
+    const file = path.join(dir, id, 'scene.js');
+    if (!fs.existsSync(file)) return;
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      const light = /rgba\(250,248,239/.test(line);
+      const dark = /rgba\(38,38,38/.test(line);
+      if ((light || dark) && !/theme\.dark|T\.overlay/.test(line)) {
+        failures.push(`${id}/scene.js:${i + 1} 结算遮罩写死了颜色，暗黑模式会不对：${line.trim().slice(0, 70)}`);
+      }
+    });
+  });
+}
+
 if (failures.length) {
   console.error(`✗ ${failures.length} 处失败：`);
   failures.forEach((f) => console.error('  - ' + f));
