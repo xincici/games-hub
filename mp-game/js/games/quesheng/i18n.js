@@ -24,10 +24,7 @@ module.exports = {
     newGameConfirm: 'Start over from level 1? The current board and level will be reset.',
     cancel: 'Cancel',
     confirmOk: 'Start Over',
-    helpMsg: 'Mahjong Master: 14 tiles that make a winning hand are dealt onto a 5x5 board. Slide to gather them, then tap a set to clear it.',
-    help1: 'The 14 tiles on the 5x5 board can always be split into 4 sets (a run or a triplet) plus one pair. Swipe up, down, left or right: every tile slides that way until it hits the edge or another tile, and tiles never merge. Every swipe costs one move.',
-    help2: 'Tiles that sit next to each other in a row or column and make a set (three tiles) or the pair (two of a kind) are ringed with a highlight. Tap the tiles of a ringed group: tap all three to clear a set, or tap the two tiles of a pair to clear the pair. A prompt only appears when the two tapped tiles are a pair that could also grow into a set of three - it offers just the pair, so tap the third tile to clear the set instead.',
-    help3: 'Order does not matter: three tiles of a kind, or three consecutive numbers of one suit, count as a set. Clear all 14 tiles to win the level; run out of moves with tiles left and you lose. Undo and redo are in the top right corner.',
+    helpMsg: '## How to play\n- The 14 tiles on the 5×5 board always split into four sets plus one pair\n- Swipe to move every tile; sets that line up are ringed\n- Tap all three tiles of a set (or the two of the pair) to clear it\n## Win or lose\n- Clear them all to pass; run out of moves and you fail',
     confirmText: 'OK, I See',
   },
   cn: {
@@ -50,10 +47,7 @@ module.exports = {
     newGameConfirm: '确定从第 1 关重新开始？当前局面和关卡都会重置。',
     cancel: '取消',
     confirmOk: '确定重来',
-    helpMsg: '雀圣：5×5 棋盘上发的 14 张牌，一定是一副能赢的麻将牌。滑动把它们凑到一起，再点牌组消掉。',
-    help1: '5×5 棋盘上的 14 张牌一定拆得成 4 组（顺子或刻子）+ 1 个将。朝上下左右滑动，所有牌朝该方向移动直到碰边或被别的牌挡住，牌与牌之间不会合并。每滑动一次消耗 1 步。',
-    help2: '横排或竖排里紧挨着的牌若凑成一组（三张相同或同花色三张连续）或一个将（两张对子），会被高亮圈住。点这一组的牌：点齐三张消掉这一组，一对点满两张消掉这一对。点满两张相同的牌、且还能和旁边第三张凑成刻子时，才会浮出提示确认消这一对；想消刻子就直接点第三张。',
-    help3: '判牌与顺序无关，不需要把点数排好。全部消完即过关；步数用完还没消完就失败。撤销 / 重做在棋盘下方的卡片里；右下角是模式切换和帮助。',
+    helpMsg: '## 怎么玩\n- 5×5 上的 14 张牌一定能拆成 4 组 + 1 对将\n- 滑动让所有牌一起移动，能成组的牌会被圈出\n- 点齐三张（或将的两张）就消掉这一组\n## 胜负\n- 全部消完即过关，步数用完则失败',
     confirmText: '好的，明白',
   },
 };

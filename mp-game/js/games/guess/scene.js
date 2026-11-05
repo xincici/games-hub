@@ -302,7 +302,8 @@ class GuessScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawHistory(c);
-    if (this.result === GAMING) this.drawKeyboard(c);
+    // 键盘常驻：结算时也留着（各键画成 35% alpha 且不注册热区，看得见、点不动）
+    this.drawKeyboard(c);
     if (this.result === WIN || this.result === LOSE) this.drawResult(c);
     if (!this.helpOpen && !this.confirming) this.drawFab(c);
     this.drawConfetti(c);
@@ -509,18 +510,19 @@ class GuessScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    const top = this.historyY;
-    const bottom = H - SAFE_BOTTOM - 16;
-    D.fillRoundRect(c, this.cx, top, this.cw, bottom - top, 14, T.overlay);
+    // 只盖记录区那张卡：下方输入区保持可见（键盘自己画成禁用态），右下 FAB 也还能点
+    const card = this.historyRect();
+    D.fillRoundRect(c, card.x, card.y, card.w, card.h, 14, T.overlay);
     const cx = W / 2;
-    const cy = top + (bottom - top) / 2;
+    const cy = card.y + card.h / 2;
     if (this.result === WIN) {
       D.text(c, `🎉🎉 ${t('guess.tipWin')} 🎉🎉`, cx, cy - 30, { size: 18, weight: 'bold', color: T.win, align: 'center' });
       D.text(c, `${t('guess.curStreak')} ${this.streak}`, cx, cy + 2, { size: 14, color: T.win, align: 'center' });
       const label = t('guess.nextRound');
       const bw = Math.min(160, D.measure(c, label, 13, 'bold') + 24);
       const bx = cx - bw / 2;
-      const by = cy + 32;
+      // 按钮锚在记录卡底部：320 宽下记录区只有 126px 高，写死 cy + 32 会溢出边缘
+      const by = Math.min(cy + 32, card.y + card.h - 12 - 32);
       D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
       D.text(c, label, cx, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
       this.addButton('next', bx, by, bw, 32, () => this.nextRound());

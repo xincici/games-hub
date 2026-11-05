@@ -19,6 +19,9 @@ let H = ARG_H;
 // ---------- 假 wx ----------
 const storage = new Map();
 const audioCalls = [];
+const blurStats = { puts: 0, gets: 0 };
+let captureDetail = false;
+
 function makeCtx() {
   const noop = () => {};
   const ctx = {
@@ -28,7 +31,18 @@ function makeCtx() {
     createRadialGradient: () => ({ addColorStop: noop }),
     createPattern: () => ({}),
     getImageData: (x, y, w, h) => {
+      blurStats.gets += 1;
       const data = new Uint8ClampedArray(Math.max(1, w * h * 4));
+      // captureDetail 打开时填渐变（模拟「画面有内容」，help 的毛玻璃要能读到细节）；
+      // 默认全 0，emoji-box 的「无墨迹 → 返回 null」测试依赖它
+      if (captureDetail) {
+        for (let i = 0; i < w * h; i += 1) {
+          data[i * 4] = (i * 7) % 200;
+          data[i * 4 + 1] = (i * 13) % 180;
+          data[i * 4 + 2] = (i * 29) % 160;
+          data[i * 4 + 3] = 255;
+        }
+      }
       // EMOJI_INK=1：在画布中心偏 (3, 6) 涂一块 8×8 不透明像素，模拟「emoji 墨迹」，
       // 用来验证 core/emoji-box 的偏移计算与 drawEmoji 的落点。
       if (process.env.EMOJI_INK) {
@@ -42,7 +56,7 @@ function makeCtx() {
       }
       return { data };
     },
-    putImageData: noop,
+    putImageData: () => { blurStats.puts += 1; },
     setLineDash: noop,
     getLineDash: () => [],
   };
@@ -53,16 +67,21 @@ function makeCtx() {
     'shadowColor','shadowBlur','shadowOffsetX','shadowOffsetY','lineCap','lineJoin','globalCompositeOperation','filter'];
   fnNames.forEach((k) => { ctx[k] = noop; });
   ctx.__calls = [];
+  ctx.__arcs = [];
   ctx.__texts = [];
   ctx.fillText = (value, x, y) => { ctx.__texts.push({ value, x, y, baseline: ctx.textBaseline }); };
   ['arc', 'clip', 'drawImage'].forEach((k) => {
-    ctx[k] = (...args) => { ctx.__calls.push(k); };
+    ctx[k] = (...args) => {
+      ctx.__calls.push(k);
+      if (k === 'arc') ctx.__arcs.push(args);
+    };
   });
   const values = {};
   props.forEach((k) => {
     Object.defineProperty(ctx, k, {
       get: () => values[k],
       set: (v) => { values[k] = v; },
+      configurable: true, // 测试里需要把某个属性改成「平台不支持」
     });
   });
   return ctx;
@@ -177,6 +196,15 @@ function runSize(width, height) {
   const ctx = makeCtx();
 
   GAMES.forEach((id) => {
+    // 扑克牌桌几何探针：改布局后确认「提示 + 牌 + 保留标签」和猜大小卡都放得下
+    if (id === 'poker' && process.env.POKER_PROBE) {
+      const PokerScene = require(path.join(ROOT, 'js/games/poker/scene'));
+      const ps = new PokerScene(fakeApp);
+      const blockH = ps.cardH + ps.holdH;
+      console.log(`poker @${ARG_W}x${ARG_H}: 牌桌 y=${ps.cardsY} h=${ps.cardsH} · 提示 ${ps.tableHintH}px`
+        + ` · 牌 ${ps.cardW}×${ps.cardH} · 需要 ${Math.round(blockH + ps.tableHintH)}px`
+        + ` · 猜大小 y=${ps.guessY} h=${ps.guessH} · 当前牌 ${ps.curW}×${ps.curH} · 历史 ${ps.miniW}×${ps.miniH}`);
+    }
     // 全局音效开 → 应有静音 FAB
     storage.set('__games_hub__sfx', '1');
     storage.delete(`__games_hub__mute__${id}`);
@@ -517,6 +545,236 @@ i18n.setLang('cn');
       `${L.contentH > H ? '需要滚动' : '不需滚动'} · 卡片 ${L.blocks.length} 组`);
   }
   scene.settingsOpen = false;
+}
+
+// ---------- 帮助弹窗：标题统一「玩法介绍」，文案是分块格式（小标题 + 项目符号） ----------
+{
+  const helpPanel = require(path.join(ROOT, 'js/core/help'));
+  const GAME_IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  GAME_IDS.forEach((id) => {
+    require(path.join(ROOT, `js/games/${id}/scene`));
+    const text = i18n.t(`${id}.helpMsg`);
+    check(text && text !== `${id}.helpMsg`, `${id}: 缺少 helpMsg`);
+    if (typeof text === 'string') {
+      check(text.indexOf('## ') === 0, `${id}: 帮助文案没有以「## 小标题」开头`);
+      check(text.split('\n').filter((l) => l.trim().startsWith('- ')).length >= 2,
+        `${id}: 帮助文案至少要有 2 条项目符号`);
+      check(text.length > 20 && text.length < 260, `${id}: 帮助文案长度异常（${text.length} 字）`);
+    }
+  });
+  check(i18n.t('helpTitle') === '玩法介绍' || i18n.t('helpTitle') === 'How to play', 'helpTitle 文案不对');
+
+  // 逐个场景把帮助面板画出来，确认不抛错、关闭按钮在
+  const ctx6 = makeCtx();
+  GAME_IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    const scene = new SceneClass(fakeApp);
+    fakeApp.sceneId = id;
+    scene.helpOpen = true;
+    scene.buttons = [];
+    try {
+      // 圆形展开是 260ms 动画，而动画用的是 Date.now()：这里把时钟按每帧 20ms 推进，
+      // 画满 20 帧（400ms）到完全展开，再断言关闭按钮已注册
+      const realNow = Date.now;
+      let fake = realNow();
+      Date.now = () => { fake += 20; return fake; };
+      try {
+        for (let i = 0; i < 20; i += 1) {
+          scene.buttons = [];
+          helpPanel.draw(ctx6, scene);
+        }
+      } finally {
+        Date.now = realNow;
+      }
+    } catch (e) {
+      failures.push(`${id}: 帮助面板渲染抛错 ${e.message}`);
+    }
+    check(scene.buttons.some((b) => b.id === 'help-ok'), `${id}: 帮助面板没有关闭按钮`);
+    helpPanel.reset(scene);
+    scene.helpOpen = false;
+  });
+}
+
+// ---------- core/blur：均匀画面不变、单点向邻格扩散、alpha 保留 ----------
+{
+  const { boxBlurRGBA } = require(path.join(ROOT, 'js/core/blur.js'));
+  const w = 9;
+  const h = 9;
+  const flat = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i += 1) { flat[i * 4] = 40; flat[i * 4 + 1] = 80; flat[i * 4 + 2] = 120; flat[i * 4 + 3] = 255; }
+  boxBlurRGBA(flat, w, h, 2, 2);
+  check(Math.abs(flat[0] - 40) <= 2 && Math.abs(flat[2] - 120) <= 2, 'blur: 均匀画面被改变');
+  check(flat[3] === 255, 'blur: alpha 被改动');
+
+  const dot = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i += 1) dot[i * 4 + 3] = 255;
+  const c = (4 * w + 4) * 4;
+  dot[c] = 255; dot[c + 1] = 255; dot[c + 2] = 255;
+  boxBlurRGBA(dot, w, h, 2, 2);
+  const at = (x, y) => dot[(y * w + x) * 4];
+  check(at(4, 4) < 255 && at(5, 4) > 0, 'blur: 亮点没有扩散');
+  check(at(0, 0) === 0, 'blur: 远处像素被影响（半径不对）');
+}
+
+// ---------- 帮助弹窗的圆形展开 / 收缩：半径必须逐帧变大、关闭时变小 ----------
+{
+  const helpPanel = require(path.join(ROOT, 'js/core/help'));
+  const ClickScene = require(path.join(ROOT, 'js/games/click/scene'));
+  const scene = new ClickScene(fakeApp);
+  fakeApp.sceneId = 'click';
+  const ctx7 = makeCtx();
+  const realNow = Date.now;
+  let fake = realNow();
+  Date.now = () => { fake += 20; return fake; };
+  try {
+    const radii = [];
+    const frame = () => {
+      ctx7.__arcs.length = 0;
+      scene.buttons = [];
+      helpPanel.draw(ctx7, scene);
+      if (ctx7.__arcs.length) radii.push(ctx7.__arcs[0][2]);   // 第一个 arc 是裁剪圆，后面还有项目符号小圆点
+    };
+    scene.helpOpen = true;
+    captureDetail = true;   // 让假画布读回「有内容」的像素，毛玻璃才会真的去模糊
+    const putsBefore = blurStats.puts;
+    const getsBefore = blurStats.gets;
+    for (let i = 0; i < 20; i += 1) frame();
+    check(radii.length >= 5, `帮助展开：只有 ${radii.length} 帧画了圆`);
+    check(blurStats.puts - putsBefore === 1,
+      `帮助毛玻璃：一次展开应只算一次背景（实际 ${blurStats.puts - putsBefore} 次）`);
+    check(blurStats.gets - getsBefore <= 2,
+      `帮助毛玻璃：抓图不该每帧重做（实际 ${blurStats.gets - getsBefore} 次）`);
+    if (radii.length >= 5) {
+      check(radii[radii.length - 1] > radii[0] * 3,
+        `帮助展开：半径没有增长（首 ${radii[0].toFixed(0)} → 末 ${radii[radii.length - 1].toFixed(0)}）`);
+      // 用 help 自己的圆心算法，最远角就是完全展开时的半径
+      const ctr = helpPanel.fabCenter(scene);
+      const cfx = ctr.x;
+      const cfy = ctr.y;
+      const far = Math.max(
+        Math.hypot(cfx, cfy), Math.hypot(W - cfx, cfy),
+        Math.hypot(cfx, H - cfy), Math.hypot(W - cfx, H - cfy),
+      );
+      check(radii[radii.length - 1] >= far - 1,
+        `帮助展开：最终没有铺满全屏（${radii[radii.length - 1].toFixed(0)} < ${far.toFixed(0)}）`);
+    }
+    // 关闭：半径必须逐帧变小
+    scene.helpOpen = false;
+    const closing = [];
+    const frame2 = () => {
+      ctx7.__arcs.length = 0;
+      scene.buttons = [];
+      helpPanel.draw(ctx7, scene);
+      if (ctx7.__arcs.length) closing.push(ctx7.__arcs[0][2]);
+    };
+    for (let i = 0; i < 20; i += 1) frame2();
+    check(closing.length >= 3, '帮助收缩：没有画出收缩动画');
+    if (closing.length >= 3) {
+      check(closing[closing.length - 1] < closing[0], '帮助收缩：半径没有变小');
+    }
+    check(helpPanel.animating(scene) === false, '帮助：收起动画结束后 animating 应为 false');
+    // 不支持 ctx.filter 的平台（多数 Android）：必须走「两级双线性放大」且不抛错
+    const ctx8 = makeCtx();
+    Object.defineProperty(ctx8, 'filter', { get: () => 'none', set: () => {}, configurable: true });
+    scene.helpOpen = true;
+    ctx8.__calls.length = 0;
+    try {
+      for (let i = 0; i < 20; i += 1) { scene.buttons = []; helpPanel.draw(ctx8, scene); }
+    } catch (e) {
+      failures.push(`帮助面板（无 filter 平台）渲染抛错 ${e.message}`);
+    }
+    check(ctx8.__calls.filter((k) => k === 'drawImage').length >= 2,
+      '帮助毛玻璃：没有 filter 时应有两级放大的 drawImage');
+  } finally {
+    Date.now = realNow;
+  }
+  helpPanel.reset(scene);
+  scene.helpOpen = false;
+  captureDetail = false;
+}
+
+// ---------- 扑克猜大小：点「大」后这张牌先飞进左侧历史位，落地才换新牌 ----------
+{
+  const PokerScene = require(path.join(ROOT, 'js/games/poker/scene'));
+  const scene = new PokerScene(fakeApp);
+  fakeApp.sceneId = 'poker';
+  audio.setGame('poker');
+  scene.stage = 'guess';
+  scene.dice = true;
+  scene.guessCard = { num: 9, type: 'S' };
+  scene.guesses = [];
+  scene.guessFly = null;
+  scene.now = Date.now();
+
+  scene.guess(true);
+  check(!!scene.guessFly, '扑克猜大小：点「大」后没有启动飞牌动画');
+  check(scene.guessCard === null, '扑克猜大小：飞牌期间右侧不应立刻出现新牌');
+  check(scene.guesses.length === 1, '扑克猜大小：结果没有记进历史');
+
+  const ctx5 = makeCtx();
+  const flyAt = scene.guessFly ? scene.guessFly.at : scene.now;
+  [0, 120, 240, 320].forEach((dt) => {
+    scene.buttons = [];
+    scene.now = flyAt + dt;
+    try {
+      scene.render(ctx5);
+    } catch (e) {
+      failures.push(`扑克猜大小：飞行第 ${dt}ms 渲染抛错 ${e.message}`);
+    }
+  });
+
+  // 把 at 往前挪 400ms 再 update：飞牌应当落地、状态清掉、右侧出现下一张
+  scene.guessFly.at = Date.now() - 400;
+  scene.update(0.016);
+  check(scene.guessFly === null, '扑克猜大小：飞牌落地后没有清状态');
+  check(!!scene.guessCard, '扑克猜大小：落地后右侧没有出现下一张牌');
+  audio.setGame(null);
+}
+
+// ---------- 1A2B 结算：遮罩只盖记录区，键盘仍然画出来但点不动 ----------
+{
+  const GuessScene = require(path.join(ROOT, 'js/games/guess/scene'));
+  const D = require(path.join(ROOT, 'js/core/draw'));
+  const theme = require(path.join(ROOT, 'js/core/theme'));
+  const scene = new GuessScene(fakeApp);
+  fakeApp.sceneId = 'guess';
+  audio.setGame('guess');
+
+  const origFill = D.fillRoundRect;
+  const fills = [];
+  D.fillRoundRect = (c, x, y, w, h, r, color) => {
+    fills.push({ x, y, w, h, r, color });
+    return origFill(c, x, y, w, h, r, color);
+  };
+  const renderResult = (result) => {
+    scene.result = result;
+    scene.resultAt = Date.now() - 1000;   // 越过 resultVisible 的 250ms 延迟
+    scene.buttons = [];
+    fills.length = 0;
+    scene.render(makeCtx());
+    return scene.buttons.map((b) => b.id);
+  };
+
+  const card = scene.historyRect();
+  const WIN = 2;
+  const LOSE = 1;
+  const winIds = renderResult(WIN);
+  const overlay = fills.find((f) => f.color === theme.tokens.overlay && Math.abs(f.h - card.h) < 0.5);
+  check(!!overlay, '1A2B 结算：遮罩没有正好盖住记录区（高度对不上）');
+  check(overlay && Math.abs(overlay.y - card.y) < 0.5 && Math.abs(overlay.x - card.x) < 0.5,
+    '1A2B 结算：遮罩没有对齐记录区左上角');
+  const keyboardCard = fills.find((f) => Math.abs(f.y - scene.keyboardY) < 0.5 && Math.abs(f.h - scene.keyboardH) < 0.5);
+  check(!!keyboardCard, '1A2B 结算：键盘不该消失（没画键盘底卡）');
+  const isKey = (id) => id.indexOf('num-') === 0 || id === 'del' || id === 'enter';
+  check(!winIds.some(isKey), `1A2B 结算：胜利态键盘按键不该可点（注册了 ${winIds.filter(isKey).join(',')}）`);
+  check(winIds.includes('next'), '1A2B 结算：胜利态缺少「下一局」按钮');
+
+  const loseIds = renderResult(LOSE);
+  check(!loseIds.some(isKey), '1A2B 结算：失败态键盘按键也不该可点');
+  D.fillRoundRect = origFill;
+  audio.setGame(null);
 }
 
 // ---------- 回归：静音必须按游戏独立（曾经 openGame 只改 sceneId 不通知 audio，

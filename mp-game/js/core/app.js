@@ -350,7 +350,9 @@ class App {
         this.input.setButtons([]);
       } else {
         this.scene.buttons = [];
-        const drawHelp = this.scene.helpOpen && typeof this.scene.drawHelp === 'function'
+        // 帮助收起动画没播完时也要继续画，否则关闭时没有圆形收缩的效果
+        const helpVisible = this.scene.helpOpen || help.animating(this.scene);
+        const drawHelp = helpVisible && typeof this.scene.drawHelp === 'function'
           ? this.scene.drawHelp : null;
         const drawConfirm = !drawHelp && confirm.canOverride(this.scene) && typeof this.scene.drawConfirm === 'function'
           ? this.scene.drawConfirm : null;

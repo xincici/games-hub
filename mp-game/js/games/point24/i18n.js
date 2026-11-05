@@ -20,9 +20,7 @@ const dict = {
     gaveUp: '已展示答案 —— 当前连胜清零',
     helpTip: '查看帮助',
     confirmText: '我知道了',
-    help1: '把给出的 4 个数字各用一次，配合加、减、乘、除和括号，组成一个结果等于 24 的算式。数字的先后顺序可以自己安排。',
-    help2: '点数字、符号或括号即可把它加进算式，点「退格」可以撤回最后一步。用过的数字会置灰，当前不能加的也会置灰 —— 比如没有未闭合的左括号时，右括号点不了。',
-    help3: '4 个数字全部用上、算式正好等于 24 即过关，当前连胜加 1（同时刷新最长连胜）。点「查看答案」算放弃：会给你一个正确答案，并把当前连胜清零。',
+    helpMsg: '## 怎么玩\n- 用给出的 4 个数字各一次，配合 + − × ÷ 和括号，算出 24\n- 点数字、符号、括号加进算式；点「退格」撤回\n## 胜负\n- 正好等于 24 即过关，连胜 +1；「查看答案」会公布答案但清零当前连胜',
   },
   en: {
     gameTitle: '24 Game',
@@ -44,9 +42,7 @@ const dict = {
     gaveUp: 'Answer shown - the streak is reset',
     helpTip: 'Click for help!',
     confirmText: 'OK, I See',
-    help1: 'Use all four numbers exactly once, together with plus, minus, times, divide and brackets, to make an expression that equals 24. The order of the numbers is up to you.',
-    help2: 'Tap a number, a sign or a bracket to add it to your expression, and use Undo to take the last one back. Numbers you have already used turn grey, and so does anything that cannot go next - for example a closing bracket when no bracket is open.',
-    help3: 'Get exactly 24 with all four numbers used and you clear the level and your streak goes up by one. Tapping Show Answer counts as giving up: it shows you one valid answer and resets your current streak to zero.',
+    helpMsg: '## How to play\n- Use the four numbers once each, with + - x / and brackets, to make 24\n- Tap numbers, operators and brackets; backspace undoes\n## Win or lose\n- Exactly 24 passes and extends your streak; Show Answer resets the current streak',
   },
 };
 module.exports = dict;

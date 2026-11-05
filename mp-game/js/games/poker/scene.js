@@ -46,6 +46,7 @@ const DEAL_INTERVAL = 170; // 发牌 / 换牌逐张错峰（row-major，从左�
 const FLIP_MS = 260; // 一张牌翻面 0 → 1 的时长
 const ENTER_MS = 220; // 牌出现的 pop 时长
 const GUESS_FLICKER = 100; // 猜大小：每秒换 10 张牌（web 同款）
+const GUESS_FLY = 320;     // 点「大 / 小」后：这张牌从右侧当前位飞到左侧历史位的时长
 const BET_DELAY = 320; // 长按下注：先走一步，停 320ms 再连发
 const BET_REPEAT = 60; // 连发间隔 ≈ 16 步/秒
 const HOLD_COLOR = '#e00000';
@@ -78,6 +79,7 @@ class PokerScene extends Scene {
     this.drawDoneAt = 0;
     this.animStart = 0;
     this.guessCard = null;
+    this.guessFly = null;    // 猜大小结算的飞牌动画 { at, index, card, big, win }
     this.guessScroll = 0;
     this.guessDrag = null;
     this.nextGuessAt = 0;
@@ -218,12 +220,12 @@ class PokerScene extends Scene {
 
     // 严格按小程序顺序：牌型倍数区在上，金额区其次，然后手牌 / 猜大小 / 操作区。
     this.rulesY = this.top + this.headerH + 12;
-    this.rulesCaption = 16;
+    this.rulesCaption = 14;
     this.ruleRowH = 23;
     this.rulesH = this.rulesCaption + 4 * this.ruleRowH + 12;
-    this.scoreY = this.rulesY + this.rulesH + 14;
-    this.scoreH = 74;
-    this.cardsY = this.scoreY + this.scoreH + 14;
+    this.scoreY = this.rulesY + this.rulesH + 10;
+    this.scoreH = 72;
+    this.cardsY = this.scoreY + this.scoreH + 10;
 
     this.fabSize = 48;
     this.fabX = W - 16 - this.fabSize;
@@ -237,33 +239,41 @@ class PokerScene extends Scene {
     this.cardW = Math.max(24, Math.min(76, Math.floor((this.cw - padX * 2 - this.cardGap * 4) / logic.LEN)));
     this.cardH = Math.round(this.cardW * 1.5);
     // 小程序 .guess-area = 200rpx，高 100~104px；历史/当前都使用 mini CardView 比例 76:114rpx。
-    this.guessH = Math.round(W * 200 / 750);
+    // 猜大小区比 web 的 200rpx 再高 6px：两行说明 + 牌 + 「大 / 小」标签才放得下
+    this.guessH = Math.round(W * 200 / 750) + 6;
     this.miniW = Math.max(30, Math.round(W * 76 / 750));
     this.miniH = Math.round(this.miniW * 114 / 76);
     this.curW = this.miniW;
     this.curH = this.miniH;
 
-    const natural = this.cardH + this.holdH + 12;
+    // 牌组区上方那句提示：16px（320×568 这类极窄屏牌桌只剩 50px，就不显示）
+    this.tableHintH = 0;
+    const hintNeed = 28;      // 两行提示（保留说明 + 大小王说明），行距 13
+    const natural = this.cardH + this.holdH + 12 + hintNeed;
     const extra = clamp((H - 667) * 0.35, 0, 40);
     let maxCards = this.maxCardsFor(this.guessH);
     // 带刘海 / 底部安全区的矮屏：猜大小卡换成紧凑尺寸，把高度让给牌桌。
-    if (this.dice && maxCards < 120) {
+    // 只有真正的矮屏（320×568）才换紧凑尺寸；375×667 加高后 maxCards 会掉到 ~117，不能误判
+    if (this.dice && maxCards < 110) {
       this.guessH = 78;
-      this.miniW = 30;
-      this.miniH = 45;
-      this.curW = 38;
-      this.curH = 57;
+      this.miniW = 28;
+      this.miniH = 42;
+      this.curW = 36;
+      this.curH = 54;
       maxCards = this.maxCardsFor(this.guessH);
     }
     // 关掉猜大小时把空出来的高度给牌桌（像一张更大的牌桌，而不是留一片空白）。
     const want = natural + extra + (this.dice ? 0 : 96);
     this.cardsH = Math.max(60, Math.min(maxCards, want));
-    if (this.cardsH < natural) {
-      const roomH = Math.max(24, this.cardsH - this.holdH - 12);
+    // 提示只在牌桌够高时才占位：375×667 可用 127px（够），320×568 只有 50px（放弃）
+    this.tableHintH = maxCards >= 120 ? hintNeed : 0;
+    const needH = this.cardH + this.holdH + 12 + this.tableHintH;
+    if (this.cardsH < needH) {
+      const roomH = Math.max(24, this.cardsH - this.holdH - 12 - this.tableHintH);
       this.cardW = Math.max(22, Math.min(this.cardW, Math.floor(roomH / 1.5)));
       this.cardH = Math.round(this.cardW * 1.5);
     }
-    this.cardsH = Math.max(this.cardsH, this.cardH + this.holdH + 12);
+    this.cardsH = Math.max(this.cardsH, this.cardH + this.holdH + 12 + this.tableHintH);
     this.cardX = this.cx + (this.cw - (this.cardW * logic.LEN + this.cardGap * (logic.LEN - 1))) / 2;
 
     this.guessY = this.cardsY + this.cardsH + 12;
@@ -438,18 +448,23 @@ class PokerScene extends Scene {
 
   guess(big) {
     if (this.stage !== GUESS || this.helpOpen || !this.dice) return;
+    if (this.guessFly) return;                 // 上一张还在飞：忽略连点
     const card = this.guessCard || logic.randomGuessCard();
     const win = logic.guessResult(card, !!big);
     this.guesses = this.guesses.concat([{ num: card.num, type: card.type, big: !!big, win }]).slice(-MAX_HISTORY);
     this.guessScroll = 99999;
+    // 先让这张牌从右侧当前位飞到左侧历史位；落地后再换新牌（见 update）
+    this.guessFly = {
+      at: Date.now(), index: this.guesses.length - 1, card: { num: card.num, type: card.type }, big: !!big, win,
+    };
+    this.guessCard = null;
+    this.nextGuessAt = 0;
     if (win > 0) {
       this.bonus *= 2;
       this.bonusPulseAt = Date.now();
       this.stats.peak = Math.max(this.stats.peak, this.bonus);
       this.app.audio.playFirework();
       this.startConfetti();
-      this.guessCard = logic.randomGuessCard();
-      this.nextGuessAt = Date.now() + GUESS_FLICKER;
     } else if (win < 0) {
       this.stage = GUESS_LOSE;
       this.bonus = 0;
@@ -600,7 +615,15 @@ class PokerScene extends Scene {
       this.bonusPulseAt = this.now;
     }
     if (this.toast && this.now >= this.toast.until) this.toast = null;
-    if (this.stage === GUESS && this.dice && this.now >= this.nextGuessAt) {
+    // 飞牌落地：清状态，右侧再出现下一张（继续每 100ms 闪一次）
+    if (this.guessFly && this.now - this.guessFly.at >= GUESS_FLY) {
+      this.guessFly = null;
+      if (this.stage === GUESS && this.dice) {
+        this.guessCard = logic.randomGuessCard();
+        this.nextGuessAt = this.now + GUESS_FLICKER;
+      }
+    }
+    if (!this.guessFly && this.stage === GUESS && this.dice && this.now >= this.nextGuessAt) {
       this.guessCard = logic.randomGuessCard();
       this.nextGuessAt = this.now + GUESS_FLICKER;
     }
@@ -837,11 +860,34 @@ class PokerScene extends Scene {
     this.addButton('dice-toggle', x - 6, y - 12, total + 12, 24, () => this.toggleDice());
   }
 
+  // 牌组区上方的提示（最多两行）：
+  //  - 发牌前：只讲「点发牌」；
+  //  - 发牌后（换牌前）：第一行讲保留、第二行讲大小王；
+  //  - 换牌后：不显示。
+  tableHintLines() {
+    if (this.stage === WAIT) return [t('poker.tableHintDeal')];
+    if (this.stage === FIRST) return [t('poker.tableHintKeep'), t('poker.tableHintJoker')];
+    return [];
+  }
+
   drawTable(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.cardsY, this.cw, this.cardsH, T);
     const blockH = this.cardH + this.holdH;
-    const top = this.cardsY + Math.max(10, (this.cardsH - blockH) / 2);
+    const hints = this.tableHintLines();
+    if (this.tableHintH && hints.length) {
+      // 一行时垂直居中；两行时基线 9 / 22（行距 13，比默认略松一点）
+      const ys = hints.length > 1
+        ? [this.cardsY + 9, this.cardsY + 22]
+        : [this.cardsY + this.tableHintH / 2 + 1];
+      hints.forEach((line, i) => {
+        D.text(c, line, this.cx + this.cw / 2, ys[i], {
+          size: 10.5, color: T.muted, align: 'center',
+        });
+      });
+    }
+    const top = this.cardsY + this.tableHintH
+      + Math.max(2, (this.cardsH - this.tableHintH - blockH) / 2);
     const canHold = this.stage === FIRST && !this.anim;
     this.cards.forEach((card, i) => {
       const x = this.cardX + i * (this.cardW + this.cardGap);
@@ -932,45 +978,77 @@ class PokerScene extends Scene {
     D.text(c, t('poker.tipReset'), cx, cy + 18, { size: 12, color: T.muted, align: 'center' });
   }
 
+  // 猜大小卡：上方两行说明（判大小规则 + 加倍说明）、右侧当前牌（闪烁）、左侧历史。
+  // 点「大 / 小」之后，右侧这张牌会飞进左侧历史位（见 guessFly），落地后右侧才出现下一张。
   drawGuessCard(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.guessY, this.cw, this.guessH, T);
-    // 中间常驻规则文案（保留这一条）。
-    D.text(c, t('poker.guessTip'), this.cx + this.cw / 2, this.guessY + 11, {
-      size: 10.5, color: T.muted, align: 'center',
+    // 两行常驻说明：第一行判大小规则，第二行「猜对加倍、猜错清零」。
+    // 头部高度按可用空间自适应（320×568 的紧凑卡只有 78px 高）。
+    // 头部给两行说明；并保证「头部 + 2 + 牌 + 12（大/小标签）」不超出卡片高度
+    const headH = Math.max(20, Math.min(28, this.guessH - this.miniH - 18));
+    const headSize = headH >= 28 ? 10 : 9;
+    // 两行说明：行距 12.5（比 0.34/0.72 的比例略松，读起来不挤）
+    const ruleY = this.guessY + 8.5;
+    D.text(c, t('poker.guessRule'), this.cx + this.cw / 2, ruleY, {
+      size: headSize, color: T.muted, align: 'center',
     });
+    D.text(c, t('poker.guessTip'), this.cx + this.cw / 2, ruleY + 12.5, {
+      size: headSize, color: T.muted, align: 'center',
+    });
+
     const padX = 12;
-    const showCurrent = this.stage === GUESS && !!this.guessCard;
+    const contentTop = this.guessY + headH;
+    const fly = this.guessFly;
+    const showCurrent = this.stage === GUESS && !!this.guessCard && !fly;
     const curX = this.cx + this.cw - padX - this.curW;
-    const contentTop = this.guessY + 18;
-    const curY = contentTop + (this.guessH - 18 - this.curH) / 2;
+    const curY = contentTop + (this.guessH - headH - this.curH) / 2;
     if (showCurrent) {
       cards.draw(c, this.guessCard, MODE_POKER, curX, curY, this.curW, this.curH, true, 'mode-poker', '🃏');
-    } else {
-      // 非猜大小阶段也常驻一张牌背（web 的 randomCard 初值就是 0 → 牌背），
-      // 不再画问号占位。
+    } else if (!fly) {
+      // 非猜大小阶段也常驻一张牌背（飞行途中右侧留空，牌已经「飞走了」）
       cards.draw(c, null, MODE_POKER, curX, curY, this.curW, this.curH, false, 'mode-poker', '🃏');
     }
+
     const histLeft = this.cx + padX;
     const histRight = curX - 12;
     const room = Math.max(0, histRight - histLeft);
     const totalW = this.guesses.length * (this.miniW + 6);
     const maxScroll = Math.max(0, totalW - room);
     this.guessScroll = Math.max(0, Math.min(maxScroll, this.guessScroll));
-    if (!this.guesses.length) return;
     const topY = contentTop + 2;
-    c.save();
-    D.roundRect(c, histLeft - 2, this.guessY + 2, room + 4, this.guessH - 4, 8);
-    c.clip();
-    this.guesses.forEach((g, i) => {
-      const x = histLeft + i * (this.miniW + 6) - this.guessScroll;
-      if (x + this.miniW < histLeft || x > histRight) return;
-      cards.draw(c, { num: g.num, type: g.type }, MODE_POKER, x, topY, this.miniW, this.miniH, true, 'mode-poker', '🃏');
-      const color = g.win > 0 ? T.win : g.win < 0 ? T.lose : T.muted;
-      D.text(c, g.big ? t('poker.bigShort') : t('poker.smallShort'),
-        x + this.miniW / 2, topY + this.miniH + 7, { size: 10.5, weight: 'bold', color, align: 'center' });
-    });
-    c.restore();
+    const p = fly ? clamp((this.now - fly.at) / GUESS_FLY, 0, 1) : 1;
+    if (this.guesses.length) {
+      c.save();
+      D.roundRect(c, histLeft - 2, this.guessY + 2, room + 4, this.guessH - 4, 8);
+      c.clip();
+      this.guesses.forEach((g, i) => {
+        if (fly && i === fly.index) return;      // 这一张正在飞：先别画在历史位里
+        const x = histLeft + i * (this.miniW + 6) - this.guessScroll;
+        if (x + this.miniW < histLeft || x > histRight) return;
+        cards.draw(c, { num: g.num, type: g.type }, MODE_POKER, x, topY, this.miniW, this.miniH, true, 'mode-poker', '🃏');
+        const color = g.win > 0 ? T.win : g.win < 0 ? T.lose : T.muted;
+        D.text(c, g.big ? t('poker.bigShort') : t('poker.smallShort'),
+          x + this.miniW / 2, topY + this.miniH + 7, { size: 10.5, weight: 'bold', color, align: 'center' });
+      });
+      c.restore();
+    }
+
+    // 飞行中的牌：从右侧当前位 → 左侧历史位（尺寸一起缩到 mini），落地后补上「大 / 小」
+    if (fly) {
+      const e = easeOut(p);
+      const toX = histLeft + fly.index * (this.miniW + 6) - this.guessScroll;
+      const x = curX + (toX - curX) * e;
+      const y = curY + (topY - curY) * e;
+      const w = this.curW + (this.miniW - this.curW) * e;
+      const h = this.curH + (this.miniH - this.curH) * e;
+      cards.draw(c, fly.card, MODE_POKER, x, y, w, h, true, 'mode-poker', '🃏');
+      if (p >= 0.98) {
+        const color = fly.win > 0 ? T.win : fly.win < 0 ? T.lose : T.muted;
+        D.text(c, fly.big ? t('poker.bigShort') : t('poker.smallShort'),
+          x + w / 2, y + h + 7, { size: 10.5, weight: 'bold', color, align: 'center' });
+      }
+    }
   }
 
   actionItems() {

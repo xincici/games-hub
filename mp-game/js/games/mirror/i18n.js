@@ -17,9 +17,7 @@ module.exports = {
     swapHint: 'Tap to swap, and use the hint until every position matches',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait',
-    help1: 'The pattern at the top is shown to you, then shuffled and turned face down. Your row below holds the same emoji in a different order - to begin with, not one of them is in the right spot.',
-    help2: 'Tap one of your cards and then another to swap the two. After each swap the hint between the two areas tells you how many cards now match the pattern, counting only cards that are in the right position with the right emoji.',
-    help3: 'Keep swapping until every card matches the pattern and you win the round. Work out the pattern from the hints alone - the timer runs while you play, and each difficulty keeps its own best time.',
+    helpMsg: '## How to play\n- The pattern up top is shown, then shuffled and turned face down\n- Tap one of your cards, then another, to swap them\n- The hint between the areas counts how many positions already match\n## Goal\n- Match every position to win',
   },
   cn: {
     gameTitle: 'Emoji 镜像',
@@ -38,8 +36,6 @@ module.exports = {
     swapHint: '点击交换，根据提示让他们位置全部相同',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏',
-    help1: '上方的展示区会先亮出这一局的 emoji，接着洗一下、翻面藏起来。下方游戏区放着同样这几个 emoji，但顺序不同 —— 开局时保证一个位置都不对。',
-    help2: '点一张自己的牌、再点另一张，两张就互换位置。每次交换后，两个区中间的提示会告诉你游戏区现在有几个位置和展示区相同（位置和 emoji 都对上才算）。',
-    help3: '不断交换直到每一张都和展示区一致即过关。展示区的顺序要自己靠提示推出来；游戏过程中计时，每种难度各自记录最佳时间。',
+    helpMsg: '## 怎么玩\n- 上方展示区的顺序先亮一下，再洗牌、翻面藏起来\n- 点自己的一张牌、再点另一张，两张互换位置\n- 中间的提示会告诉你现在有几个位置已经和展示区一致\n## 过关\n- 全部对上即过关',
   },
 };

@@ -23,9 +23,7 @@ module.exports = {
     suitP: 'dots',
     helpTip: 'Click for help!',
     confirmText: 'OK, I See',
-    help1: 'You hold 14 tiles and the goal is a winning hand: four sets of three plus a pair (or seven pairs).',
-    help2: 'Tap a tile to discard it, then you draw one from the wall automatically. A drawn tile waits at the far right until you discard, then the hand sorts itself again.',
-    help3: 'The number on the right is how many tiles are left in the wall. Run out without winning and the streak goes back to zero.',
+    helpMsg: '## How to play\n- You hold 14 tiles: make four sets (runs or triplets) plus one pair to win\n- Tap a tile to discard, then you draw one from the wall\n## End\n- If the wall runs out before you win, the round is over',
   },
   cn: {
     gameTitle: '单人麻将',
@@ -48,8 +46,6 @@ module.exports = {
     suitP: '筒子',
     helpTip: '查看帮助',
     confirmText: '我知道了',
-    help1: '手上 14 张牌，目标是把它们凑成能胡的牌型：四组三张 + 一对将（或者七对子）。',
-    help2: '点一张手牌就打出去，然后自动从牌墙摸一张。刚摸到的牌先停在最右侧，等你打出一张后手牌会按顺序重新排好。',
-    help3: '右上角的数字是牌墙里还剩多少张，摸完还没胡就本局结束、当前连胜归零。',
+    helpMsg: '## 怎么玩\n- 手里 14 张牌：凑成 4 组（顺子或刻子）+ 1 对将即可胡牌\n- 点一张手牌打出，然后自动从牌墙摸一张\n## 结束\n- 牌墙摸完还没胡，本局结束',
   },
 };

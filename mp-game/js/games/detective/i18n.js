@@ -19,12 +19,7 @@ module.exports = {
     tipLost: 'Out of Hearts',
     stampText: 'Correct',
     helpTip: 'Click for help!',
-    helpMsg: 'Memorize every emoji in the preview. One is swapped during the flip — spot it when they flip back!',
-    help1: 'Emoji mode runs nine levels from 1×3 to 4×5 (2–7s preview); poker mode runs ten levels from 1×4 to 4×7; mahjong mode reuses the emoji levels with tile faces.',
-    help2: 'Cards flip 1s; the swap happens mid-flip, then they flip back.',
-    help3: 'Tap the swapped emoji to win. Wrong taps cost a heart and turn red — red cards are locked.',
-    help4: 'Win: Replay or Next Level. New games start at level 1.',
-    help5: 'The button beside help cycles emoji / poker / mahjong faces. Rules are the same, but each mode keeps its own level and save.',
+    helpMsg: '## How to play\n- Memorise every emoji on display\n- One is swapped while the cards are face down; find the impostor once they flip back\n## Rules\n- A wrong tap costs a heart and greys that card; lose all hearts and the round is over',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait'
   },
@@ -48,12 +43,7 @@ module.exports = {
     tipLost: '生命耗尽',
     stampText: '正确',
     helpTip: '查看帮助',
-    helpMsg: '展示阶段记住所有 emoji。翻面时其中一个被偷偷替换，翻回正面后找出冒牌货！',
-    help1: 'emoji 模式 1×3 到 4×5 共九关（观察 2~7 秒）；扑克牌面 1×4 到 4×7 共十关；麻将牌面沿用 emoji 九关，只是换成麻将牌。',
-    help2: '观察后卡片翻面 1 秒，趁翻面偷换再翻回。',
-    help3: '点中被替换的 emoji 即胜利。点错会抖动、扣心并标红，标红后不能再点。',
-    help4: '过关可选重玩或下一关，新游戏回第 1 关。',
-    help5: '帮助旁的按钮在 emoji / 扑克 / 麻将三种牌面间循环：玩法相同，关卡与局面各自保存，切回接着玩。',
+    helpMsg: '## 怎么玩\n- 先记住展示的所有 emoji\n- 翻面时其中一个被换掉，翻回后找出冒牌货\n## 规则\n- 点中即过关；点错扣一颗心，标红的牌不能再点，心用完失败',
     confirmText: '好的，明白',
     rotateTip: '请旋转设备至竖屏'
   }
