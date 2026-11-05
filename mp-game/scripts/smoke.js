@@ -22,6 +22,18 @@ const audioCalls = [];
 const blurStats = { puts: 0, gets: 0 };
 let captureDetail = false;
 
+// 帮助动画用 Date.now() 推进；同步循环里时间几乎不走，套上这个可以按每帧 20ms 前进
+function withFakeClock(stepMs, fn) {
+  const realNow = Date.now;
+  let fake = realNow();
+  Date.now = () => { fake += stepMs; return fake; };
+  try {
+    return fn();
+  } finally {
+    Date.now = realNow;
+  }
+}
+
 function makeCtx() {
   const noop = () => {};
   const ctx = {
@@ -547,6 +559,29 @@ i18n.setLang('cn');
   scene.settingsOpen = false;
 }
 
+// ---------- 场景里用到的 i18n key 必须真的存在（中英都要），否则界面上会直接显示 key ----------
+{
+  const fs = require('fs');
+  const GAME_IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const missing = [];
+  GAME_IDS.forEach((id) => {
+    const src = fs.readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
+    // 只认字面量 key（动态拼接的没法静态检查）
+    const keys = new Set();
+    const re = /t\('([a-zA-Z0-9_]+\.[\w]+)'/g;
+    let m;
+    while ((m = re.exec(src))) if (m[1].startsWith(`${id}.`)) keys.add(m[1]);
+    keys.forEach((key) => {
+      const cn = i18n.t(key);
+      const en = (() => { i18n.setLang('en'); const v = i18n.t(key); i18n.setLang('cn'); return v; })();
+      if (cn === key || en === key) missing.push(`${id}: ${key}${cn === key ? ' (cn)' : ''}${en === key ? ' (en)' : ''}`);
+    });
+  });
+  check(missing.length === 0, `场景里引用了不存在的 i18n key：${missing.join('、')}`);
+}
+
 // ---------- 帮助弹窗：标题统一「玩法介绍」，文案是分块格式（小标题 + 项目符号） ----------
 {
   const helpPanel = require(path.join(ROOT, 'js/core/help'));
@@ -575,23 +610,19 @@ i18n.setLang('cn');
     scene.helpOpen = true;
     scene.buttons = [];
     try {
-      // 圆形展开是 260ms 动画，而动画用的是 Date.now()：这里把时钟按每帧 20ms 推进，
-      // 画满 20 帧（400ms）到完全展开，再断言关闭按钮已注册
-      const realNow = Date.now;
-      let fake = realNow();
-      Date.now = () => { fake += 20; return fake; };
-      try {
-        for (let i = 0; i < 20; i += 1) {
+      // 圆形展开 600ms，而动画用 Date.now()：这里把时钟按每帧 20ms 推进，
+      // 画满 40 帧（800ms）到完全展开，再断言关闭按钮已注册
+      withFakeClock(20, () => {
+        for (let i = 0; i < 40; i += 1) {
           scene.buttons = [];
           helpPanel.draw(ctx6, scene);
         }
-      } finally {
-        Date.now = realNow;
-      }
+      });
     } catch (e) {
       failures.push(`${id}: 帮助面板渲染抛错 ${e.message}`);
     }
     check(scene.buttons.some((b) => b.id === 'help-ok'), `${id}: 帮助面板没有关闭按钮`);
+    check(scene.buttons.some((b) => b.id === 'help-close'), `${id}: 帮助面板没有 FAB 位置的 ✕`);
     helpPanel.reset(scene);
     scene.helpOpen = false;
   });
@@ -640,7 +671,7 @@ i18n.setLang('cn');
     captureDetail = true;   // 让假画布读回「有内容」的像素，毛玻璃才会真的去模糊
     const putsBefore = blurStats.puts;
     const getsBefore = blurStats.gets;
-    for (let i = 0; i < 20; i += 1) frame();
+    for (let i = 0; i < 40; i += 1) frame();
     check(radii.length >= 5, `帮助展开：只有 ${radii.length} 帧画了圆`);
     check(blurStats.puts - putsBefore === 1,
       `帮助毛玻璃：一次展开应只算一次背景（实际 ${blurStats.puts - putsBefore} 次）`);
@@ -669,7 +700,7 @@ i18n.setLang('cn');
       helpPanel.draw(ctx7, scene);
       if (ctx7.__arcs.length) closing.push(ctx7.__arcs[0][2]);
     };
-    for (let i = 0; i < 20; i += 1) frame2();
+    for (let i = 0; i < 40; i += 1) frame2();
     check(closing.length >= 3, '帮助收缩：没有画出收缩动画');
     if (closing.length >= 3) {
       check(closing[closing.length - 1] < closing[0], '帮助收缩：半径没有变小');
@@ -681,7 +712,7 @@ i18n.setLang('cn');
     scene.helpOpen = true;
     ctx8.__calls.length = 0;
     try {
-      for (let i = 0; i < 20; i += 1) { scene.buttons = []; helpPanel.draw(ctx8, scene); }
+      for (let i = 0; i < 40; i += 1) { scene.buttons = []; helpPanel.draw(ctx8, scene); }
     } catch (e) {
       failures.push(`帮助面板（无 filter 平台）渲染抛错 ${e.message}`);
     }

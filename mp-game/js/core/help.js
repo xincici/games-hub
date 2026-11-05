@@ -4,6 +4,7 @@ const theme = require('./theme');
 const D = require('./draw');
 const i18n = require('./i18n');
 const blur = require('./blur');
+const icons = require('./icons');
 
 const { t } = i18n;
 const states = new WeakMap();
@@ -107,17 +108,23 @@ function stateOf(scene) {
 }
 
 // 帮助 FAB 的中心（圆形展开的圆心）；各游戏的 FAB 字段名不统一，逐个兜底
-function fabCenter(scene) {
+function fabRect(scene) {
   const r = (scene && (scene.helpFab || scene.helpRect)) || null;
   if (r && Number.isFinite(r.x) && Number.isFinite(r.w)) {
-    return { x: r.x + r.w / 2, y: r.y + (Number.isFinite(r.h) ? r.h : r.w) / 2 };
+    const h = Number.isFinite(r.h) ? r.h : r.w;
+    return { x: r.x, y: r.y, w: r.w, h };
   }
   // 有些场景只存 fabX / fabY / fabSize（关灯游戏等）
   if (scene && Number.isFinite(scene.fabX) && Number.isFinite(scene.fabY)) {
     const size = Number.isFinite(scene.fabSize) ? scene.fabSize : 40;
-    return { x: scene.fabX + size / 2, y: scene.fabY + size / 2 };
+    return { x: scene.fabX, y: scene.fabY, w: size, h: size };
   }
-  return { x: W - 36, y: H - 72 };
+  return { x: W - 56, y: H - 92, w: 40, h: 40 };
+}
+
+function fabCenter(scene) {
+  const r = fabRect(scene);
+  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
 }
 
 // 关闭动画还在播时，App 需要继续调用 draw()
@@ -153,7 +160,9 @@ function helpBlocks(c, scene) {
   return blocks;
 }
 
-const ANIM_MS = 260;
+// 与首页设置面板一致：展开 600ms、收起 480ms
+const OPEN_MS = 600;
+const CLOSE_MS = 480;
 
 function draw(c, scene) {
   const s = stateOf(scene);
@@ -166,8 +175,8 @@ function draw(c, scene) {
     s.backdrop = undefined;   // 重新打开：重拍一张背景
   }
   // 注意：等于目标时不能再加减，否则会在 1 附近来回抖（按钮只在 anim>=1 时注册，会闪）
-  if (s.anim < target) s.anim = Math.min(target, s.anim + dt / ANIM_MS);
-  else if (s.anim > target) s.anim = Math.max(target, s.anim - dt / ANIM_MS);
+  if (s.anim < target) s.anim = Math.min(target, s.anim + dt / OPEN_MS);
+  else if (s.anim > target) s.anim = Math.max(target, s.anim - dt / CLOSE_MS);
   if (s.anim <= 0) {
     s.backdrop = undefined;
     return;
@@ -254,9 +263,31 @@ function draw(c, scene) {
   const by = y + h - 42;
   D.fillRoundRect(c, bx, by, bw, 30, 8, T.primary);
   D.text(c, closeText, bx + bw / 2, by + 15, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+
+  // 关闭 ✕：画在帮助 FAB 那一格（和首页设置面板同款：圆形底 + 阴影 + 图标，随圆形淡入）
+  const fr = fabRect(scene);
+  const fcx = fr.x + fr.w / 2;
+  const fcy = fr.y + fr.h / 2;
+  const closeAlpha = Math.min(1, Math.max(0, (ease - 0.45) / 0.4));
+  c.save();
+  c.globalAlpha = closeAlpha;
+  c.shadowColor = 'rgba(0,0,0,0.12)';
+  c.shadowBlur = 10;
+  c.shadowOffsetY = 2;
+  D.circle(c, fcx, fcy, fr.w / 2, T.card);
+  c.restore();
+  c.save();
+  c.globalAlpha = closeAlpha;
+  if (!icons.draw(c, 'close', fcx, fcy, Math.round(fr.w * 0.42), T.text)) {
+    D.text(c, '×', fcx, fcy, { size: Math.round(fr.w * 0.5), color: T.text, align: 'center' });
+  }
+  c.restore();
   c.restore();   // 结束圆形裁剪
 
-  // 完全展开后才接受点击（动画过程中不注册热区，和设置面板一致）
+  // 和设置面板一致：✕ 在展开过半后可点，其余按钮完全展开后才注册
+  if (ease > 0.75) {
+    scene.addButton('help-close', fr.x, fr.y, fr.w, fr.h, () => { scene.helpOpen = false; });
+  }
   if (s.anim >= 1) {
     scene.addButton('help-mask', 0, 0, W, H, () => { scene.helpOpen = false; });
     scene.addButton('help-ok', bx, by, bw, 30, () => { scene.helpOpen = false; });

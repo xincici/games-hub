@@ -93,8 +93,12 @@ game.js
   拿不到第二块画布或读不到像素时退回 `rgba(0,0,0,0.32)` 纯遮罩。
   ⚠️ 毛玻璃要画在**圆形裁剪之内**（先 `clip` 再铺底），否则一打开整屏就糊，看不出圆形扩张。
 - **展开 / 收起是圆形**（和首页设置面板一致）：圆心 = 帮助 FAB 的中心
-  （`help.fabCenter()`：`helpFab` / `helpRect` / `fabX+fabY+fabSize` 依次兜底），
-  半径 0 → 最远屏幕角，260ms ease-in-out；内容整体 `clip` 在圆里，按钮**只在 `anim >= 1` 时注册**。
+  （`help.fabCenter()` / `fabRect()`：`helpFab` / `helpRect` / `fabX+fabY+fabSize` 依次兜底），
+  半径 0 → 最远屏幕角，**展开 600ms、收起 480ms**（与首页 `settingsAnim` 同参数）ease-in-out；
+  内容整体 `clip` 在圆里，`help-ok` / 全屏遮罩**只在 `anim >= 1` 时注册**。
+- **关闭 ✕**：完全展开后，在帮助 FAB 那一格画一枚圆形 ✕（`T.card` 底 + 阴影 + `icons` 的 `close`，
+  图标失败退回 `×` 文字），透明度随圆形 `(ease-0.45)/0.4` 淡入；`ease > 0.75` 就可点
+  （`help-close`），和首页设置面板把齿轮变成 ✕ 是同一套做法。面板右下仍保留「好的，明白」。
   `App` 在 `helpOpen` 为假但 `help.animating()` 为真时仍会调用 `help.draw()`，收起动画才不会断。
   ⚠️ 动画推进别写成 `target > anim ? +dt : -dt` —— 相等时会持续减，anim 在 1 附近来回抖，
   按钮时有时无。要写成 `if (anim < target) … else if (anim > target) …`。
