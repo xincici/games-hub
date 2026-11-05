@@ -787,6 +787,33 @@
 
 
 
+### 110. Android 上 emoji 在卡片里偏左 / 偏下甚至溢出边框
+
+- **症状**：同一个小游戏，iOS 牌面正常；部分 Android 机型上 emoji 明显往**左下**偏，个别字形顶出卡片边框。
+- **根因**：
+  1. `measureText()` 的 `actualBoundingBox*` 在微信自绘 canvas（Android）上经常**不返回**，代码退回
+     `textBaseline='middle'`；而 `middle` 的基准来自字体 ascent/descent（含 emoji 字体的行高垫），
+     Noto Color Emoji 上会整体偏下；
+  2. 退回分支还继承了为 iOS 调的 `+0.18em` 光学下移（约 5px @28px 字号），把偏下进一步放大，于是溢出边框；
+  3. 横向只靠 `textAlign='center'`（按 advance 居中，不是按墨迹），字形左右留白不一致的字形看起来偏左。
+- **修法**（`js/core/cards.js` 的 `drawEmoji` + `js/core/emoji-box.js`、`js/core/platform.js`）：
+  **分流信号用「有没有 `actualBoundingBox`」，不要用平台名。**
+  - 有 metrics（iOS、开发者工具、连 Android Profile 的 Nexus 也有，因为宿主是 Apple Emoji）→ 老逻辑
+    （墨迹中心 + `0.18em`），与历史版本逐像素一致；
+  - 没有 metrics（微信自绘 canvas 的真机 Android，如 vivo）→ 纵向 `textBaseline='middle'`（**去掉** 0.18em），
+    横向用离屏画布量墨迹偏移修正。
+  - ⚠️ 踩过两次：①「非 iOS 用新逻辑」→ iOS `platform` 取不到，误判 → 全局上移 5px；
+    ②「确认 Android 用新逻辑」→ 开发者工具的 Nexus Profile 平台名是 android、但渲染用 Apple Emoji →
+    又上移 5px。**平台名不可靠，metrics 的可用性才可靠。**
+  - 另：Android 真机原来的「偏下」正是 `0.18em` 加多了（它是为 Apple Emoji 的墨迹/em 中线差补的），
+    所以无 metrics 分支用 em 中线、不再加光学偏移。
+  - 非 iOS：有 `actualBoundingBox` 就按 `(right-left)/2`、`(ascent-descent)/2` 把**墨迹中心**放到卡片中心；
+    没有就用离屏画布逐字画一遍 + `getImageData` 找墨迹包围盒（按 `字号|字形` 缓存，每个字形只量一次，96×96 canvas 仅 36KB）；
+    两者都没有就退回 `middle` 基线，**不加**光学偏移。
+  - 离屏画布的第一次 `wx.createCanvas()` 会拿到主画布，必须与 `core/canvas.js` 的 `canvas` 比较后拒绝，否则会画花主屏。
+- **验证**：冒烟脚本用 `EMOJI_INK=1` 让假 `getImageData` 在中心偏 (3, 6) 画一块墨迹，断言
+  `emojiBox.measure()` 的 `dx=3`、`dy=6-size*0.45`，并断言 `drawEmoji` 的落点 = `中心 - 偏移`；默认（无墨迹）返回 null 且不抛错。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

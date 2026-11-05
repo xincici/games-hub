@@ -27,7 +27,21 @@ function makeCtx() {
     createLinearGradient: () => ({ addColorStop: noop }),
     createRadialGradient: () => ({ addColorStop: noop }),
     createPattern: () => ({}),
-    getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(Math.max(1, w * h * 4)) }),
+    getImageData: (x, y, w, h) => {
+      const data = new Uint8ClampedArray(Math.max(1, w * h * 4));
+      // EMOJI_INK=1：在画布中心偏 (3, 6) 涂一块 8×8 不透明像素，模拟「emoji 墨迹」，
+      // 用来验证 core/emoji-box 的偏移计算与 drawEmoji 的落点。
+      if (process.env.EMOJI_INK) {
+        const cx = Math.floor(w / 2) + 3;
+        const cy = Math.floor(h / 2) + 6;
+        for (let yy = cy - 4; yy < cy + 4; yy += 1) {
+          for (let xx = cx - 4; xx < cx + 4; xx += 1) {
+            if (xx >= 0 && yy >= 0 && xx < w && yy < h) data[(yy * w + xx) * 4 + 3] = 255;
+          }
+        }
+      }
+      return { data };
+    },
     putImageData: noop,
     setLineDash: noop,
     getLineDash: () => [],
@@ -39,6 +53,8 @@ function makeCtx() {
     'shadowColor','shadowBlur','shadowOffsetX','shadowOffsetY','lineCap','lineJoin','globalCompositeOperation','filter'];
   fnNames.forEach((k) => { ctx[k] = noop; });
   ctx.__calls = [];
+  ctx.__texts = [];
+  ctx.fillText = (value, x, y) => { ctx.__texts.push({ value, x, y, baseline: ctx.textBaseline }); };
   ['arc', 'clip', 'drawImage'].forEach((k) => {
     ctx[k] = (...args) => { ctx.__calls.push(k); };
   });
@@ -67,6 +83,8 @@ global.wx = {
   getSystemInfoSync: () => ({
     windowWidth: W, windowHeight: H, pixelRatio: 2, statusBarHeight: 0,
     safeArea: { top: 0, bottom: H },
+    // 想测 Android 分支时设 FAKE_PLATFORM=android（默认按 devtools 走老逻辑）
+    ...(process.env.FAKE_PLATFORM ? { platform: process.env.FAKE_PLATFORM } : { platform: 'devtools' }),
   }),
   createCanvas: () => makeCanvas(),
   createImage: () => ({ onload: null, onerror: null, width: 0, height: 0, set src(v) {} }),
@@ -548,6 +566,57 @@ i18n.setLang('cn');
   storage.delete('__games_hub__mute__click');
   storage.delete('__games_hub__mute__match');
   audio.setGame(null);
+}
+
+// ---------- emoji 墨迹居中：Android 上 measureText 不给 actualBoundingBox 时的兜底 ----------
+{
+  const emojiBox = require(path.join(ROOT, 'js/core/emoji-box'));
+  const cards = require(path.join(ROOT, 'js/core/cards'));
+  const ctx4 = makeCtx();
+
+  // 1) 没有墨迹（默认 mock）→ 量不出来，返回 null，调用方退回 middle 基线，不能崩
+  check(emojiBox.measure('🐍', 24, 'sans-serif') === null, 'emoji-box：没有墨迹数据时应当返回 null');
+
+  // 2) 模拟墨迹在中心偏 (3, 6) → dx = 3、dy = 6 - size*0.45（基线在中心下方 size*0.45）
+  //    注意用另一个字形：上一个字形已经缓存了「量不出来」，这正是想要的行为（不反复 getImageData）
+  //    这一段测的是 Android 分支，把平台切成 android 再清缓存
+  process.env.EMOJI_INK = '1';
+  process.env.FAKE_PLATFORM = 'android';
+  require(path.join(ROOT, 'js/core/platform')).resetCache();
+  const size = 24;
+  const box = emojiBox.measure('🦊', size, 'sans-serif');
+  check(!!box, 'emoji-box：有墨迹时应当能量出偏移');
+  if (box) {
+    check(Math.abs(box.dx - 3) < 0.51, `emoji-box：横向偏移算错（${box.dx.toFixed(2)}，期望 3）`);
+    check(Math.abs(box.dy - (6 - size * 0.45)) < 0.51,
+      `emoji-box：纵向偏移算错（${box.dy.toFixed(2)}，期望 ${(6 - size * 0.45).toFixed(2)}）`);
+  }
+
+  // 3) drawEmoji 必须把字形画到「墨迹中心 = 卡片中心」的位置
+  ctx4.__texts.length = 0;
+  cards.drawEmoji(ctx4, '🦊', 100, 100, size);
+  const drawn = ctx4.__texts.find((t) => t.value === '🦊');
+  check(!!drawn, 'drawEmoji：没有调用 fillText');
+  if (drawn && box) {
+    // 无 metrics 的 Android：纵向用 em 中线（cy 不动），横向按墨迹修正
+    check(Math.abs(drawn.x - (100 - box.dx)) < 0.51 && Math.abs(drawn.y - 100) < 0.51,
+      `drawEmoji：落点不对（${drawn.x.toFixed(1)}, ${drawn.y.toFixed(1)}），期望 (${(100 - box.dx).toFixed(1)}, 100)`);
+    check(drawn.baseline === 'middle', `drawEmoji：Android 无 metrics 时纵向应当用 middle 基线（实际 ${drawn.baseline}）`);
+  }
+
+  // 4) iOS / 开发者工具必须保持老逻辑：不量墨迹、坐标带 0.18em 光学下移
+  process.env.FAKE_PLATFORM = 'ios';
+  require(path.join(ROOT, 'js/core/platform')).resetCache();
+  ctx4.__texts.length = 0;
+  cards.drawEmoji(ctx4, '🦊', 100, 100, size);
+  const iosDraw = ctx4.__texts.find((t) => t.value === '🦊');
+  check(!!iosDraw && Math.abs(iosDraw.x - 100) < 0.51 && Math.abs(iosDraw.y - (100 + size * 0.18)) < 0.51,
+    `drawEmoji：iOS 走老逻辑时落点应为 (100, ${(100 + size * 0.18).toFixed(1)})，实际 ${iosDraw && `${iosDraw.x.toFixed(1)}, ${iosDraw.y.toFixed(1)}`}`);
+
+  // 5) 清掉模拟：后续场景仍按「量不出来 → middle」渲染
+  delete process.env.EMOJI_INK;
+  delete process.env.FAKE_PLATFORM;
+  require(path.join(ROOT, 'js/core/platform')).resetCache();
 }
 
 if (failures.length) {

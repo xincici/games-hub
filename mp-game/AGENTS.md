@@ -125,7 +125,18 @@ game.js
 ## 真机居中
 
 - 自定义 icon font 用离屏 alpha 墨迹探针居中（缓存 glyph+size），不要只依赖 actualBoundingBox/textAlign。
-- emoji 光学下移固定 `0.18em`，0.30em 在真机会偏下。
+- **emoji 居中（2026-11 起）**：分流条件是「**Android 且拿不到 `actualBoundingBox`**」，其余一律走老逻辑
+  （老逻辑 = 墨迹中心 + `0.18em` 光学下移，iOS 真机已调好）。
+  ⚠️ 两次踩坑：
+  ① 一开始写成「非 iOS 就用新逻辑」→ iOS 上 `platform` 取不到、被判成非 iOS，`0.18em` 被去掉，整盘上移 5px；
+  ② 第二次写成「确认 Android 就用新逻辑」→ 开发者工具的 Nexus 等 Android Profile 宿主仍是 **Apple Emoji**
+     （`measureText` 有 metrics），于是同样上移 5px。
+  **结论：能不能拿到 metrics 才是可靠信号，平台名不是。** 开发者工具 / Android Profile / iOS 都有 metrics，
+  只有微信自绘 canvas 的真机 Android 没有。
+- Android 无 metrics 时的实现：纵向用 **em 盒中线**（`textBaseline='middle'`，不再叠 0.18em —— 那个补偿是给
+  Apple Emoji 的，在 Noto Color Emoji 上会整体偏下），横向按 `core/emoji-box.js` 量到的墨迹偏移修正。
+  这个模块用离屏画布 `getImageData` 逐字量一次（按「字号|字形」缓存，96×96 canvas 仅 36KB），拿不到就退回
+  `middle` + 不修正。
 
 ## 镜像洗牌
 
@@ -174,7 +185,7 @@ game.js
 
 ## 牌面渲染统一（硬约定，后续迁移游戏都遵守）
 
-- **所有** emoji / 扑克 / 麻将的**正面、背面、边框、圆角、牌面高度比例**统一走 [`js/core/cards.js`](js/core/cards.js) 的 `cards.draw()`；emoji 统一由 `drawEmoji()` 按卡片宽 0.42 渲染，真实墨迹居中后再补 0.30em 视觉上浮补偿。游戏里不允许再写 `drawPoker` / `drawBack` / `drawMahjong` 或自定 emoji 字号。
+- **所有** emoji / 扑克 / 麻将的**正面、背面、边框、圆角、牌面高度比例**统一走 [`js/core/cards.js`](js/core/cards.js) 的 `cards.draw()`；emoji 统一由 `drawEmoji()` 按卡片宽渲染（当前 `0.58w`），居中规则见上面「真机居中」（有 `actualBoundingBox` 的平台走老逻辑；只有拿不到 metrics 的 Android 真机走「em 中线 + 墨迹横向修正」）。游戏里不允许再写 `drawPoker` / `drawBack` / `drawMahjong` 或自定 emoji 字号。
 - 圆角统一为 `8`；扑克正面白底 + 左上/右下 rank + 中央花色；扑克背面白底 + 内虚线 + `mode-poker` 图标；emoji 背面统一主色 + 灯泡；三者尺寸比例统一由 `cards.ratio(mode)` 给出。
 - 麻将**正面直接画 PNG 雪碧图**（`images/mahjong-tiles.png`），但雪碧图本身没有透明圆角：必须先用 8px 圆角 `clip()` 裁切再 `drawImage`，否则会露出灰色方角。图片自带底色和描边，**绝不能**在外层再套米色圆角底或 1px 边框；只有图片未加载时才走 `#f7f4ee` + 8px 圆角降级。
 - 麻将背面统一绿色斜纹 + 8px 圆角 + 内描边；不要每个游戏另画一套。

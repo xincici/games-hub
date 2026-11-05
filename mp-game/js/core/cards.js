@@ -2,6 +2,8 @@
 // 侦探、猎手、消除大帅共用，避免每个游戏各写一套牌背 / 牌面。
 const theme = require('./theme');
 const D = require('./draw');
+const emojiBox = require('./emoji-box');
+const platform = require('./platform');
 const icons = require('./icons');
 const tiles = require('./tiles');
 
@@ -179,23 +181,43 @@ function drawPoker(c, item, x, y, w, h) {
 
 function drawEmoji(c, item, cx, cy, size) {
   const family = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  const glyph = String(item);
   c.save();
   c.font = `${size}px ${family}`;
   c.fillStyle = '#222';
   c.textAlign = 'center';
-  const m = c.measureText(String(item));
-  // 用真实墨迹框把 emoji 垂直居中；没有 actualBoundingBox 的端退回 middle 基线。
-  // 真机上 emoji 墨迹本身略偏下；0.30em 补偿会过度，这里收到 0.18em。
-  const optical = size * 0.18;
-  let y = cy + optical;
-  if (Number.isFinite(m.actualBoundingBoxAscent) && Number.isFinite(m.actualBoundingBoxDescent)
-    && (m.actualBoundingBoxAscent > 0 || m.actualBoundingBoxDescent > 0)) {
-    c.textBaseline = 'alphabetic';
-    y = cy + optical + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
-  } else {
-    c.textBaseline = 'middle';
+
+  const m = c.measureText(glyph);
+  const hasBox = Number.isFinite(m.actualBoundingBoxAscent) && Number.isFinite(m.actualBoundingBoxDescent)
+    && (m.actualBoundingBoxAscent > 0 || m.actualBoundingBoxDescent > 0);
+
+  // 分流原则：**默认保持已调好的老逻辑**，只有「确定是 Android 且拿不到 actualBoundingBox」
+  // 才换实现。这样：
+  //   - iOS / 开发者工具（含 Nexus 等 Android 机型 Profile，宿主仍是 Apple Emoji，measureText 有 metrics）
+  //     走老逻辑 → 与之前逐像素一致，不会因为改这里而上移/下移；
+  //   - vivo 等真机（微信自绘 canvas 普遍不返回 actualBoundingBox）走新逻辑 → 修掉「偏右下」。
+  const legacy = !platform.isAndroid() || hasBox;
+  if (legacy) {
+    const optical = size * 0.18;
+    let y = cy + optical;
+    if (hasBox) {
+      c.textBaseline = 'alphabetic';
+      y = cy + optical + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+    } else {
+      c.textBaseline = 'middle';
+    }
+    c.fillText(glyph, cx, y);
+    c.restore();
+    return;
   }
-  c.fillText(String(item), cx, y);
+
+  // Android 真机（无 metrics）：
+  //  - 纵向用 **em 盒中线**（textBaseline='middle'），不再叠 0.18em —— 那个补偿是给 Apple Emoji 的，
+  //    在 Noto Color Emoji 上会整体偏下，也是之前「偏下」的主因；
+  //  - 横向按**真实墨迹**修：`textAlign='center'` 居中的是 advance，左右留白不同的字形会偏。
+  const box = emojiBox.measure(glyph, size, family);
+  c.textBaseline = 'middle';
+  c.fillText(glyph, cx - (box ? box.dx : 0), cy);
   c.restore();
 }
 
