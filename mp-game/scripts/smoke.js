@@ -559,6 +559,35 @@ i18n.setLang('cn');
   scene.settingsOpen = false;
 }
 
+// ---------- 背景浅景：坐标不跑飞、流星会来也会走 ----------
+{
+  const ParticleField = require(path.join(ROOT, 'js/core/particles'));
+  const field = new ParticleField();
+  const ctxBg = makeCtx();
+  let sawComet = false;
+  let cometGoneAfter = false;
+  const finite = (v) => Number.isFinite(v);
+  for (let i = 0; i < 1400; i += 1) {
+    field.update(16);
+    if (field.comet) sawComet = true;
+    if (sawComet && !field.comet && i > 60) cometGoneAfter = true;
+    if (i % 50 === 0) field.draw(ctxBg, i % 100 === 0);
+  }
+  const bad = [];
+  field.orbs.forEach((o) => { if (!finite(o.x) || !finite(o.y) || !finite(o.r)) bad.push('orb'); });
+  field.hexes.forEach((h) => { if (!finite(h.x) || !finite(h.y) || !finite(h.rot)) bad.push('hex'); });
+  field.motes.forEach((m) => { if (!finite(m.x) || !finite(m.y)) bad.push('mote'); });
+  check(bad.length === 0, `背景：坐标出现 NaN（${bad.join('、')}）`);
+  const outOfRange = field.orbs.concat(field.hexes, field.motes)
+    .some((p) => p.x < -80 || p.x > W + 80 || p.y < -80 || p.y > H + 80);
+  check(!outOfRange, '背景：有元素跑到画面外没有回收');
+  check(sawComet, '背景：22 秒内一次流星都没有');
+  check(cometGoneAfter, '背景：流星划过去之后没有清掉');
+  // 透视检查：背景不能画出内容层（只允许 fill / stroke / 渐变填充）
+  const badOps = ctxBg.__calls.filter((k) => k === 'fillText' || k === 'drawImage');
+  check(badOps.length === 0, '背景：不该写字或贴图');
+}
+
 // ---------- 场景里用到的 i18n key 必须真的存在（中英都要），否则界面上会直接显示 key ----------
 {
   const fs = require('fs');
