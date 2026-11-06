@@ -568,7 +568,7 @@ i18n.setLang('cn');
   let bad = null;
   data.games.forEach((g) => {
     if (!g.name || g.name === g.id || g.name.endsWith('Title')) bad = `${g.id} 名称没取到（${g.name}）`;
-    if (!g.achv.length || g.achv.length > 5) bad = `${g.id} 成就条数 ${g.achv.length}`;
+    if (!g.achv.length || g.achv.length > 6) bad = `${g.id} 成就条数 ${g.achv.length}`;
     g.achv.forEach((a) => {
       if (!a.name || /[A-Za-z_]+\./.test(a.name)) bad = `${g.id} 成就名异常 ${a.name}`;
       if (!(a.target > 0)) bad = `${g.id} target 非法`;
@@ -628,6 +628,19 @@ i18n.setLang('cn');
     const radii = ringCtx.__arcs.map((a) => Math.round(a[2]));
     check(radii.includes(22) && radii.includes(20) && radii.includes(18), `FAB 描边：半径不对（${radii.join(',')}）`);
   }
+
+  // 历史成绩推算：成就系统上线前的老玩家（没有任何 achv 记录），只看存档也要能认定
+  wx.setStorageSync('__emoji_detective__level', JSON.stringify({ level: 1, hearts: 3, phase: 'play' }));
+  wx.setStorageSync('__emoji_match__level', '3');
+  wx.setStorageSync('__easy_click_game__6', '4');
+  check(achv.legacyCleared('detective', 1) === 1, `成就：侦探首关没有从存档推算出来（${achv.legacyCleared('detective', 1)}）`);
+  check(achv.legacyCleared('match', 1) === 2, `成就：对对碰关卡没有从存档换算（${achv.legacyCleared('match', 1)}）`);
+  check(achv.legacyCleared('match', 3) === 0, '成就：没玩过的模式被算成通关了');
+  check(achv.totalWins('match') >= 2, '成就：累计胜利没有吃历史推算');
+  wx.setStorageSync('__game_2048__best', '2048');
+  const g2048Card = achv.pageData().games.find((g) => g.id === 'g2048');
+  check(g2048Card && g2048Card.achv.filter((a) => a.counter && a.value >= 1).length === 2,
+    '成就：2048 里程碑没有按最高牌补记');
 
   const clickCard = achv.pageData().games.find((g) => g.id === 'click');
   check(clickCard && clickCard.achv.some((a) => a.counter), '成就：关灯缺少计数型成就');

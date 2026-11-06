@@ -363,9 +363,9 @@ class AchvPage {
 
     // 左 3：只有图标 + 游戏名，整组垂直居中（成绩行留给右侧的指标行，这里不放）
     const cx = SIDE + LEFT_W / 2;
-    // 图标与名字之间留 ~10px 空隙，整组仍然垂直居中
-    this.drawHexIcon(c, cx, y + h / 2 - 13, 16, game);
-    D.text(c, game.name, cx, y + h / 2 + 19, {
+    // 图标 44px（半径 22），与名字之间留 ~8px 空隙，整组仍然垂直居中
+    this.drawHexIcon(c, cx, y + h / 2 - 10, 22, game);
+    D.text(c, game.name, cx, y + h / 2 + 26, {
       size: 12, weight: 'bold', color: T.text, align: 'center',
     });
 

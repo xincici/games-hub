@@ -277,42 +277,113 @@ function readJsonField(key, field) {
   try {
     const raw = getRaw(key, '');
     const obj = typeof raw === 'string' && raw ? JSON.parse(raw) : raw;
-    return obj && Number.isFinite(+obj[field]) ? +obj[field] : 0;
+    if (!obj) return 0;
+    if (field === 'phase') return obj.phase || '';
+    return Number.isFinite(+obj[field]) ? +obj[field] : 0;
   } catch (e) {
     return 0;
   }
 }
 
-// ---- 多模式类成就的辅助 ----
-// legacy 存档里：match / detective / hunter 的 best = 已通关 + 1；master 的 level = 已通关的关卡
-const MATCH_CAPS = [11, 11, 11];
-const DET_CAPS = [9, 10, 9];
-const HUNT_CAPS = [6, 6, 6];
+// ---- 历史存档推算（成就上线前就玩过的老玩家）----
+// 成就系统是后来加的，老玩家的 `modes` / `wins` 是空的，但存档里有成绩：
+//   best  = 已通关数 + 1（赢一次就会写）
+//   level = 当前关卡（1 基的游戏 → 当前关 = 已通关 + 1；0 基的游戏 → 当前关 = 已通关）
+// 只要这些记录能证明「打过第 N 关」，就当作已达成 —— 这样新加成就也不吃亏。
+// master 的 level 写的是「刚通关的那一关」，但默认值也是 1，分不清「没玩过」和「通了第 1 关」，
+// 所以额外看 state 里的 phase === 'won'。
+const LEGACY = {
+  match: {
+    caps: [11, 11, 11], levelBase: 1,
+    best: ['__emoji_match__best_1', '__emoji_match__best_1_2', '__emoji_match__best_1_3'],
+    level: ['__emoji_match__level', '__emoji_match__level_2', '__emoji_match__level_3'],
+  },
+  detective: {
+    caps: [9, 10, 9], levelBase: 0, jsonLevel: true,
+    best: ['__emoji_detective__best', '__emoji_detective__best_2', '__emoji_detective__best_3'],
+    level: ['__emoji_detective__level', '__emoji_detective__level_2', '__emoji_detective__level_3'],
+  },
+  hunter: {
+    caps: [6, 6, 6], levelBase: 0, jsonLevel: true,
+    best: ['__emoji_hunter__best', '__emoji_hunter__best_2', '__emoji_hunter__best_3'],
+    level: ['__emoji_hunter__level', '__emoji_hunter__level_2', '__emoji_hunter__level_3'],
+  },
+  master: {
+    caps: [0, 0, 0], levelBase: 0,
+    level: ['__emoji_master__level', '__emoji_master__poker_level', '__emoji_master__mahjong_level'],
+    phase: ['__emoji_master__state', '__emoji_master__poker_state', '__emoji_master__mahjong_state'],
+  },
+  sort: {
+    caps: [0, 0], levelBase: 1,
+    best: ['__emoji_sort__best_1', '__emoji_sort__best_2'],
+    level: ['__emoji_sort__level', '__emoji_sort__level_2'],
+  },
+  alchemy: {
+    caps: [0, 0], levelBase: 1,
+    best: ['__poker_alchemy__best_1', '__poker_alchemy__best_2'],
+    level: ['__poker_alchemy__level', '__poker_alchemy__level_2'],
+  },
+  quesheng: {
+    caps: [0, 0], levelBase: 1,
+    level: ['__quesheng__level', '__quesheng__level_2'],
+  },
+  gambler: {
+    caps: [0, 0], levelBase: 1,
+    best: ['__gambler__best', '__gambler__best_2'],
+    level: ['__gambler__level', '__gambler__level_2'],
+  },
+  link: { caps: [0], levelBase: 1, best: ['__emoji_link__best_1'], level: ['__emoji_link__level'] },
+  crush: { caps: [0], levelBase: 1, best: ['__emoji_crush__best_1'], level: ['__emoji_crush__level'] },
+  slide: { caps: [0], levelBase: 1, level: [], stateLevel: '__emoji_slide__state' },
+};
 
-function modeFirstCount(id, keys) {
-  return keys.reduce((acc, key, i) => (
-    acc + (modeOf(id, i + 1).first || read(key) >= 2 ? 1 : 0)
+// 某一模式「能证明通关过几关」——best / 当前关卡 / 自己记的 max 取最大
+function legacyCleared(id, slot) {
+  const cfg = LEGACY[id];
+  if (!cfg) return modeOf(id, slot).max;
+  const i = slot - 1;
+  let best = 0;
+  if (cfg.best && cfg.best[i]) best = Math.max(0, read(cfg.best[i]) - 1);
+  let lv = 0;
+  if (cfg.level && cfg.level[i]) {
+    lv = cfg.jsonLevel ? readJsonField(cfg.level[i], 'level') : read(cfg.level[i]);
+    if (cfg.phase && cfg.phase[i] && readJsonField(cfg.phase[i], 'phase') === 'won') {
+      lv = Math.max(lv, read(cfg.level[i]));
+    } else {
+      lv = Math.max(0, lv - cfg.levelBase);
+    }
+  }
+  if (cfg.stateLevel) lv = Math.max(lv, Math.max(0, readJsonField(cfg.stateLevel, 'level') - cfg.levelBase));
+  return Math.max(best, lv, modeOf(id, slot).max);
+}
+
+// 该游戏各模式加起来「至少赢过多少局」
+function legacyWins(id) {
+  const cfg = LEGACY[id];
+  if (!cfg) return 0;
+  return (cfg.caps || [0]).reduce((sum, _c, i) => sum + legacyCleared(id, i + 1), 0);
+}
+
+// 成就里的「累计胜利次数」：自己记的胜场与历史推算取大
+function totalWins(id) {
+  return Math.max(winsOf(id), legacyWins(id));
+}
+
+function modeFirstCount(id) {
+  const cfg = LEGACY[id] || { caps: [0] };
+  return cfg.caps.reduce((acc, _c, i) => acc + (legacyCleared(id, i + 1) >= 1 ? 1 : 0), 0);
+}
+
+function modeTopCount(id) {
+  const cfg = LEGACY[id] || { caps: [0] };
+  return cfg.caps.reduce((acc, cap, i) => (
+    acc + (cap > 0 && legacyCleared(id, i + 1) >= cap ? 1 : 0)
   ), 0);
 }
 
-function modeTopCount(id, keys, caps) {
-  return keys.reduce((acc, key, i) => {
-    const cleared = Math.max(modeOf(id, i + 1).max, Math.max(0, read(key) - 1));
-    return acc + (cleared >= (caps[i] || 1) ? 1 : 0);
-  }, 0);
-}
-
-// 只按成就系统自己的记录判断（首关）—— master 的 level 默认就是 1，用存档判断不可靠
-function modeFirstOwn(id, slots) {
-  return slots.reduce((acc, slot) => acc + (modeOf(id, slot).first ? 1 : 0), 0);
-}
-
-// 关卡数：自己记的 max 和存档里的「当前关」取大
-function modeLevelCount(id, keys, target) {
-  return keys.reduce((acc, key, i) => {
-    const cleared = Math.max(modeOf(id, i + 1).max, read(key));
-    return acc + (cleared >= target ? 1 : 0);
-  }, 0);
+function modeLevelCount(id, target) {
+  const cfg = LEGACY[id] || { caps: [0] };
+  return cfg.caps.reduce((acc, _c, i) => acc + (legacyCleared(id, i + 1) >= target ? 1 : 0), 0);
 }
 
 // 难度列表（数字迷宫 3~6、镜像 1~5、数独 1~3）：该难度赢过（或存档里有记录）就算通关过
@@ -326,17 +397,18 @@ function diffDoneCount(id, diffs, keyOf) {
   ), 0);
 }
 
-// link / crush 的 best = 已通关 + 1
-const linkBest = () => Math.max(cleared(read('__emoji_link__best_1')), bestLevelOf('link'));
-const crushBest = () => Math.max(cleared(read('__emoji_crush__best_1')), bestLevelOf('crush'));
-const sortBest = (mode) => Math.max(
-  cleared(read(`__emoji_sort__best_${mode}`)),
-  modeOf('sort', mode).max,
-);
+const linkBest = () => legacyCleared('link', 1);
+const crushBest = () => legacyCleared('crush', 1);
+const sortBest = (mode) => legacyCleared('sort', mode);
 
-// 单模式的最高关卡：成就自己记的 max 与存档（已通关 + 1）取大
-function modeLevel(id, slot, key) {
-  return Math.max(modeOf(id, slot).max, cleared(read(key)));
+// 单模式的最高关卡（兼容旧调用）
+function modeLevel(id, slot) {
+  return legacyCleared(id, slot);
+}
+
+// 达成次数：自己记的次数与「最高分/最大牌已经到过这一档」取大
+function reachCount(id, threshold, bestKey) {
+  return Math.max(reachOf(id, threshold), bestKey && read(bestKey) >= threshold ? 1 : 0);
 }
 
 const clickClearedDiffs = () => CLICK_DIFFS.filter(
@@ -352,7 +424,7 @@ const lv = (n) => `${n} ${i18n.t('achvLv')}`;
 const lvOf = (n) => (Number(n) > 0 ? `${n} ${i18n.t('achvLv')}` : '—');
 // 带单位的值：0 时整段显示成「—」，不要出现「— 连胜」这种别扭文案
 const withUnit = (v, unit) => (Number(v) > 0 ? `${v} ${unit}` : '—');
-const winTag = (id) => (winsOf(id) > 0 ? ` · ${i18n.t('achvWins')} ${winsOf(id)}` : '');
+const winTag = (id) => (totalWins(id) > 0 ? ` · ${i18n.t('achvWins')} ${totalWins(id)}` : '');
 // link / crush / detective / hunter / gambler 的 best = 通关关数 + 1
 const cleared = (n) => Math.max(0, n - 1);
 
@@ -368,8 +440,9 @@ const SPEC = {
   },
   guess: {
     icon: 'counter', accent: '#2c6aad',
-    stats: () => `${i18n.t('achvLongest')} ${withUnit(read('__guess_number__best'), i18n.t('achvStreak'))}${winTag('guess')}`,
+    stats: () => `${i18n.t('achvWins')} ${V(winsOf('guess'))}`,
     achv: [
+      A('最长连胜', 'Best streak', () => ({ value: read('__guess_number__best'), target: 1 }), { stat: true, unit: 'achvStreak' }),
       A('累计 10 胜', 'Win 10 games', () => ({ value: winsOf('guess'), target: 10 })),
       A('累计 100 胜', 'Win 100 games', () => ({ value: winsOf('guess'), target: 100 })),
       A('累计 500 胜', 'Win 500 games', () => ({ value: winsOf('guess'), target: 500 })),
@@ -378,7 +451,7 @@ const SPEC = {
   },
   poker: {
     icon: 'mode-poker', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(winsOf('poker'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('poker'))}`,
     achv: [
       A('最高资产', 'Top chips', () => ({ value: read('__poker_game_total'), target: 1 }), { stat: true }),
       A('单次最高奖金', 'Best single payout', () => ({ value: peakOf('poker', 'payout'), target: 1 }), { stat: true }),
@@ -404,27 +477,27 @@ const SPEC = {
     icon: 'numeric-3', accent: '#2c6aad',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__game_2048__best'))}`,
     achv: [
-      A('达成 1024', 'Reach 1024', () => ({ value: reachOf('g2048', 1024), target: 1 }), { counter: true }),
-      A('达成 2048', 'Reach 2048', () => ({ value: reachOf('g2048', 2048), target: 1 }), { counter: true }),
-      A('达成 4096', 'Reach 4096', () => ({ value: reachOf('g2048', 4096), target: 1 }), { counter: true }),
+      A('达成 1024', 'Reach 1024', () => ({ value: reachCount('g2048', 1024, '__game_2048__best'), target: 1 }), { counter: true }),
+      A('达成 2048', 'Reach 2048', () => ({ value: reachCount('g2048', 2048, '__game_2048__best'), target: 1 }), { counter: true }),
+      A('达成 4096', 'Reach 4096', () => ({ value: reachCount('g2048', 4096, '__game_2048__best'), target: 1 }), { counter: true }),
     ],
   },
   snake: {
     icon: 'snake', accent: '#23804e',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__snake_game__best'))}${playsOf('snake') ? ` · ${playsOf('snake')} ${i18n.t('achvPlaysUnit')}` : ''}`,
     achv: [
-      A('达成 100 分', 'Score 100', () => ({ value: reachOf('snake', 100), target: 1 }), { counter: true }),
-      A('达成 500 分', 'Score 500', () => ({ value: reachOf('snake', 500), target: 1 }), { counter: true }),
-      A('达成 1000 分', 'Score 1000', () => ({ value: reachOf('snake', 1000), target: 1 }), { counter: true }),
+      A('达成 100 分', 'Score 100', () => ({ value: reachCount('snake', 100, '__snake_game__best'), target: 1 }), { counter: true }),
+      A('达成 500 分', 'Score 500', () => ({ value: reachCount('snake', 500, '__snake_game__best'), target: 1 }), { counter: true }),
+      A('达成 1000 分', 'Score 1000', () => ({ value: reachCount('snake', 1000, '__snake_game__best'), target: 1 }), { counter: true }),
     ],
   },
   match: {
     icon: 'layers', accent: '#7550ad',
     stats: () => `${i18n.t('achvHigh')} ${lvOf(Math.max(maxOf(MATCH_BEST), bestLevelOf('match')))}${winTag('match')}`,
     achv: [
-      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('match', MATCH_BEST), target: 3 })),
-      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('match', MATCH_BEST, MATCH_CAPS), target: 3 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('match'), target: 1 }), { counter: true }),
+      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('match'), target: 3 })),
+      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('match'), target: 3 })),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('match'), target: 1 }), { counter: true }),
       A('完美操作胜利', 'Flawless wins', () => ({ value: perfectOf('match'), target: 1 }), { counter: true }),
     ],
   },
@@ -435,34 +508,34 @@ const SPEC = {
       A('完成第 10 关', 'Clear level 10', () => ({ value: linkBest(), target: 10 })),
       A('完成第 50 关', 'Clear level 50', () => ({ value: linkBest(), target: 50 })),
       A('完成第 100 关', 'Clear level 100', () => ({ value: linkBest(), target: 100 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('link'), target: 1 }), { counter: true }),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('link'), target: 1 }), { counter: true }),
     ],
   },
   detective: {
     icon: 'incognito', accent: '#7550ad',
     stats: () => `${i18n.t('achvHigh')} ${lvOf(Math.max(cleared(maxOf(DET_BEST)), bestLevelOf('detective')))}${winTag('detective')}`,
     achv: [
-      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('detective', DET_BEST), target: 3 })),
-      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('detective', DET_BEST, DET_CAPS), target: 3 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('detective'), target: 1 }), { counter: true }),
+      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('detective'), target: 3 })),
+      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('detective'), target: 3 })),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('detective'), target: 1 }), { counter: true }),
     ],
   },
   hunter: {
     icon: 'target', accent: '#7550ad',
     stats: () => `${i18n.t('achvHigh')} ${V(Math.max(cleared(maxOf(HUNT_BEST)), bestLevelOf('hunter')))}/6 ${i18n.t('achvLv')}${winTag('hunter')}`,
     achv: [
-      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('hunter', HUNT_BEST), target: 3 })),
-      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('hunter', HUNT_BEST, HUNT_CAPS), target: 3 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('hunter'), target: 1 }), { counter: true }),
+      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('hunter'), target: 3 })),
+      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('hunter'), target: 3 })),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('hunter'), target: 1 }), { counter: true }),
     ],
   },
   three: {
     icon: 'numeric-3', accent: '#2c6aad',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__threes_game__best'))}`,
     achv: [
-      A('达成 2000 分', 'Score 2000', () => ({ value: reachOf('three', 2000), target: 1 }), { counter: true }),
-      A('达成 10000 分', 'Score 10000', () => ({ value: reachOf('three', 10000), target: 1 }), { counter: true }),
-      A('达成 30000 分', 'Score 30000', () => ({ value: reachOf('three', 30000), target: 1 }), { counter: true }),
+      A('达成 2000 分', 'Score 2000', () => ({ value: reachCount('three', 2000, '__threes_game__best'), target: 1 }), { counter: true }),
+      A('达成 10000 分', 'Score 10000', () => ({ value: reachCount('three', 10000, '__threes_game__best'), target: 1 }), { counter: true }),
+      A('达成 30000 分', 'Score 30000', () => ({ value: reachCount('three', 30000, '__threes_game__best'), target: 1 }), { counter: true }),
     ],
   },
   crush: {
@@ -472,7 +545,7 @@ const SPEC = {
       A('完成第 10 关', 'Clear level 10', () => ({ value: crushBest(), target: 10 })),
       A('完成第 50 关', 'Clear level 50', () => ({ value: crushBest(), target: 50 })),
       A('完成第 100 关', 'Clear level 100', () => ({ value: crushBest(), target: 100 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('crush'), target: 1 }), { counter: true }),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('crush'), target: 1 }), { counter: true }),
     ],
   },
   sudoku: {
@@ -492,27 +565,27 @@ const SPEC = {
     icon: 'layers', accent: '#7550ad',
     stats: () => `${i18n.t('achvHigh')} ${lvOf(Math.max(maxOf(MASTER_LV), bestLevelOf('master')))}${winTag('master')}`,
     achv: [
-      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstOwn('master', [1, 2, 3]), target: 3 })),
-      A('三模式达成 10 关', 'Reach level 10 · all modes', () => ({ value: modeLevelCount('master', MASTER_LV, 10), target: 3 })),
-      A('三模式达成 100 关', 'Reach level 100 · all modes', () => ({ value: modeLevelCount('master', MASTER_LV, 100), target: 3 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('master'), target: 1 }), { counter: true }),
+      A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('master'), target: 3 })),
+      A('三模式达成 10 关', 'Reach level 10 · all modes', () => ({ value: modeLevelCount('master', 10), target: 3 })),
+      A('三模式达成 100 关', 'Reach level 100 · all modes', () => ({ value: modeLevelCount('master', 100), target: 3 })),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('master'), target: 1 }), { counter: true }),
     ],
   },
   sort: {
     icon: 'sort', accent: '#23804e',
     stats: () => `${i18n.t('achvOneSlot')} ${lvOf(sortBest(1))} · ${i18n.t('achvTwoSlot')} ${lvOf(sortBest(2))}`,
     achv: [
-      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('sort', SORT_BEST), target: 2 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('sort'), target: 1 }), { counter: true }),
+      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('sort'), target: 2 })),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('sort'), target: 1 }), { counter: true }),
     ],
   },
   down: {
     icon: 'down', accent: '#bd5420',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__emoji_down__best_1'))}`,
     achv: [
-      A('达成 50 分', 'Score 50', () => ({ value: reachOf('down', 50), target: 1 }), { counter: true }),
-      A('达成 100 分', 'Score 100', () => ({ value: reachOf('down', 100), target: 1 }), { counter: true }),
-      A('达成 1000 分', 'Score 1000', () => ({ value: reachOf('down', 1000), target: 1 }), { counter: true }),
+      A('达成 50 分', 'Score 50', () => ({ value: reachCount('down', 50, '__emoji_down__best_1'), target: 1 }), { counter: true }),
+      A('达成 100 分', 'Score 100', () => ({ value: reachCount('down', 100, '__emoji_down__best_1'), target: 1 }), { counter: true }),
+      A('达成 1000 分', 'Score 1000', () => ({ value: reachCount('down', 1000, '__emoji_down__best_1'), target: 1 }), { counter: true }),
     ],
   },
   slide: {
@@ -520,23 +593,23 @@ const SPEC = {
     stats: () => `${i18n.t('achvHigh')} ${lvOf(Math.max(readJsonField('__emoji_slide__state', 'level'), bestLevelOf('slide'), 1))}${winTag('slide')}`,
     achv: [
       A('无重排获胜', 'Win without reshuffle', () => ({ value: perfectOf('slide'), target: 1 })),
-      A('累计胜利次数', 'Total wins', () => ({ value: winsOf('slide'), target: 1 }), { counter: true }),
+      A('累计胜利次数', 'Total wins', () => ({ value: totalWins('slide'), target: 1 }), { counter: true }),
     ],
   },
   alchemy: {
     icon: 'alchemy', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(winsOf('alchemy'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('alchemy'))}`,
     achv: [
-      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('alchemy', ALCH_BEST), target: 2 })),
-      A('普通模式最高关卡', 'Poker · top level', () => ({ value: modeLevel('alchemy', 1, '__poker_alchemy__best_1'), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('alchemy'), target: 2 })),
+      A('普通模式最高关卡', 'Poker · top level', () => ({ value: modeLevel('alchemy', 1), target: 1 }), { stat: true, unit: 'achvLv' }),
       A('普通模式最大单次得分', 'Poker · best single', () => ({ value: peakOf('alchemy', 'gain1'), target: 1 }), { stat: true, unit: 'achvScore' }),
-      A('炸金花最高关卡', '3-card · top level', () => ({ value: modeLevel('alchemy', 2, '__poker_alchemy__best_2'), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('炸金花最高关卡', '3-card · top level', () => ({ value: modeLevel('alchemy', 2), target: 1 }), { stat: true, unit: 'achvLv' }),
       A('炸金花最大单次得分', '3-card · best single', () => ({ value: peakOf('alchemy', 'gain2'), target: 1 }), { stat: true, unit: 'achvScore' }),
     ],
   },
   mahjong: {
     icon: 'mode-mahjong', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(winsOf('mahjong'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('mahjong'))}`,
     achv: [
       A('最高关卡', 'Top stage', () => ({ value: read('__mahjong_hero__best_1'), target: 1 }), { stat: true, unit: 'achvLv' }),
       A('无尽模式最高分', 'Endless top score', () => ({ value: read('__mahjong_hero__best_2'), target: 1 }), { stat: true, unit: 'achvScore' }),
@@ -545,11 +618,11 @@ const SPEC = {
   },
   quesheng: {
     icon: 'quesheng', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(winsOf('quesheng'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('quesheng'))}`,
     achv: [
-      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstOwn('quesheng', [1, 2]), target: 2 })),
-      A('滑底模式最高关卡', 'Slide mode · top level', () => ({ value: Math.max(read('__quesheng__level'), modeOf('quesheng', 1).max), target: 1 }), { stat: true, unit: 'achvLv' }),
-      A('步进模式最高关卡', 'Step mode · top level', () => ({ value: Math.max(read('__quesheng__level_2'), modeOf('quesheng', 2).max), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('quesheng'), target: 2 })),
+      A('滑底模式最高关卡', 'Slide mode · top level', () => ({ value: modeLevel('quesheng', 1), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('步进模式最高关卡', 'Step mode · top level', () => ({ value: modeLevel('quesheng', 2), target: 1 }), { stat: true, unit: 'achvLv' }),
     ],
   },
   legend: {
@@ -557,9 +630,9 @@ const SPEC = {
     stats: () => `${i18n.t('achvPlays')} ${V(playsOf('legend'))}`,
     achv: [
       A('最高得分', 'Top score', () => ({ value: read('__mahjong_legend__best_1'), target: 1 }), { stat: true, unit: 'achvScore' }),
-      A('达成 1000 分', 'Score 1000', () => ({ value: reachOf('legend', 1000), target: 1 }), { counter: true }),
-      A('达成 5000 分', 'Score 5000', () => ({ value: reachOf('legend', 5000), target: 1 }), { counter: true }),
-      A('达成 10000 分', 'Score 10000', () => ({ value: reachOf('legend', 10000), target: 1 }), { counter: true }),
+      A('达成 1000 分', 'Score 1000', () => ({ value: reachCount('legend', 1000, '__mahjong_legend__best_1'), target: 1 }), { counter: true }),
+      A('达成 5000 分', 'Score 5000', () => ({ value: reachCount('legend', 5000, '__mahjong_legend__best_1'), target: 1 }), { counter: true }),
+      A('达成 10000 分', 'Score 10000', () => ({ value: reachCount('legend', 10000, '__mahjong_legend__best_1'), target: 1 }), { counter: true }),
       A('字牌消除', 'Honor tiles cleared', () => ({ value: countOf('legend', 'honor'), target: 1 }), { counter: true }),
     ],
   },
@@ -578,8 +651,9 @@ const SPEC = {
   },
   point24: {
     icon: 'calculator', accent: '#2c6aad',
-    stats: () => `${i18n.t('achvLongest')} ${withUnit(read('__point24__best_streak'), i18n.t('achvStreak'))}${winTag('point24')}`,
+    stats: () => `${i18n.t('achvWins')} ${V(winsOf('point24'))}`,
     achv: [
+      A('最长连胜', 'Best streak', () => ({ value: read('__point24__best_streak'), target: 1 }), { stat: true, unit: 'achvStreak' }),
       A('累计 10 胜', 'Win 10 games', () => ({ value: winsOf('point24'), target: 10 })),
       A('累计 100 胜', 'Win 100 games', () => ({ value: winsOf('point24'), target: 100 })),
       A('累计 500 胜', 'Win 500 games', () => ({ value: winsOf('point24'), target: 500 })),
@@ -587,7 +661,7 @@ const SPEC = {
   },
   solo: {
     icon: 'mode-mahjong', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(winsOf('solo'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('solo'))}`,
     achv: [
       A('最长连胜', 'Best streak', () => ({ value: read('__solo__best_streak'), target: 1 }), { stat: true, unit: 'achvStreak' }),
       A('5 次摸牌内获胜', 'Win within 5 draws', () => ({ value: fastOf('solo'), target: 1 }), { counter: true }),
@@ -595,12 +669,19 @@ const SPEC = {
   },
   gambler: {
     icon: 'gambler', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(winsOf('gambler'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('gambler'))}`,
     achv: [
-      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('gambler', ['__gambler__best', '__gambler__best_2']), target: 2 })),
-      A('即时模式最高关卡', 'Instant · top level', () => ({ value: modeLevel('gambler', 1, '__gambler__best'), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('最长连胜', 'Best streak', () => ({
+        value: Math.max(
+          peakOf('gambler', 'streak1'), peakOf('gambler', 'streak2'),
+          read('__gambler__streak'), read('__gambler__streak_2'),
+        ),
+        target: 1,
+      }), { stat: true, unit: 'achvStreak' }),
+      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('gambler'), target: 2 })),
+      A('即时模式最高关卡', 'Instant · top level', () => ({ value: modeLevel('gambler', 1), target: 1 }), { stat: true, unit: 'achvLv' }),
       A('即时模式最长连胜', 'Instant · best streak', () => ({ value: peakOf('gambler', 'streak1'), target: 1 }), { stat: true, unit: 'achvStreak' }),
-      A('提交模式最高关卡', 'Submit · top level', () => ({ value: modeLevel('gambler', 2, '__gambler__best_2'), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('提交模式最高关卡', 'Submit · top level', () => ({ value: modeLevel('gambler', 2), target: 1 }), { stat: true, unit: 'achvLv' }),
       A('提交模式最长连胜', 'Submit · best streak', () => ({ value: peakOf('gambler', 'streak2'), target: 1 }), { stat: true, unit: 'achvStreak' }),
     ],
   },
@@ -742,6 +823,9 @@ module.exports = {
   peakOf,
   bump,
   countOf,
+  legacyCleared,
+  legacyWins,
+  totalWins,
   totalPlays,
   pageData,
   unlockedCount,

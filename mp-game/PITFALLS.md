@@ -966,6 +966,15 @@
 - **难度类成就的兼容**：数字迷宫 / 镜像 / 数独的历史记录就在各自难度的 key 里
   （`__number_puzzle__<n>` / `__emoji_mirror__best_<d>` / `__sudoku_game__<d>`），
   `diffDoneCount()` 同时看「成就自己记的 modes」和这些 key，老玩家不会被清零。
+- **新成就对老玩家全是 0**（踩过：三模式首关只数 `modes`，老玩家明明打到第 3 关却显示 0/3）：
+  成就系统上线前的成绩只能从各游戏存档里推 —— `best`（通关数 + 1）、`level`（当前关）、
+  `state.phase`，统一收进 `achv.js` 的 `LEGACY` 表，用 `legacyCleared()` / `totalWins()` / `reachCount()` 读。
+  **以后新增「按模式 / 按难度」的成就，先补 LEGACY 一行**，别在成就里现场 `read()` 某个 key。
+- **`level` 的基数是 1 还是 0，每个游戏不一样**：match / link / crush / sort / alchemy / quesheng / gambler 是
+  **1 基**（当前关 3 = 已通关 2）；detective / hunter 的 state 里是 **0 基**（level 2 = 已通关 2）。
+  写 `LEGACY` 的 `levelBase` 之前先看对应场景怎么存，否则会整体差一关。
+- **默认值会冒充成绩**：master 的 `level` 默认 1，光看它没法区分「没玩过」和「通了第 1 关」；
+  必须结合 `state.phase === 'won'` 判断，否则会白送一个成就。
 - **成就数据 v1 → v2 的兼容**：v2 加了 `perfect / fast / modes / reach`，老存档只有 `plays / wins / bestLevel`。
   `load()` 里缺的字段一律补空对象（`plain()` / `nested()`），别直接 `data.modes[id][slot]` 就写 —— 会炸。
   `save()` 写回 v2，读回时按缺字段补，不需要迁移脚本。
