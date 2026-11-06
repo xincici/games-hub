@@ -642,6 +642,34 @@ i18n.setLang('cn');
   check(g2048Card && g2048Card.achv.filter((a) => a.counter && a.value >= 1).length === 2,
     '成就：2048 里程碑没有按最高牌补记');
 
+  // 隐藏成就：4 条都在列表末尾，未达成时名字是 ******，达成后显示真名 + 说明
+  {
+    const hidden = achv.hiddenList();
+    check(hidden.length === 4, `隐藏成就：应有 4 条，实际 ${hidden.length}`);
+    check(hidden.every((h) => h.name && h.desc), '隐藏成就：名称/说明缺失');
+    check(achv.hiddenList()[0].unlocked === false || achv.helpCount() >= 25, '隐藏成就：求知好学状态不一致');
+    // 帮助看满 25 个 + 时长 + 失败 + 9 个闯关游戏过 10 关
+    achv.pageData().games.forEach((g) => achv.markHelp(g.id));
+    achv.addPlayMs(3600000);
+    achv.flushTime();
+    for (let i = 0; i < 100; i += 1) achv.markFail();
+    wx.setStorageSync('__emoji_master__level', '12');
+    wx.setStorageSync('__emoji_link__level', '12');
+    wx.setStorageSync('__emoji_crush__level', '12');
+    wx.setStorageSync('__emoji_sort__level', '12');
+    wx.setStorageSync('__emoji_slide__state', JSON.stringify({ level: 12 }));
+    wx.setStorageSync('__mahjong_hero__best_1', '12');
+    wx.setStorageSync('__poker_alchemy__best_1', '13');
+    wx.setStorageSync('__quesheng__level', '12');
+    wx.setStorageSync('__gambler__best', '13');
+    const done = achv.hiddenList();
+    check(done.every((h) => h.unlocked), '隐藏成就：条件满足后没有全部解锁');
+    check(done[0].name === '求知好学' && done[1].name === '我已沉迷' && done[2].name === '锲而不舍' && done[3].name === '我爱闯关',
+      '隐藏成就：名字不对');
+    check(/\d+ 小时 \d+ 分钟/.test(done[1].desc), `隐藏成就：时长文案不对（${done[1].desc}）`);
+    check(/100 次/.test(done[2].desc), `隐藏成就：失败文案不对（${done[2].desc}）`);
+  }
+
   const clickCard = achv.pageData().games.find((g) => g.id === 'click');
   check(clickCard && clickCard.achv.some((a) => a.counter), '成就：关灯缺少计数型成就');
 
@@ -665,6 +693,13 @@ i18n.setLang('cn');
   home.achvScroll = 99999;
   home.render(ctxA);
   check(home.achvScroll <= home.achvPage.maxScroll() + 0.5, '成就：滚动没有被夹住');
+  // 隐藏成就在列表最末，滑到底时必须完整露出（不能只露一半）
+  home.achvScroll = home.achvPage.maxScroll();
+  home.render(ctxA);
+  const tail = home.achvPage.cardList(home.achvScroll);
+  const lastCard = tail[tail.length - 1];
+  check(lastCard && lastCard.hidden === true, '成就：最后一张卡不是隐藏成就');
+  check(lastCard.y + lastCard.h <= home.achvPage.viewH(), `成就：隐藏成就卡滑到底仍被盖住（底边 ${Math.round(lastCard.y + lastCard.h)} / 视口 ${home.achvPage.viewH()}）`);
   // 顺序：拖动换位 + 落盘 + 读回
   const orderBefore = home.achvPage.data.games.map((g) => g.id);
   check(orderBefore.length === 25, '成就：卡片数量不对');

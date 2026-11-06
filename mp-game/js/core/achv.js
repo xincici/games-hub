@@ -40,6 +40,9 @@ function load() {
     reach: nested(data.reach),
     peak: nested(data.peak),
     counters: nested(data.counters),
+    help: plain(data.help),
+    timeMs: num(data.timeMs),
+    fails: num(data.fails),
     seen: data.seen !== false,
   };
   return cache;
@@ -59,6 +62,9 @@ function save() {
       reach: data.reach,
       peak: data.peak,
       counters: data.counters,
+      help: data.help,
+      timeMs: data.timeMs,
+      fails: data.fails,
       seen: data.seen !== false,
     }));
   } catch (e) {
@@ -193,6 +199,51 @@ function bump(id, field, n) {
 function countOf(id, field) {
   const c = load().counters[id];
   return (c && c[field]) || 0;
+}
+
+// ---- 隐藏成就的埋点 ----
+// 帮助弹窗：每个游戏看过一次就记 1，集齐 25 个解锁「求知好学」
+function markHelp(id) {
+  if (!id || id === 'home') return;
+  const data = load();
+  data.help[id] = 1;
+  save();
+}
+
+function helpCount() {
+  return Object.keys(load().help).length;
+}
+
+// 游戏时长：App 每帧累加，攒够 3 秒或切场景时落盘（别每帧写存储）
+let pendingMs = 0;
+
+function addPlayMs(ms) {
+  const v = num(ms);
+  if (v <= 0) return;
+  pendingMs += v;
+  if (pendingMs >= 3000) flushTime();
+}
+
+function flushTime() {
+  if (pendingMs <= 0) return;
+  const data = load();
+  data.timeMs += pendingMs;
+  pendingMs = 0;
+  save();
+}
+
+function timeMsOf() {
+  return load().timeMs + pendingMs;
+}
+
+function failsOf() {
+  return load().fails || 0;
+}
+
+function markFail() {
+  const data = load();
+  data.fails = (data.fails || 0) + 1;
+  save();
 }
 
 function hasNew() {
@@ -332,6 +383,8 @@ const LEGACY = {
     best: ['__gambler__best', '__gambler__best_2'],
     level: ['__gambler__level', '__gambler__level_2'],
   },
+  // 麻将英雄：闯关最高关存在 best_1（已开始的最高关，比已通关多 1）
+  mahjong: { caps: [0], levelBase: 1, best: ['__mahjong_hero__best_1'] },
   link: { caps: [0], levelBase: 1, best: ['__emoji_link__best_1'], level: ['__emoji_link__level'] },
   crush: { caps: [0], levelBase: 1, best: ['__emoji_crush__best_1'], level: ['__emoji_crush__level'] },
   slide: { caps: [0], levelBase: 1, level: [], stateLevel: '__emoji_slide__state' },
@@ -717,6 +770,59 @@ function saveOrder(order) {
   }
 }
 
+// ---- 隐藏成就 ----
+// 四条的解锁条件都跨游戏；未解锁时名字显示成 ******。
+const HIDDEN_GAMES = ['master', 'link', 'crush', 'sort', 'slide', 'mahjong', 'alchemy', 'quesheng', 'gambler'];
+
+// 某个游戏「最好的那个模式」通关到第几关
+function bestClearedOf(id) {
+  const cfg = LEGACY[id];
+  const slots = cfg ? cfg.caps.length : 1;
+  let best = 0;
+  for (let i = 1; i <= slots; i += 1) best = Math.max(best, legacyCleared(id, i));
+  return best;
+}
+
+function hiddenList() {
+  const T = i18n.t;
+  const helpN = helpCount();
+  const ms = timeMsOf();
+  const fails = failsOf();
+  const clearedGames = HIDDEN_GAMES.filter((id) => bestClearedOf(id) >= 11).length;
+  const mins = Math.floor(ms / 60000);
+  const hours = Math.floor(mins / 60);
+  return [
+    {
+      key: 'help',
+      name: T('achvHiddenHelp'),
+      desc: T('achvHiddenHelpDesc'),
+      unlocked: helpN >= 25,
+      hint: `${Math.min(helpN, 25)}/25`,
+    },
+    {
+      key: 'time',
+      name: T('achvHiddenTime'),
+      desc: `${T('achvHiddenTimeDesc')} ${hours} ${T('achvHours')} ${mins % 60} ${T('achvMinutes')}`,
+      unlocked: ms >= 3600000,
+      hint: `${hours}h${mins % 60}m`,
+    },
+    {
+      key: 'fails',
+      name: T('achvHiddenFail'),
+      desc: `${T('achvHiddenFailDesc')} ${fails} ${T('achvTimes')}`,
+      unlocked: fails >= 100,
+      hint: `${Math.min(fails, 100)}/100`,
+    },
+    {
+      key: 'levels',
+      name: T('achvHiddenLevel'),
+      desc: T('achvHiddenLevelDesc'),
+      unlocked: clearedGames >= HIDDEN_GAMES.length,
+      hint: `${clearedGames}/${HIDDEN_GAMES.length}`,
+    },
+  ];
+}
+
 function titleOf(id) {
   const key = `home.${id}Title`;
   const v = i18n.t(key);
@@ -793,7 +899,7 @@ function summaryOf(games) {
 
 function pageData() {
   const games = gamesData();
-  return { games, summary: summaryOf(games) };
+  return { games, hidden: hiddenList(), summary: summaryOf(games) };
 }
 
 function unlockedCount() {
@@ -826,6 +932,15 @@ module.exports = {
   legacyCleared,
   legacyWins,
   totalWins,
+  markHelp,
+  helpCount,
+  addPlayMs,
+  flushTime,
+  timeMsOf,
+  failsOf,
+  markFail,
+  hiddenList,
+  HIDDEN_GAMES,
   totalPlays,
   pageData,
   unlockedCount,

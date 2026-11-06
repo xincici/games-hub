@@ -85,7 +85,10 @@ class App {
       if (this.scene.onTouchEnd) this.scene.onTouchEnd(p);
     };
 
+    // 隐藏成就：失败计数（锲而不舍）；后台时把未落盘的时长写掉（我已沉迷）
+    audio.setLoseHook(() => achv.markFail());
     wx.onHide(() => {
+      achv.flushTime();
       this.paused = true;
       if (this.scene.onHide) this.scene.onHide();
     });
@@ -375,6 +378,8 @@ class App {
       const dt = Math.min(50, now - this.last);
       this.last = now;
       if (this.scene.update) this.scene.update(dt);
+      // 隐藏成就：游戏内时长累计（首页不算）
+      if (this.sceneId && this.sceneId !== 'home') achv.addPlayMs(dt || 16);
       this.updateGlobalConfetti(dt);
       if (this.transition) {
         this.drawTransition(ctx);
@@ -384,6 +389,11 @@ class App {
         this.scene.buttons = [];
         // 帮助收起动画没播完时也要继续画，否则关闭时没有圆形收缩的效果
         const helpVisible = this.scene.helpOpen || help.animating(this.scene);
+        // 隐藏成就：每个游戏的帮助弹窗看过一次就记一个（求知好学）
+        if (this.scene.helpOpen && this.markedHelp !== this.sceneId) {
+          this.markedHelp = this.sceneId;
+          achv.markHelp(this.sceneId);
+        }
         const drawHelp = helpVisible && typeof this.scene.drawHelp === 'function'
           ? this.scene.drawHelp : null;
         const drawConfirm = !drawHelp && confirm.canOverride(this.scene) && typeof this.scene.drawConfirm === 'function'

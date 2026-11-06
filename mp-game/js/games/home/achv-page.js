@@ -19,7 +19,8 @@ const CARD_GAP = 9;
 // 卡片左右 3:7：左边图标 + 名字，右边成就列表
 const LEFT_W = Math.round(CARD_W * 0.3);
 const RIGHT_W = CARD_W - LEFT_W;
-const ROW_GAP = 12;   // 分隔线到成就列表的间距（右边留 10）
+const ROW_GAP = 12;
+const HIDDEN_ROW_H = 34;   // 隐藏成就行更高：已达成时名字下面还有一句说明   // 分隔线到成就列表的间距（右边留 10）
 // 卡片最小高度 = 放得下 3 条成就 —— 否则只有 2 条时卡片变矮，左侧图标会被顶出卡片外
 const CARD_MIN_H = 3 * ROW_H + CARD_PAD * 2 + 6;
 
@@ -179,6 +180,7 @@ class AchvPage {
   }
 
   cardHeight(game) {
+    if (game.hidden) return HIDDEN_ROW_H * game.achv.length + CARD_PAD * 2 + 6;
     const rows = Math.max(1, game.achv.length);
     return Math.max(CARD_MIN_H, rows * ROW_H + CARD_PAD * 2 + 6);
   }
@@ -186,6 +188,8 @@ class AchvPage {
   contentHeight() {
     let h = this.headerH - this.safeTop + 8;
     this.data.games.forEach((g) => { h += this.cardHeight(g) + CARD_GAP; });
+    // 列表末尾还有一张「隐藏成就」卡，高度必须算进去，否则滑到底会被渐隐盖住一半
+    if (this.data.hidden && this.data.hidden.length) h += this.cardHeight(this.hiddenCard()) + CARD_GAP;
     return h + 84 + this.safeBottom;   // 底部留出 ✕ 与渐隐的空间
   }
 
@@ -206,7 +210,24 @@ class AchvPage {
       out.push({ index, game, y, h });
       y += h + CARD_GAP;
     });
+    // 最后一张是「隐藏成就」卡（不参与拖动排序）
+    if (this.data.hidden && this.data.hidden.length) {
+      const hiddenGame = this.hiddenCard();
+      const h = this.cardHeight(hiddenGame);
+      out.push({ index: -1, game: hiddenGame, y, h, hidden: true });
+    }
     return out;
+  }
+
+  hiddenCard() {
+    return {
+      id: '__hidden__',
+      name: t('achvHiddenTitle'),
+      hidden: true,
+      accent: theme.tokens.god,
+      icon: 'incognito',
+      achv: this.data.hidden || [],
+    };
   }
 
   // 手指落在哪张卡上（返回 index，落空返回 -1）
@@ -214,7 +235,7 @@ class AchvPage {
     const list = this.cardList(scroll);
     for (let i = list.length - 1; i >= 0; i -= 1) {
       const c = list[i];
-      if (py >= c.y && py <= c.y + c.h) return c.index;
+      if (py >= c.y && py <= c.y + c.h) return c.hidden ? -1 : c.index;
     }
     return -1;
   }
@@ -377,12 +398,21 @@ class AchvPage {
     // 右 7：成就列表，垂直居中
     const rows = game.achv.length;
     const rowW = RIGHT_W - ROW_GAP - 10;
-    const listH = rows * ROW_H;
-    let rowY = y + (h - listH) / 2;
-    game.achv.forEach((a) => {
-      this.drawAchvRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, ROW_H - 6, a, dark);
-      rowY += ROW_H;
-    });
+    if (game.hidden) {
+      const listH = rows * HIDDEN_ROW_H;
+      let rowY = y + (h - listH) / 2;
+      game.achv.forEach((item) => {
+        this.drawHiddenRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, HIDDEN_ROW_H, item, dark);
+        rowY += HIDDEN_ROW_H;
+      });
+    } else {
+      const listH = rows * ROW_H;
+      let rowY = y + (h - listH) / 2;
+      game.achv.forEach((a) => {
+        this.drawAchvRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, ROW_H - 6, a, dark);
+        rowY += ROW_H;
+      });
+    }
     c.restore();
   }
 
@@ -406,6 +436,19 @@ class AchvPage {
     c.stroke();
     c.restore();
     if (game.icon) icons.draw(c, game.icon, cx, cy, Math.round(r * 0.92), accent);
+  }
+
+  // 隐藏成就行：未达成只有 ****** + 未达成；达成后显示橙色名字 + 一句说明
+  drawHiddenRow(c, x, y, w, h, item, dark) {
+    const T = theme.tokens;
+    if (!item || !item.unlocked) {
+      D.text(c, t('achvHiddenLocked'), x + 12, y + h / 2, { size: 11.5, weight: 'bold', color: T.muted });
+      D.text(c, t('achvNotDone'), x + w - 12, y + h / 2, { size: 10, color: T.muted, align: 'right' });
+      return;
+    }
+    D.text(c, item.name, x + 12, y + 11, { size: 11.5, weight: 'bold', color: T.god });
+    D.text(c, item.desc, x + 12, y + 24, { size: 9, color: T.muted });
+    D.text(c, t('achvDone'), x + w - 12, y + 11, { size: 10, weight: 'bold', color: T.primary, align: 'right' });
   }
 
   drawAchvRow(c, x, y, w, h, a, dark) {

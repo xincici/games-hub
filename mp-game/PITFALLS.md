@@ -966,6 +966,18 @@
 - **难度类成就的兼容**：数字迷宫 / 镜像 / 数独的历史记录就在各自难度的 key 里
   （`__number_puzzle__<n>` / `__emoji_mirror__best_<d>` / `__sudoku_game__<d>`），
   `diffDoneCount()` 同时看「成就自己记的 modes」和这些 key，老玩家不会被清零。
+- **隐藏成就的三个埋点都容易写脏**：
+  1. **时长别每帧写存储**：`addPlayMs` 只在内存里累加，满 3 秒或 `wx.onHide` / 切场景才 `flushTime()`；
+     每帧 `setStorageSync` 会明显拖慢帧率。
+  2. **失败次数别在场景里数**：25 个场景各自 `playLose`，统一由 `audio.setLoseHook` 注入回调
+     （`core/audio` 不直接 require 成就模块，避免依赖环）。
+  3. **帮助看过要按场景去重**：App 里用 `markedHelp` 记住当前场景，`scene.helpOpen` 首次为真才记一次，
+     否则每帧 +1，集齐 25 个会瞬间达成。
+- **列表末尾新加卡片，`contentHeight()` 一定要同步**（踩过：隐藏成就卡加在 `cardList` 里，
+  高度没算进 `contentHeight`，滑到底只露出半张、被底部渐隐压住）。判断标准：`cardList(maxScroll())`
+  最后一张的 `y + h` 必须 ≤ `viewH()`，冒烟已经断言这一条。
+- **隐藏成就在列表末尾，但不是「游戏卡」**：`cardList` 用 `index: -1` + `hidden: true` 追加，
+  `hitIndex` 命中它必须返回 -1 —— 否则长按会把它拖进 25 个游戏的排序里（`moveItem` 只认 `data.games`）。
 - **新成就对老玩家全是 0**（踩过：三模式首关只数 `modes`，老玩家明明打到第 3 关却显示 0/3）：
   成就系统上线前的成绩只能从各游戏存档里推 —— `best`（通关数 + 1）、`level`（当前关）、
   `state.phase`，统一收进 `achv.js` 的 `LEGACY` 表，用 `legacyCleared()` / `totalWins()` / `reachCount()` 读。

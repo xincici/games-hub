@@ -170,6 +170,17 @@ game.js
   这两个绿是按「填充上还要压文字」挑的 —— 暗色主题浅色文字、亮色主题深色文字都能读。
 - **烟花画在卡片之上**（`celebration.draw` 放在列表之后、底部渐隐之前）—— 放在卡片下面会被完全挡住。
   烟花只是绘制、不注册任何命中区，所以滚动 / 长按拖动完全不受影响；透明度仍然很低，不压文字。
+- **隐藏成就（列表最末一张卡）**：4 条跨游戏的成就，未达成时名字显示 `******` + 右侧「未达成」，
+  达成后换成**橙色**真名 + 一行说明（行高 `HIDDEN_ROW_H = 34`，比普通行高）。卡片不参与拖动排序
+  （`hitIndex` 命中隐藏卡返回 -1）。
+  - 求知好学：25 个游戏的帮助弹窗都看过（`markHelp`，App 在 `scene.helpOpen` 首次为真时记一次）
+  - 我已沉迷：游戏内累计时长 ≥ 1 小时（`addPlayMs`，每帧累加、满 3 秒或 `wx.onHide` 时落盘）
+  - 锲而不舍：累计失败 ≥ 100 次（`markFail`，由 `audio.setLoseHook` 注入，不直接依赖 audio）
+  - 我爱闯关：`HIDDEN_GAMES`（消除大师 / 连连看 / 消消乐 / 排序 / 滑行 / 麻将英雄 / 炼金术 / 雀圣 / 赌神）
+    每个都至少有一个模式通关 ≥ 11 关（`bestClearedOf`，走 LEGACY，老存档也算）
+  - 这些数据不进「成就总数 / 已入门」总览（那三个 chip 只统计 25 张游戏卡）。
+  - **`contentHeight()` 必须把隐藏卡也算进去**（`+ cardHeight(hiddenCard()) + CARD_GAP`），
+    否则滑到底时最后一张卡会被底部渐隐盖掉一半；末尾的 84px 留白同时清开 ✕ 与提示行。
 - **成就条数 2~6 条**：机制复杂的（关卡 + 连胜 + 分数）给 3~4 条，纯刷分的给 2 条就够，不必凑满；
   目前 91 条（赌神 6 行、扑克 / 炼金术 / 传奇 / 1A2B 为 5 行），卡片高度按行数自动长（最多 6 行）。
 - **成就设计原则**：别把 3 条都写成同一指标的三档（「1000 分 / 5000 分 / 20000 分」很偷懒）。
@@ -187,7 +198,8 @@ game.js
   - 成就 milestone 要「可能达成」：click 早期写过「剩余步数 = n²」，但 score = 上限 − 点击数，至少点一次，
     永远达不到；改成「挑战难度 8」（该难度 best > 0 即视作通关过）。
 - **数据来源**：能读存档就优先读（`best` / `level` / `streak` / 秒数），存档里没有的才自己记。
-  `__games_hub__achv`（**v2**）= `{ v, plays, wins, bestLevel, perfect, fast, modes, reach, seen }`：
+  `__games_hub__achv`（**v2**）= `{ v, plays, wins, bestLevel, perfect, fast, modes, reach, peak, counters, help, timeMs, fails, seen }`
+  （后三个是隐藏成就用的：看过帮助的游戏、累计游戏毫秒数、累计失败次数）：
   - 对局：`App.openGame()` → `achv.trackPlay(id)`
   - 胜利：`achv.win(id, { level, mode, perfect, fast })`（全部可选）—— 21 个有胜场的游戏都接了：
     click / guess / poker / puzzle / g2048 / match / link / detective / hunter / crush / sudoku /

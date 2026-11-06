@@ -88,6 +88,12 @@ function play(name) {
   }
 }
 
+let loseHook = null;
+
+function setLoseHook(fn) {
+  loseHook = typeof fn === 'function' ? fn : null;
+}
+
 function setEnabled(value) {
   setRaw('__games_hub__sfx', value ? '1' : '0');
 }
@@ -100,7 +106,11 @@ module.exports = {
   gameMuted,
   toggleMute,
   playSuccess: () => play('success'),
-  playLose: () => play('lose'),
+  // 失败计数（隐藏成就「锲而不舍」）：由 App 注入，避免 audio 直接依赖成就模块
+  playLose: () => {
+    if (loseHook) loseHook();
+    play('lose');
+  },
   playFail: () => play('fail'),
   playFirework: () => { lastFireworkAt = Date.now(); play('firework'); },
   playElimination: () => {
@@ -108,4 +118,5 @@ module.exports = {
     play('elimination');
   },
   setEnabled,
+  setLoseHook,
 };
