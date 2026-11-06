@@ -3,6 +3,7 @@ const Input = require('./input');
 const theme = require('./theme');
 const audio = require('./audio');
 const help = require('./help');
+const achv = require('./achv');
 const confirm = require('./confirm');
 const confetti = require('./confetti');
 const D = require('./draw');
@@ -200,6 +201,36 @@ class App {
     if (this.input) this.input.cancel();
   }
 
+  // 游戏内 FAB 的彩色描边：帮助=橙、静音=绿、模式切换=浅蓝。
+  // 统一在 scene.render 之后、帮助面板之前画 —— 面板打开时会自然盖住描边；
+  // 不用每个场景各画一遍（25 个场景的 FAB 尺寸 40~48 不等，这里按命中区现算）。
+  drawFabRings(c) {
+    const scene = this.scene;
+    const buttons = scene && scene.buttons;
+    if (!buttons || !buttons.length) return;
+    const T = theme.tokens;
+    const dark = !!theme.dark;
+    buttons.forEach((b) => {
+      let color = null;
+      const id = String(b.id || '');
+      if (id === 'help' || id === 'fab-help' || id === 'help-fab') color = T.god;
+      else if (id === 'fab-mute') color = T.primary;
+      // 模式切换的 id 各场景不统一：mode / fab-mode / fab-mode-emoji / fab-mode-poker …
+      else if (/^mode$/.test(id) || /^fab-mode/.test(id)) color = dark ? '#38bdf8' : '#0ea5e9';
+      if (!color) return;
+      const r = Math.min(b.w, b.h) / 2;
+      if (r < 10) return;
+      c.save();
+      c.strokeStyle = color;
+      c.lineWidth = 2;
+      c.lineCap = 'round';
+      c.beginPath();
+      c.arc(b.x + b.w / 2, b.y + b.h / 2, r - 2, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    });
+  }
+
   ensureSnapshot() {
     if (this.snapshot) return true;
     try {
@@ -235,6 +266,7 @@ class App {
   openGame(id, origin) {
     const SceneClass = this.scenes[id];
     if (!SceneClass) return;
+    achv.trackPlay(id);
     const old = this.scene;
     const o = origin || { x: W / 2, y: H / 2 };
     const ok = this.snapshotScene(old);
@@ -359,6 +391,7 @@ class App {
         if (drawHelp) this.scene.drawHelp = () => {};
         if (drawConfirm) this.scene.drawConfirm = () => {};
         this.scene.render(ctx);
+        this.drawFabRings(ctx);
         if (drawHelp) {
           this.scene.drawHelp = drawHelp;
           this.scene.buttons = [];

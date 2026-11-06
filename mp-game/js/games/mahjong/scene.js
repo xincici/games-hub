@@ -15,6 +15,7 @@ const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
 
@@ -382,6 +383,7 @@ class MahjongScene extends Scene {
         + logic.chainBonus(this.combo);
       const top = hits.reduce((a, b) => (b.trio.score > a.trio.score ? b : a));
       this.score += gained;
+      achv.peak('mahjong', 'gained', gained);   // 最大单次得分
       const special = hits.length > 1 || this.combo > 1;
       if (gained >= FX_MIN || special) this.app.audio.playFirework();
       else this.app.audio.playElimination();
@@ -436,6 +438,7 @@ class MahjongScene extends Scene {
     if (this.score >= this.conf.target) {
       this.phase = WON;
       if (this.level > this.best) {
+      achv.win('mahjong', { mode: this.mode, level: this.level });
         this.best = this.level;
         setRaw(BEST_KEY + 1, String(this.best));
       }

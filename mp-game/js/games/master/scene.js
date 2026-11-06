@@ -14,6 +14,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__masterRegistered) {
   coreI18n.register('master', i18nDict);
   coreI18n.__masterRegistered = true;
@@ -26,6 +27,8 @@ const MODE_KEYS = {
   mahjong: { level: '__emoji_master__mahjong_level', state: '__emoji_master__mahjong_state' },
 };
 const MODE_NUM = { emoji: cards.MODE_EMOJI, poker: cards.MODE_POKER, mahjong: cards.MODE_MAHJONG };
+// 成就按 1/2/3 记模式（emoji / poker / mahjong）
+const MASTER_MODE_NUM = { emoji: 1, poker: 2, mahjong: 3 };
 
 class MasterScene extends Scene {
   constructor(app) {
@@ -177,6 +180,7 @@ class MasterScene extends Scene {
     if (!this.tiles.length) {
       this.phase = 'won';
       this.saveWin();
+      achv.win('master', { mode: MASTER_MODE_NUM[this.mode], level: this.level });
       this.startConfetti();
       this.app.audio.playSuccess();
     } else if (this.tray.length >= 7) {

@@ -11,6 +11,7 @@ const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const achv = require('../../core/achv');
 const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
@@ -375,6 +376,10 @@ class LegendScene extends Scene {
     const gain = base + logic.multiBonus(groups.length) + logic.chainBonus(turn.chain);
     this.score += gain;
     this.cleared += groups.length;
+    // 字牌（z）消除单独计数
+    if (groups.some((g) => (g.tiles || g.cells || []).some((t) => t && t.suit === 'z'))) {
+      achv.bump('legend', 'honor');
+    }
     const prevLevel = this.level;
     this.level = logic.levelOf(this.score);
     if (this.level > prevLevel) this.levelFlashAt = this.clock;
@@ -490,6 +495,8 @@ class LegendScene extends Scene {
   gameOver() {
     if (this.phase === OVER) return;
     this.phase = OVER;
+    // 一局结束：本局得分上报给成就系统（1000/5000/10000 各计一次）
+    achv.reach('legend', this.score, [1000, 5000, 10000]);
     this.activeTurn = null;
     this.pendingTurns.length = 0;
     this.helpOpen = false;

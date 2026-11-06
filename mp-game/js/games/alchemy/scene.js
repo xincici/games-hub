@@ -22,6 +22,7 @@ const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
 const { matchedMotion, TOTAL_MS: CLEAR_TOTAL_MS } = require('../../core/motion');
+const achv = require('../../core/achv');
 const board = require('./board');
 const i18nDict = require('./i18n');
 
@@ -331,6 +332,7 @@ class AlchemyScene extends Scene {
     if (this.score >= this.cfg.target) {
       this.phase = WON;
       if (!silent) {
+      achv.win('alchemy', { mode: this.mode, level: this.level });
         this.sfx('playSuccess');
         this.startConfetti();
       }
@@ -371,6 +373,7 @@ class AlchemyScene extends Scene {
         gained = taken.reduce((sum, h) => sum + h.combo.score, 0);
       }
       this.score += gained;
+      achv.peak('alchemy', this.mode === 2 ? 'gain2' : 'gain1', gained);
       if (!silent) {
         if (gained >= FX_MIN) this.app.audio.playFirework();
         else this.sfx('playElimination');

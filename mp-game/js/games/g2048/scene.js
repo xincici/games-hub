@@ -10,6 +10,7 @@ const fabKit = require('../../core/fab');
 const confetti = require('../../core/confetti');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
+const achv = require('../../core/achv');
 const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
@@ -202,10 +203,13 @@ class Game2048Scene extends Scene {
     if (!this.winShown && this.tiles.some(t => t.value >= WIN_VAL)) {
       this.winShown = true;
       this.phase = WON;
+      achv.win('g2048');
       this.app.audio.playSuccess();
       this.startConfetti();
     } else if (this.isDead()) {
       this.phase = OVER;
+      // 一局结束：本局最大牌上报给成就系统（达成 1024/2048/4096 各计一次）
+      achv.reach('g2048', this.score, [1024, 2048, 4096]);
       this.app.audio.playLose();
     }
     this.save();

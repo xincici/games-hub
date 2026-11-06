@@ -16,6 +16,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__point24Registered) {
   coreI18n.register('point24', i18nDict);
   coreI18n.__point24Registered = true;
@@ -166,6 +167,7 @@ class Point24Scene extends Scene {
 
   win() {
     this.phase = WON;
+    achv.win('point24');
     this.streak += 1;
     if (this.streak > this.best) {
       this.best = this.streak;

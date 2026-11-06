@@ -14,6 +14,7 @@ const i18nDict = require('./i18n');
 // 注册本游戏文案，键前缀 click.*
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__clickRegistered) {
   coreI18n.register('click', i18nDict);
   coreI18n.__clickRegistered = true;
@@ -41,6 +42,8 @@ function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
 class ClickScene extends Scene {
   constructor(app) {
     super(app);
+    this.usedUndo = false;
+    this.usedGod = false;
     this.difficulty = clamp(+getRaw(DIFFICULTY_KEY, INIT_DIFFICULTY) || INIT_DIFFICULTY, MIN_DIFFICULTY, MAX_DIFFICULTY);
     this.logic = new ClickLogic(this.difficulty);
     this.best = +getRaw(bestKey(this.difficulty), 0) || 0;
@@ -70,6 +73,9 @@ class ClickScene extends Scene {
   }
 
   newGame() {
+    this.usedUndo = false;   // 本局是否用过撤销 / 重做（完美操作的判定）
+    this.usedGod = false;    // 本局是否开过上帝模式（开了不计入成就）
+
     this.stopAutoplay();
     this.logic = new ClickLogic(this.difficulty);
     this.display = this.logic.cells.slice();
@@ -100,6 +106,7 @@ class ClickScene extends Scene {
     if (this.logic.undoIndex !== -1) return;
     const gen = ++this.autoGen;
     this.autoplaying = true;
+    this.usedGod = true;
     const opts = this.logic.solutionOps();
     for (let i = 0; i < opts.length; i++) {
       if (gen !== this.autoGen || !this.autoplaying || this.logic.result !== GAMING) break;
@@ -200,6 +207,8 @@ class ClickScene extends Scene {
     if (this.lastResult !== this.logic.result) {
       this.lastResult = this.logic.result;
       if (this.logic.result === WIN) {
+        // 上帝模式通关不算成就；没用过撤销 / 重做算「完美操作」
+        if (!this.usedGod) achv.win('click', { mode: n, perfect: !this.usedUndo });
         this.updateBest();
         this.app.audio.playSuccess();
         this.startConfetti();
@@ -262,6 +271,7 @@ class ClickScene extends Scene {
 
   undo() {
     if (this.autoplaying) return;
+    this.usedUndo = true;
     const before = this.logic.cells.slice();
     this.logic.undo();
     this.syncTargets(before);
@@ -269,6 +279,7 @@ class ClickScene extends Scene {
 
   redo() {
     if (this.autoplaying) return;
+    this.usedUndo = true;
     const before = this.logic.cells.slice();
     this.logic.redo();
     this.syncTargets(before);

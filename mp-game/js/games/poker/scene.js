@@ -16,6 +16,7 @@ const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const confetti = require('../../core/confetti');
 const fx = require('../../core/fx');
+const achv = require('../../core/achv');
 const logic = require('./rules');
 const i18nDict = require('./i18n');
 
@@ -452,6 +453,13 @@ class PokerScene extends Scene {
     const card = this.guessCard || logic.randomGuessCard();
     const win = logic.guessResult(card, !!big);
     this.guesses = this.guesses.concat([{ num: card.num, type: card.type, big: !!big, win }]).slice(-MAX_HISTORY);
+    // 猜大小连胜：从最后一张往前数连续猜中的次数
+    let gstreak = 0;
+    for (let i = this.guesses.length - 1; i >= 0; i -= 1) {
+      if (!this.guesses[i].win) break;
+      gstreak += 1;
+    }
+    achv.peak('poker', 'gstreak', gstreak);
     this.guessScroll = 99999;
     // 先让这张牌从右侧当前位飞到左侧历史位；落地后再换新牌（见 update）
     this.guessFly = {
@@ -479,6 +487,13 @@ class PokerScene extends Scene {
 
   settle() {
     if (this.stage !== GUESS || this.helpOpen) return;
+    if (this.bonus > 0) {
+      achv.win('poker');
+      achv.peak('poker', 'payout', this.bonus);
+      // 牌型里程碑：四条 / 同花顺各计一次
+      if (this.result && this.result.key === 'four') achv.bump('poker', 'four');
+      if (this.result && this.result.key === 'straightflush') achv.bump('poker', 'flush');
+    }
     this.total += this.bonus;
     this.totalPulseAt = Date.now();
     this.stats.peak = Math.max(this.stats.peak, this.bonus);

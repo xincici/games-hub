@@ -559,6 +559,147 @@ i18n.setLang('cn');
   scene.settingsOpen = false;
 }
 
+// ---------- 成就系统：数据、计数、首页成就页 ----------
+{
+  const achv = require(path.join(ROOT, 'js/core/achv'));
+  check(achv.ORDER.length === 25, `成就：游戏数应为 25，实际 ${achv.ORDER.length}`);
+  const data = achv.pageData();
+  check(data.games.length === 25, '成就：pageData 没返回 25 个游戏');
+  let bad = null;
+  data.games.forEach((g) => {
+    if (!g.name || g.name === g.id || g.name.endsWith('Title')) bad = `${g.id} 名称没取到（${g.name}）`;
+    if (!g.achv.length || g.achv.length > 5) bad = `${g.id} 成就条数 ${g.achv.length}`;
+    g.achv.forEach((a) => {
+      if (!a.name || /[A-Za-z_]+\./.test(a.name)) bad = `${g.id} 成就名异常 ${a.name}`;
+      if (!(a.target > 0)) bad = `${g.id} target 非法`;
+      if (!(a.ratio >= 0 && a.ratio <= 1)) bad = `${g.id} ratio 越界`;
+      if (a.counter && a.target !== 1) bad = `${g.id} 计数型 target 应为 1（${a.name}）`;
+      if (a.stat && a.ratio !== 0) bad = `${g.id} 指标行不应该有进度（${a.name}）`;
+    });
+  });
+  check(!bad, `成就：数据异常 ${bad || ''}`);
+  check(data.summary.total === data.games.reduce((n, g) => n + g.achv.length, 0), '成就：总览总数对不上');
+  check(achv.totalCount() === data.summary.total, '成就：totalCount 与页面数据不一致');
+
+  // 计数：开局 / 胜利都要落盘并能读回
+  const beforePlays = achv.playsOf('click');
+  const beforeWins = achv.winsOf('click');
+  achv.trackPlay('click');
+  achv.win('click');
+  check(achv.playsOf('click') === beforePlays + 1, '成就：开局计数没有 +1');
+  check(achv.winsOf('click') === beforeWins + 1, '成就：胜利计数没有 +1');
+  check(achv.totalCount() > 0 && achv.unlockedCount() >= 0, '成就：统计接口异常');
+
+  // 分模式 / 完美 / 速通 / 里程碑计数
+  const beforeMode = achv.modeOf('match', 2).wins;
+  const beforePerfect = achv.perfectOf('match');
+  achv.win('match', { mode: 2, level: 1, perfect: true });
+  check(achv.modeOf('match', 2).wins === beforeMode + 1, '成就：分模式胜场没有 +1');
+  check(achv.modeOf('match', 2).first === 1, '成就：首关胜利没有记下');
+  check(achv.perfectOf('match') === beforePerfect + 1, '成就：完美胜利没有记下');
+  check(achv.bestLevelOf('match') >= 1, '成就：历史最高关卡没有记下');
+  const fastBefore = achv.fastOf('guess');
+  achv.win('guess', { fast: true });
+  check(achv.fastOf('guess') === fastBefore + 1, '成就：速通次数没有 +1');
+  achv.reach('g2048', 2048, [1024, 2048, 4096]);
+  check(achv.reachOf('g2048', 1024) === 1 && achv.reachOf('g2048', 2048) === 1, '成就：里程碑没有计数');
+  check(achv.reachOf('g2048', 4096) === 0, '成就：未达成的里程碑被计数了');
+  // FAB 描边：帮助橙 / 静音绿 / 模式浅蓝（首页按钮不该有）
+  {
+    const { App } = require(path.join(ROOT, 'js/core/app'));
+    const ringCtx = makeCtx();
+    const fake = {
+      scene: {
+        buttons: [
+          { id: 'help', x: 300, y: 560, w: 48, h: 48 },
+          { id: 'fab-help', x: 252, y: 560, w: 44, h: 44 },
+          { id: 'fab-mute', x: 204, y: 560, w: 48, h: 48 },
+          // 模式切换的 id 各场景不统一：mode / fab-mode / fab-mode-emoji 都要能描边
+          { id: 'mode', x: 188, y: 560, w: 40, h: 40 },
+          { id: 'fab-mode', x: 140, y: 560, w: 44, h: 44 },
+          { id: 'fab-mode-emoji', x: 92, y: 560, w: 48, h: 48 },
+          { id: 'home', x: 16, y: 16, w: 48, h: 48 },
+          { id: 'settings', x: 300, y: 16, w: 48, h: 48 },
+        ],
+      },
+    };
+    App.prototype.drawFabRings.call(fake, ringCtx);
+    check(ringCtx.__arcs.length === 6, `FAB 描边：应画 6 圈，实际 ${ringCtx.__arcs.length}`);
+    const radii = ringCtx.__arcs.map((a) => Math.round(a[2]));
+    check(radii.includes(22) && radii.includes(20) && radii.includes(18), `FAB 描边：半径不对（${radii.join(',')}）`);
+  }
+
+  const clickCard = achv.pageData().games.find((g) => g.id === 'click');
+  check(clickCard && clickCard.achv.some((a) => a.counter), '成就：关灯缺少计数型成就');
+
+  // 首页成就页：圆形展开后要有遮罩 + 关闭按钮，滚动要被夹住
+  const HomeScene = require(path.join(ROOT, 'js/games/home/scene'));
+  const home = new HomeScene(fakeApp);
+  fakeApp.sceneId = 'home';
+  const ctxA = makeCtx();
+  home.openAchv();
+  check(home.achvOpen === true, '成就：openAchv 没有打开');
+  withFakeClock(20, () => {
+    for (let i = 0; i < 40; i += 1) {
+      home.update(20);
+      home.buttons = [];
+      home.render(ctxA);
+    }
+  });
+  check(home.achvAnim >= 1, `成就：展开没完成（${home.achvAnim}）`);
+  check(home.buttons.some((b) => b.id === 'achv-close'), '成就：没有关闭按钮');
+  check(home.buttons.some((b) => b.id === 'achv-mask'), '成就：没有遮罩');
+  home.achvScroll = 99999;
+  home.render(ctxA);
+  check(home.achvScroll <= home.achvPage.maxScroll() + 0.5, '成就：滚动没有被夹住');
+  // 顺序：拖动换位 + 落盘 + 读回
+  const orderBefore = home.achvPage.data.games.map((g) => g.id);
+  check(orderBefore.length === 25, '成就：卡片数量不对');
+  const moved = home.achvPage.moveItem(0, 3);
+  check(moved, '成就：moveItem 没有移动');
+  const orderAfter = home.achvPage.data.games.map((g) => g.id);
+  check(orderAfter[3] === orderBefore[0] && orderAfter[0] === orderBefore[1], '成就：拖动换位结果不对');
+  achv.saveOrder(orderAfter);
+  const reloaded = achv.loadOrder();
+  check(reloaded.length === 25 && reloaded[3] === orderBefore[0], '成就：排序没有存进去 / 读不回');
+  // 拖动状态下渲染不抛错，且被拖的那张不再按原位置画
+  home.render(ctxA);
+  home.achvCard = { index: 3, grabDy: 20, fingerY: 300 };
+  try {
+    home.render(ctxA);
+  } catch (e) {
+    failures.push(`成就：拖动渲染抛错 ${e.message}`);
+  }
+  home.achvCard = null;
+  achv.saveOrder(orderBefore);
+
+  // 滚动：拖动 → 松手应有惯性（速度>0），update() 之后继续滚
+  home.achvScroll = 0;
+  home.onTouchStart({ x: 100, y: 420 });
+  home.onTouchMove({ x: 100, y: 360 });
+  home.onTouchMove({ x: 100, y: 300 });
+  const scrolledByDrag = home.achvScroll;
+  check(scrolledByDrag > 0, `成就：拖动没有滚动（${scrolledByDrag}）`);
+  home.onTouchEnd();
+  check(home.achvVel > 0, `成就：松手没有惯性（${home.achvVel}）`);
+  const beforeFlung = home.achvScroll;
+  home.update(16);
+  check(home.achvScroll > beforeFlung, '成就：惯性没有继续滚动');
+  // 惯性衰减：跑一会儿后速度归零
+  for (let i = 0; i < 120; i += 1) home.update(16);
+  check(Math.abs(home.achvVel) < 0.3, `成就：惯性没有停下来（${home.achvVel}）`);
+  check(home.achvScroll <= home.achvPage.maxScroll() + 0.5, '成就：惯性滚过了末端');
+  home.achvOpen = false;
+  withFakeClock(20, () => {
+    for (let i = 0; i < 40; i += 1) {
+      home.update(20);
+      home.buttons = [];
+      home.render(ctxA);
+    }
+  });
+  check(home.achvAnim === 0, '成就：收起没归零');
+}
+
 // ---------- 背景浅景：坐标不跑飞、流星会来也会走 ----------
 {
   const ParticleField = require(path.join(ROOT, 'js/core/particles'));

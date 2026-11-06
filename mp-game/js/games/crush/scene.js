@@ -12,6 +12,7 @@ const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
 
@@ -698,6 +699,7 @@ class CrushScene extends Scene {
     if (this.phase !== PLAY) return;
     this.phase = WON;
     this.busy = false;
+    achv.win('crush', { level: this.level + 1 });
     if (this.level + 1 > this.best) {
       this.best = this.level + 1;
       setRaw(BEST_KEY, String(this.best));

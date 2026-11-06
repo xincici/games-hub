@@ -22,6 +22,7 @@ const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
 const fx = require('../../core/fx');
+const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
 
@@ -660,6 +661,7 @@ class SortScene extends Scene {
     if (logic.isWon(piles, this.cfg.copies, this.cfg.kinds)) {
       this.phase = WON;
       this.selected = -1;
+      achv.win('sort', { mode: this.mode, level: this.level + 1 });
       this.save();
       this.startConfetti();
       this.app.audio.playSuccess();

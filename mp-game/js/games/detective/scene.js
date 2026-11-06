@@ -15,6 +15,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__detectiveRegistered) {
   coreI18n.register('detective', i18nDict);
   coreI18n.__detectiveRegistered = true;
@@ -230,6 +231,7 @@ class DetectiveScene extends Scene {
         } else if (this.right >= 0) {
           this.phase = WON;
           this.best = Math.max(this.best, this.level + 1);
+          achv.win('detective', { mode: this.mode, level: this.level + 1 });
           setRaw(bestKey(this.mode), String(this.best));
           this.saveState();
           this.startConfetti();

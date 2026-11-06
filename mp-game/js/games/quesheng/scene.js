@@ -15,6 +15,7 @@ const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 const board = require('./board');
 const i18nDict = require('./i18n');
 
@@ -301,6 +302,7 @@ class QueshengScene extends Scene {
     if (this.countTiles() === 0) {
       this.phase = WON;
       this.resultSerial += 1;
+      achv.win('quesheng', { mode: this.mode, level: this.level });
       this.save();
       this.startConfetti();
       this.playSuccess();

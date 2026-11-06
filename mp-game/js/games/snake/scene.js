@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const achv = require('../../core/achv');
 const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
 const i18nDict = require('./i18n');
@@ -139,6 +140,8 @@ class SnakeScene extends Scene {
     if (head[0] < 0 || head[0] >= GRID || head[1] < 0 || head[1] >= GRID
       || this.snake.some(([r, c]) => r === head[0] && c === head[1])) {
       this.phase = LOSE;
+      // 一局结束：本局得分上报给成就系统（100/500/1000 各计一次）
+      achv.reach('snake', this.score, [100, 500, 1000]);
       this.app.audio.playLose();
       this.save();
       return;

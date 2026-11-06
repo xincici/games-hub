@@ -20,6 +20,7 @@ const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
 
@@ -171,6 +172,7 @@ class SlideScene extends Scene {
 
   startLevel(level, restored) {
     this.level = Math.max(1, Math.floor(level) || 1);
+    this.usedShuffle = false;   // 本关是否用过死局重排（成就「无重排获胜」判定）
     this.conf = logic.levelConfig(this.level);
     this.layout();
     this.phase = PLAY;
@@ -232,6 +234,7 @@ class SlideScene extends Scene {
     if (this.phase !== PLAY) return;
     this.phase = WON;
     this.drag = null;
+    achv.win('slide', { level: this.level, perfect: !this.usedShuffle });
     this.touch = null;
     // 收掉还没闪完的 ghost：棋盘已经清空，继续闪会被结算层盖住
     this.tiles = this.tiles.filter(tile => !tile.popping);
@@ -507,6 +510,7 @@ class SlideScene extends Scene {
     // 只剩还在闪的 ghost（最后一对）时不算死局，等它闪完直接判胜
     if (!this.tiles.some(tile => !tile.popping)) return;
     if (logic.hasAnyMove(this.grid())) return;
+    this.usedShuffle = true;   // 本关用过死局重排 → 不算「无重排获胜」
     this.applyGrid(logic.reshuffleBoard(this.grid()));
     this.save();
     this.startShuffle();

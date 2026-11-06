@@ -15,6 +15,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__linkRegistered) {
   coreI18n.register('link', i18nDict);
   coreI18n.__linkRegistered = true;
@@ -228,6 +229,7 @@ class LinkScene extends Scene {
     if (!this.leftPairs) {
       this.phase = WON;
       this.best = Math.max(this.best, this.level + 1);
+      achv.win('link', { level: this.level + 1 });
       setRaw(BEST_KEY, String(this.best));
       this.app.audio.playSuccess();
       this.startConfetti();

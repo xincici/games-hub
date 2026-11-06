@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const achv = require('../../core/achv');
 const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
@@ -156,6 +157,8 @@ class DownScene extends Scene {
   lose() {
     if (this.phase !== PLAY) return;
     this.phase = OVER;
+    // 一局结束：本局得分上报给成就系统（50/100/1000 各计一次）
+    achv.reach('down', this.score, [50, 100, 1000]);
     this.queuedCol = null;
     this.paused = false;
     this.app.audio.playLose();

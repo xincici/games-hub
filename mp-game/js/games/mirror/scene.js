@@ -11,6 +11,7 @@ const confetti = require('../../core/confetti');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
+const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
 
@@ -248,6 +249,7 @@ class MirrorScene extends Scene {
   finishCheck() {
     if (this.matches === this.count) {
       this.phase = WON;
+      achv.win('mirror', { mode: this.difficulty });
       this.winAt = Date.now() + (this.count - 1) * 20 + FLIP_MS + 60;
       this.displayTargets = this.displayTargets.map(() => 1);
       this.displayFlipStart = Date.now();

@@ -13,6 +13,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__guessRegistered) {
   coreI18n.register('guess', i18nDict);
   coreI18n.__guessRegistered = true;
@@ -213,6 +214,7 @@ class GuessScene extends Scene {
     this.current = '';
     if (a === GAME_SIZE) {
       this.result = WIN;
+      achv.win('guess', { fast: this.history.length <= 4 });
       this.streak += 1;
       this.best = Math.max(this.best, this.streak);
       this.saveRecords();

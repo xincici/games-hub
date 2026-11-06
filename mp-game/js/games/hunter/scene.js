@@ -15,6 +15,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__hunterRegistered) {
   coreI18n.register('hunter', i18nDict);
   coreI18n.__hunterRegistered = true;
@@ -213,6 +214,7 @@ class HunterScene extends Scene {
         else if (this.found.size === this.stage.length) {
           this.phase = WON;
           this.best = Math.max(this.best, this.level + 1);
+          achv.win('hunter', { mode: this.mode, level: this.level + 1 });
           setRaw(bestKey(this.mode), String(this.best));
           this.saveState();
           this.startConfetti();

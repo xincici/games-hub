@@ -21,6 +21,7 @@ const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
 const fx = require('../../core/fx');
+const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
 
@@ -514,6 +515,8 @@ class GamblerScene extends Scene {
     if (this.phase !== PLAY) return;
     this.phase = WON;
     this.reason = '';
+    achv.win('gambler', { mode: this.mode, level: this.level + 1 });
+    achv.peak('gambler', this.mode === 2 ? 'streak2' : 'streak1', this.streak + 1);
     this.streak += 1;
     this.best = Math.max(this.best, this.level + 1);     // 解锁下一关
     if (!this.flights.length) this.picked = this.picks.slice();

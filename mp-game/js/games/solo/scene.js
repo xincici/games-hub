@@ -13,6 +13,7 @@ const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 const board = require('./board');
 const i18nDict = require('./i18n');
 
@@ -172,6 +173,7 @@ class SoloScene extends Scene {
     const next = this.wall.shift();
     this.hand.push(next);
     this.drawnId = next.id;
+    this.draws = (this.draws || 0) + 1;
     if (board.isWin(this.hand)) {
       this.beginWin();
       return;
@@ -269,6 +271,7 @@ class SoloScene extends Scene {
     this.wall = this.wall.slice(1);
     this.hand = this.hand.concat([next]);
     this.drawnId = next.id;
+    this.draws = (this.draws || 0) + 1;
     const targetIndex = this.displayItems().findIndex(item => item.id === next.id);
     const target = this.handSlotRect(targetIndex);
     this.flights.push({
@@ -315,6 +318,9 @@ class SoloScene extends Scene {
     if (this.phase !== CELEBRATE) return;
     this.phase = WON;
     this.streak += 1;
+    // 5 次摸牌内自摸：手气好，单独计一次
+    achv.win('solo', { fast: this.draws > 0 && this.draws <= 5 });
+    achv.peak('solo', 'streak', this.streak);
     if (this.streak > this.best) this.best = this.streak;
     setRaw(STREAK_KEY, String(this.streak));
     setRaw(BEST_KEY, String(this.best));

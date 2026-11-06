@@ -18,6 +18,7 @@ const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
 const confetti = require('../../core/confetti');
+const achv = require('../../core/achv');
 if (!coreI18n.__matchRegistered) {
   coreI18n.register('match', i18nDict);
   coreI18n.__matchRegistered = true;
@@ -146,6 +147,7 @@ class MatchScene extends Scene {
 
   // ---------- level lifecycle ----------
   initLevel(lv, restored) {
+    this.mistakes = 0;   // 本关配对失败次数（完美操作判定）
     this.clearTransient();
     this.confirming = false;
     this.helpOpen = false;
@@ -321,6 +323,7 @@ class MatchScene extends Scene {
     if (this.phase !== PLAY) return;
     this.phase = WON;
     this.finished = true;
+    achv.win('match', { mode: this.mode, level: this.level + 1, perfect: !this.mistakes });
     this.usedTime = this.usedTime || this.elapsed;
     this.save();
     this.app.audio.playSuccess();
@@ -355,6 +358,7 @@ class MatchScene extends Scene {
         this.save();
       }
     } else {
+      this.mistakes = (this.mistakes || 0) + 1;   // 完美操作 = 整局零次配对失败
       this.breakCombo();
       this.lock = true;
       this.pendingMismatch = { a, b: card, at: Date.now() + FLIP_BACK_MS };

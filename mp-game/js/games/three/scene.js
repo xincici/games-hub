@@ -6,6 +6,7 @@ const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
+const achv = require('../../core/achv');
 const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
@@ -226,6 +227,8 @@ class ThreeScene extends Scene {
     this.busy = false;
     if (!this.canMove()) {
       this.phase = LOSE;
+      // 一局结束：本局得分上报给成就系统（2000/10000/30000 各计一次）
+      achv.reach('three', this.score, [2000, 10000, 30000]);
       this.app.audio.playLose();
     }
     this.save();

@@ -10,6 +10,8 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const homeI18n = require('./i18n');
 const tiles = require('../../core/tiles');
+const achv = require('../../core/achv');
+const AchvPage = require('./achv-page');
 
 // 分段控件滑块动画时长（web 的 .seg-slider 是 0.32s）
 const SEG_SLIDE_MS = 320;
@@ -58,6 +60,16 @@ class HomeScene extends Scene {
     tiles.preload();
     this.settingsOpen = false;
     this.settingsAnim = 0;
+    this.achvOpen = false;
+    this.achvAnim = 0;
+    this.achvScroll = 0;
+    this.achvDrag = null;
+    this.achvPress = null;        // 长按判定：{ x, y, index, scroll }
+    this.achvPressTimer = null;
+    this.achvVel = 0;             // 松手后的惯性速度（px/帧）
+    this.achvTrack = [];          // 最近几次移动采样，用来算甩动速度
+    this.achvCard = null;         // 拖动中的卡：{ index, grabDy, fingerY }
+    this.achvPage = new AchvPage(SAFE_TOP, SAFE_BOTTOM);
     this.settingsSurface = null;   // 圆形展开用的离屏画布（懒创建）
     this.segSlide = {};            // 分段控件滑块的弹性动画：key → { from, to, at }
     this.order = this.loadOrder();
@@ -93,6 +105,8 @@ class HomeScene extends Scene {
     // 与微信右上角胶囊按钮同一水平线。
     this.titleY = HEADER.TITLE_Y;
     this.gearRect = { x: W - 16 - 48, y: H - SAFE_BOTTOM - 16 - 48, w: 48, h: 48 };
+    // 成就按钮：齿轮左边一格
+    this.achvRect = { x: this.gearRect.x - 12 - 48, y: this.gearRect.y, w: 48, h: 48 };
     const gap = Math.max(2, W * 0.008);
     const avail = W - 32;
     const hexW = (avail - gap * 3) / 4;
@@ -156,6 +170,37 @@ class HomeScene extends Scene {
     // 与 web 的 clip-path 0.6s 对齐：展开 600ms、收拢 480ms
     if (this.settingsOpen) this.settingsAnim = Math.min(1, this.settingsAnim + step / 600);
     else if (this.settingsAnim > 0) this.settingsAnim = Math.max(0, this.settingsAnim - step / 480);
+    if (this.achvOpen) this.achvAnim = Math.min(1, this.achvAnim + step / 600);
+    else if (this.achvAnim > 0) this.achvAnim = Math.max(0, this.achvAnim - step / 480);
+    if (this.achvAnim > 0) this.achvPage.update(step);
+    if (!this.achvDrag && !this.achvCard && Math.abs(this.achvVel) > 0.2) {
+      // 甩动惯性：松手后继续滑、按 0.94/帧 衰减，撞到两端就停
+      const max = this.achvPage.maxScroll();
+      const k = step / 16.67;
+      let next = this.achvScroll + this.achvVel * k;
+      if (next <= 0) {
+        next = 0;
+        this.achvVel = 0;
+      } else if (next >= max) {
+        next = max;
+        this.achvVel = 0;
+      } else {
+        this.achvVel *= Math.pow(0.94, k);
+      }
+      this.achvScroll = next;
+    }
+    if (this.achvCard) {
+      // 拖着卡走到列表上下边缘时自动滚动，长列表也能一步拖到底
+      const top = this.achvPage.headerH;
+      const bottom = H - SAFE_BOTTOM;
+      const edge = 52;
+      let next = this.achvScroll;
+      if (this.achvCard.fingerY < top + edge) next -= 7;
+      else if (this.achvCard.fingerY > bottom - edge) next += 7;
+      if (next !== this.achvScroll) {
+        this.achvScroll = Math.min(this.achvPage.maxScroll(), Math.max(0, next));
+      }
+    }
   }
 
   render(c) {
@@ -176,8 +221,12 @@ class HomeScene extends Scene {
       const item = this.hexes.find(h => h.id === this.drag.id);
       if (item) this.drawHex(c, item, this.drag.x, this.drag.y, true);
     }
-    if (this.settingsAnim > 0) this.drawSettings(c);
-    else if (!this.settingsOpen) this.drawSettingsButton(c);
+    if (this.achvAnim > 0) this.drawAchv(c);
+    else if (this.settingsAnim > 0) this.drawSettings(c);
+    else if (!this.settingsOpen && !this.achvOpen) {
+      this.drawAchvButton(c);
+      this.drawSettingsButton(c);
+    }
   }
 
   onTheme() {
@@ -211,6 +260,29 @@ class HomeScene extends Scene {
 
   onTouchStart(p) {
     if (!p) return;
+    if (this.achvOpen) {
+      this.achvVel = 0;
+      this.achvTrack.length = 0;
+      const index = this.achvPage.hitIndex(p.y, this.achvScroll);
+      this.achvPress = { x: p.x, y: p.y, index };
+      this.achvDrag = { y: p.y, scroll: this.achvScroll || 0 };
+      if (this.achvPressTimer) clearTimeout(this.achvPressTimer);
+      this.achvPressTimer = null;
+      if (index >= 0) {
+        // 长按 260ms 拿起卡片（和首页蜂窝长按拖动同一套节奏）
+        this.achvPressTimer = setTimeout(() => {
+          this.achvPressTimer = null;
+          const press = this.achvPress;
+          if (!press || press.index !== index) return;
+          const card = this.achvPage.cardList(this.achvScroll).find((c) => c.index === index);
+          if (!card) return;
+          this.achvCard = { index, grabDy: press.y - card.y, fingerY: press.y };
+          this.achvDrag = null;
+          if (wx.vibrateShort) wx.vibrateShort({ type: 'light' });
+        }, 260);
+      }
+      return;
+    }
     if (this.settingsOpen) {
       // 设置面板内容比屏幕高时可以拖动滚动；拖过 6px 就不再触发点击
       this.settingsDrag = { y: p.y, scroll: this.settingsScroll || 0 };
@@ -226,6 +298,29 @@ class HomeScene extends Scene {
 
   onTouchMove(p) {
     if (!p) return;
+    if (this.achvCard) {
+      this.achvCard.fingerY = p.y;
+      const target = this.achvPage.hitIndex(p.y, this.achvScroll);
+      if (target >= 0 && target !== this.achvCard.index) {
+        if (this.achvPage.moveItem(this.achvCard.index, target)) this.achvCard.index = target;
+      }
+      return;
+    }
+    if (this.achvDrag) {
+      // 手指移动超过 8px 就取消长按（想滚动而不是拖卡）
+      if (this.achvPress && this.achvPressTimer
+        && Math.abs(p.y - this.achvPress.y) > 8) {
+        clearTimeout(this.achvPressTimer);
+        this.achvPressTimer = null;
+        this.achvPress = null;
+      }
+      const max = this.achvPage.maxScroll();
+      this.achvScroll = Math.min(max, Math.max(0, this.achvDrag.scroll - (p.y - this.achvDrag.y)));
+      // 记录最近几次位移，松手时用来算甩动速度
+      this.achvTrack.push({ s: this.achvScroll, t: Date.now() });
+      if (this.achvTrack.length > 6) this.achvTrack.shift();
+      return;
+    }
     if (this.settingsDrag) {
       const L = this.settingsLayout();
       const maxScroll = Math.max(0, L.contentH - H);
@@ -259,6 +354,31 @@ class HomeScene extends Scene {
   }
 
   onTouchEnd() {
+    if (this.achvPressTimer) {
+      clearTimeout(this.achvPressTimer);
+      this.achvPressTimer = null;
+    }
+    this.achvPress = null;
+    if (this.achvCard) {
+      this.achvCard = null;
+      achv.saveOrder(this.achvPage.data.games.map((g) => g.id));
+      return;
+    }
+    if (this.achvDrag) {
+      this.achvDrag = null;
+      const tr = this.achvTrack;
+      if (tr.length >= 2) {
+        const first = tr[0];
+        const last = tr[tr.length - 1];
+        const dt = Math.max(16, last.t - first.t);
+        const v = ((last.s - first.s) / dt) * 16.67;
+        this.achvVel = Math.abs(v) > 1.2 ? Math.max(-45, Math.min(45, v)) : 0;
+      } else {
+        this.achvVel = 0;
+      }
+      this.achvTrack.length = 0;
+      return;
+    }
     if (this.settingsDrag) {
       this.settingsDrag = null;
       return;
@@ -432,6 +552,147 @@ class HomeScene extends Scene {
     });
   }
 
+  // ---------- 成就 ----------
+
+  openAchv() {
+    achv.markSeen();
+    this.achvPage.setData(achv.pageData());
+    this.achvOpen = true;
+    this.achvAnim = 0;
+    this.achvScroll = 0;
+    this.achvDrag = null;
+    this.achvCard = null;
+    this.achvPress = null;
+    this.achvVel = 0;
+    this.achvTrack.length = 0;
+  }
+
+  // 手绘奖杯：icon font 里没有 trophy，索性画一个（杯身 + 双耳 + 底座）
+  drawTrophy(c, cx, cy, size, color) {
+    const s = size;
+    c.save();
+    c.fillStyle = color;
+    c.beginPath();
+    c.moveTo(cx - s * 0.42, cy - s * 0.46);
+    c.lineTo(cx + s * 0.42, cy - s * 0.46);
+    c.lineTo(cx + s * 0.42, cy - s * 0.16);
+    c.quadraticCurveTo(cx + s * 0.42, cy + s * 0.06, cx, cy + s * 0.06);
+    c.quadraticCurveTo(cx - s * 0.42, cy + s * 0.06, cx - s * 0.42, cy - s * 0.16);
+    c.closePath();
+    c.fill();
+    // 双耳
+    c.lineWidth = Math.max(1.4, s * 0.09);
+    c.strokeStyle = color;
+    c.beginPath();
+    c.arc(cx - s * 0.5, cy - s * 0.28, s * 0.16, Math.PI * 0.55, Math.PI * 1.55);
+    c.stroke();
+    c.beginPath();
+    c.arc(cx + s * 0.5, cy - s * 0.28, s * 0.16, Math.PI * 1.45, Math.PI * 0.45);
+    c.stroke();
+    // 杯柄 + 底座
+    c.fillRect(cx - s * 0.07, cy + s * 0.04, s * 0.14, s * 0.2);
+    c.beginPath();
+    c.moveTo(cx - s * 0.3, cy + s * 0.42);
+    c.quadraticCurveTo(cx - s * 0.3, cy + s * 0.26, cx, cy + s * 0.26);
+    c.quadraticCurveTo(cx + s * 0.3, cy + s * 0.26, cx + s * 0.3, cy + s * 0.42);
+    c.closePath();
+    c.fill();
+    c.restore();
+  }
+
+  drawAchvButton(c) {
+    const T = theme.tokens;
+    const r = this.achvRect;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const unlocked = achv.unlockedCount();
+    const total = Math.max(1, achv.totalCount());
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.12)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 2;
+    D.circle(c, cx, cy, r.w / 2, T.card);
+    c.restore();
+    // 外圈进度：已解锁比例（激励继续刷）
+    if (unlocked > 0) {
+      c.save();
+      c.strokeStyle = T.primary;
+      c.lineWidth = 2;
+      c.lineCap = 'round';
+      c.beginPath();
+      c.arc(cx, cy, r.w / 2 - 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (unlocked / total));
+      c.stroke();
+      c.restore();
+    }
+    this.drawTrophy(c, cx, cy - 1, 21, unlocked > 0 ? T.primary : T.text);
+    // 有新解锁：右上角一个暖色小圆点
+    if (achv.hasNew()) {
+      D.circle(c, cx + r.w * 0.34, cy - r.h * 0.34, 4.2, T.god || T.primary);
+    }
+    this.addButton('achv', r.x, r.y, r.w, r.h, () => this.openAchv());
+  }
+
+  drawAchv(c) {
+    const anim = this.achvAnim;
+    const ease = anim < 0.5 ? 2 * anim * anim : 1 - Math.pow(-2 * anim + 2, 2) / 2;
+    const page = this.achvPage;
+    const r = this.achvRect;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const maxR = Math.max(
+      Math.hypot(cx, cy), Math.hypot(W - cx, cy),
+      Math.hypot(cx, H - cy), Math.hypot(W - cx, H - cy),
+    );
+    const maxScroll = page.maxScroll();
+    const scroll = Math.min(Math.max(0, this.achvScroll || 0), maxScroll);
+    this.achvScroll = scroll;
+    const open = ease >= 0.995;
+
+    if (open) {
+      // 遮罩先注册（后注册优先），否则会把关闭按钮压掉
+      this.addButton('achv-mask', 0, 0, W, H, () => { this.achvOpen = false; });
+      page.draw(c, {
+        ease,
+        scroll,
+        interactive: true,
+        scrolling: !!this.achvDrag || !!this.achvCard || Math.abs(this.achvVel) > 0.2,
+        drag: this.achvCard
+          ? { index: this.achvCard.index, top: this.achvCard.fingerY - this.achvCard.grabDy }
+          : null,
+      });
+    } else {
+      c.save();
+      c.beginPath();
+      c.arc(cx, cy, Math.max(0.1, maxR * ease), 0, Math.PI * 2);
+      c.clip();
+      c.globalAlpha = Math.min(1, Math.max(0, (ease - 0.14) / 0.5));
+      page.draw(c, { ease, scroll, interactive: false });
+      c.restore();
+    }
+
+    // 关闭按钮：画在「设置齿轮」那一格（右下角），不是成就 FAB 的位置
+    const g = this.gearRect;
+    const gx = g.x + g.w / 2;
+    const gy = g.y + g.h / 2;
+    const closeAlpha = Math.min(1, Math.max(0, (ease - 0.45) / 0.4));
+    c.save();
+    c.globalAlpha = closeAlpha;
+    c.shadowColor = 'rgba(0,0,0,0.12)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 2;
+    D.circle(c, gx, gy, g.w / 2, theme.tokens.card);
+    c.restore();
+    c.save();
+    c.globalAlpha = closeAlpha;
+    if (!icons.draw(c, 'close', gx, gy, 20, theme.tokens.text)) {
+      D.text(c, '×', gx, gy, { size: 20, color: theme.tokens.text, align: 'center' });
+    }
+    c.restore();
+    if (ease > 0.75) {
+      this.addButton('achv-close', g.x, g.y, g.w, g.h, () => { this.achvOpen = false; });
+    }
+  }
+
   drawSettingsButton(c) {
     const T = theme.tokens;
     const r = this.gearRect;
@@ -442,6 +703,15 @@ class HomeScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, cx, cy, r.w / 2, T.card);
+    c.restore();
+    // 橙色整圈边框：和成就 FAB 的进度环同款，只是这里固定满圈
+    c.save();
+    c.strokeStyle = T.god || '#c2410c';
+    c.lineWidth = 2;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
+    c.stroke();
     c.restore();
     if (!icons.draw(c, 'settings', cx, cy, 22, T.text)) {
       D.text(c, '⚙', cx, cy, { size: 20, color: T.text, align: 'center' });

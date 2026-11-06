@@ -9,6 +9,7 @@ const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
+const achv = require('../../core/achv');
 const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
@@ -111,6 +112,7 @@ class PuzzleScene extends Scene {
     this.clicks++;
     if (this.isSolved()) {
       this.phase = WON;
+      achv.win('puzzle', { mode: this.difficulty });
       this.winStart = Date.now();
       this.winAt = this.winStart + this.n * this.n * 35 + 620;
       this.confettiUntil = 0;

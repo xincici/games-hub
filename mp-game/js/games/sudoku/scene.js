@@ -20,6 +20,7 @@ const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
 const confetti = require('../../core/confetti');
 const { wrongShake, popScale } = require('../../core/fx');
+const achv = require('../../core/achv');
 const logic = require('./sudoku');
 const i18nDict = require('./i18n');
 
@@ -380,6 +381,8 @@ class SudokuScene extends Scene {
     if (this.phase === PLAY && this.winAt && this.now >= this.winAt) {
       this.winAt = 0;
       this.phase = WON;
+      // 只在「刚通关」这一帧记一次（以前写在这一行外面，每帧都会 +1）
+      achv.win('sudoku', { mode: this.difficulty });
     }
     if (this.revealing && this.now - this.revealStart >= CELLS * REVEAL_STEP + REVEAL_MS + 40) {
       this.revealing = false;
