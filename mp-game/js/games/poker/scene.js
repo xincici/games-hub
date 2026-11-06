@@ -475,6 +475,8 @@ class PokerScene extends Scene {
       this.startConfetti();
     } else if (win < 0) {
       this.stage = GUESS_LOSE;
+      // 隐藏成就「再也不赌了」：记下这一把输掉的奖金（= 清零前的 bonus）
+      achv.peak('poker', 'lost', this.bonus);
       this.bonus = 0;
       this.result = { times: 0, key: '' };
       this.guessCard = null;

@@ -645,7 +645,7 @@ i18n.setLang('cn');
   // 隐藏成就：4 条都在列表末尾，未达成时名字是 ******，达成后显示真名 + 说明
   {
     const hidden = achv.hiddenList();
-    check(hidden.length === 4, `隐藏成就：应有 4 条，实际 ${hidden.length}`);
+    check(hidden.length === 7, `隐藏成就：应有 7 条，实际 ${hidden.length}`);
     check(hidden.every((h) => h.name && h.desc), '隐藏成就：名称/说明缺失');
     check(achv.hiddenList()[0].unlocked === false || achv.helpCount() >= 25, '隐藏成就：求知好学状态不一致');
     // 帮助看满 25 个 + 时长 + 失败 + 9 个闯关游戏过 10 关
@@ -662,10 +662,18 @@ i18n.setLang('cn');
     wx.setStorageSync('__poker_alchemy__best_1', '13');
     wx.setStorageSync('__quesheng__level', '12');
     wx.setStorageSync('__gambler__best', '13');
+    // 新增三条：单次猜大小输 >10000 / 任一游戏 800 胜 / 任一闯关游戏 500 关
+    achv.peak('poker', 'lost', 12000);
+    wx.setStorageSync('__emoji_crush__level', '501');
+    for (let i = 0; i < 800; i += 1) achv.win('click');
     const done = achv.hiddenList();
-    check(done.every((h) => h.unlocked), '隐藏成就：条件满足后没有全部解锁');
-    check(done[0].name === '求知好学' && done[1].name === '我已沉迷' && done[2].name === '锲而不舍' && done[3].name === '我爱闯关',
-      '隐藏成就：名字不对');
+    check(done.every((h) => h.unlocked), `隐藏成就：条件满足后没有全部解锁（${done.filter((h) => !h.unlocked).map((h) => h.name).join(',')}）`);
+    check(done[0].name === '求知好学' && done[1].name === '我已沉迷' && done[2].name === '锲而不舍' && done[3].name === '我爱闯关'
+      && done[4].name === '再也不赌了' && done[5].name === '赢上瘾了' && done[6].name === '闯关英豪',
+    '隐藏成就：名字不对');
+    check(/12000/.test(done[4].desc), `隐藏成就：输掉奖金文案不对（${done[4].desc}）`);
+    check(/800/.test(done[5].desc), `隐藏成就：800 胜文案不对（${done[5].desc}）`);
+    check(/500/.test(done[6].desc), `隐藏成就：500 关文案不对（${done[6].desc}）`);
     check(/\d+ 小时 \d+ 分钟/.test(done[1].desc), `隐藏成就：时长文案不对（${done[1].desc}）`);
     check(/100 次/.test(done[2].desc), `隐藏成就：失败文案不对（${done[2].desc}）`);
   }

@@ -783,6 +783,16 @@ function bestClearedOf(id) {
   return best;
 }
 
+// 任一游戏的最大累计胜场（含历史推算）
+function bestWinsOfAny() {
+  return ORDER.reduce((best, id) => Math.max(best, totalWins(id)), 0);
+}
+
+// 任一闯关游戏的最大关卡
+function bestClearedOfAny() {
+  return HIDDEN_GAMES.reduce((best, id) => Math.max(best, bestClearedOf(id)), 0);
+}
+
 function hiddenList() {
   const T = i18n.t;
   const helpN = helpCount();
@@ -819,6 +829,27 @@ function hiddenList() {
       desc: T('achvHiddenLevelDesc'),
       unlocked: clearedGames >= HIDDEN_GAMES.length,
       hint: `${clearedGames}/${HIDDEN_GAMES.length}`,
+    },
+    {
+      key: 'lost',
+      name: T('achvHiddenLost'),
+      desc: `${T('achvHiddenLostDesc')} ${peakOf('poker', 'lost')}`,
+      unlocked: peakOf('poker', 'lost') > 10000,
+      hint: `${Math.min(peakOf('poker', 'lost'), 10000)}/10000`,
+    },
+    {
+      key: 'wins800',
+      name: T('achvHiddenWins'),
+      desc: `${T('achvHiddenWinsDesc')} ${bestWinsOfAny()}`,
+      unlocked: bestWinsOfAny() >= 800,
+      hint: `${Math.min(bestWinsOfAny(), 800)}/800`,
+    },
+    {
+      key: 'level500',
+      name: T('achvHiddenLevel500'),
+      desc: `${T('achvHiddenLevel500Desc')} ${bestClearedOfAny()}`,
+      unlocked: bestClearedOfAny() >= 500,
+      hint: `${Math.min(bestClearedOfAny(), 500)}/500`,
     },
   ];
 }
@@ -941,6 +972,9 @@ module.exports = {
   markFail,
   hiddenList,
   HIDDEN_GAMES,
+  bestClearedOf,
+  bestClearedOfAny,
+  bestWinsOfAny,
   totalPlays,
   pageData,
   unlockedCount,
