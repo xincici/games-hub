@@ -7,6 +7,7 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
+const daily = require('../../core/daily');
 const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
@@ -65,6 +66,8 @@ class DownScene extends Scene {
     while (this.top + this.stack.length < logic.ROWS) this.stack.push(this.newRow());
   }
   startGame() {
+    // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
+    daily.markNewRun('down');
     this.phase = PLAY;
     this.paused = false;
     this.resumeCount = 0;
@@ -218,6 +221,8 @@ class DownScene extends Scene {
     // 消掉的是顶排，下面的行位置不变；只让玩家牌平滑下落，不整排下移。
     this.fillPile();
     this.score++;
+    // 每日挑战：消一排就上报分数（不用等一局结束）
+    daily.report('down', 'reach', { value: this.score });
     this.cleared++;
     if (this.score > this.best) {
       this.best = this.score;

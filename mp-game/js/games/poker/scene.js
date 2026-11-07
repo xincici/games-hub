@@ -419,6 +419,12 @@ class PokerScene extends Scene {
     this.stage = GUESS;
     this.result = res;
     this.winMask = res;
+    // 四条 / 同花顺在「评牌时」就记一次，不等结算 —— 之后猜大小输了也算达成
+    // （silent 是恢复存档时的评牌，已经记过，避免重复计数）
+    if (!silent) {
+      if (res.key === 'four') achv.bump('poker', 'four');
+      if (res.key === 'straightflush') achv.bump('poker', 'flush');
+    }
     this.bonus = this.bet * res.times;
     this.resultAt = now;
     this.bonusPulseAt = now;
@@ -492,9 +498,7 @@ class PokerScene extends Scene {
     if (this.bonus > 0) {
       achv.win('poker');
       achv.peak('poker', 'payout', this.bonus);
-      // 牌型里程碑：四条 / 同花顺各计一次
-      if (this.result && this.result.key === 'four') achv.bump('poker', 'four');
-      if (this.result && this.result.key === 'straightflush') achv.bump('poker', 'flush');
+      // 四条 / 同花顺的计数在 resolveHand() 评牌时已经记过，这里不再重复
     }
     this.total += this.bonus;
     this.totalPulseAt = Date.now();

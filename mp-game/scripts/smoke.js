@@ -568,7 +568,7 @@ i18n.setLang('cn');
   let bad = null;
   data.games.forEach((g) => {
     if (!g.name || g.name === g.id || g.name.endsWith('Title')) bad = `${g.id} 名称没取到（${g.name}）`;
-    if (!g.achv.length || g.achv.length > 6) bad = `${g.id} 成就条数 ${g.achv.length}`;
+    if (!g.achv.length || g.achv.length > 8) bad = `${g.id} 成就条数 ${g.achv.length}`;
     g.achv.forEach((a) => {
       if (!a.name || /[A-Za-z_]+\./.test(a.name)) bad = `${g.id} 成就名异常 ${a.name}`;
       if (!(a.target > 0)) bad = `${g.id} target 非法`;
@@ -578,7 +578,7 @@ i18n.setLang('cn');
     });
   });
   check(!bad, `成就：数据异常 ${bad || ''}`);
-  check(data.summary.total === data.games.reduce((n, g) => n + g.achv.length, 0), '成就：总览总数对不上');
+  check(data.summary.total === data.games.reduce((n, g) => n + g.achv.length, 0) + data.daily.achv.length, '成就：总览总数对不上');
   check(achv.totalCount() === data.summary.total, '成就：totalCount 与页面数据不一致');
 
   // 计数：开局 / 胜利都要落盘并能读回
@@ -642,10 +642,10 @@ i18n.setLang('cn');
   check(g2048Card && g2048Card.achv.filter((a) => a.counter && a.value >= 1).length === 2,
     '成就：2048 里程碑没有按最高牌补记');
 
-  // 隐藏成就：4 条都在列表末尾，未达成时名字是 ******，达成后显示真名 + 说明
+  // 隐藏成就：8 条都在列表末尾，未达成时名字是 ******，达成后显示真名 + 说明
   {
     const hidden = achv.hiddenList();
-    check(hidden.length === 7, `隐藏成就：应有 7 条，实际 ${hidden.length}`);
+    check(hidden.length === 8, `隐藏成就：应有 8 条，实际 ${hidden.length}`);
     check(hidden.every((h) => h.name && h.desc), '隐藏成就：名称/说明缺失');
     check(achv.hiddenList()[0].unlocked === false || achv.helpCount() >= 25, '隐藏成就：求知好学状态不一致');
     // 帮助看满 25 个 + 时长 + 失败 + 9 个闯关游戏过 10 关
@@ -667,15 +667,178 @@ i18n.setLang('cn');
     wx.setStorageSync('__emoji_crush__level', '501');
     for (let i = 0; i < 800; i += 1) achv.win('click');
     const done = achv.hiddenList();
-    check(done.every((h) => h.unlocked), `隐藏成就：条件满足后没有全部解锁（${done.filter((h) => !h.unlocked).map((h) => h.name).join(',')}）`);
+    // 前 7 条是行为型条件，这一轮都能满足；「成就达人」要累计解锁 100 个，本轮不一定够，
+    // 所以它单独和 unlockedCount() 对账（口径一致性比「一定解锁」更重要）
+    check(done.slice(0, 7).every((h) => h.unlocked), `隐藏成就：条件满足后没有全部解锁（${done.filter((h) => !h.unlocked).map((h) => h.name).join(',')}）`);
+    check(done[7].unlocked === (achv.unlockedCount() >= 100),
+      `隐藏成就：成就达人状态与已解锁数不一致（${achv.unlockedCount()} 个）`);
+    check(/\d+/.test(done[7].desc), `隐藏成就：成就达人文案不对（${done[7].desc}）`);
     check(done[0].name === '求知好学' && done[1].name === '我已沉迷' && done[2].name === '锲而不舍' && done[3].name === '我爱闯关'
-      && done[4].name === '再也不赌了' && done[5].name === '赢上瘾了' && done[6].name === '闯关英豪',
+      && done[4].name === '再也不赌了' && done[5].name === '赢上瘾了' && done[6].name === '闯关英豪'
+      && done[7].name === '成就达人',
     '隐藏成就：名字不对');
     check(/12000/.test(done[4].desc), `隐藏成就：输掉奖金文案不对（${done[4].desc}）`);
     check(/800/.test(done[5].desc), `隐藏成就：800 胜文案不对（${done[5].desc}）`);
     check(/500/.test(done[6].desc), `隐藏成就：500 关文案不对（${done[6].desc}）`);
+
+    // 「超过第 10 关」的阈值口径：通过第 10 关（存档 best = 11）就算，只到第 10 关（未通过）不算
+    // —— 这里用连连看单独验一遍，曾经写成 >= 11 导致差一关永远解锁不了
+    const keepLinkBest = wx.getStorageSync('__emoji_link__best_1');
+    const keepLinkLevel = wx.getStorageSync('__emoji_link__level');
+    wx.setStorageSync('__emoji_link__best_1', '11');
+    wx.setStorageSync('__emoji_link__level', '11');
+    check(achv.hiddenList().find((h) => h.key === 'levels').unlocked === true,
+      '隐藏成就：通过第 10 关（存档 11）就该算达成');
+    wx.setStorageSync('__emoji_link__best_1', '10');
+    wx.setStorageSync('__emoji_link__level', '10');
+    check(achv.hiddenList().find((h) => h.key === 'levels').unlocked === false,
+      '隐藏成就：只到第 10 关、还没通过时不该算达成');
+    if (keepLinkBest) wx.setStorageSync('__emoji_link__best_1', keepLinkBest); else wx.removeStorageSync('__emoji_link__best_1');
+    if (keepLinkLevel) wx.setStorageSync('__emoji_link__level', keepLinkLevel); else wx.removeStorageSync('__emoji_link__level');
     check(/\d+ 小时 \d+ 分钟/.test(done[1].desc), `隐藏成就：时长文案不对（${done[1].desc}）`);
     check(/100 次/.test(done[2].desc), `隐藏成就：失败文案不对（${done[2].desc}）`);
+  }
+
+  // 新成就：滑行 / 麻将英雄 / 雀圣 / 炼金术 第 50、100 关（任意模式） + 单人麻将三项
+  {
+    const achvMod = require(path.join(ROOT, 'js/core/achv'));
+    const names = (gid) => {
+      const g = achvMod.pageData().games.find((x) => x.id === gid);
+      return g.achv.filter((a) => a.unlocked).map((a) => a.name);
+    };
+    // 滑行：只写 state.level（0 基之外还要 +1），验「50 关解锁 / 100 关不提前」
+    wx.setStorageSync('__emoji_slide__state', JSON.stringify({ level: 51 }));
+    check(names('slide').indexOf('完成第 50 关') >= 0, '成就：滑行第 50 关没解锁');
+    check(names('slide').indexOf('完成第 100 关') < 0, '成就：滑行第 100 关提前解锁了');
+    wx.setStorageSync('__emoji_slide__state', JSON.stringify({ level: 101 }));
+    check(names('slide').indexOf('完成第 100 关') >= 0, '成就：滑行第 100 关没解锁');
+
+    // 炼金术：只玩炸金花（模式 2）打到第 51 关，也要算「任意模式」
+    wx.setStorageSync('__poker_alchemy__level_2', '51');
+    check(names('alchemy').indexOf('完成第 50 关') >= 0, '成就：炼金术只有模式 2 通关时没算');
+
+    // 雀圣：步进模式（level_2）
+    wx.setStorageSync('__quesheng__level_2', '101');
+    check(names('quesheng').indexOf('完成第 100 关') >= 0, '成就：雀圣第 100 关没解锁');
+
+    // 麻将英雄：闯关 best_1 存的是「已开始的最高关」
+    wx.setStorageSync('__mahjong_hero__best_1', '101');
+    check(names('mahjong').indexOf('完成第 100 关') >= 0, '成就：麻将英雄第 100 关没解锁');
+
+    // Emoji 排序：第 50 / 100 关（两种模式任一）+ 累计 100 / 500 胜
+    wx.setStorageSync('__emoji_sort__level_2', '51');
+    check(names('sort').indexOf('完成第 50 关') >= 0, '成就：排序只有模式 2 通关到第 50 关时没算');
+    check(names('sort').indexOf('完成第 100 关') < 0, '成就：排序第 100 关提前解锁了');
+    wx.setStorageSync('__emoji_sort__level_2', '101');
+    check(names('sort').indexOf('完成第 100 关') >= 0, '成就：排序第 100 关没解锁');
+    for (let i = 0; i < 100; i += 1) achvMod.win('sort');
+    check(names('sort').indexOf('累计 100 胜') >= 0, '成就：排序累计 100 胜没解锁');
+    check(names('sort').indexOf('累计 500 胜') < 0, '成就：排序累计 500 胜提前解锁');
+
+    // 全部 25 个游戏：不再有「累计胜利次数」/「累计 10 胜」这两类低门槛行
+    achvMod.pageData().games.forEach((g) => {
+      check(!g.achv.some((a) => a.name === '累计胜利次数'), `成就：${g.id} 还有「累计胜利次数」`);
+      check(!g.achv.some((a) => /10\s*胜/.test(a.name)), `成就：${g.id} 还有「累计 10 胜」`);
+    });
+    // 关灯 / 侦探 / 猎手 / 连连看 / 消消乐 / 消除大师 / 滑行 / 对对碰 / 排序：
+    // 改成「累计 100 胜 / 500 胜」（不分难度，胜利就算；老存档的关卡也算胜场）
+    ['click', 'detective', 'hunter', 'link', 'crush', 'master', 'slide', 'match', 'sort'].forEach((gid) => {
+      const g = achvMod.pageData().games.find((x) => x.id === gid);
+      const has = (n) => g.achv.some((a) => a.name === n);
+      check(!has('累计胜利次数'), `成就：${gid} 还留着「累计胜利次数」`);
+      check(has('累计 100 胜') && has('累计 500 胜'), `成就：${gid} 缺少累计 100 / 500 胜`);
+    });
+    // 连连看：打 100 胜解锁 100、不解锁 500；再打到 500 才解锁
+    check(names('link').indexOf('累计 100 胜') < 0, '成就：连连看 100 胜提前解锁');
+    for (let i = 0; i < 100; i += 1) achvMod.win('link');
+    check(names('link').indexOf('累计 100 胜') >= 0, '成就：连连看累计 100 胜没解锁');
+    check(names('link').indexOf('累计 500 胜') < 0, '成就：连连看 500 胜跟着 100 胜一起解锁了');
+    for (let i = 0; i < 400; i += 1) achvMod.win('link');
+    check(names('link').indexOf('累计 500 胜') >= 0, '成就：连连看累计 500 胜没解锁');
+    // 消消乐：只写「通关到第 101 关」的老存档，累计 100 胜也要算（关卡 = 胜场）
+    wx.setStorageSync('__emoji_crush__best_1', '101');
+    check(names('crush').indexOf('累计 100 胜') >= 0, '成就：消消乐老存档 100 关没算进累计胜场');
+    // 对对碰：老存档 best_1 = 101（通 100 关）算 100 胜；500 胜要真打到
+    wx.setStorageSync('__emoji_match__best_1', '101');
+    check(names('match').indexOf('累计 100 胜') >= 0, '成就：对对碰老存档 100 关没算进累计胜场');
+    check(names('match').indexOf('累计 500 胜') < 0, '成就：对对碰 500 胜提前解锁了');
+    for (let i = 0; i < 500; i += 1) achvMod.win('match');
+    check(names('match').indexOf('累计 500 胜') >= 0, '成就：对对碰累计 500 胜没解锁');
+
+    // 1A2B / 24 点：达成 10 连胜 / 30 连胜（读各自的最长连胜 key），且排在累计胜场前面
+    wx.setStorageSync('__guess_number__best', '10');
+    wx.setStorageSync('__point24__best_streak', '9');
+    check(names('guess').indexOf('达成 10 连胜') >= 0, '成就：1A2B 10 连胜没解锁');
+    check(names('guess').indexOf('达成 30 连胜') < 0, '成就：1A2B 30 连胜提前解锁');
+    check(names('point24').indexOf('达成 10 连胜') < 0, '成就：24 点 9 连胜不该解锁 10 连胜');
+    wx.setStorageSync('__guess_number__best', '31');
+    wx.setStorageSync('__point24__best_streak', '30');
+    check(names('guess').indexOf('达成 30 连胜') >= 0, '成就：1A2B 30 连胜没解锁');
+    check(names('point24').indexOf('达成 30 连胜') >= 0, '成就：24 点 30 连胜没解锁');
+
+    // 数独：中等 / 困难 0 错误获胜（bump 计数口径）
+    check(names('sudoku').indexOf('中等难度 0 错误获胜') < 0, '成就：数独 0 错误提前解锁');
+    achvMod.bump('sudoku', 'clean2');
+    check(names('sudoku').indexOf('中等难度 0 错误获胜') >= 0, '成就：数独中等 0 错误获胜没解锁');
+    check(names('sudoku').indexOf('困难难度 0 错误获胜') < 0, '成就：数独困难 0 错误跟着中等一起解锁了');
+    achvMod.bump('sudoku', 'clean3');
+    check(names('sudoku').indexOf('困难难度 0 错误获胜') >= 0, '成就：数独困难 0 错误获胜没解锁');
+
+    // 赌神：不区分模式 —— 连胜两档 + 累计 100 / 500 胜，旧的「首胜 / 分模式最长连胜」已删
+    {
+      const g = achvMod.pageData().games.find((x) => x.id === 'gambler');
+      const has = (n) => g.achv.some((a) => a.name === n);
+      check(!has('两种模式首胜'), '成就：赌神还留着「两种模式首胜」');
+      check(!has('即时模式最长连胜') && !has('提交模式最长连胜'), '成就：赌神还留着分模式最长连胜');
+      check(has('达成 10 连胜') && has('达成 30 连胜'), '成就：赌神缺少 10 / 30 连胜');
+      check(has('累计 100 胜') && has('累计 500 胜'), '成就：赌神缺少 100 / 500 胜');
+      // 连胜取两种模式里较大的那个（不区分模式）
+      achvMod.peak('gambler', 'streak2', 10);
+      check(names('gambler').indexOf('达成 10 连胜') >= 0, '成就：赌神模式 2 的 10 连胜没算');
+      check(names('gambler').indexOf('达成 30 连胜') < 0, '成就：赌神 30 连胜提前解锁');
+      achvMod.peak('gambler', 'streak1', 30);
+      check(names('gambler').indexOf('达成 30 连胜') >= 0, '成就：赌神模式 1 的 30 连胜没算');
+      for (let i = 0; i < 100; i += 1) achvMod.win('gambler');
+      check(names('gambler').indexOf('累计 100 胜') >= 0, '成就：赌神累计 100 胜没解锁');
+      check(names('gambler').indexOf('累计 500 胜') < 0, '成就：赌神累计 500 胜提前解锁');
+    }
+
+    // 全局：数量类（指标行 / 计数型）必须全部排在进度类（带 x/target 进度条）之前
+    achvMod.pageData().games.forEach((g) => {
+      const qty = [];
+      const prog = [];
+      g.achv.forEach((r, i) => { (r.stat || r.counter ? qty : prog).push(i); });
+      if (qty.length && prog.length) {
+        check(Math.max(...qty) < Math.min(...prog), `成就：${g.id} 有进度类排到了数量类前面`);
+      }
+    });
+
+    // 全局：任何「连胜」成就都要排在「累计 N 胜」之前
+    achvMod.pageData().games.forEach((g) => {
+      const streak = g.achv.map((r, i) => ({ r, i })).filter((x) => /连胜/.test(x.r.name)).map((x) => x.i);
+      const wins = g.achv.map((r, i) => ({ r, i })).filter((x) => /累计\s*\d+\s*胜/.test(x.r.name)).map((x) => x.i);
+      if (streak.length && wins.length) {
+        check(Math.max(...streak) < Math.min(...wins), `成就：${g.id} 的连胜成就排在累计胜场后面`);
+      }
+    });
+
+    // 单人麻将：10 连胜 / 累计 100 胜 / 500 胜
+    wx.setStorageSync('__solo__best_streak', '10');
+    check(names('solo').indexOf('达成 10 连胜') >= 0, '成就：单人麻将 10 连胜没解锁');
+    check(names('solo').indexOf('达成 30 连胜') < 0, '成就：单人麻将 30 连胜提前解锁了');
+    wx.setStorageSync('__solo__best_streak', '31');
+    check(names('solo').indexOf('达成 30 连胜') >= 0, '成就：单人麻将 30 连胜没解锁');
+    let hookNames = null;
+    achvMod.setUnlockHook((list) => { hookNames = list; });
+    for (let i = 0; i < 100; i += 1) achvMod.win('solo');
+    check(names('solo').indexOf('累计 100 胜') >= 0, '成就：单人麻将累计 100 胜没解锁');
+    check(!!hookNames && hookNames.join(',').indexOf('累计 100 胜') >= 0,
+      `成就：累计 100 胜解锁时没有实时回调（${hookNames || 'null'}）`);
+    // 累计对局 1000 局（单人麻将没有关卡概念，用对局数代替「最高关卡」）
+    check(names('solo').indexOf('累计对局 1000 局') < 0, '成就：单人麻将 1000 局提前解锁');
+    for (let i = 0; i < 1000; i += 1) achvMod.trackPlay('solo');
+    check(names('solo').indexOf('累计对局 1000 局') >= 0, '成就：单人麻将累计对局 1000 局没解锁');
+    achvMod.setUnlockHook(null);
   }
 
   const clickCard = achv.pageData().games.find((g) => g.id === 'click');
@@ -688,6 +851,211 @@ i18n.setLang('cn');
   const ctxA = makeCtx();
   home.openAchv();
   check(home.achvOpen === true, '成就：openAchv 没有打开');
+  // 某个游戏成就全部达成 → 卡片底色换成浅橙
+  {
+    const D = require(path.join(ROOT, 'js/core/draw'));
+    [3, 4, 5, 6, 7, 8, 9, 10].forEach((d) => achv.win('click', { mode: d, perfect: true }));
+    const clickGame = achv.pageData().games.find((g) => g.id === 'click');
+    check(clickGame.achv.every((a) => a.unlocked), '成就：关灯没有全部解锁（准备全达成卡片）');
+    const origFill = D.fillRoundRect;
+    const fills = [];
+    D.fillRoundRect = (c, x, y, w, h, r, color) => {
+      fills.push({ x, y, w, h, color });
+      return origFill(c, x, y, w, h, r, color);
+    };
+    home.achvAnim = 1;   // 展开动画走完：卡片才会按最终 alpha 画出来
+    home.achvPage.setData(achv.pageData());   // 上面刚伪造的进度，刷新一次页面数据
+    home.achvScroll = 0;
+    home.render(ctxA);
+    D.fillRoundRect = origFill;
+    const orange = fills.some((f) => f.color === 'rgba(255,214,170,0.9)' || f.color === 'rgba(150,86,32,0.5)');
+    check(orange, '成就：全部达成的卡片没有换成浅橙底');
+    const normal = fills.some((f) => f.color === 'rgba(255,255,255,0.86)' || f.color === 'rgba(52,52,52,0.84)');
+    check(normal, '成就：其它卡片不该全变橙');
+  }
+
+  // 设置 / 成就面板：从屏幕边缘内滑关闭（和点 ✕ 同一套收起）
+  {
+    const { App: AppClass } = require(path.join(ROOT, 'js/core/app'));
+    const fake = {
+      sceneId: 'home', transition: null, scene: home, edgeSwipe: null, wentHome: false,
+      goHome() { this.wentHome = true; },
+    };
+    // 面板没打开时不该抢边缘手势
+    home.settingsOpen = false;
+    home.achvOpen = false;
+    check(AppClass.prototype.startEdgeSwipe.call(fake, { x: 6, y: 300 }) === false,
+      '成就：首页没有面板时不该拦边缘手势');
+    // 设置面板打开 → 边缘内滑关闭
+    home.settingsOpen = true;
+    home.achvOpen = false;
+    check(AppClass.prototype.startEdgeSwipe.call(fake, { x: 6, y: 300 }) === true,
+      '设置：面板打开时边缘手势没有拦下');
+    AppClass.prototype.moveEdgeSwipe.call(fake, { x: 110, y: 304 });
+    check(home.settingsOpen === false, '设置：边缘内滑没有关掉设置面板');
+    check(fake.wentHome === false, '设置：边缘内滑关面板时不该回首页');
+    // 成就面板同理
+    home.settingsOpen = false;
+    home.achvOpen = true;
+    AppClass.prototype.startEdgeSwipe.call(fake, { x: 6, y: 300 });
+    AppClass.prototype.moveEdgeSwipe.call(fake, { x: 110, y: 304 });
+    check(home.achvOpen === false, '成就：边缘内滑没有关掉成就面板');
+    // 还原成「成就页打开」的状态，后面的滚动 / 拖动断言还要用
+    home.achvOpen = true;
+    home.achvAnim = 1;
+    home.achvPage.setData(achv.pageData());
+    fake.edgeSwipe = null;
+  }
+
+  // 每日挑战卡：列表最上面、5 条成就、不参与排序
+  {
+    const daily = require(path.join(ROOT, 'js/core/daily'));
+    const page0 = achv.pageData();
+    check(!!page0.daily && page0.daily.pinned === true, '成就：缺少每日挑战卡');
+    check(page0.daily.achv.length === 5, `成就：每日挑战应有 5 条（${page0.daily.achv.length}）`);
+    check(page0.daily.name === '每日挑战', `成就：每日挑战卡名字不对（${page0.daily.name}）`);
+    home.achvPage.setData(page0);
+    const list = home.achvPage.cardList(0);
+    check(list[0] && list[0].pinned === true, '成就：每日挑战卡不在列表最上面');
+    check(list[list.length - 1].hidden === true, '成就：隐藏成就卡应仍在最后');
+    check(home.achvPage.hitIndex(list[0].y + 10) === -1, '成就：每日挑战卡不该被长按拖走');
+    // 完成一次（任意游戏赢 3 局）→ 累计次数 +1、首条解锁
+    const beforeTotal = page0.daily.achv[3].value;
+    wx.setStorageSync(daily.KEY, JSON.stringify({
+      v: 1,
+      cur: { date: daily.dateKey(), id: 'any_win3', prog: 0, done: false, runs: {} },
+      days: {},
+      recent: ['any_win3'],
+      total: beforeTotal,
+    }));
+    achv.win('click');
+    achv.win('match');
+    achv.win('link');
+    const page1 = achv.pageData();
+    check(page1.daily.achv[3].value === beforeTotal + 1, `成就：每日挑战累计次数没有 +1（${beforeTotal} → ${page1.daily.achv[3].value}）`);
+    check(page1.daily.achv[0].unlocked === true, '成就：完成第 1 次每日挑战没解锁');
+  }
+
+  // 中英双语：任务文案和月历年月都要跟着语言变
+  {
+    const daily = require(path.join(ROOT, 'js/core/daily'));
+    const i18nMod = require(path.join(ROOT, 'js/core/i18n'));
+    const prevMode = i18nMod.langMode;
+    i18nMod.setLangMode('en');
+    const en = daily.pageData();
+    check(/^[A-Z][a-z]{2} \d{4}$/.test(en.month.title), `每日挑战：英文月历标题不对（${en.month.title}）`);
+    check(/^[\x20-\x7e]+$/.test(en.today.desc), `每日挑战：英文下任务文案还是中文（${en.today.desc}）`);
+    i18nMod.setLangMode('cn');
+    const cn = daily.pageData();
+    check(/年\s*\d+\s*月/.test(cn.month.title), `每日挑战：中文月历标题不对（${cn.month.title}）`);
+    check(/[\u4e00-\u9fa5]/.test(cn.today.desc), `每日挑战：中文下任务文案不是中文（${cn.today.desc}）`);
+    i18nMod.setLangMode(prevMode);
+  }
+
+  // 任务池改过 → 老存档里「已下线的任务」要能自愈（面板不能空白、不能永远完成不了）
+  {
+    const daily = require(path.join(ROOT, 'js/core/daily'));
+    const todayKey = daily.dateKey();
+    const base = { v: 1, days: {}, recent: [], total: 3 };
+    // A. 未完成 + 任务已下线 → 换一条能做的
+    wx.setStorageSync(daily.KEY, JSON.stringify({
+      ...base, cur: { date: todayKey, id: 'poker_four', prog: 0, done: false, runs: {} },
+    }));
+    const task = daily.todayTask();
+    check(!!daily.taskOf(task.id), `每日挑战：下线的任务没有自愈（还在 ${task.id}）`);
+    check(!!task.desc && task.desc !== '已完成', `每日挑战：自愈后文案为空（${task.desc}）`);
+    check(daily.hasNew() === true, '每日挑战：自愈后应该有红点');
+    // 界面上也要真的能看见任务：开面板画一遍，找得到任务文案
+    {
+      const HomeSceneCls = require(path.join(ROOT, 'js/games/home/scene'));
+      const dh = new HomeSceneCls(fakeApp);
+      dh.openDaily();
+      dh.dailyAnim = 1;
+      const cRender = makeCtx();
+      dh.render(cRender);
+      const texts = cRender.__texts.map((x) => String(x.value));
+      const desc = dh.dailyPage.data.today.desc;
+      check(!!desc && texts.indexOf(desc) >= 0, `每日挑战：面板上没画出任务文案（${desc}）`);
+      dh.dailyOpen = false;
+    }
+    // B. 已完成 + 任务已下线 → 保留完成状态，文案不空白
+    wx.setStorageSync(daily.KEY, JSON.stringify({
+      ...base, total: 7, cur: { date: todayKey, id: 'slide_perfect', prog: 1, done: true, doneAt: Date.now(), runs: {} },
+    }));
+    const doneTask = daily.todayTask();
+    check(doneTask.done === true && !!doneTask.desc, '每日挑战：已完成的下线任务状态丢了');
+    check(daily.completedTotal() === 7, `每日挑战：累计次数被重置（${daily.completedTotal()}）`);
+    check(daily.hasNew() === false, '每日挑战：已完成却还留着红点');
+  }
+
+  // 今日卡上「已完成」只能出现一次（左边胶囊），别在右边再写一遍
+  {
+    const daily = require(path.join(ROOT, 'js/core/daily'));
+    const i18nMod = require(path.join(ROOT, 'js/core/i18n'));
+    const todayKey = daily.dateKey();
+    wx.setStorageSync(daily.KEY, JSON.stringify({
+      v: 1,
+      days: {},
+      recent: [],
+      total: 1,
+      cur: { date: todayKey, id: 'any_win3', prog: 3, done: true, doneAt: Date.now(), runs: {} },
+    }));
+    const HomeSceneCls = require(path.join(ROOT, 'js/games/home/scene'));
+    const dh = new HomeSceneCls(fakeApp);
+    dh.openDaily();
+    dh.dailyAnim = 1;
+    const cDone = makeCtx();
+    dh.render(cDone);
+    const label = i18nMod.t('dailyDone');
+    const hits = cDone.__texts.filter((x) => String(x.value) === label).length;
+    check(dh.dailyPage.data.today.done === true, '每日挑战：已完成状态没读出来');
+    check(hits === 1, `每日挑战：完成态在今日卡上画了 ${hits} 次「${label}」（应该只有左边胶囊那一次）`);
+    dh.dailyOpen = false;
+  }
+
+  // 任务池里每一条都必须真的能被触发（埋点缺失 = 永远完成不了）
+  {
+    const fsMod = require('fs');
+    const daily = require(path.join(ROOT, 'js/core/daily'));
+    const srcOf = {};
+    fsMod.readdirSync(path.join(ROOT, 'js/games')).forEach((g) => {
+      const f = path.join(ROOT, 'js/games', g, 'scene.js');
+      if (fsMod.existsSync(f)) srcOf[g] = fsMod.readFileSync(f, 'utf8');
+    });
+    const bad = [];
+    daily.POOL.forEach((t) => {
+      if (t.game === '*') return;          // 任意游戏类靠 achv 公共埋点
+      const code = srcOf[t.game] || '';
+      const winCall = code.indexOf(`achv.win('${t.game}'`) >= 0;
+      let ok = true;
+      switch (t.kind) {
+        case 'play': ok = true; break;
+        case 'win': ok = winCall; break;
+        case 'perfect': ok = winCall && /perfect:/.test(code); break;
+        case 'fast': ok = winCall && /fast:/.test(code); break;
+        case 'level': ok = winCall && /level:/.test(code); break;
+        case 'reach':
+          ok = code.indexOf(`achv.reach('${t.game}'`) >= 0
+            || code.indexOf(`daily.report('${t.game}', 'reach'`) >= 0;
+          break;
+        case 'peak':
+          ok = code.indexOf(`achv.peak('${t.game}'`) >= 0 && code.indexOf(`'${t.field}'`) >= 0;
+          break;
+        case 'bump':
+          ok = code.indexOf(`achv.bump('${t.game}'`) >= 0;
+          break;
+        case 'run':
+          ok = code.indexOf(`daily.markNewRun('${t.game}')`) >= 0;
+          break;
+        default: ok = false;
+      }
+      if (!ok) bad.push(`${t.id}（${t.game}/${t.kind}）`);
+    });
+    check(bad.length === 0, `每日挑战：这些任务没有埋点，永远做不完 → ${bad.join('、')}`);
+  }
+
+
+
   withFakeClock(20, () => {
     for (let i = 0; i < 40; i += 1) {
       home.update(20);
@@ -708,6 +1076,50 @@ i18n.setLang('cn');
   const lastCard = tail[tail.length - 1];
   check(lastCard && lastCard.hidden === true, '成就：最后一张卡不是隐藏成就');
   check(lastCard.y + lastCard.h <= home.achvPage.viewH(), `成就：隐藏成就卡滑到底仍被盖住（底边 ${Math.round(lastCard.y + lastCard.h)} / 视口 ${home.achvPage.viewH()}）`);
+  // 底部「长按卡片可拖动排序」必须是绿底白字的不透明标签（不是半透明文字压渐隐）
+  {
+    const T = theme.tokens;
+    const rects = [];
+    const origFill = D.fillRoundRect;
+    D.fillRoundRect = (c, x, y, w, h, r, color) => {
+      rects.push({ x, y, w, h, r, color, shadowBlur: c.__shadowBlur, shadowY: c.__shadowOffsetY });
+    };
+    const cHint = makeCtx();
+    // 记录 shadow 状态（mock ctx 的 save/restore 不还原自定义字段，这里手动镜像）
+    const origSave = cHint.save;
+    const origRestore = cHint.restore;
+    cHint.save = () => { cHint.__savedShadow = cHint.__shadowBlur; origSave && origSave(); };
+    cHint.restore = () => { cHint.__shadowBlur = cHint.__savedShadow; origRestore && origRestore(); };
+    Object.defineProperty(cHint, 'shadowBlur', {
+      get: () => cHint.__shadowBlur || 0,
+      set: (v) => { cHint.__shadowBlur = v; },
+    });
+    Object.defineProperty(cHint, 'shadowOffsetY', {
+      get: () => cHint.__shadowOffsetY || 0,
+      set: (v) => { cHint.__shadowOffsetY = v; },
+    });
+    home.render(cHint);
+    D.fillRoundRect = origFill;
+    const pill = rects.find((q) => q.color === T.primary && q.h === 20 && q.w > 40);
+    check(!!pill, '成就：拖拽提示不是绿底标签');
+    check(home.achvPage.fadeGrad === undefined, '成就：底部渐隐还在（应只留标签自己的投影）');
+    if (pill) {
+      check(pill.shadowBlur > 0 && pill.shadowY > 0, `成就：拖拽提示标签没有悬浮投影（${pill.shadowBlur}/${pill.shadowY}）`);
+    }
+    if (pill) {
+      const hint = cHint.__texts.find((x) => String(x.value) === '长按卡片可拖动排序');
+      check(!!hint, '成就：拖拽提示文字没画出来');
+      if (hint) {
+        check(hint.x > pill.x && hint.x < pill.x + pill.w
+          && hint.y > pill.y && hint.y < pill.y + pill.h, '成就：拖拽提示文字没落在标签里');
+      }
+      check(pill.x >= 0 && pill.x + pill.w <= W, '成就：拖拽提示标签超出屏幕');
+      const gear = home.gearRect;
+      check(!(pill.x + pill.w > gear.x && pill.x < gear.x + gear.w
+        && pill.y + pill.h > gear.y && pill.y < gear.y + gear.h), '成就：拖拽提示标签压住了 ✕');
+    }
+  }
+
   // 顺序：拖动换位 + 落盘 + 读回
   const orderBefore = home.achvPage.data.games.map((g) => g.id);
   check(orderBefore.length === 25, '成就：卡片数量不对');
@@ -987,6 +1399,168 @@ i18n.setLang('cn');
   scene.update(0.016);
   check(scene.guessFly === null, '扑克猜大小：飞牌落地后没有清状态');
   check(!!scene.guessCard, '扑克猜大小：落地后右侧没有出现下一张牌');
+  audio.setGame(null);
+}
+
+// ---------- 每日挑战：任务池 / 不重复 / 完成判定 / 面板 ----------
+{
+  const daily = require(path.join(ROOT, 'js/core/daily'));
+  const HomeScene = require(path.join(ROOT, 'js/games/home/scene'));
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+
+  // 任务池：条数、id 唯一、need 合法、25 个游戏全覆盖
+  const pool = daily.POOL;
+  check(pool.length >= 30, `每日挑战：任务太少（${pool.length}）`);
+  const ids = pool.map((x) => x.id);
+  check(new Set(ids).size === ids.length, '每日挑战：任务 id 有重复');
+  check(pool.every((x) => x.need >= 1 && x.game && x.kind), '每日挑战：任务缺少 game / kind / need');
+  const games = achvMod.pageData().games.map((g) => g.id);
+  const covered = games.filter((id) => pool.some((x) => x.game === id));
+  check(covered.length === games.length, `每日挑战：还有游戏没有任务（${games.length - covered.length} 个）`);
+
+  // 5 天内不重复：把最近 5 条塞进 recent，roll 出来的新任务不能撞
+  const todayKey = daily.dateKey();
+  wx.setStorageSync(daily.KEY, JSON.stringify({
+    v: 1,
+    cur: { date: '2000-01-01', id: 'x', prog: 0, done: false },
+    days: {},
+    recent: pool.slice(0, 5).map((x) => x.id),
+  }));
+  const picked = daily.ensureToday();
+  check(!pool.slice(0, 5).some((x) => x.id === picked.id), '每日挑战：抽到了最近 5 天内重复的任务');
+  check(picked.date === todayKey, '每日挑战：ensureToday 没有落到今天');
+
+  // 完成判定：任意赢 3 局
+  wx.setStorageSync(daily.KEY, JSON.stringify({
+    v: 1,
+    cur: { date: todayKey, id: 'any_win3', prog: 0, done: false },
+    days: {},
+    recent: ['any_win3'],
+  }));
+  let completed = null;
+  daily.setOnComplete((task) => { completed = task; });
+  achvMod.win('click');
+  achvMod.win('match');
+  check(daily.todayTask().done === false, '每日挑战：2/3 就提前算完成了');
+  check(daily.hasNew() === true, '每日挑战：未完成时不应清掉红点');
+  achvMod.win('link');
+  check(completed && completed.id === 'any_win3', '每日挑战：完成后没有回调');
+  check(daily.todayTask().done === true && daily.hasNew() === false, '每日挑战：完成后状态 / 红点不对');
+  daily.setOnComplete(null);
+
+  // 分数类任务必须是「今天开的一局」：光有分数不算，开了新局才算
+  wx.setStorageSync(daily.KEY, JSON.stringify({
+    v: 1,
+    cur: { date: todayKey, id: 'g2048_tile512', prog: 0, done: false, runs: {} },
+    days: {},
+    recent: ['g2048_tile512'],
+  }));
+  daily.report('g2048', 'reach', { value: 2048 });
+  check(daily.todayTask().done === false, '每日挑战：没开新局就凭老分数算完成了');
+  daily.markNewRun('g2048');
+  daily.report('g2048', 'reach', { value: 2048 });
+  check(daily.todayTask().done === true, '每日挑战：开了新局、分数够了却没完成');
+
+  // 「开一局」类任务：markNewRun 当场完成
+  wx.setStorageSync(daily.KEY, JSON.stringify({
+    v: 1,
+    cur: { date: todayKey, id: 'g2048_run', prog: 0, done: false, runs: {} },
+    days: {},
+    recent: ['g2048_run'],
+  }));
+  check(daily.markNewRun('g2048') === true, '每日挑战：开一局类任务没有当场完成');
+
+  // 面板：展开后有关闭 / 上个月 / 下个月，且不能切到未来
+  const homeDaily = new HomeScene(fakeApp);
+  homeDaily.openDaily();
+  homeDaily.dailyAnim = 1;
+  homeDaily.buttons = [];
+  try {
+    homeDaily.render(makeCtx());
+  } catch (e) {
+    failures.push(`每日挑战：面板渲染抛错 ${e.message}`);
+  }
+  const ids2 = homeDaily.buttons.map((b) => b.id);
+  check(ids2.includes('daily-close') && ids2.includes('daily-mask'), `每日挑战：展开后按钮不全（${ids2.join(',')}）`);
+  check(ids2.includes('daily-prev') && ids2.includes('daily-next'), '每日挑战：月份切换按钮缺失');
+  const now = new Date();
+  check(homeDaily.dailyYear === now.getFullYear() && homeDaily.dailyMonth === now.getMonth(), '每日挑战：默认应停在当前月');
+  check(homeDaily.shiftDailyMonth(-1) === true, '每日挑战：上个月切不过去');
+  // 切月是滑动替换，不是瞬间变
+  {
+    const pageSlide = homeDaily.dailyPage;
+    check(pageSlide.sliding() === true, '每日挑战：切月没有动画状态');
+    const t0 = pageSlide.slide.at;
+    check(pageSlide.slideProgress(t0) < 0.05, '每日挑战：切月动画起点不是 0');
+    const mid = pageSlide.slideProgress(t0 + 130);
+    check(mid > 0.2 && mid < 0.8, `每日挑战：切月动画中点异常（${mid}）`);
+    const cSlide = makeCtx();
+    homeDaily.render(cSlide);
+    // 旧月向左滑出、新月从右边进来：两边的月份标题应该同时在场，且横向错开
+    const monthTexts = cSlide.__texts.filter((x) => /年.*月|20\d\d/.test(String(x.value)));
+    check(monthTexts.length >= 2, `每日挑战：切月时只有 ${monthTexts.length} 个月份标题（应该新旧各一）`);
+    const xs = monthTexts.map((x) => Math.round(x.x));
+    check(new Set(xs).size >= 2, '每日挑战：切月时两个月份标题没有错开（看起来是瞬间替换）');
+    pageSlide.slideProgress(t0 + 500);
+    check(pageSlide.sliding() === false, '每日挑战：切月动画没有结束');
+  }
+  check(homeDaily.shiftDailyMonth(1) === true, '每日挑战：回到当前月失败');
+  check(homeDaily.shiftDailyMonth(1) === false, '每日挑战：不该允许切到未来月份');
+  homeDaily.dailyOpen = false;
+
+  // 完成提示：不能抛错（AI 之前漏了 SAFE_TOP 的引用）
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const ctxToast = Object.create(AppCls.prototype);
+  ctxToast.startCelebration = () => {};
+  ctxToast.audio = { playSuccess: () => {} };
+  try {
+    AppCls.prototype.notifyDaily.call(ctxToast, { id: 'any_win3', cn: '任意游戏累计赢 3 局', en: 'Win 3 rounds in any games' });
+    AppCls.prototype.drawToast.call(ctxToast, makeCtx());
+    // 每日挑战那条还在显示 → 成就提示应当排队，先让上一条过期
+    check(!!ctxToast.toast || (ctxToast.toasts && ctxToast.toasts.length), '成就：提示条没有进入队列');
+    if (ctxToast.toast) ctxToast.toast.at = Date.now() - 4000;
+    AppCls.prototype.notifyAchievements.call(ctxToast, ['关灯 · 累计胜利次数']);
+    // 过期的那条会在这一帧被清掉，队列里的成就提示从下一帧开始画
+    AppCls.prototype.drawToast.call(ctxToast, makeCtx());
+    const cAchvToast = makeCtx();
+    AppCls.prototype.drawToast.call(ctxToast, cAchvToast);
+    const achvTexts = cAchvToast.__texts.map((x) => String(x.value));
+    check(achvTexts.indexOf('达成成就') >= 0, `成就：解锁提示没画出来（${achvTexts.slice(0, 4).join('/')}）`);
+  } catch (e) {
+    failures.push(`每日挑战：完成提示绘制抛错 ${e.message}`);
+  }
+  ctxToast.dailyToast = null;
+}
+
+// ---------- 扑克：四条 / 同花顺在评牌时就记（之后猜大小输了也算） ----------
+{
+  const PokerScene = require(path.join(ROOT, 'js/games/poker/scene'));
+  const pokerLogic = require(path.join(ROOT, 'js/games/poker/rules'));
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const scene = new PokerScene(fakeApp);
+  fakeApp.sceneId = 'poker';
+  audio.setGame('poker');
+  const beforeFour = achvMod.countOf('poker', 'four');
+  const beforeFlush = achvMod.countOf('poker', 'flush');
+  const rawEval = pokerLogic.evaluate;
+  pokerLogic.evaluate = () => ({ times: 20, key: 'four' });
+  scene.cards = [{ item: {} }, { item: {} }, { item: {} }, { item: {} }, { item: {} }];
+  scene.stage = 'guess';
+  scene.resolveHand(false);
+  check(achvMod.countOf('poker', 'four') === beforeFour + 1, '扑克：评牌时没有记四条');
+  // 接着猜大小输掉：计数不能回退，也不该等结算才记
+  scene.dice = true;
+  scene.guessCard = { num: 8, type: 'S' };
+  scene.guessFly = null;
+  scene.guess(false);
+  check(scene.stage === 'guesslose', `扑克：猜大小输掉后阶段不对（${scene.stage}）`);
+  check(achvMod.countOf('poker', 'four') === beforeFour + 1, '扑克：猜大小输掉后四条计数丢了');
+  // 同花顺同理
+  pokerLogic.evaluate = () => ({ times: 50, key: 'straightflush' });
+  scene.stage = 'guess';
+  scene.resolveHand(false);
+  check(achvMod.countOf('poker', 'flush') === beforeFlush + 1, '扑克：评牌时没有记同花顺');
+  pokerLogic.evaluate = rawEval;
   audio.setGame(null);
 }
 

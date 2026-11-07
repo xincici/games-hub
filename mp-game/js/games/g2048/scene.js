@@ -11,6 +11,7 @@ const confetti = require('../../core/confetti');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const achv = require('../../core/achv');
+const daily = require('../../core/daily');
 const i18nDict = require('./i18n');
 
 const coreI18n = require('../../core/i18n');
@@ -61,6 +62,8 @@ class Game2048Scene extends Scene {
     if (!this.restore()) this.startGame();
   }
   startGame() {
+    // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
+    daily.markNewRun('g2048');
     this.tiles = [];
     this.score = 0;
     this.seconds = 0;
@@ -195,6 +198,8 @@ class Game2048Scene extends Scene {
     this.spawnTile();
     this.busy = false;
     this.score = Math.max(...this.tiles.map(t => t.value));
+    // 每日挑战：最高牌到了就立刻算（不用等一局结束）
+    daily.report('g2048', 'reach', { value: this.score });
     if (this.score > this.best) {
       this.best = this.score;
       this.newBest = true;

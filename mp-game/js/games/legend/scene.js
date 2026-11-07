@@ -12,6 +12,7 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
+const daily = require('../../core/daily');
 const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
@@ -140,6 +141,8 @@ class LegendScene extends Scene {
 
   // ---------- 新局 ----------
   startNewRun() {
+    // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
+    daily.markNewRun('legend');
     this.phase = PLAY;
     this.helpOpen = false;
     this.score = 0;
@@ -375,6 +378,8 @@ class LegendScene extends Scene {
     const base = groups.reduce((sum, g) => sum + g.score, 0);
     const gain = base + logic.multiBonus(groups.length) + logic.chainBonus(turn.chain);
     this.score += gain;
+    // 每日挑战：本局分数当场上报（不必等一局结束）
+    daily.report('legend', 'reach', { value: this.score });
     this.cleared += groups.length;
     // 字牌（z）消除单独计数
     if (groups.some((g) => (g.tiles || g.cells || []).some((t) => t && t.suit === 'z'))) {

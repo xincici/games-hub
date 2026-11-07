@@ -1,12 +1,14 @@
-const { ctx, W, H, DPR, canvas } = require('./canvas');
+const { ctx, W, H, DPR, canvas, SAFE_TOP } = require('./canvas');
 const Input = require('./input');
 const theme = require('./theme');
 const audio = require('./audio');
 const help = require('./help');
 const achv = require('./achv');
+const daily = require('./daily');
 const confirm = require('./confirm');
 const confetti = require('./confetti');
 const D = require('./draw');
+const icons = require('./icons');
 const { t } = require('./i18n');
 const i18n = require('./i18n');
 const share = require('./share');
@@ -85,6 +87,11 @@ class App {
       if (this.scene.onTouchEnd) this.scene.onTouchEnd(p);
     };
 
+    // 每日挑战：每天第一次进游戏时抽今天的题；完成时给一个不打断操作的提示 + 烟花
+    daily.ensureToday();
+    daily.setOnComplete((task) => this.notifyDaily(task));
+    // 成就：任何一处新解锁都给同样的实时提示（提示条排队，一次只显一条）
+    achv.setUnlockHook((names) => this.notifyAchievements(names));
     // 隐藏成就：失败计数（锲而不舍）；后台时把未落盘的时长写掉（我已沉迷）
     audio.setLoseHook(() => achv.markFail());
     wx.onHide(() => {
@@ -134,6 +141,103 @@ class App {
     };
   }
 
+  // 完成每日挑战 / 解锁成就：烟花 + 顶部一条提示（排队，一次一条，不拦触摸）
+  notifyDaily(task) {
+    this.pushToast({
+      kind: 'daily',
+      title: i18n.t('dailyToast'),
+      desc: task ? daily.descOf(task) : '',
+    });
+    this.startCelebration();
+    try {
+      audio.playSuccess();
+    } catch (e) {
+      // 音效失败不影响提示
+    }
+  }
+
+  notifyAchievements(names) {
+    if (!names || !names.length) return;
+    const desc = names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0];
+    this.pushToast({ kind: 'achv', title: i18n.t('achvToastTitle'), desc });
+    this.startCelebration();
+    try {
+      audio.playSuccess();
+    } catch (e) {
+      // 音效失败不影响提示
+    }
+  }
+
+  pushToast(toast) {
+    if (!toast) return;
+    if (!this.toasts) this.toasts = [];
+    // 最多排 4 条，避免连解锁一堆时一直弹
+    if (this.toasts.length >= 3 && !this.toast) {
+      this.toast = null;
+      this.toasts.length = 0;
+    }
+    this.toasts.push(toast);
+  }
+
+  drawToast(c) {
+    const LIFE = 3200;
+    if (!this.toast) {
+      const next = this.toasts && this.toasts.length ? this.toasts.shift() : null;
+      if (!next) return;
+      next.at = Date.now();
+      this.toast = next;
+    }
+    const toast = this.toast;
+    const age = Date.now() - toast.at;
+    if (age > LIFE) {
+      this.toast = null;
+      return;
+    }
+    // 前 260ms 滑入、最后 420ms 淡出
+    const inK = Math.min(1, age / 260);
+    const outK = age > LIFE - 420 ? (LIFE - age) / 420 : 1;
+    const alpha = Math.max(0, Math.min(1, outK)) * inK;
+    const T = theme.tokens;
+    const dark = !!theme.dark;
+    const isAchv = toast.kind === 'achv';
+    const accent = isAchv ? T.primary : (T.god || '#c2410c');
+    const icon = isAchv ? 'bolt' : 'check-all';
+    const w = Math.min(W - 36, 340);
+    const h = 84;
+    const x = (W - w) / 2;
+    const y = SAFE_TOP + 8 + (1 - inK) * -16;
+    const r = 18;
+    c.save();
+    c.globalAlpha = alpha;
+    c.shadowColor = 'rgba(0,0,0,0.22)';
+    c.shadowBlur = 20;
+    c.shadowOffsetY = 6;
+    D.fillRoundRect(c, x, y, w, h, r, dark ? '#2f2f31' : '#ffffff');
+    c.restore();
+    c.save();
+    c.globalAlpha = alpha;
+    D.strokeRoundRect(c, x, y, w, h, r,
+      isAchv
+        ? (dark ? 'rgba(79,158,116,0.6)' : 'rgba(35,128,78,0.55)')
+        : (dark ? 'rgba(224,150,80,0.55)' : 'rgba(216,138,66,0.55)'), 1.2);
+    D.fillRoundRect(c, x + 11, y + 16, 4, h - 32, 2, accent);
+    const ix = x + 36;
+    const iy = y + h / 2;
+    D.circle(c, ix, iy, 17, isAchv
+      ? (dark ? 'rgba(79,158,116,0.22)' : 'rgba(35,128,78,0.12)')
+      : (dark ? 'rgba(224,150,80,0.2)' : 'rgba(216,138,66,0.13)'));
+    if (!icons.draw(c, icon, ix, iy, 19, accent)) {
+      D.text(c, isAchv ? '★' : '✓', ix, iy, { size: 17, align: 'center', color: accent });
+    }
+    const tx = ix + 26;
+    D.text(c, toast.title, tx, iy - 11, { size: 15, weight: 'bold', color: T.text });
+    let desc = toast.desc || '';
+    const maxW = x + w - 16 - tx;
+    while (desc.length > 2 && D.measure(c, desc, 11.5) > maxW) desc = `${desc.slice(0, -2)}…`;
+    D.text(c, desc, tx, iy + 12, { size: 11.5, color: T.muted });
+    c.restore();
+  }
+
   updateGlobalConfetti(dt) {
     const now = Date.now();
     if (now < this.globalConfettiUntil && now - this.lastGlobalConfettiAt >= 40) {
@@ -157,11 +261,16 @@ class App {
   }
 
   // 屏幕左右边缘向内滑动 = 返回首页（类似系统返回手势）。
-  // 只吃边缘 12px，避免和游戏内滑动 / 按钮抢触摸；阈值 72px、竖直偏移 40px 内。
+  // 边缘内滑：只吃左右各 20px，避免和游戏内滑动 / 按钮抢触摸；阈值 72px、竖直偏移 40px 内。
+  // 首页在设置 / 成就面板打开时也生效（用来关面板），没面板就完全不拦。
+  // ⚠️ 安卓全面屏手势的「边缘返回」由系统 / 微信在触摸到达 canvas 之前消费，JS 拦不到。
   startEdgeSwipe(p) {
     this.edgeSwipe = null;
-    if (!p || this.transition || this.sceneId === 'home') return false;
-    const edge = 12;
+    if (!p || this.transition) return false;
+    // 首页：只有设置 / 成就面板打开时才拦边缘手势（用来关闭面板）；没面板就交给场景
+    const onHome = this.sceneId === 'home';
+    if (onHome && !(this.scene.overlayOpen && this.scene.overlayOpen())) return false;
+    const edge = 20;
     if (p.x > edge && p.x < W - edge) return false;
     this.edgeSwipe = {
       side: p.x <= edge ? -1 : 1,
@@ -181,7 +290,12 @@ class App {
     const inward = this.edgeSwipe.side < 0 ? dx : -dx;
     if (inward >= 72 && Math.abs(dy) <= 40) {
       this.edgeSwipe = null;
-      this.goHome();
+      // 首页：边缘内滑关掉设置 / 成就面板；游戏内：回首页
+      if (this.scene.closeOverlay && this.scene.overlayOpen && this.scene.overlayOpen()) {
+        this.scene.closeOverlay();
+      } else {
+        this.goHome();
+      }
     } else if (Math.abs(dy) > 56 || inward < -20) {
       this.edgeSwipe = null;
     }
@@ -402,6 +516,7 @@ class App {
         if (drawConfirm) this.scene.drawConfirm = () => {};
         this.scene.render(ctx);
         this.drawFabRings(ctx);
+        this.drawToast(ctx);
         if (drawHelp) {
           this.scene.drawHelp = drawHelp;
           this.scene.buttons = [];

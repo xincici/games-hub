@@ -383,6 +383,11 @@ class SudokuScene extends Scene {
       this.phase = WON;
       // 只在「刚通关」这一帧记一次（以前写在这一行外面，每帧都会 +1）
       achv.win('sudoku', { mode: this.difficulty });
+      // 0 错误通关（一颗心都没掉）：中等 / 困难各记一次，给成就用
+      if (this.hearts === this.difficulty) {
+        if (this.difficulty === 2) achv.bump('sudoku', 'clean2');
+        else if (this.difficulty === 3) achv.bump('sudoku', 'clean3');
+      }
     }
     if (this.revealing && this.now - this.revealStart >= CELLS * REVEAL_STEP + REVEAL_MS + 40) {
       this.revealing = false;

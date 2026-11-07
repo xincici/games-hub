@@ -20,7 +20,9 @@ const CARD_GAP = 9;
 const LEFT_W = Math.round(CARD_W * 0.3);
 const RIGHT_W = CARD_W - LEFT_W;
 const ROW_GAP = 12;
-const HIDDEN_ROW_H = 34;   // 隐藏成就行更高：已达成时名字下面还有一句说明   // 分隔线到成就列表的间距（右边留 10）
+const HIDDEN_ROW_H = 34;   // 隐藏成就行更高：已达成时名字下面还有一句说明
+const HEX_R = 22;          // 卡片左列六边形半径
+const NAME_LH = 14;        // 游戏名行高   // 隐藏成就行更高：已达成时名字下面还有一句说明   // 分隔线到成就列表的间距（右边留 10）
 // 卡片最小高度 = 放得下 3 条成就 —— 否则只有 2 条时卡片变矮，左侧图标会被顶出卡片外
 const CARD_MIN_H = 3 * ROW_H + CARD_PAD * 2 + 6;
 
@@ -36,7 +38,90 @@ const FIRE_COLORS = [
 
 // 半透明卡片：背景的烟花要能透出来，所以不用不透明的 T.card。
 // 阴影 + 细描边保证卡片边界依然清楚；文字对比度不受影响（只透 12%~16%）。
-function glassCard(c, x, y, w, h, radius, dark, lifted, flat) {
+// 卡片配色：某个游戏的成就全部达成时换成浅橙底（暗色用暖橙半透明，避免整块发亮）
+const CARD_FILL_DONE = { dark: 'rgba(150,86,32,0.5)', light: 'rgba(255,214,170,0.9)' };
+const CARD_FILL = { dark: 'rgba(52,52,52,0.84)', light: 'rgba(255,255,255,0.86)' };
+const CARD_STROKE_DONE = { dark: 'rgba(224,150,80,0.5)', light: 'rgba(216,138,66,0.5)' };
+const CARD_STROKE = { dark: 'rgba(88,88,88,0.55)', light: 'rgba(210,218,228,0.75)' };
+
+// 手绘日历（icon font 里没有日历图标）——和首页每日挑战 FAB 同一个造型
+function drawCalendar(c, cx, cy, size, color) {
+  const w = size * 0.82;
+  const h = size * 0.74;
+  c.save();
+  c.strokeStyle = color;
+  c.fillStyle = color;
+  c.lineWidth = Math.max(1, size * 0.075);
+  D.roundRect(c, cx - w / 2, cy - h / 2 + size * 0.06, w, h, size * 0.15);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(cx - w * 0.28, cy - h / 2);
+  c.lineTo(cx - w * 0.28, cy - h / 2 + size * 0.15);
+  c.moveTo(cx + w * 0.28, cy - h / 2);
+  c.lineTo(cx + w * 0.28, cy - h / 2 + size * 0.15);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(cx - w / 2, cy - h * 0.08);
+  c.lineTo(cx + w / 2, cy - h * 0.08);
+  c.stroke();
+  c.beginPath();
+  c.arc(cx - w * 0.22, cy + h * 0.2, size * 0.05, 0, Math.PI * 2);
+  c.arc(cx, cy + h * 0.2, size * 0.05, 0, Math.PI * 2);
+  c.arc(cx + w * 0.22, cy + h * 0.2, size * 0.05, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+// 游戏名一行放不下时按空格折行（最多两行；单个单词太长就只能那样放着）
+function wrapName(name, maxW) {
+  const text = String(name || '');
+  if (!text) return [''];
+  const probe = nameProbeCtx();
+  const fits = (t) => !probe || probe.measureText(t).width <= maxW;
+  if (!probe || fits(text)) return [text];
+  const words = text.split(' ');
+  if (words.length < 2) return [text];
+  const lines = [];
+  let cur = '';
+  words.forEach((w) => {
+    const next = cur ? `${cur} ${w}` : w;
+    if (lines.length === 0 && fits(next)) {
+      cur = next;
+      return;
+    }
+    if (fits(next) && lines.length === 1) {
+      cur = next;
+      return;
+    }
+    if (cur) lines.push(cur);
+    cur = w;
+  });
+  if (cur) lines.push(cur);
+  return lines.slice(0, 2);
+}
+
+// 折行用的离屏量尺（拿不到画布时直接返回 null，按单行画）
+let nameProbe = null;
+function nameProbeCtx() {
+  if (nameProbe !== undefined && nameProbe !== null) return nameProbe;
+  try {
+    const cv = typeof wx !== 'undefined' && wx.createCanvas ? wx.createCanvas() : null;
+    nameProbe = cv ? cv.getContext('2d') : null;
+    if (nameProbe) nameProbe.font = 'bold 12px sans-serif';
+  } catch (e) {
+    nameProbe = null;
+  }
+  return nameProbe;
+}
+
+function cardColors(dark, allDone) {
+  const k = dark ? 'dark' : 'light';
+  return allDone
+    ? { fill: CARD_FILL_DONE[k], stroke: CARD_STROKE_DONE[k] }
+    : { fill: CARD_FILL[k], stroke: CARD_STROKE[k] };
+}
+
+function glassCard(c, x, y, w, h, radius, dark, lifted, flat, allDone) {
   const T = theme.tokens;
   c.save();
   if (!flat) {
@@ -45,18 +130,20 @@ function glassCard(c, x, y, w, h, radius, dark, lifted, flat) {
     c.shadowBlur = lifted ? 18 : 12;
     c.shadowOffsetY = lifted ? 6 : 2;
   }
-  D.fillRoundRect(c, x, y, w, h, radius, dark ? 'rgba(52,52,52,0.84)' : 'rgba(255,255,255,0.86)');
+  // 全部达成：卡片底色换成浅橙（仍然半透明，烟花能透出来）
+  const colors = cardColors(dark, allDone);
+  D.fillRoundRect(c, x, y, w, h, radius, colors.fill);
   c.restore();
-  D.strokeRoundRect(c, x, y, w, h, radius, dark ? 'rgba(88,88,88,0.55)' : 'rgba(210,218,228,0.75)', 1);
+  D.strokeRoundRect(c, x, y, w, h, radius, colors.stroke, 1);
 }
 
 class Celebration {
   constructor(safeTop) {
     this.safeTop = safeTop;
     this.time = 0;
-    this.sparks = Array.from({ length: 16 }, () => this.newSpark(Math.random() * H));
+    this.sparks = Array.from({ length: 22 }, () => this.newSpark(Math.random() * H));
     this.bursts = [];
-    this.nextBurst = 600 + Math.random() * 900;
+    this.nextBurst = 300 + Math.random() * 500;
   }
 
   newSpark(y) {
@@ -75,7 +162,7 @@ class Celebration {
   spawnBurst() {
     const x = 40 + Math.random() * (W - 80);
     const y = this.safeTop + 90 + Math.random() * (H * 0.55);
-    const count = 10 + Math.floor(Math.random() * 5);
+    const count = 12 + Math.floor(Math.random() * 6);
     const color = FIRE_COLORS[Math.floor(Math.random() * FIRE_COLORS.length)];
     const parts = [];
     for (let i = 0; i < count; i += 1) {
@@ -103,11 +190,12 @@ class Celebration {
       if (s.y < this.safeTop - 10) Object.assign(s, this.newSpark());
     });
 
-    if (this.bursts.length < 3) {
+    // 烟花频率：每 0.7~1.5s 一朵，最多 4 朵同屏（原来 1.5~3.1s / 3 朵，太安静）
+    if (this.bursts.length < 4) {
       this.nextBurst -= d;
       if (this.nextBurst <= 0) {
         this.spawnBurst();
-        this.nextBurst = 1500 + Math.random() * 1600;
+        this.nextBurst = 700 + Math.random() * 800;
       }
     }
 
@@ -181,12 +269,16 @@ class AchvPage {
 
   cardHeight(game) {
     if (game.hidden) return HIDDEN_ROW_H * game.achv.length + CARD_PAD * 2 + 6;
+    if (game.pinned) return Math.max(CARD_MIN_H, game.achv.length * ROW_H + CARD_PAD * 2 + 6);
     const rows = Math.max(1, game.achv.length);
     return Math.max(CARD_MIN_H, rows * ROW_H + CARD_PAD * 2 + 6);
   }
 
   contentHeight() {
     let h = this.headerH - this.safeTop + 8;
+    if (this.data.daily && this.data.daily.achv && this.data.daily.achv.length) {
+      h += this.cardHeight(this.data.daily) + CARD_GAP;
+    }
     this.data.games.forEach((g) => { h += this.cardHeight(g) + CARD_GAP; });
     // 列表末尾还有一张「隐藏成就」卡，高度必须算进去，否则滑到底会被渐隐盖住一半
     if (this.data.hidden && this.data.hidden.length) h += this.cardHeight(this.hiddenCard()) + CARD_GAP;
@@ -205,6 +297,12 @@ class AchvPage {
   cardList(scroll) {
     const out = [];
     let y = this.headerH + 6 - (scroll || 0);
+    // 最上面固定一张「每日挑战」卡（不参与长按排序）
+    if (this.data.daily && this.data.daily.achv && this.data.daily.achv.length) {
+      const h = this.cardHeight(this.data.daily);
+      out.push({ index: -1, game: this.data.daily, y, h, pinned: true });
+      y += h + CARD_GAP;
+    }
     this.data.games.forEach((game, index) => {
       const h = this.cardHeight(game);
       out.push({ index, game, y, h });
@@ -235,7 +333,7 @@ class AchvPage {
     const list = this.cardList(scroll);
     for (let i = list.length - 1; i >= 0; i -= 1) {
       const c = list[i];
-      if (py >= c.y && py <= c.y + c.h) return c.hidden ? -1 : c.index;
+      if (py >= c.y && py <= c.y + c.h) return (c.hidden || c.pinned) ? -1 : c.index;
     }
     return -1;
   }
@@ -302,19 +400,21 @@ class AchvPage {
     // 烟花画在卡片之上（不然全被卡片挡住），只是装饰、不注册命中区，滚动 / 拖动照旧
     this.celebration.draw(c, dark);
 
-    // 底部渐隐，提示还有内容（渐变对象缓存，避免每帧新建）
-    if (!this.fadeGrad || this.fadeGradDark !== dark) {
-      this.fadeGrad = c.createLinearGradient(0, H - this.safeBottom - 46, 0, H - this.safeBottom - 8);
-      this.fadeGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      this.fadeGrad.addColorStop(1, dark ? 'rgba(38,38,38,0.9)' : 'rgba(240,242,245,0.92)');
-      this.fadeGradDark = dark;
-    }
-    c.fillStyle = this.fadeGrad;
-    c.fillRect(0, H - this.safeBottom - 46, W, 38);
-
-    // 底部常驻提示：长按卡片可拖动排序
-    D.text(c, t('achvDragHint'), W / 2, H - this.safeBottom - 20, {
-      size: 9.5, color: T.muted, align: 'center',
+    // 底部常驻提示：绿底白字小标签（不透明 + 轻投影，自己浮在列表之上；不再铺底部渐隐）
+    const hint = t('achvDragHint');
+    const hintSize = 10;
+    const pillH = 20;
+    const pillW = Math.min(W - 24, D.measure(c, hint, hintSize, 'bold') + 22);
+    const pillX = (W - pillW) / 2;
+    const pillY = H - this.safeBottom - 20 - pillH / 2;
+    c.save();
+    c.shadowColor = dark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)';
+    c.shadowBlur = 8;
+    c.shadowOffsetY = 2;
+    D.fillRoundRect(c, pillX, pillY, pillW, pillH, pillH / 2, T.primary);
+    c.restore();
+    D.text(c, hint, W / 2, pillY + pillH / 2, {
+      size: hintSize, weight: 'bold', color: '#ffffff', align: 'center',
     });
 
     // 滚动条
@@ -380,14 +480,23 @@ class AchvPage {
       c.scale(1.02, 1.02);
       c.translate(-W / 2, -(y + h / 2));
     }
-    glassCard(c, SIDE, y, CARD_W, h, 14, dark, lifted, flat);
+    // 某个游戏的成就全部达成：整张卡换成浅橙底
+    const allDone = !game.hidden && game.achv.length > 0 && game.achv.every((a) => a.unlocked);
+    glassCard(c, SIDE, y, CARD_W, h, 14, dark, lifted, flat, allDone);
 
     // 左 3：只有图标 + 游戏名，整组垂直居中（成绩行留给右侧的指标行，这里不放）
     const cx = SIDE + LEFT_W / 2;
-    // 图标 44px（半径 22），与名字之间留 ~8px 空隙，整组仍然垂直居中
-    this.drawHexIcon(c, cx, y + h / 2 - 10, 22, game);
-    D.text(c, game.name, cx, y + h / 2 + 26, {
-      size: 12, weight: 'bold', color: T.text, align: 'center',
+    // 名字放不下一行时按空格折成两行（英文 "Hidden achievements" 这种），整组仍居中
+    const nameLines = wrapName(game.name, LEFT_W - 16);
+    const nameH = nameLines.length * NAME_LH;
+    const blockH = HEX_R * 2 + 8 + nameH;
+    const blockTop = y + (h - blockH) / 2;
+    // 图标 44px（半径 22），与名字之间留 ~8px 空隙
+    this.drawHexIcon(c, cx, blockTop + HEX_R, HEX_R, game);
+    nameLines.forEach((line, i) => {
+      D.text(c, line, cx, blockTop + HEX_R * 2 + 8 + NAME_LH * (i + 0.5), {
+        size: 12, weight: 'bold', color: T.text, align: 'center',
+      });
     });
 
     // 左 3 / 右 7 之间的极淡分隔线
@@ -435,6 +544,10 @@ class AchvPage {
     c.lineWidth = 1;
     c.stroke();
     c.restore();
+    if (game.icon === 'daily') {
+      drawCalendar(c, cx, cy, Math.round(r * 1.05), accent);
+      return;
+    }
     if (game.icon) icons.draw(c, game.icon, cx, cy, Math.round(r * 0.92), accent);
   }
 
@@ -448,7 +561,10 @@ class AchvPage {
     }
     D.text(c, item.name, x + 12, y + 11, { size: 11.5, weight: 'bold', color: T.god });
     D.text(c, item.desc, x + 12, y + 24, { size: 9, color: T.muted });
-    D.text(c, t('achvDone'), x + w - 12, y + 11, { size: 10, weight: 'bold', color: T.primary, align: 'right' });
+    // 暗色主题下成功态用白色，绿字绿底看不清
+    D.text(c, t('achvDone'), x + w - 12, y + 11, {
+      size: 10, weight: 'bold', color: dark ? '#ffffff' : T.primary, align: 'right',
+    });
   }
 
   drawAchvRow(c, x, y, w, h, a, dark) {
@@ -474,11 +590,13 @@ class AchvPage {
       c.fillRect(x, y, w * (done ? 1 : ratio), h);
       c.restore();
     }
+    // 暗色主题里成功态的绿压在浅绿填充上几乎看不见，统一改白色（亮色主题仍用主色绿）
+    const okColor = dark ? '#ffffff' : T.primary;
     // 左侧标记
     const markX = x + h / 2 + 1;
     if (done) {
-      if (!icons.draw(c, 'check-all', markX, y + h / 2, 10, T.primary)) {
-        D.circle(c, markX, y + h / 2, 3, T.primary);
+      if (!icons.draw(c, 'check-all', markX, y + h / 2, 10, okColor)) {
+        D.circle(c, markX, y + h / 2, 3, okColor);
       }
     } else {
       D.circle(c, markX, y + h / 2, 2.2, D.mix(T.muted, T.card, 0.45));
@@ -492,7 +610,7 @@ class AchvPage {
     else if (done) label = t('achvDone');
     else label = `${Math.min(a.value, a.target)}/${a.target}`;
     D.text(c, label, x + w - 12, y + h / 2, {
-      size: 10, weight: done ? 'bold' : 'normal', color: done ? T.primary : T.muted, align: 'right',
+      size: 10, weight: done ? 'bold' : 'normal', color: done ? okColor : T.muted, align: 'right',
     });
   }
 }

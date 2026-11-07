@@ -7,6 +7,7 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
+const daily = require('../../core/daily');
 const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
@@ -81,6 +82,8 @@ class ThreeScene extends Scene {
     return value;
   }
   startGame() {
+    // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
+    daily.markNewRun('three');
     this.deck = [];
     this.tiles = [];
     this.tileId = 0;
@@ -223,6 +226,7 @@ class ThreeScene extends Scene {
     }
     this.tiles = next;
     this.score = next.reduce((s, t) => s + tileScore(t.value), 0);
+    daily.report('three', 'reach', { value: this.score });
     if (this.score > this.best) { this.best = this.score; setRaw(BEST_KEY, String(this.best)); }
     this.busy = false;
     if (!this.canMove()) {

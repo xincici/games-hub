@@ -7,6 +7,7 @@ const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
+const daily = require('../../core/daily');
 const fabKit = require('../../core/fab');
 const HEADER = require('../../core/header');
 const i18nDict = require('./i18n');
@@ -62,6 +63,8 @@ class SnakeScene extends Scene {
     if (!this.restore()) this.startGame();
   }
   startGame() {
+    // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
+    daily.markNewRun('snake');
     this.snake = [[10, 10], [10, 9], [10, 8]];
     this.dir = [0, 1];
     this.nextDir = [0, 1];
@@ -149,6 +152,7 @@ class SnakeScene extends Scene {
     this.snake.unshift(head);
     if (this.food && head[0] === this.food[0] && head[1] === this.food[1]) {
       this.score += SCORE_PER_FOOD[this.difficulty - 1];
+      daily.report('snake', 'reach', { value: this.score });
       this.app.audio.playElimination();
       if (this.score > this.best) {
         this.best = this.score;

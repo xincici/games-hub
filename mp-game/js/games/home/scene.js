@@ -11,7 +11,9 @@ const ParticleField = require('../../core/particles');
 const homeI18n = require('./i18n');
 const tiles = require('../../core/tiles');
 const achv = require('../../core/achv');
+const daily = require('../../core/daily');
 const AchvPage = require('./achv-page');
+const DailyPage = require('./daily-page');
 
 // 分段控件滑块动画时长（web 的 .seg-slider 是 0.32s）
 const SEG_SLIDE_MS = 320;
@@ -70,6 +72,12 @@ class HomeScene extends Scene {
     this.achvTrack = [];          // 最近几次移动采样，用来算甩动速度
     this.achvCard = null;         // 拖动中的卡：{ index, grabDy, fingerY }
     this.achvPage = new AchvPage(SAFE_TOP, SAFE_BOTTOM);
+    this.dailyOpen = false;
+    this.dailyAnim = 0;
+    this.dailyYear = new Date().getFullYear();
+    this.dailyMonth = new Date().getMonth();
+    this.dailySwipe = null;       // 月历区域横向滑动：{ x, y, active }
+    this.dailyPage = new DailyPage(SAFE_TOP);
     this.settingsSurface = null;   // 圆形展开用的离屏画布（懒创建）
     this.segSlide = {};            // 分段控件滑块的弹性动画：key → { from, to, at }
     this.order = this.loadOrder();
@@ -107,6 +115,8 @@ class HomeScene extends Scene {
     this.gearRect = { x: W - 16 - 48, y: H - SAFE_BOTTOM - 16 - 48, w: 48, h: 48 };
     // 成就按钮：齿轮左边一格
     this.achvRect = { x: this.gearRect.x - 12 - 48, y: this.gearRect.y, w: 48, h: 48 };
+    // 每日挑战按钮：成就按钮左边一格
+    this.dailyRect = { x: this.achvRect.x - 12 - 48, y: this.gearRect.y, w: 48, h: 48 };
     const gap = Math.max(2, W * 0.008);
     const avail = W - 32;
     const hexW = (avail - gap * 3) / 4;
@@ -172,6 +182,8 @@ class HomeScene extends Scene {
     else if (this.settingsAnim > 0) this.settingsAnim = Math.max(0, this.settingsAnim - step / 480);
     if (this.achvOpen) this.achvAnim = Math.min(1, this.achvAnim + step / 600);
     else if (this.achvAnim > 0) this.achvAnim = Math.max(0, this.achvAnim - step / 480);
+    if (this.dailyOpen) this.dailyAnim = Math.min(1, this.dailyAnim + step / 600);
+    else if (this.dailyAnim > 0) this.dailyAnim = Math.max(0, this.dailyAnim - step / 480);
     if (this.achvAnim > 0) this.achvPage.update(step);
     if (!this.achvDrag && !this.achvCard && Math.abs(this.achvVel) > 0.2) {
       // 甩动惯性：松手后继续滑、按 0.94/帧 衰减，撞到两端就停
@@ -221,9 +233,11 @@ class HomeScene extends Scene {
       const item = this.hexes.find(h => h.id === this.drag.id);
       if (item) this.drawHex(c, item, this.drag.x, this.drag.y, true);
     }
-    if (this.achvAnim > 0) this.drawAchv(c);
+    if (this.dailyAnim > 0) this.drawDaily(c);
+    else if (this.achvAnim > 0) this.drawAchv(c);
     else if (this.settingsAnim > 0) this.drawSettings(c);
-    else if (!this.settingsOpen && !this.achvOpen) {
+    else if (!this.settingsOpen && !this.achvOpen && !this.dailyOpen) {
+      this.drawDailyButton(c);
       this.drawAchvButton(c);
       this.drawSettingsButton(c);
     }
@@ -260,6 +274,10 @@ class HomeScene extends Scene {
 
   onTouchStart(p) {
     if (!p) return;
+    if (this.dailyOpen) {
+      this.dailySwipe = { x: p.x, y: p.y, active: false };
+      return;
+    }
     if (this.achvOpen) {
       this.achvVel = 0;
       this.achvTrack.length = 0;
@@ -298,6 +316,15 @@ class HomeScene extends Scene {
 
   onTouchMove(p) {
     if (!p) return;
+    if (this.dailySwipe) {
+      const dx = p.x - this.dailySwipe.x;
+      const dy = p.y - this.dailySwipe.y;
+      if (!this.dailySwipe.active && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) {
+        this.dailySwipe.active = true;
+      }
+      if (this.dailySwipe.active) this.dailySwipe.lastX = p.x;
+      return;
+    }
     if (this.achvCard) {
       this.achvCard.fingerY = p.y;
       const target = this.achvPage.hitIndex(p.y, this.achvScroll);
@@ -354,6 +381,13 @@ class HomeScene extends Scene {
   }
 
   onTouchEnd() {
+    if (this.dailySwipe) {
+      const swipe = this.dailySwipe;
+      this.dailySwipe = null;
+      const dx = (swipe.lastX == null ? swipe.x : swipe.lastX) - swipe.x;
+      if (swipe.active && Math.abs(dx) > 44) this.shiftDailyMonth(dx > 0 ? -1 : 1);
+      return;
+    }
     if (this.achvPressTimer) {
       clearTimeout(this.achvPressTimer);
       this.achvPressTimer = null;
@@ -600,6 +634,28 @@ class HomeScene extends Scene {
     c.restore();
   }
 
+  // 设置 / 成就面板是否开着（App 的边缘手势用它判断该不该拦手）
+  overlayOpen() {
+    return !!this.settingsOpen || !!this.achvOpen || !!this.dailyOpen;
+  }
+
+  // 从屏幕边缘内滑关闭面板（和点 ✕ / 遮罩同一套收起动画）
+  closeOverlay() {
+    if (this.dailyOpen) {
+      this.dailyOpen = false;
+      return true;
+    }
+    if (this.achvOpen) {
+      this.achvOpen = false;
+      return true;
+    }
+    if (this.settingsOpen) {
+      this.settingsOpen = false;
+      return true;
+    }
+    return false;
+  }
+
   drawAchvButton(c) {
     const T = theme.tokens;
     const r = this.achvRect;
@@ -690,6 +746,154 @@ class HomeScene extends Scene {
     c.restore();
     if (ease > 0.75) {
       this.addButton('achv-close', g.x, g.y, g.w, g.h, () => { this.achvOpen = false; });
+    }
+  }
+
+  // ---------- 每日挑战 ----------
+
+  openDaily() {
+    daily.ensureToday();
+    this.dailyYear = new Date().getFullYear();
+    this.dailyMonth = new Date().getMonth();
+    this.refreshDaily();
+    this.dailyOpen = true;
+    this.dailyAnim = 0;
+    this.dailySwipe = null;
+  }
+
+  refreshDaily() {
+    this.dailyPage.setData(daily.pageData(this.dailyYear, this.dailyMonth));
+  }
+
+  // 切换月份：超出现在（未来）就夹回当前月
+  shiftDailyMonth(dir) {
+    const now = new Date();
+    let y = this.dailyYear;
+    let m = this.dailyMonth + dir;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    } else if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+    const isFuture = y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth());
+    if (isFuture) return false;
+    const from = this.dailyPage.data && this.dailyPage.data.month ? this.dailyPage.data.month : null;
+    this.dailyYear = y;
+    this.dailyMonth = m;
+    this.dailyPage.setData(daily.pageData(y, m), { slideFrom: from, dir });
+    return true;
+  }
+
+  // 手绘日历图标（icon font 里没有日历）
+  drawCalendarGlyph(c, cx, cy, size, color) {
+    const w = size * 0.82;
+    const h = size * 0.74;
+    c.save();
+    c.strokeStyle = color;
+    c.fillStyle = color;
+    c.lineWidth = Math.max(1.2, size * 0.07);
+    D.roundRect(c, cx - w / 2, cy - h / 2 + size * 0.06, w, h, size * 0.14);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(cx - w * 0.28, cy - h / 2);
+    c.lineTo(cx - w * 0.28, cy - h / 2 + size * 0.14);
+    c.moveTo(cx + w * 0.28, cy - h / 2);
+    c.lineTo(cx + w * 0.28, cy - h / 2 + size * 0.14);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(cx - w / 2, cy - h * 0.08);
+    c.lineTo(cx + w / 2, cy - h * 0.08);
+    c.stroke();
+    c.beginPath();
+    c.arc(cx - w * 0.22, cy + h * 0.2, size * 0.045, 0, Math.PI * 2);
+    c.arc(cx, cy + h * 0.2, size * 0.045, 0, Math.PI * 2);
+    c.arc(cx + w * 0.22, cy + h * 0.2, size * 0.045, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
+  drawDailyButton(c) {
+    const T = theme.tokens;
+    const r = this.dailyRect;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const done = !daily.hasNew();
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.12)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 2;
+    D.circle(c, cx, cy, r.w / 2, T.card);
+    c.restore();
+    // 外圈固定蓝色（和游戏内「模式切换」FAB 的蓝同一套），当天是否完成看右上角红点
+    c.save();
+    c.strokeStyle = theme.dark ? '#38bdf8' : '#0ea5e9';
+    c.lineWidth = 2;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+    this.drawCalendarGlyph(c, cx, cy - 1, 22, done ? T.primary : T.text);
+    // 今天还没完成 → 小红点（和成就的新解锁红点同款）
+    if (!done) D.circle(c, cx + r.w * 0.34, cy - r.h * 0.34, 4.2, T.god || T.primary);
+    this.addButton('daily', r.x, r.y, r.w, r.h, () => this.openDaily());
+  }
+
+  drawDaily(c) {
+    const anim = this.dailyAnim;
+    const ease = anim < 0.5 ? 2 * anim * anim : 1 - Math.pow(-2 * anim + 2, 2) / 2;
+    const page = this.dailyPage;
+    const r = this.dailyRect;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const maxR = Math.max(
+      Math.hypot(cx, cy), Math.hypot(W - cx, cy),
+      Math.hypot(cx, H - cy), Math.hypot(W - cx, H - cy),
+    );
+    const open = ease >= 0.995;
+
+    if (open) {
+      this.addButton('daily-mask', 0, 0, W, H, () => { this.dailyOpen = false; });
+      page.draw(c, { ease, interactive: true });
+      // 月份切换按钮：月历卡头部两侧
+      if (page.prevHit && page.nextHit) {
+        const prev = page.prevHit;
+        const next = page.nextHit;
+        this.addButton('daily-prev', prev.x, prev.y, prev.w, prev.h, () => this.shiftDailyMonth(-1));
+        this.addButton('daily-next', next.x, next.y, next.w, next.h, () => this.shiftDailyMonth(1));
+      }
+    } else {
+      c.save();
+      c.beginPath();
+      c.arc(cx, cy, Math.max(0.1, maxR * ease), 0, Math.PI * 2);
+      c.clip();
+      c.globalAlpha = Math.min(1, Math.max(0, (ease - 0.14) / 0.5));
+      page.draw(c, { ease, interactive: false });
+      c.restore();
+    }
+
+    // 关闭 ✕：和其它面板一样画在设置齿轮那一格
+    const g = this.gearRect;
+    const gx = g.x + g.w / 2;
+    const gy = g.y + g.h / 2;
+    const closeAlpha = Math.min(1, Math.max(0, (ease - 0.45) / 0.4));
+    c.save();
+    c.globalAlpha = closeAlpha;
+    c.shadowColor = 'rgba(0,0,0,0.12)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 2;
+    D.circle(c, gx, gy, g.w / 2, theme.tokens.card);
+    c.restore();
+    c.save();
+    c.globalAlpha = closeAlpha;
+    if (!icons.draw(c, 'close', gx, gy, 20, theme.tokens.text)) {
+      D.text(c, '×', gx, gy, { size: 20, color: theme.tokens.text, align: 'center' });
+    }
+    c.restore();
+    if (ease > 0.75) {
+      this.addButton('daily-close', g.x, g.y, g.w, g.h, () => { this.dailyOpen = false; });
     }
   }
 
