@@ -1017,6 +1017,17 @@
 - **i18n 的语言属性叫 `i18n.lang`，不是 `i18n.language`**（踩过：每日挑战的任务文案和月历年月
   写成了 `i18n.language === 'en'`，取到 undefined → 英文模式下这两处永远显示中文，界面其余部分却是英文）。
   `i18n` 只导出 `lang` / `langMode` / `setLang` / `setLangMode`；写文案前 `grep i18n.language` should be 0。
+- **成就实时提示曾经整条漏掉过（2026-11 修）**，三个原因叠在一起：
+  ① `peak()` 为了省开销把快照节流到 400ms —— **恰好落在被节流那一次上的解锁就永远不会弹**
+     （之后每次快照都已包含它，再也不会「新」）；② 隐藏成就的写入口（`markHelp` / `markFail` / `flushTime`）
+     根本没做检查；③ 快照用「游戏名·成就名」当身份，**名字会随语言变**，切一次语言等于把全部成就
+     当成新解锁（反过来也会因为重名漏判）。
+  现在的写法：快照身份用稳定 key（`<游戏 id>#<行号>` / `hidden#<key>`），维护一份
+  `knownUnlocks` 基线，每个写入口改完存盘调一次 `fireUnlocks()`；`peak()` 这种每消一组就调的热路径
+  **只打 `unlockDirty` 标记**，由 `App.frame` 每秒一次的 `achv.sweepUnlocks()` 补查（顺带也能兜住
+  「场景自己写存档、没走 achv」的解锁）。第一次只建立基线，不会把老存档的成就一次性弹出来。
+  另外快照里加了「一次快照内同一 key 只读一次」的读缓存 —— `wx.getStorageSync` 是 JSBridge 同步调用，
+  一次快照原本要读一两百次，真机上十几毫秒；缓存后 `sweepUnlocks()` 约 0.2ms（冒烟实测）。
 - **成就解说的话要「改前改后各取一次快照」**：`achv` 的 mutator（win / reach / bump / peak / trackPlay）里
   先 `unlockedSnapshot()`，改完再取一次 diff，才能知道**具体哪一条**新解锁（只看 `unlockedCount` 增减拿不到名字）。
   成本约 0.1~0.2ms；`peak` 在消除类游戏里一局要调很多次，所以那一条做了 400ms 节流。

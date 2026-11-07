@@ -647,6 +647,15 @@ i18n.setLang('cn');
     const hidden = achv.hiddenList();
     check(hidden.length === 8, `隐藏成就：应有 8 条，实际 ${hidden.length}`);
     check(hidden.every((h) => h.name && h.desc), '隐藏成就：名称/说明缺失');
+    // 隐藏成就的解锁也要能实时提示（markHelp / markFail / 时长这些写入口以前完全不给提示）
+    {
+      const seenHidden = [];
+      achv.setUnlockHook((list) => seenHidden.push(list.join('+')));
+      achv.pageData().games.forEach((g) => achv.markHelp(g.id));
+      check(seenHidden.join(',').indexOf('求知好学') >= 0,
+        `成就提示：隐藏成就没触发（${seenHidden}）`);
+      achv.setUnlockHook(null);
+    }
     check(achv.hiddenList()[0].unlocked === false || achv.helpCount() >= 25, '隐藏成就：求知好学状态不一致');
     // 帮助看满 25 个 + 时长 + 失败 + 9 个闯关游戏过 10 关
     achv.pageData().games.forEach((g) => achv.markHelp(g.id));
@@ -793,14 +802,48 @@ i18n.setLang('cn');
       check(has('达成 10 连胜') && has('达成 30 连胜'), '成就：赌神缺少 10 / 30 连胜');
       check(has('累计 100 胜') && has('累计 500 胜'), '成就：赌神缺少 100 / 500 胜');
       // 连胜取两种模式里较大的那个（不区分模式）
+      const peakToasts = [];
+      achvMod.setUnlockHook((list) => peakToasts.push(list.join('+')));
       achvMod.peak('gambler', 'streak2', 10);
       check(names('gambler').indexOf('达成 10 连胜') >= 0, '成就：赌神模式 2 的 10 连胜没算');
+      // peak 是热路径，只打标记；App 每秒的 sweepUnlocks() 会把它补上（不能丢）
+      check(peakToasts.length === 0, '成就提示：peak 不该同步弹（消除类会每消一组调一次）');
+      achvMod.sweepUnlocks();
+      check(peakToasts.join(',').indexOf('达成 10 连胜') >= 0,
+        `成就提示：peak 解锁没被兜底扫描补上（${peakToasts}）`);
+      peakToasts.length = 0;
+      achvMod.sweepUnlocks();
+      check(peakToasts.length === 0, '成就提示：已达成的成就不该重复弹');
+      achvMod.setUnlockHook(null);
       check(names('gambler').indexOf('达成 30 连胜') < 0, '成就：赌神 30 连胜提前解锁');
       achvMod.peak('gambler', 'streak1', 30);
       check(names('gambler').indexOf('达成 30 连胜') >= 0, '成就：赌神模式 1 的 30 连胜没算');
       for (let i = 0; i < 100; i += 1) achvMod.win('gambler');
       check(names('gambler').indexOf('累计 100 胜') >= 0, '成就：赌神累计 100 胜没解锁');
       check(names('gambler').indexOf('累计 500 胜') < 0, '成就：赌神累计 500 胜提前解锁');
+    }
+
+    // 实时解锁提示：每一条写入口都要能触发（旧实现漏过 peak 节流 / 隐藏成就 / 直接写存档三种）
+    {
+      const got = [];
+      achvMod.setUnlockHook((list) => got.push(list.join('+')));
+      // a) peak 打标记 + sweep 检查，不会把已解锁的重复弹出来
+      achvMod.peak('gambler', 'streak1', 32);
+      achvMod.sweepUnlocks();
+      check(got.length === 0, `成就提示：已达成的成就不该重复弹（${got}）`);
+      // c) 切语言不应该把已解锁的全部当成「新解锁」再弹一遍（key 用 id + 行号，不用名字）
+      got.length = 0;
+      i18n.setLangMode('en');
+      achvMod.sweepUnlocks();
+      check(got.length === 0, `成就提示：切语言后误报新解锁（${got}）`);
+      i18n.setLangMode('cn');
+      // d) 场景直接写存档、没走 achv：每秒兜底扫描要能补上
+      got.length = 0;
+      wx.setStorageSync('__emoji_link__best_1', '131');
+      wx.setStorageSync('__emoji_link__level', '131');
+      achvMod.sweepUnlocks();
+      check(got.length > 0, '成就提示：直接写存档的解锁没被兜底扫描发现');
+      achvMod.setUnlockHook(null);
     }
 
     // 全局：数量类（指标行 / 计数型）必须全部排在进度类（带 x/target 进度条）之前

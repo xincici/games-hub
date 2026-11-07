@@ -214,10 +214,14 @@ game.js
   滑行 / 麻将英雄 / 雀圣 / 扑克炼金术各 2 条（**第 50 关 / 第 100 关**）。注意各游戏的上限：
   滑行 `CAP_LEVEL = 15` 之后盘面封顶、只继续收限时（160s 保底）；雀圣 `MAX_LEVEL = 20` 之后配置固定；
   所以 50 / 100 关是「能刷到」而不是「越来越难」，写文案时别暗示难度递增。
-- **实时解锁提示**：`core/achv.js` 的 `setUnlockHook(fn)` —— 每个 mutator（`trackPlay / win / reach / bump / peak`）
-  在改动前后各取一次 `unlockedSnapshot()`（成就名数组），diff 出新增项后回调；`App` 用它弹提示条
+- **实时解锁提示**：`core/achv.js` 的 `setUnlockHook(fn)` + 一份 `knownUnlocks` 基线。
+  每个写入口（`trackPlay / win / reach / bump`、隐藏成就的 `markHelp / markFail / flushTime`）改完存盘后
+  调 `fireUnlocks()` → 取一次解锁快照、和基线 diff 出新增项、回调给 `App` 弹提示条
   （`notifyAchievements` → 同一个 `drawToast`，绿色 + ⚡图标，标题「达成成就」/「Achievement unlocked」）。
-  一次解锁多条只弹一条（`第一条 +N`）。`peak` 的快照做了 400ms 节流（消除类游戏会连着调）。
+  **快照身份必须用稳定 key**（`<游戏 id>#<行号>`、`hidden#<key>`），**不能用名字** —— 名字会随语言变。
+  `peak()` 在消除类里每消一组就调一次，**只打 `unlockDirty` 标记**，由 `App.frame` 每秒的
+  `achv.sweepUnlocks()` 补查（也顺带兜住「场景直接写存档」的解锁）；第一次只建基线，不弹老存档。
+  一次解锁多条只弹一条（`第一条 +N`）。快照内有「同一 key 只读一次」的读缓存，`sweep` 约 0.2ms。
 - **成就行的顺序约定（两条，冒烟都会断言）**：
   1. **数量类在前、进度类在后** —— 指标行（`stat`）和计数型（`counter`，右侧显示「x 次」）都必须排在
      带 `x/target` 进度条的行之前。实现是 `SPEC` 定义之后统一做一次稳定重排（`Object.keys(SPEC)` 遍历，

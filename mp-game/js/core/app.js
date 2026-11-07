@@ -494,6 +494,11 @@ class App {
       if (this.scene.update) this.scene.update(dt);
       // 隐藏成就：游戏内时长累计（首页不算）
       if (this.sceneId && this.sceneId !== 'home') achv.addPlayMs(dt || 16);
+      // 成就兜底：有的解锁不走 achv 写入口（场景直接写存档 / 隐藏成就计时），每秒补查一次
+      if (now - (this.lastAchvSweep || 0) > 1000) {
+        this.lastAchvSweep = now;
+        achv.sweepUnlocks();
+      }
       this.updateGlobalConfetti(dt);
       if (this.transition) {
         this.drawTransition(ctx);

@@ -102,9 +102,21 @@ function num(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// 一次快照内的存档读缓存：同一 key 只真正调一次 wx.getStorageSync。
+// wx 的同步存储是 JSBridge 调用，一次快照原本要读一两百次，真机上能卡出十几毫秒。
+let passRaw = null;
+
+function rawOf(key) {
+  if (!passRaw) return getRaw(key, '');
+  if (passRaw.has(key)) return passRaw.get(key);
+  const v = getRaw(key, '');
+  passRaw.set(key, v);
+  return v;
+}
+
 function read(key) {
   try {
-    return num(getRaw(key, 0));
+    return num(rawOf(key));
   } catch (e) {
     return 0;
   }
@@ -124,35 +136,61 @@ function minPositiveOf(keys) {
 // 每次可能改变成绩的操作前后各取一次快照，diff 出新解锁的成就名，交给 App 弹提示。
 // 快照只读内存里的 achv 数据 + 各游戏存档，不写盘；成本约 0.1~0.2ms（冒烟实测）。
 let unlockHook = null;
-let lastPeakSnapshotAt = 0;
+let unlockDirty = false;   // peak 这类热路径只打标记，等 sweep / 下一次写入口检查
+let knownUnlocks = null;   // 上次检查时已解锁的成就 key 集合（游戏卡 + 隐藏成就）
 
 function setUnlockHook(fn) {
   unlockHook = typeof fn === 'function' ? fn : null;
 }
 
-function unlockedSnapshot() {
+// 当前所有「已解锁」的成就：[{ key, name }]
+function unlockList() {
   const out = [];
   gamesData().forEach((g) => {
     g.achv.forEach((a) => {
-      if (a.unlocked) out.push(`${g.name}·${a.name}`);
+      if (a.unlocked) out.push({ key: a.key, name: `${g.name}·${a.name}` });
     });
   });
   hiddenList().forEach((h) => {
-    if (h.unlocked) out.push(`hidden·${h.name}`);
+    if (h.unlocked) out.push({ key: `hidden#${h.key}`, name: h.name });
   });
   return out;
 }
 
-// 和 before 快照对比，返回新解锁的成就名；没有 hook 时返回 null（不做任何额外计算）
-function freshUnlocks(before) {
-  if (!before) return null;
-  const after = unlockedSnapshot();
-  if (!after.length) return [];
-  return after.filter((n) => before.indexOf(n) < 0);
+// 和上一次快照比较。第一次只建立基线（不把老存档里已解锁的一堆一次性弹出来）；
+// 之后返回本次新增的成就名，并顺手把「有新成就」的红点标记写上。
+function collectUnlocks() {
+  passRaw = new Map();
+  let list;
+  try {
+    list = unlockList();
+  } finally {
+    passRaw = null;
+  }
+  const first = !knownUnlocks;
+  const fresh = [];
+  const keys = new Set();
+  list.forEach((it) => {
+    keys.add(it.key);
+    if (!first && !knownUnlocks.has(it.key)) fresh.push(it.name);
+  });
+  knownUnlocks = keys;
+  if (fresh.length) {
+    const data = load();
+    data.seen = false;
+    save();
+  }
+  return fresh;
 }
 
-function fireUnlocks(fresh) {
-  if (!unlockHook || !fresh || !fresh.length) return;
+function fireUnlocks() {
+  let fresh = [];
+  try {
+    fresh = collectUnlocks();
+  } catch (e) {
+    return;
+  }
+  if (!unlockHook || !fresh.length) return;
   try {
     unlockHook(fresh);
   } catch (e) {
@@ -160,15 +198,19 @@ function fireUnlocks(fresh) {
   }
 }
 
+// 兜底检查：有的解锁不走 achv 的写入口（隐藏成就的看过帮助 / 失败次数 / 时长，
+// 或场景自己写存档），App 每秒调一次把漏掉的补上；基线机制保证不会重复弹。
+function sweepUnlocks() {
+  unlockDirty = false;
+  fireUnlocks();
+}
+
 function trackPlay(id) {
   if (!id) return;
   const data = load();
-  const before = unlockHook ? unlockedSnapshot() : null;
   data.plays[id] = (data.plays[id] || 0) + 1;
-  const fresh = freshUnlocks(before);
-  if (fresh && fresh.length) data.seen = false;
   save();
-  fireUnlocks(fresh);
+  fireUnlocks();
   // 每日挑战埋点：开一局
   daily.report(id, 'play', {});
 }
@@ -183,8 +225,6 @@ function trackPlay(id) {
 function win(id, extra) {
   if (!id) return;
   const data = load();
-  const before = unlockHook ? unlockedSnapshot() : null;
-  const beforeCount = before ? before.length : unlockedCount();
   const e = extra || {};
   const level = Number.isFinite(+e.level) ? Math.floor(+e.level) : 0;
   data.wins[id] = (data.wins[id] || 0) + 1;
@@ -199,11 +239,8 @@ function win(id, extra) {
   if (e.perfect) data.perfect[id] = (data.perfect[id] || 0) + 1;
   if (e.fast) data.fast[id] = (data.fast[id] || 0) + 1;
   // 有新解锁就在首页成就 FAB 上点个小红点（打开成就页后消失）
-  const fresh = freshUnlocks(before);
-  const grown = fresh ? fresh.length > 0 : unlockedCount() > beforeCount;
-  if (grown) data.seen = false;
   save();
-  fireUnlocks(fresh);
+  fireUnlocks();
   // 每日挑战埋点：赢一局 / 完美 / 速通 / 通关到第 N 关
   daily.report(id, 'win', {});
   if (e.perfect) daily.report(id, 'perfect', {});
@@ -217,17 +254,12 @@ function reach(id, value, thresholds) {
   const v = num(value);
   if (!id || !v || !thresholds) return;
   const data = load();
-  const before = unlockHook ? unlockedSnapshot() : null;
-  const beforeCount = before ? before.length : unlockedCount();
   data.reach[id] = data.reach[id] || {};
   thresholds.forEach((t) => {
     if (v >= t) data.reach[id][t] = (data.reach[id][t] || 0) + 1;
   });
-  const fresh = freshUnlocks(before);
-  const grown = fresh ? fresh.length > 0 : unlockedCount() > beforeCount;
-  if (grown) data.seen = false;
   save();
-  fireUnlocks(fresh);
+  fireUnlocks();
   // 每日挑战埋点：分数 / 里程碑
   daily.report(id, 'reach', { value: v });
 }
@@ -239,16 +271,11 @@ function peak(id, field, value) {
   const data = load();
   data.peak[id] = data.peak[id] || {};
   if (v <= (data.peak[id][field] || 0)) return;
-  // peak 在消除类游戏里可能每消一组就调一次：快照做 400ms 节流，避免连续两帧各算一遍
-  const now = Date.now();
-  const canCheck = !!unlockHook && now - lastPeakSnapshotAt >= 400;
-  const before = canCheck ? unlockedSnapshot() : null;
-  if (canCheck) lastPeakSnapshotAt = now;
   data.peak[id][field] = v;
-  const fresh = freshUnlocks(before);
-  if (fresh && fresh.length) data.seen = false;
   save();
-  fireUnlocks(fresh);
+  // peak 在消除类游戏里可能每消一组就调一次，同步跑整份快照在真机上很贵：
+  // 这里只打标记，交给 App 每秒的 sweepUnlocks()（或紧随其后的 win()）统一检查，不会漏。
+  unlockDirty = true;
   // 每日挑战埋点：峰值（猜大小连胜、赌神连胜…）
   daily.report(id, 'peak', { field, value: v });
 }
@@ -264,12 +291,9 @@ function bump(id, field, n) {
   if (!id || !field || !v) return;
   const data = load();
   data.counters[id] = data.counters[id] || {};
-  const before = unlockHook ? unlockedSnapshot() : null;
   data.counters[id][field] = (data.counters[id][field] || 0) + v;
-  const fresh = freshUnlocks(before);
-  if (fresh && fresh.length) data.seen = false;
   save();
-  fireUnlocks(fresh);
+  fireUnlocks();
   // 每日挑战埋点：计数型（四条 / 同花顺…）
   daily.report(id, 'bump', { field });
 }
@@ -284,8 +308,10 @@ function countOf(id, field) {
 function markHelp(id) {
   if (!id || id === 'home') return;
   const data = load();
+  const first = !data.help[id];
   data.help[id] = 1;
   save();
+  if (first) fireUnlocks();
 }
 
 function helpCount() {
@@ -308,6 +334,7 @@ function flushTime() {
   data.timeMs += pendingMs;
   pendingMs = 0;
   save();
+  fireUnlocks();
 }
 
 function timeMsOf() {
@@ -322,6 +349,7 @@ function markFail() {
   const data = load();
   data.fails = (data.fails || 0) + 1;
   save();
+  fireUnlocks();
 }
 
 function hasNew() {
@@ -404,7 +432,7 @@ const ALCH_BEST = ['__poker_alchemy__best_1', '__poker_alchemy__best_2'];
 // 读 JSON 存档里的一个字段（少数游戏只把关卡写进 state）
 function readJsonField(key, field) {
   try {
-    const raw = getRaw(key, '');
+    const raw = rawOf(key);
     const obj = typeof raw === 'string' && raw ? JSON.parse(raw) : raw;
     if (!obj) return 0;
     if (field === 'phase') return obj.phase || '';
@@ -1010,9 +1038,11 @@ function ratioOf(a) {
 function gamesData() {
   return loadOrder().map((id) => {
     const spec = SPEC[id];
-    const rows = spec.achv.map((def) => {
+    const rows = spec.achv.map((def, i) => {
       const p = progressOf(def);
       return {
+        // 稳定标识：解锁判定用它做 diff（名字会随语言变、也可能跨游戏重名）
+        key: `${id}#${i}`,
         name: i18n.lang === 'cn' ? def.cn : def.en,
         value: p.value,
         target: p.target,
@@ -1116,6 +1146,7 @@ function totalCount() {
 module.exports = {
   trackPlay,
   setUnlockHook,
+  sweepUnlocks,
   hasNew,
   markSeen,
   win,
