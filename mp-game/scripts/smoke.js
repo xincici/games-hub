@@ -1770,6 +1770,89 @@ i18n.setLang('cn');
   });
 }
 
+// ---------- 侦探：偷换必须等牌全翻到背面；中途退出要能接着答 ----------
+{
+  const DetectiveScene = require(path.join(ROOT, 'js/games/detective/scene'));
+  const LEVEL_KEY = '__emoji_detective__level';
+  wx.setStorageSync('__emoji_detective__mode', '1');
+  wx.removeStorageSync('__games_hub__face');
+  wx.removeStorageSync(LEVEL_KEY);
+
+  const s1 = new DetectiveScene(fakeApp);
+  fakeApp.sceneId = 'detective';
+  audio.setGame('detective');
+  s1.level = 3;
+  s1.startLevel();
+  const boardBefore = s1.board.slice();
+
+  let swapWhileFlipping = false;
+  let memTicks = 0;
+  let flipTicks = 0;
+  let wrongIdx = -1;
+  let swappedBefore = -1;
+  let boardAfterSwap = [];
+  let s2 = null;
+
+  // 整段用同一个假时钟：playStart / now 必须是同一套时间，否则恢复后的计时会算成负数
+  withFakeClock(16, () => {
+    // ① 记忆阶段跑完，牌真的翻到正面（否则 flips 一直是 0，测不出「翻面途中换牌」）
+    while (s1.phase === 'memory' && memTicks < 800) { memTicks += 1; s1.update(16); }
+    // ② 翻面阶段：换牌只能在所有 flips 归零之后
+    while (s1.phase !== 'answer' && flipTicks < 400) {
+      flipTicks += 1;
+      s1.update(16);
+      if (s1.swapped >= 0 && s1.phase === 'flip' && !s1.flips.every((f) => f <= 0)) {
+        swapWhileFlipping = true;
+      }
+    }
+    boardAfterSwap = s1.board.slice();
+    swappedBefore = s1.swapped;
+    // ③ 答题中途：点错一次，再过 9 秒，然后模拟「回首页」存盘
+    if (s1.phase === 'answer') {
+      wrongIdx = s1.board.findIndex((_, i) => i !== s1.swapped);
+      s1.onCellClick(wrongIdx);
+    }
+    for (let i = 0; i < 560; i += 1) s1.update(16);
+    s1.onHide();
+    s2 = new DetectiveScene(fakeApp);
+  });
+
+  check(s1.flips.every((f) => f >= 1), '侦探：答题态所有牌都应是正面');
+  check(!swapWhileFlipping, '侦探：牌还没完全翻到背面就偷换了（玩家能直接看出哪张被换）');
+  check(swappedBefore >= 0, '侦探：翻面结束后没有换牌');
+  check(s1.phase === 'answer', `侦探：翻面阶段没进答题（${s1.phase}）`);
+  check(swappedBefore >= 0 && boardAfterSwap[swappedBefore] !== boardBefore[swappedBefore],
+    '侦探：换牌没真正替换那张牌');
+  check(s1.hearts === 2, `侦探：点错没有扣心（${s1.hearts}）`);
+
+  check(s2 && s2.phase === 'answer', `侦探：中途退出后没回到答题（${s2 && s2.phase}）`);
+  if (s2) {
+    check(s2.level === 3, `侦探：中途退出后关卡丢了（${s2.level}）`);
+    check(s2.swapped === swappedBefore, `侦探：恢复后换牌位置变了（${s2.swapped} / ${swappedBefore}）`);
+    check(JSON.stringify(s2.board) === JSON.stringify(boardAfterSwap), '侦探：恢复后牌面不一致');
+    check(s2.hearts === 2, `侦探：恢复后心数不对（${s2.hearts}）`);
+    check(s2.wrong.length === 1 && s2.wrong[0] === wrongIdx, '侦探：恢复后点错的格子没记住');
+    check(s2.time >= 8, `侦探：恢复后已用时间没接着算（${s2.time}s）`);
+    check(s2.lock === false, '侦探：恢复后不能继续作答（lock 没解开）');
+
+    // ④ 观察阶段（记忆 / 翻面）退出 → 重开本关、心数回满
+    s2.startLevel();
+    const s3 = new DetectiveScene(fakeApp);
+    check(s3.phase === 'memory', `侦探：观察阶段退出后阶段不对（${s3.phase}）`);
+    check(s3.level === 3, `侦探：观察阶段退出后关卡丢了（${s3.level}）`);
+    check(s3.hearts === 3 && s3.swapped === -1, '侦探：观察阶段退出后不该带着上一局的心数 / 换牌');
+
+    // ⑤ 失败态保持展示
+    s3.phase = 'lost';
+    s3.swapped = 2;
+    s3.hearts = 0;
+    s3.saveState();
+    const s4 = new DetectiveScene(fakeApp);
+    check(s4.phase === 'lost' && s4.lock === true, `侦探：失败态退出后没保持（${s4.phase}）`);
+  }
+  audio.setGame(null);
+}
+
 if (failures.length) {
   console.error(`✗ ${failures.length} 处失败：`);
   failures.forEach((f) => console.error('  - ' + f));

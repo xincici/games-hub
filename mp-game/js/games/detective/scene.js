@@ -34,6 +34,10 @@ const EMOJI_MEMORIES = [2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000];
 const CARD_SIZES = [[1, 4], [2, 3], [2, 4], [2, 5], [3, 4], [3, 5], [3, 6], [4, 5], [4, 6], [4, 7]];
 const CARD_MEMORIES = [2000, 2600, 3000, 3400, 3800, 4500, 5000, 5500, 6500, 7500];
 const HEARTS_MAX = 3;
+// 全部牌翻到背面后，先停留这么久再开始揭面（偷换就发生在这一段里，玩家看不到）
+const REVEAL_HOLD = 160;
+// 存档版本：v2 起支持「答题中途退出后接着答」
+const STATE_V = 2;
 
 function suffix(mode) { return mode === 1 ? '' : `_${mode}`; }
 function levelKey(mode) { return `${PREFIX}level${suffix(mode)}`; }
@@ -83,8 +87,7 @@ class DetectiveScene extends Scene {
     this.memLeft = 0;
     this.time = 0;
     this.memoryEnd = 0;
-    this.flipEnd = 0;
-    this.swapAt = 0;
+    this.revealAt = 0;
     this.playStart = 0;
     this.settleAt = 0;
     this.lock = false;
@@ -108,35 +111,63 @@ class DetectiveScene extends Scene {
   get modeName() { return t(this.mode === 2 ? 'detective.modePoker' : this.mode === 3 ? 'detective.modeMahjong' : 'detective.modeEmoji'); }
 
   loadRecords() { this.best = +(getRaw(bestKey(this.mode), 0) || 0); }
+  // 存盘要覆盖「答题中途」：以前只在胜负结算时写，中途退出等于没存 —— 回来会掉回第 1 关。
   saveState() {
-    setRaw(levelKey(this.mode), JSON.stringify({
-      level: this.level, hearts: this.hearts, phase: this.phase, time: this.time,
-      board: this.board, swapped: this.swapped, wrong: this.wrong,
-    }));
+    try {
+      setRaw(levelKey(this.mode), JSON.stringify({
+        v: STATE_V,
+        level: this.level, hearts: this.hearts, phase: this.phase, time: this.time,
+        // 已经答了多久（毫秒）：恢复后接着计时，不能从 0 重算
+        elapsed: this.playStart ? Math.max(0, this.now - this.playStart) : 0,
+        board: this.board, swapped: this.swapped, wrong: this.wrong,
+      }));
+    } catch (e) { /* 存储异常不影响游玩 */ }
   }
   restore() {
     try {
       const raw = getRaw(levelKey(this.mode), '');
       if (!raw) return false;
-      const s = JSON.parse(raw);
+      const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
       if (!s || typeof s.level !== 'number') return false;
       this.level = Math.min(this.sizes.length - 1, Math.max(0, s.level));
-      const over = s.phase === WON || s.phase === LOST;
-      if (over && Array.isArray(s.board) && s.board.length === this.rows * this.cols) {
-        this.board = s.board;
-        this.swapped = Number.isInteger(+s.swapped) ? +s.swapped : -1;
-        this.wrong = Array.isArray(s.wrong) ? s.wrong : [];
-        this.hearts = typeof s.hearts === 'number' ? s.hearts : 0;
-        this.phase = s.phase === WON ? WON : LOST;
-        this.flips = new Array(this.board.length).fill(1);
-        this.flipTargets = new Array(this.board.length).fill(1);
-        this.time = Math.max(0, +s.time || 0);
-        this.right = -1;
-        this.lock = true;
-        this.layout();
+      const n = this.rows * this.cols;
+      const boardOk = Array.isArray(s.board) && s.board.length === n;
+      const phase = s.phase;
+      // 观察阶段（记忆 / 翻面）没有「答案」可言，也没损失，直接重开本关最干净
+      const heartsOk = !(phase === ANSWER && !(typeof s.hearts === 'number' && s.hearts > 0));
+      const resumable = boardOk && heartsOk && (phase === ANSWER || phase === WON || phase === LOST)
+        && !(phase === ANSWER && !Number.isInteger(+s.swapped));
+      if (!resumable) {
+        this.startLevel();
         return true;
       }
-      this.startLevel();
+      this.board = s.board.slice();
+      this.swapped = Number.isInteger(+s.swapped) && +s.swapped >= 0 && +s.swapped < n ? +s.swapped : -1;
+      this.wrong = Array.isArray(s.wrong) ? s.wrong.filter((i) => Number.isInteger(+i) && +i >= 0 && +i < n) : [];
+      this.hearts = typeof s.hearts === 'number' ? Math.max(0, Math.min(HEARTS_MAX, s.hearts)) : HEARTS_MAX;
+      this.time = Math.max(0, +s.time || 0);
+      this.flips = new Array(n).fill(1);
+      this.flipTargets = new Array(n).fill(1);
+      this.flipDelays = [];
+      this.right = -1;
+      this.rightAt = 0;
+      this.settleAt = 0;
+      this.confirming = false;
+      this.wrongFx = new Map();
+      this.layout();
+      if (phase === WON || phase === LOST) {
+        this.phase = phase;
+        this.lock = true;
+        this.playStart = 0;
+        return true;
+      }
+      // 答题中途退出：牌已经全部翻开过，接着答；计时扣掉已经用掉的部分
+      this.phase = ANSWER;
+      this.lock = false;
+      const elapsed = Math.max(0, Math.min(24 * 3600 * 1000, +s.elapsed || 0));
+      this.playStart = Date.now() - elapsed;
+      this.revealAt = 0;
+      this.memLeft = 0;
       return true;
     } catch (e) { return false; }
   }
@@ -166,8 +197,10 @@ class DetectiveScene extends Scene {
     const ms = this.memories[this.level];
     this.memLeft = Math.ceil(ms / 1000);
     this.memoryEnd = this.now + ms;
-    removeRaw(levelKey(this.mode));
+    this.revealAt = 0;
     this.layout();
+    // 别 removeRaw：留一条观察阶段的记录，这样退出再进来仍然停在这一关
+    this.saveState();
   }
   nextLevel() {
     if (this.level < this.sizes.length - 1) this.level++;
@@ -181,6 +214,7 @@ class DetectiveScene extends Scene {
     this.startLevel();
   }
   toggleMode() {
+    this.saveState();               // 先把当前模式这局的进度存下来
     this.mode = this.mode === 1 ? 2 : this.mode === 2 ? 3 : 1;
     setRaw(MODE_KEY, String(this.mode));
     this.loadRecords();
@@ -203,23 +237,33 @@ class DetectiveScene extends Scene {
         this.flipTargets = this.flipTargets.map(() => 0);
         this.flipStart = this.now;
         this.flipDelays = this.flipTargets.map((_, i) => i * 20);
-        this.flipEnd = this.now + 1000;
-        this.swapAt = this.now + 250;
+        this.revealAt = 0;
       }
     } else if (this.phase === FLIP) {
-      if (this.swapped < 0 && this.now >= this.swapAt) {
-        const idx = Math.floor(Math.random() * this.board.length);
-        const repl = pickReplacement(this.board, this.mode);
-        if (repl != null) { this.swapped = idx; this.board[idx] = repl; }
-      }
-      if (this.now >= this.flipEnd) {
-        this.phase = ANSWER;
-        this.flipTargets = this.flipTargets.map(() => 1);
-        this.flipStart = this.now;
-        this.flipDelays = this.flipTargets.map((_, i) => i * 20);
-        this.playStart = this.now;
-        this.time = 0;
-        this.memLeft = 0;
+      // 偷换必须等所有牌**完全**翻到背面再做：翻面途中换牌，玩家能直接看到哪张变了
+      const allDown = this.flips.length > 0 && this.flips.every((f) => f <= 0);
+      if (allDown) {
+        if (this.swapped < 0) {
+          const idx = Math.floor(Math.random() * this.board.length);
+          const repl = pickReplacement(this.board, this.mode);
+          if (repl != null) {
+            this.swapped = idx;
+            this.board[idx] = repl;
+          }
+          // 全背面的停留：换完再揭面，任何一帧都看不到牌面内容变化
+          this.revealAt = this.now + REVEAL_HOLD;
+          if (repl != null) this.saveState();
+        }
+        if (this.revealAt && this.now >= this.revealAt) {
+          this.phase = ANSWER;
+          this.flipTargets = this.flipTargets.map(() => 1);
+          this.flipStart = this.now;
+          this.flipDelays = this.flipTargets.map((_, i) => i * 20);
+          this.playStart = this.now;
+          this.time = 0;
+          this.memLeft = 0;
+          this.saveState();
+        }
       }
     } else if (this.phase === ANSWER) {
       if (this.playStart) this.time = Math.floor((this.now - this.playStart) / 1000);
@@ -255,6 +299,7 @@ class DetectiveScene extends Scene {
       this.lock = true;
       this.settleAt = this.now + 500;
       this.app.audio.playElimination();
+      this.saveState();
       return;
     }
     this.wrong = this.wrong.concat([idx]);
@@ -265,6 +310,7 @@ class DetectiveScene extends Scene {
       this.lock = true;
       this.settleAt = this.now + 500;
     }
+    this.saveState();
   }
   startConfetti() {
     this.confetti = [];
@@ -540,7 +586,8 @@ class DetectiveScene extends Scene {
   }
 
   onTheme() { this.layout(); }
-  onHide() {}
+  // 回首页 / 切到后台：先把这局存下来（以前这里是空的，中途退出必然丢进度）
+  onHide() { this.saveState(); }
   onShow() {}
 }
 

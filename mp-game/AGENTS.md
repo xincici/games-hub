@@ -609,7 +609,16 @@ game.js
 ## 侦探 / 猎手 / 消除大师
 
 - 三者共用 `js/core/cards.js`（emoji / 扑克 / 麻将牌面、牌背）；关卡数据、存档 key 与 web / 小程序对齐。
-- **侦探**：`__emoji_detective__mode`、`level[_2|_3]`、`best[_2|_3]`；记忆 → 翻面偷换 → 作答；3 心；只保存胜负结算。
+- **侦探**：`__emoji_detective__mode`、`level[_2|_3]`、`best[_2|_3]`；记忆 → 翻面偷换 → 作答；3 心。
+  - **偷换（换掉一张牌）必须等所有牌完全翻到背面再做**：`flips.every(f => f <= 0)` 之后才挑牌替换，
+    再停 `REVEAL_HOLD = 160ms` 才开始揭面。以前是「翻面开始后 250ms」就换，牌还在动画中，
+    玩家能直接看到哪张牌的内容变了。冒烟会逐帧断言「换牌那一刻所有 flips 都是 0」。
+  - **存档要覆盖答题中途**（以前只在胜负结算时写、`onHide()` 是空的 → 中途退出必然丢进度、回来掉回第 1 关）：
+    `saveState()` 在 `startLevel`（观察阶段，记 level 好回去接着这一关）、换牌完成、进入答题、每次作答、
+    胜负结算、`onHide()`（回首页 / 切后台）、`toggleMode()`（切模式前先存当前模式）都会写。
+    `restore()` 按 phase 分流：`answer` → 恢复牌面 / 换牌位置 / 已用时间 / 心数 / 点错的格子接着答（`lock=false`）；
+    `won` / `lost` → 保持结算态；`memory` / `flip` → 没有答案可言，重开本关（心数回满）。
+    答题态若 `swapped` 越界或心数已经为 0 则不算可恢复，避免「0 心还能答对通关」。
 - **猎手**：`__emoji_hunter__mode`、`level[_2|_3]`、`best[_2|_3]`；目标区 + 候选区；3 心；只保存胜负结算。
   目标区先正面记忆，进入 ANSWER 时目标牌先翻回背面、候选区同时翻正；找回一个目标后，上方对应目标牌再翻正。
 - **消除大师**：`__emoji_master__mode`、`level` / `poker_level` / `mahjong_level`、`state` / `poker_state` / `mahjong_state`；`board.js` 纯逻辑分层摆放 + 可解发牌；7 格槽三消；无计时。
