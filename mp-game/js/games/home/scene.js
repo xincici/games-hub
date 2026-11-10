@@ -1,4 +1,5 @@
 const { W, H, DPR, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const fabKit = require('../../core/fab');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const i18n = require('../../core/i18n');
@@ -113,11 +114,11 @@ class HomeScene extends Scene {
   layout() {
     // 与微信右上角胶囊按钮同一水平线。
     this.titleY = HEADER.TITLE_Y;
-    this.gearRect = { x: W - 16 - 48, y: H - SAFE_BOTTOM - 16 - 48, w: 48, h: 48 };
+    this.gearRect = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
     // 成就按钮：齿轮左边一格
-    this.achvRect = { x: this.gearRect.x - 12 - 48, y: this.gearRect.y, w: 48, h: 48 };
+    this.achvRect = { x: this.gearRect.x - 12 - fabKit.SIZE, y: this.gearRect.y, w: fabKit.SIZE, h: fabKit.SIZE };
     // 每日挑战按钮：成就按钮左边一格
-    this.dailyRect = { x: this.achvRect.x - 12 - 48, y: this.gearRect.y, w: 48, h: 48 };
+    this.dailyRect = { x: this.achvRect.x - 12 - fabKit.SIZE, y: this.gearRect.y, w: fabKit.SIZE, h: fabKit.SIZE };
     const gap = Math.max(2, W * 0.008);
     const avail = W - 32;
     const hexW = (avail - gap * 3) / 4;
@@ -692,17 +693,22 @@ class HomeScene extends Scene {
     c.shadowOffsetY = 2;
     D.circle(c, cx, cy, r.w / 2, T.card);
     c.restore();
-    // 外圈进度：已解锁比例（激励继续刷）
+    // 边框（和游戏内 FAB 一样贴边描）：先一圈淡色轨道，再叠已解锁比例的绿色进度弧。
+    // 0 进度时轨道也必须画 —— 否则新玩家看到的奖杯按钮「没有边框」。
+    c.save();
+    c.strokeStyle = theme.dark ? 'rgba(255,255,255,0.18)' : 'rgba(35,128,78,0.22)';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(cx, cy, r.w / 2 - 1, 0, Math.PI * 2);
+    c.stroke();
     if (unlocked > 0) {
-      c.save();
       c.strokeStyle = T.primary;
-      c.lineWidth = 2;
       c.lineCap = 'round';
       c.beginPath();
-      c.arc(cx, cy, r.w / 2 - 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (unlocked / total));
+      c.arc(cx, cy, r.w / 2 - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (unlocked / total));
       c.stroke();
-      c.restore();
     }
+    c.restore();
     this.drawTrophy(c, cx, cy - 1, 21, unlocked > 0 ? T.primary : T.text);
     // 有新解锁：右上角一个暖色小圆点
     if (achv.hasNew()) {
@@ -855,7 +861,7 @@ class HomeScene extends Scene {
     c.lineWidth = 2;
     c.lineCap = 'round';
     c.beginPath();
-    c.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
+    c.arc(cx, cy, r.w / 2 - 1, 0, Math.PI * 2);
     c.stroke();
     c.restore();
     this.drawCalendarGlyph(c, cx, cy - 1, 22, done ? T.primary : T.text);
@@ -937,7 +943,7 @@ class HomeScene extends Scene {
     c.lineWidth = 2;
     c.lineCap = 'round';
     c.beginPath();
-    c.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
+    c.arc(cx, cy, r.w / 2 - 1, 0, Math.PI * 2);
     c.stroke();
     c.restore();
     if (!icons.draw(c, 'settings', cx, cy, 22, T.text)) {

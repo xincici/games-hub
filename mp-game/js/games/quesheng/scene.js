@@ -805,8 +805,8 @@ class QueshengScene extends Scene {
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
 
-    this.fabSize = 40;
-    this.helpRect = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
+    this.fabSize = fabKit.SIZE;
+    this.helpRect = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
     const undoW = Math.min(this.cw, W * 0.8293);
     this.undoW = undoW;
     this.undoH = 52;
@@ -990,6 +990,7 @@ class QueshengScene extends Scene {
       c.shadowBlur = 10;
       c.shadowOffsetY = 2;
       D.circle(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, T.card);
+      fabKit.stroke(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, fabKit.borderOf(iconKey === 'help' ? 'help' : 'mode'));
       c.restore();
       if (!icons.draw(c, iconKey, rect.x + rect.w / 2, rect.y + rect.h / 2, 21, color)) {
         D.text(c, fallback, rect.x + rect.w / 2, rect.y + rect.h / 2, { size: 19, color, align: 'center' });

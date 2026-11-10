@@ -279,7 +279,7 @@ class LinkScene extends Scene {
     this.boardX = (W - this.boardW) / 2;
     this.pad = pad;
     this.gap = gap;
-    this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
+    this.helpFab = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
   }
   cellX(c) { return this.boardX + this.pad + c * (this.cell + this.gap); }
   cellY(r) { return this.boardY + this.pad + r * (this.cell + this.gap); }
@@ -568,6 +568,7 @@ class LinkScene extends Scene {
     const T = theme.tokens, r = this.helpFab;
     c.save(); c.shadowColor = 'rgba(0,0,0,0.12)'; c.shadowBlur = 10; c.shadowOffsetY = 2;
     D.circle(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, T.card); c.restore();
+    fabKit.stroke(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, fabKit.borderOf('help'));
     if (!icons.draw(c, 'help', r.x + r.w / 2, r.y + r.h / 2, 20, T.text)) D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 18, color: T.text, align: 'center' });
     this.addButton('help', r.x, r.y, r.w, r.h, () => { this.helpOpen = true; });
     fabKit.drawMute(this, c, fabKit.leftSlot(r));

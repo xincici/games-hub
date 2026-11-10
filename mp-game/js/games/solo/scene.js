@@ -54,7 +54,7 @@ const DRAW_DELAY_MS = DISCARD_FLY_MS + 20;
 const CELEBRATE_STEP = 55;
 const CELEBRATE_MS = 420;
 const LOSE_DELAY = 350;
-const FAB_SIZE = 48;
+const FAB_SIZE = fabKit.SIZE;   // 统一尺寸（和帮助/静音/分享一致）
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const easeOut = p => 1 - Math.pow(1 - p, 3);
@@ -702,6 +702,7 @@ class SoloScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, T.card);
+    fabKit.stroke(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, fabKit.borderOf('help'));
     c.restore();
     if (!icons.draw(c, 'help', r.x + r.w / 2, r.y + r.h / 2, 22, T.text)) {
       D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 22, weight: 'bold', color: T.text, align: 'center' });

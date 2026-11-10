@@ -259,7 +259,7 @@ class MatchScene extends Scene {
     this.boardW = c.cols * this.cellW + (c.cols - 1) * this.gap + this.pad * 2;
     this.boardH = c.rows * this.cellH + (c.rows - 1) * this.gap + this.pad * 2;
     this.boardX = (W - this.boardW) / 2;
-    this.fabSize = 48;
+    this.fabSize = fabKit.SIZE;
     this.helpX = W - 16 - this.fabSize;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
   }
@@ -751,6 +751,7 @@ class MatchScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, x + this.fabSize / 2, y + this.fabSize / 2, this.fabSize / 2, T.card);
+    fabKit.stroke(c, x + this.fabSize / 2, y + this.fabSize / 2, this.fabSize / 2, fabKit.borderOf(iconKey === 'help' ? 'help' : 'mode'));
     c.restore();
     if (!icons.draw(c, iconKey, x + this.fabSize / 2, y + this.fabSize / 2, 22, T.primary)) {
       D.text(c, fallback, x + this.fabSize / 2, y + this.fabSize / 2, {

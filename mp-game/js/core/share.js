@@ -231,9 +231,13 @@ function exportPoster(cv, payload) {
 
 // 海报：整屏截图 **contain 居中完整显示**，背景用和页面同色系的底色 + 柔光（不用游戏画面铺底），
 // 文字放在左右两侧的留白里。这样主体内容不被裁掉、又是 5:4。
-function buildPoster(scene, gameId) {
-  const line = resultLine(scene);
-  if (poster && poster.gameId === gameId && poster.line === line && poster.dark === !!theme.dark) return poster;
+function buildPoster(scene, gameId, buildOpts) {
+  const bo = buildOpts || {};
+  const live = !!bo.live;
+  // 实时分享（左下角那颗分享按钮）：用当前界面的截图，不再叠「本局成绩」那一行
+  const line = live ? '' : resultLine(scene);
+  if (poster && poster.gameId === gameId && poster.line === line && poster.live === live
+    && poster.dark === !!theme.dark) return poster;
   if (posterBuilding) return poster;
   if (typeof wx === 'undefined' || !wx.createCanvas) return null;
   posterBuilding = true;
@@ -285,7 +289,7 @@ function buildPoster(scene, gameId) {
         c.save();
         D.roundRect(c, fg.x, fg.y, fg.w, fg.h, 16);
         c.clip();
-        try { captureFn(c, fg.x, fg.y, fg.w, fg.h); } catch (e) { /* 画不出来就留底色 */ }
+        try { captureFn(c, fg.x, fg.y, fg.w, fg.h, { live }); } catch (e) { /* 画不出来就留底色 */ }
         c.restore();
         D.strokeRoundRect(c, fg.x, fg.y, fg.w, fg.h, 16, dark ? 'rgba(255,255,255,0.26)' : 'rgba(0,0,0,0.16)', 1.5);
       }
@@ -308,13 +312,15 @@ function buildPoster(scene, gameId) {
       while (nameSize > 13 && D.measure(c, gameTitle, nameSize, 'bold') > rw) nameSize -= 1;
       D.text(c, gameTitle, rx, top + 34,
         { size: nameSize, weight: 'bold', color: dark ? '#ffffff' : '#1f2a24' });
-      let lineSize = 28;
-      while (lineSize > 15 && D.measure(c, line, lineSize, 'bold') > rw) lineSize -= 1;
-      D.text(c, line, rx, top + 74,
-        { size: lineSize, weight: 'bold', color: dark ? '#ff9aa8' : ROSE });
+      if (line) {
+        let lineSize = 28;
+        while (lineSize > 15 && D.measure(c, line, lineSize, 'bold') > rw) lineSize -= 1;
+        D.text(c, line, rx, top + 74,
+          { size: lineSize, weight: 'bold', color: dark ? '#ff9aa8' : ROSE });
+      }
 
     const payload = {
-      gameId, line, dark, title: resultTitle(gameId, line), canvas: cv,
+      gameId, line, live, dark, title: resultTitle(gameId, line), canvas: cv,
       path: null, exported: null, exportError: null,
     };
     poster = payload;
@@ -331,10 +337,11 @@ function buildPoster(scene, gameId) {
 }
 
 // 点「炫耀一下」→ 先开预览（图片 + 取消 / 去分享），玩家点「去分享」才真的分享
-function openPreview(scene, gameId) {
+function openPreview(scene, gameId, opts) {
   const id = gameId || latestGameId();
-  buildPoster(scene, id);
-  preview = { gameId: id, at: Date.now() };
+  const o = opts || {};
+  buildPoster(scene, id, { live: !!o.live });
+  preview = { gameId: id, at: Date.now(), live: !!o.live };
   return true;
 }
 

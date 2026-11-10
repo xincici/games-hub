@@ -383,7 +383,7 @@ class SortScene extends Scene {
     this.boardH = height;
     this.metrics = { cell, stepX, stepY, hoverStep, offsetX, slotTop, slotH, headH, height };
 
-    this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
+    this.helpFab = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
     this.helpScroll = Math.min(this.helpScroll, this.helpScrollMax || 0);
     if (this.fruits.length) this.syncPositions();
   }
@@ -1002,6 +1002,7 @@ class SortScene extends Scene {
       c.shadowBlur = 10;
       c.shadowOffsetY = 2;
       D.circle(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, T.card);
+      fabKit.stroke(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, fabKit.borderOf(id === 'help' ? 'help' : 'mode'));
       c.restore();
       paint(rect.x + rect.w / 2, rect.y + rect.h / 2);
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);

@@ -780,7 +780,7 @@ class CrushScene extends Scene {
     this.innerY = this.boardY + this.pad;
     this.innerW = c.cols * this.cell + (c.cols - 1) * this.gap;
     this.innerH = c.rows * this.cell + (c.rows - 1) * this.gap;
-    this.fabSize = 48;
+    this.fabSize = fabKit.SIZE;
     this.helpX = W - 16 - this.fabSize;
     this.opX = this.helpX - 60;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
@@ -1248,6 +1248,7 @@ class CrushScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, x + size / 2, y + size / 2, size / 2, T.card);
+    fabKit.stroke(c, x + size / 2, y + size / 2, size / 2, fabKit.borderOf(iconKey === 'help' ? 'help' : 'mode'));
     c.restore();
     if (!icons.draw(c, iconKey, x + size / 2, y + size / 2, 22, T.primary)) {
       D.text(c, fallback, x + size / 2, y + size / 2, {

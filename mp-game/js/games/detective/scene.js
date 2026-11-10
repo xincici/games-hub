@@ -414,8 +414,8 @@ class DetectiveScene extends Scene {
     this.boardW = this.cols * this.cellW + (this.cols - 1) * gap + pad * 2;
     this.boardH = this.rows * this.cellH + (this.rows - 1) * gap + pad * 2;
     this.boardX = (W - this.boardW) / 2;
-    this.fabSize = 40;
-    this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
+    this.fabSize = fabKit.SIZE;
+    this.helpFab = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
   }
   render(c) {
     this.buttons = [];
@@ -638,6 +638,7 @@ class DetectiveScene extends Scene {
       c.shadowBlur = 10;
       c.shadowOffsetY = 2;
       D.circle(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, T.card);
+      fabKit.stroke(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, fabKit.borderOf(key === 'help' ? 'help' : 'mode'));
       c.restore();
       if (!icons.draw(c, key, rect.x + rect.w / 2, rect.y + rect.h / 2, 20, color)) {
         D.text(c, fallback, rect.x + rect.w / 2, rect.y + rect.h / 2, { size: 18, color, align: 'center' });

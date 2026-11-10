@@ -368,7 +368,7 @@ class SlideScene extends Scene {
     this.boardW = cols * this.pitch;
     this.boardH = rows * this.pitch;
     this.boardX = (W - this.boardW) / 2;
-    this.fabSize = 48;
+    this.fabSize = fabKit.SIZE;
     this.helpFab = {
       x: W - 16 - this.fabSize,
       y: H - SAFE_BOTTOM - 16 - this.fabSize,
@@ -975,6 +975,7 @@ class SlideScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, cx, cy, r.w / 2, T.card);
+    fabKit.stroke(c, cx, cy, r.w / 2, fabKit.borderOf('help'));
     c.restore();
     if (!icons.draw(c, 'help', cx, cy, 22, T.text)) {
       D.text(c, '?', cx, cy, { size: 20, weight: 'bold', color: T.text, align: 'center' });

@@ -172,7 +172,7 @@ class ClickScene extends Scene {
     this.undoW = Math.min(this.cw * 622 / 750, 398);
     this.undoX = (W - this.undoW) / 2;
     this.undoH = undoH;
-    this.fabSize = 48;
+    this.fabSize = fabKit.SIZE;
     this.fabX = W - 16 - this.fabSize;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
   }
@@ -580,6 +580,7 @@ class ClickScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, this.fabX + this.fabSize / 2, this.fabY + this.fabSize / 2, this.fabSize / 2, T.card);
+    fabKit.stroke(c, this.fabX + this.fabSize / 2, this.fabY + this.fabSize / 2, this.fabSize / 2, fabKit.borderOf('help'));
     c.restore();
     if (!icons.draw(c, 'help', this.fabX + this.fabSize / 2, this.fabY + this.fabSize / 2, 22, T.primary)) {
       D.text(c, '?', this.fabX + this.fabSize / 2, this.fabY + this.fabSize / 2, {

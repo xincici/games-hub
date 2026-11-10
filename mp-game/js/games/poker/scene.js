@@ -229,7 +229,7 @@ class PokerScene extends Scene {
     this.scoreH = 72;
     this.cardsY = this.scoreY + this.scoreH + 10;
 
-    this.fabSize = 48;
+    this.fabSize = fabKit.SIZE;
     this.fabX = W - 16 - this.fabSize;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
 
@@ -1128,6 +1128,7 @@ class PokerScene extends Scene {
       c.shadowBlur = 10;
       c.shadowOffsetY = 2;
       D.circle(c, x + this.fabSize / 2, this.fabY + this.fabSize / 2, this.fabSize / 2, T.card);
+      fabKit.stroke(c, x + this.fabSize / 2, this.fabY + this.fabSize / 2, this.fabSize / 2, fabKit.borderOf(id === 'help' ? 'help' : 'mode'));
       c.restore();
       if (!icons.draw(c, icon, x + this.fabSize / 2, this.fabY + this.fabSize / 2, 21, color)) {
         D.text(c, fallback, x + this.fabSize / 2, this.fabY + this.fabSize / 2, {

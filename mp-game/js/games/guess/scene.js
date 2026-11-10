@@ -245,8 +245,8 @@ class GuessScene extends Scene {
     this.top = HEADER.TOP;
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
-    this.fabSize = 40;
-    this.helpFab = { x: W - 16 - 40, y: 0, w: 40, h: 40 };
+    this.fabSize = fabKit.SIZE;
+    this.helpFab = { x: W - 16 - fabKit.SIZE, y: 0, w: fabKit.SIZE, h: fabKit.SIZE };
     this.scoreY = this.top + this.headerH + 12;
     this.scoreH = 72;
     this.optY = this.scoreY + this.scoreH + 16;
@@ -258,7 +258,7 @@ class GuessScene extends Scene {
     this.keyboardW = Math.min(W, 480);
     this.keyboardX = (W - this.keyboardW) / 2;
     // 与退格/提交行垂直居中对齐（不在键盘最底部）。
-    this.fabY = this.keyboardY + 12 + 2 * (48 + 8) + (48 - 40) / 2;
+    this.fabY = this.keyboardY + 12 + 2 * (48 + 8) + (48 - fabKit.SIZE) / 2;
     this.helpFab.y = this.fabY;
     // 右下角是「静音 / 机器人 / 帮助」三枚 FAB 一行；静音隐藏（全局音效关闭）时机器人自动顶上，
     // 坐标在 drawFab / drawKeyboard 里按当前状态现算。
@@ -464,50 +464,56 @@ class GuessScene extends Scene {
     c.restore();
     const pad = 12;
     const gap = 8;
-    const bw = (kw - pad * 2 - gap * 3) / 4;
+    // 每行 5 个：4 个数字 + 1 个操作键（退格 / 提交）。
+    // 操作键比数字键宽一点（1.35 倍），所以同一行里数字键会略小。
+    const wideRatio = 1.35;
+    const nw = (kw - pad * 2 - gap * 4) / (4 + wideRatio);
+    const ww = nw * wideRatio;
     const bh = 48;
-    const numRows = [[1, 2, 3, 4], [5, 6, 7, 8]];
-    numRows.forEach((row, ri) => {
-      row.forEach((n, ci) => {
-        const x = kx + pad + ci * (bw + gap);
-        const y = ky + pad + ri * (bh + gap);
-        const enabled = this.result === GAMING && !this.current.includes(String(n)) && this.current.length < GAME_SIZE;
-        D.fillRoundRect(c, x, y, bw, bh, 8, T.keyBg);
+    const rows = [
+      { nums: [1, 2, 3, 4], action: 'del' },
+      { nums: [5, 6, 7, 8], action: 'enter' },
+    ];
+    rows.forEach((row, ri) => {
+      const y = ky + pad + ri * (bh + gap);
+      row.nums.forEach((n, ci) => {
+        const x = kx + pad + ci * (nw + gap);
+        const enabled = this.result === GAMING && !this.current.includes(String(n))
+          && this.current.length < GAME_SIZE;
+        D.fillRoundRect(c, x, y, nw, bh, 8, T.keyBg);
         c.globalAlpha = enabled ? 1 : 0.35;
-        D.text(c, String(n), x + bw / 2, y + bh / 2, { size: 18, weight: 'bold', color: T.text, align: 'center' });
+        D.text(c, String(n), x + nw / 2, y + bh / 2, { size: 18, weight: 'bold', color: T.text, align: 'center' });
         c.globalAlpha = 1;
-        if (enabled) this.addButton('num-' + n, x, y, bw, bh, () => this.addNumber(n));
+        if (enabled) this.addButton('num-' + n, x, y, nw, bh, () => this.addNumber(n));
       });
+      // 第 5 个：退格 / 提交
+      const ax = kx + pad + 4 * (nw + gap);
+      if (row.action === 'del') {
+        const canDel = this.result === GAMING && this.current.length > 0;
+        D.fillRoundRect(c, ax, y, ww, bh, 8, T.delBg);
+        c.globalAlpha = canDel ? 1 : 0.35;
+        const delText = t('guess.optDel').replace(/^⌫\s*/, '');
+        const delLabelW = D.measure(c, delText, 13, 'bold');
+        const delGroupW = 17 + 5 + delLabelW;
+        const delGX = ax + (ww - delGroupW) / 2;
+        const delCX = delGX + 8.5;
+        if (!icons.draw(c, 'backspace', delCX, y + bh / 2, 17, T.delColor)) {
+          D.text(c, '⌫', delCX, y + bh / 2, { size: 16, color: T.delColor, align: 'center' });
+        }
+        D.text(c, delText, delGX + 17 + 5 + delLabelW / 2, y + bh / 2,
+          { size: 13, weight: 'bold', color: T.delColor, align: 'center' });
+        c.globalAlpha = 1;
+        if (canDel) this.addButton('del', ax, y, ww, bh, () => this.delNumber());
+      } else {
+        const canEnter = this.result === GAMING && this.current.length === GAME_SIZE;
+        D.fillRoundRect(c, ax, y, ww, bh, 8, T.enter);
+        c.globalAlpha = canEnter ? 1 : 0.35;
+        D.text(c, t('guess.optEnter'), ax + ww / 2, y + bh / 2,
+          { size: 13, weight: 'bold', color: T.enterColor, align: 'center' });
+        c.globalAlpha = 1;
+        if (canEnter) this.addButton('enter', ax, y, ww, bh, () => this.guessOnce());
+      }
     });
-    const y = ky + pad + 2 * (bh + gap);
-    // 三个 FAB（静音 / 机器人 / 帮助）排在右边：退格+提交最多画到**最左那枚**左边 8px，
-    // 否则整行会从机器人 FAB 底下穿过去。
-    const fabRowLeft = fabKit.slotLeft(this.helpFab, fabKit.muteSlot(this.helpFab) ? 2 : 1).x;
-    const optW = Math.min(kw * 0.68, fabRowLeft - (kx + pad) - 8);
-    const halfW = (optW - pad * 2 - gap) / 2;
-    const del = { x: kx + pad, y, w: halfW, h: bh };
-    const enter = { x: kx + pad + halfW + gap, y, w: halfW, h: bh };
-    const canDel = this.result === GAMING && this.current.length > 0;
-    const canEnter = this.result === GAMING && this.current.length === GAME_SIZE;
-    D.fillRoundRect(c, del.x, del.y, del.w, del.h, 8, T.delBg);
-    c.globalAlpha = canDel ? 1 : 0.35;
-    const delText = t('guess.optDel').replace(/^⌫\s*/, '');
-    // 图标 + 文字作为一个整体居中，图标和文字间距 5px。
-    const delLabelW = D.measure(c, delText, 13, 'bold');
-    const delGroupW = 17 + 5 + delLabelW;
-    const delGX = del.x + (del.w - delGroupW) / 2;
-    const delCX = delGX + 8.5;
-    if (!icons.draw(c, 'backspace', delCX, del.y + del.h / 2, 17, T.delColor)) {
-      D.text(c, '⌫', delCX, del.y + del.h / 2, { size: 16, color: T.delColor, align: 'center' });
-    }
-    D.text(c, delText, delGX + 17 + 5 + delLabelW / 2, del.y + del.h / 2, { size: 13, weight: 'bold', color: T.delColor, align: 'center' });
-    c.globalAlpha = 1;
-    if (canDel) this.addButton('del', del.x, del.y, del.w, del.h, () => this.delNumber());
-    D.fillRoundRect(c, enter.x, enter.y, enter.w, enter.h, 8, T.enter);
-    c.globalAlpha = canEnter ? 1 : 0.35;
-    D.text(c, t('guess.optEnter'), enter.x + enter.w / 2, enter.y + enter.h / 2, { size: 13, weight: 'bold', color: T.enterColor, align: 'center' });
-    c.globalAlpha = 1;
-    if (canEnter) this.addButton('enter', enter.x, enter.y, enter.w, enter.h, () => this.guessOnce());
   }
 
   drawResult(c) {
@@ -545,6 +551,7 @@ class GuessScene extends Scene {
       c.shadowBlur = 10;
       c.shadowOffsetY = 2;
       D.circle(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, T.card);
+      fabKit.stroke(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, fabKit.borderOf(id === 'help' ? 'help' : 'mode'));
       c.restore();
       if (!icons.draw(c, iconKey, rect.x + rect.w / 2, rect.y + rect.h / 2, 21, color)) {
         D.text(c, fallback, rect.x + rect.w / 2, rect.y + rect.h / 2, { size: 19, color, align: 'center' });

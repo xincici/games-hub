@@ -554,7 +554,7 @@ class MahjongScene extends Scene {
     this.optH = 72;
     const boardTop = this.optY + this.optH + 16;
 
-    this.fabSize = 40;
+    this.fabSize = fabKit.SIZE;
     this.helpX = W - 16 - this.fabSize;
     this.fabY = H - SAFE_BOTTOM - 16 - this.fabSize;
 
@@ -1049,6 +1049,7 @@ class MahjongScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, x + size / 2, y + size / 2, size / 2, T.card);
+    fabKit.stroke(c, x + size / 2, y + size / 2, size / 2, fabKit.borderOf(iconKey === 'help' ? 'help' : 'mode'));
     c.restore();
     if (!icons.glyph(iconKey) || !icons.draw(c, iconKey, x + size / 2, y + size / 2, 20, T.primary)) {
       const emoji = fallback === '🏆';

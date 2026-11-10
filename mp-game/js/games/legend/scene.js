@@ -52,7 +52,7 @@ const GLOW_MS = 900;
 const POP_MS = 1000;          // 得分浮字
 const RESULT_DELAY = 300;     // 结算层至少等 250ms（PITFALLS #57）
 const LEVEL_FLASH_MS = 800;
-const FAB_SIZE = 40;
+const FAB_SIZE = fabKit.SIZE;   // 统一尺寸（和帮助/静音/分享一致）
 
 const PREVIEW_SCALES = [0.8, 0.6];   // 后两张：第二张 0.8、第三张 0.6（与 web 一致）
 
@@ -1037,6 +1037,7 @@ class LegendScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, T.card);
+    fabKit.stroke(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, fabKit.borderOf('help'));
     c.restore();
     if (!icons.draw(c, 'help', r.x + r.w / 2, r.y + r.h / 2, 22, T.text)) {
       D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2,

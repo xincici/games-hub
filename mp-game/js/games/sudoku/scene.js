@@ -336,7 +336,7 @@ class SudokuScene extends Scene {
     // 操作区比内容窄 56px，右下角帮助按钮放在它外侧，不侵入操作卡。
     this.padX = this.cx;
     this.padW = this.cw;
-    this.fabSize = 40;
+    this.fabSize = fabKit.SIZE;
     this.helpFab = { x: W - 16 - this.fabSize, y: H - SAFE_BOTTOM - 16 - this.fabSize, w: this.fabSize, h: this.fabSize };
 
     // 棋盘顶边、棋盘底边到操作区、操作区顶边都保持固定 12px；
@@ -688,6 +688,7 @@ class SudokuScene extends Scene {
     c.save();
     c.shadowColor = 'rgba(0,0,0,0.12)'; c.shadowBlur = 10; c.shadowOffsetY = 2;
     D.circle(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, T.card);
+    fabKit.stroke(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, fabKit.borderOf('help'));
     c.restore();
     if (!icons.draw(c, 'help', r.x + r.w / 2, r.y + r.h / 2, 21, T.text)) {
       D.text(c, '?', r.x + r.w / 2, r.y + r.h / 2, { size: 18, color: T.text, align: 'center' });

@@ -554,20 +554,40 @@ game.js
 
 ## 底部控件与 FAB
 
-- **FAB 彩色描边（统一由 `App.drawFabRings()` 画）**：帮助 = **橙色**（`T.god`）、静音 = **绿色**（`T.primary`）、
-  模式切换 = **浅蓝**（暗色 `#38bdf8` / 亮色 `#0ea5e9`）。
-  - 实现位置在 `App` 渲染循环里、`scene.render()` 之后、帮助 / 二次确认面板之前 ——
-    面板打开时会自然盖住描边，不用 25 个场景各画一遍。
-  - 按 `scene.buttons` 里的 id 识别：帮助 `help` / `fab-help` / `help-fab`、静音 `fab-mute`、
-    模式切换 **`mode` 或任何 `fab-mode*`**（match 是 `fab-mode-emoji`、mahjong / gambler 是 `fab-mode`）。
-    半径 `min(w,h)/2 - 2`、线宽 2、圆头，FAB 尺寸 40~48 都适用。
-  - **新增 FAB 时沿用这些 id 前缀**，描边会自动出现；别在场景里自己画描边（会和统一描边叠成双线）。
-  - 现状：25 个场景里 9 个有模式 FAB（match / detective / hunter / master / sort / alchemy / mahjong /
-    quesheng / gambler）→ 3 圈，其余 16 个 → 2 圈（帮助 + 静音）。
-  - 冒烟断言：`help` / `fab-help` / `fab-mute` / `mode` / `fab-mode` / `fab-mode-emoji` + 两个非 FAB 按钮
-    → 只画 6 圈，半径 22 / 20 / 18 都要出现。
+- **尺寸统一 `fabKit.SIZE = 44`**：首页三枚（每日挑战 / 成就 / 设置）与游戏内的帮助 / 静音 / 模式（开关）/ 分享，
+  全部 44×44。各场景的 `this.fabSize`、`FAB_SIZE` 常量、`helpFab` / `helpRect` 都从 `fabKit.SIZE` 取，
+  **不要再写字面量 40 / 48**（原来 40/44/48 三种混着用）。
+- **边框是按钮自己的一部分**（`App.drawFabRings()` 已删除，不再「先画按钮、事后补一圈」）：
+  - `fabKit.draw(scene, c, rect, { id, icon, fallback, color, onTap })` 一次画完**底色 + 边框 + 图标**；
+  - 自己画圆的场景用 `fabKit.stroke(c, cx, cy, r, fabKit.borderOf(kind))` 紧跟在 fill 之后描边；
+  - 颜色规则（`fabKit.borderOf`）：帮助 = **橙**（`T.god`）、静音 = **绿**（`T.primary`）、
+    模式 / 开关（机器人 / 穿墙 / 骰子…）= **蓝**（暗 `#38bdf8` / 亮 `#0ea5e9`）、分享 = **胭脂红**（`#962832`）；
+  - 边框贴边描（线宽 2 → 覆盖 r-2..r），和按钮同色闭合，看起来就是按钮自己的边。
+  - id 约定：`help` / `fab-help` / `help-fab` / `fab-mute` / `mode` / `fab-mode*` / `fab-share`。
+- **左下角「分享」FAB（`App.drawShareFab`）**：26 个界面（首页 + 25 个游戏）都有，坐标
+  `x = 16, y = H - SAFE_BOTTOM - 16 - 44`。点是**当前界面的实时截图**
+  （`share.openPreview(scene, id, { live: true })`），弹出与结算分享完全同一条预览 / 取消 / 去分享链路。
+  - 帮助 / 二次确认面板打开、首页有面板（`overlayOpen()`）、预览已打开、转场中**都不画**；
+  - 和场景里已有按钮重叠时**跳过不画**（宁可少一个入口，也不能挡住操作）；
+  - live 截图不屏蔽结算遮罩（`paintSceneForPoster` 的 `opts.live`），海报里也不叠「本局成绩」那一行。
+  - 冒烟断言：26 个界面都能画出来、尺寸 44、在最左侧（x ≤ 40）、不与任何已有按钮重叠；
+    其余 FAB（`fab-*` / `help` / `robot` / `wall` / `mode`）尺寸也必须是 44。
+- **帮助 FAB 的小红点**（`App.drawHelpDot`）：这个游戏的帮助**没看过**时，在帮助按钮右上角
+  （`x + w*0.84, y + h*0.16`，半径 4.2，`T.god`）画一个和「每日挑战未完成」同款的小红点；
+  打开过一次就没了（`App` 在 `helpOpen` 变真时调 `achv.markHelp(id)` 落盘，**永久**消失）。
+  状态来自 `achv.seenHelp(id)`（`__games_hub__achv` 的 `help` 字段）；问号 / 麻将传奇还认各自的老 key
+  （`__quesheng__help_showed` / `__mahjong_legend__help_showed`），老玩家不会突然冒一堆红点。
+  帮助面板打开着、二次确认中、首页都不画。
+- **每个 FAB 都必须真的描上边**：冒烟按「按钮圆心处的描边颜色」断言 —— 帮助 `T.god`、静音 `T.primary`、
+  模式 / 开关蓝、分享胭脂红。自己画圆的场景**别忘了 `fabKit.stroke`**（point24 / poker / slide 就漏过）。
+  首页三枚 FAB 的环也统一 `r - 1`：每日挑战蓝、设置橙、奖杯「先画淡色轨道再叠进度弧」——**0 进度也要有边**。
 
-- 1A2B 的机器人/帮助 FAB 与退格/提交行垂直居中；键盘底部留 10px，不贴底。
+
+## 1A2B 键盘（每行 5 个）
+
+- 第一行 **1 2 3 4 退格**、第二行 **5 6 7 8 提交**；第 5 列是操作键，比数字键**宽 1.35 倍**
+  （所以数字键反而略小）。分两行后**第三行只放 FAB**（静音 / 机器人 / 帮助），退格 / 提交不再和 FAB 同行。
+- 冒烟断言：数字键 8 个、键盘正好 2 行、第一行 4 个数字键、退格 / 提交都比数字键宽、互不重叠。
 
 - 底部有键盘/按钮行时，FAB 必须独占 action row 或放标题栏，不能覆盖可点区域（数独已按此布局）。
 

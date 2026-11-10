@@ -1,4 +1,4 @@
-const { ctx, W, H, DPR, canvas, SAFE_TOP } = require('./canvas');
+const { ctx, W, H, DPR, canvas, SAFE_TOP, SAFE_BOTTOM } = require('./canvas');
 const Input = require('./input');
 const theme = require('./theme');
 const audio = require('./audio');
@@ -10,6 +10,7 @@ const confetti = require('./confetti');
 const D = require('./draw');
 const icons = require('./icons');
 const { t } = require('./i18n');
+const fabKit = require('./fab');
 const i18n = require('./i18n');
 const share = require('./share');
 
@@ -319,14 +320,15 @@ class App {
     if (!scene || typeof scene.render !== 'function') return false;
     if (!(w > 0) || !(h > 0)) return false;
     const cover = !!(opts && opts.cover);
+    const live = !!(opts && opts.live);   // 实时分享：连结算遮罩一起截
     const scale = cover ? Math.max(w / W, h / H) : Math.min(w / W, h / H);
     const dw = W * scale;
     const dh = H * scale;
     const od = scene.drawResult;
     const ow = scene.drawWin;
     try {
-      if (od) scene.drawResult = () => {};
-      if (ow) scene.drawWin = () => {};
+      if (od && !live) scene.drawResult = () => {};
+      if (ow && !live) scene.drawWin = () => {};
       scene.buttons = [];
       c.save();
       c.beginPath();
@@ -360,31 +362,39 @@ class App {
   // 游戏内 FAB 的彩色描边：帮助=橙、静音=绿、模式切换=浅蓝。
   // 统一在 scene.render 之后、帮助面板之前画 —— 面板打开时会自然盖住描边；
   // 不用每个场景各画一遍（25 个场景的 FAB 尺寸 40~48 不等，这里按命中区现算）。
-  drawFabRings(c) {
+  // 帮助 FAB 右上角的小红点：这个游戏的帮助还没看过时显示，看过一次永久消失。
+  // 只画一次（App 层），25 个游戏不用各写一遍。
+  drawHelpDot(c) {
     const scene = this.scene;
-    const buttons = scene && scene.buttons;
-    if (!buttons || !buttons.length) return;
+    if (!scene || this.sceneId === 'home' || !this.sceneId) return;
+    if (scene.helpOpen || scene.confirming) return;
+    if (achv.seenHelp(this.sceneId)) return;
+    const helpBtn = scene.buttons.find((b) => b.id === 'help' || b.id === 'fab-help' || b.id === 'help-fab');
+    if (!helpBtn) return;
     const T = theme.tokens;
-    const dark = !!theme.dark;
-    buttons.forEach((b) => {
-      let color = null;
-      const id = String(b.id || '');
-      if (id === 'help' || id === 'fab-help' || id === 'help-fab') color = T.god;
-      else if (id === 'fab-mute') color = T.primary;
-      // 模式切换的 id 各场景不统一：mode / fab-mode / fab-mode-emoji / fab-mode-poker …
-      else if (/^mode$/.test(id) || /^fab-mode/.test(id)) color = dark ? '#38bdf8' : '#0ea5e9';
-      if (!color) return;
-      const r = Math.min(b.w, b.h) / 2;
-      if (r < 10) return;
-      c.save();
-      c.strokeStyle = color;
-      c.lineWidth = 2;
-      c.lineCap = 'round';
-      c.beginPath();
-      c.arc(b.x + b.w / 2, b.y + b.h / 2, r - 2, 0, Math.PI * 2);
-      c.stroke();
-      c.restore();
+    D.circle(c, helpBtn.x + helpBtn.w * 0.84, helpBtn.y + helpBtn.h * 0.16, 4.2, T.god || T.primary);
+  }
+
+  // 左下角统一的「分享」FAB：点是当前界面的实时截图 + 预览弹窗（和结算分享同一条链路）。
+  // 边框（胭脂红）和按钮一起画，不再事后补圈。
+  drawShareFab(c) {
+    const scene = this.scene;
+    if (!scene) return;
+    if (scene.helpOpen || scene.confirming) return;
+    if (typeof scene.overlayOpen === 'function' && scene.overlayOpen()) return;
+    if (share.previewOpen() || this.transition) return;
+    const size = fabKit.SIZE;
+    const rect = { x: 16, y: H - SAFE_BOTTOM - 16 - size, w: size, h: size };
+    // 和场景里已有的可点区域重叠时就不画（宁可少一个入口，也不能挡住操作）
+    if (scene.buttons.some((b) => fabKit.overlaps(b, rect))) return;
+    const app = this;
+    fabKit.draw(scene, c, rect, {
+      id: 'fab-share',
+      kind: 'share',
+      icon: false,
+      onTap: () => share.openPreview(scene, app.sceneId, { live: true }),
     });
+    share.drawShareIcon(c, rect.x + size / 2, rect.y + size / 2, 19, fabKit.ROSE);
   }
 
   ensureSnapshot() {
@@ -559,7 +569,8 @@ class App {
         if (drawHelp) this.scene.drawHelp = () => {};
         if (drawConfirm) this.scene.drawConfirm = () => {};
         this.scene.render(ctx);
-        this.drawFabRings(ctx);
+        this.drawHelpDot(ctx);
+        this.drawShareFab(ctx);
         // 结算态：右上角一枚「炫耀一下」（生成 5:4 海报，点一下发分享）
         if (share.shouldShowChip(this.scene, this.sceneId)) {
           try {

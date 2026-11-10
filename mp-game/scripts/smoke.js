@@ -328,18 +328,39 @@ function runSize(width, height) {
         `boardH=${Math.round(scene.boardH)} undoY=${Math.round(scene.undoY)} 底部余量=${Math.round(H - (scene.undoY + scene.undoH))}`);
     }
     if (id === 'guess') {
-      scene.current = '1234';
+      // 先空手牌渲染一次，拿到全部数字键；再填满 4 位，拿到退格 / 提交
+      scene.current = '';
+      scene.result = 0;   // GAMING
       scene.buttons = [];
+      scene.render(ctx);
+      const numButtons = scene.buttons.filter((b) => /^num-/.test(b.id));
+      scene.current = '1234';
       scene.render(ctx);
       const del = scene.buttons.find((b) => b.id === 'del');
       const enter = scene.buttons.find((b) => b.id === 'enter');
       const mute2 = scene.buttons.find((b) => b.id === fab.MUTE_ID);
       const robot = scene.buttons.find((b) => b.id === 'robot');
       check(!!del && !!enter, `${id}@${width}x${height}: 退格/提交没有注册（键盘没画出来？）`);
-      const rowRight = Math.max(del ? del.x + del.w : 0, enter ? enter.x + enter.w : 0);
-      const fabLeft = Math.min(mute2 ? mute2.x : 1e9, robot ? robot.x : 1e9);
-      check(rowRight <= fabLeft - 8,
-        `${id}@${width}x${height}: 退格/提交行右沿 ${Math.round(rowRight)} 没让开 FAB 组左沿 ${Math.round(fabLeft)}-8`);
+      // 键盘改成「每行 5 个」：1 2 3 4 退格 / 5 6 7 8 提交；
+      // 退格和提交在第 5 列、和数字键同一行，FAB 独占下一行 → 只需保证纵向不重叠。
+      const keys = numButtons.concat([del, enter].filter(Boolean));
+      const rows = new Set(keys.map((b) => Math.round(b.y)));
+      check(rows.size === 2, `${id}@${width}x${height}: 键盘应为 2 行（实际 ${rows.size} 行）`);
+      const nums = numButtons;
+      check(nums.length === 8, `${id}@${width}x${height}: 数字键应有 8 个（实际 ${nums.length}）`);
+      const firstRow = nums.filter((b) => Math.round(b.y) === Math.min(...rows)).length;
+      check(firstRow === 4, `${id}@${width}x${height}: 第一行应 4 个数字键（实际 ${firstRow}）`);
+      check(del && nums[0] && del.w > nums[0].w, `${id}@${width}x${height}: 退格应比数字键宽`);
+      check(enter && nums[0] && enter.w > nums[0].w, `${id}@${width}x${height}: 提交应比数字键宽`);
+      const fabs = [del, enter, mute2, robot].filter(Boolean);
+      for (let a = 0; a < fabs.length; a += 1) {
+        for (let b = a + 1; b < fabs.length; b += 1) {
+          const p1 = fabs[a];
+          const p2 = fabs[b];
+          const hit = p1.x < p2.x + p2.w && p2.x < p1.x + p1.w && p1.y < p2.y + p2.h && p2.y < p1.y + p1.h;
+          check(!hit, `${id}@${width}x${height}: ${p1.id} 和 ${p2.id} 重叠`);
+        }
+      }
       if (process.env.HINT_PROBE) {
         const c2 = makeCtx();
         const r = scene.historyRect();
@@ -606,30 +627,42 @@ i18n.setLang('cn');
   achv.reach('g2048', 2048, [1024, 2048, 4096]);
   check(achv.reachOf('g2048', 1024) === 1 && achv.reachOf('g2048', 2048) === 1, '成就：里程碑没有计数');
   check(achv.reachOf('g2048', 4096) === 0, '成就：未达成的里程碑被计数了');
-  // FAB 描边：帮助橙 / 静音绿 / 模式浅蓝（首页按钮不该有）
-  {
-    const { App } = require(path.join(ROOT, 'js/core/app'));
-    const ringCtx = makeCtx();
-    const fake = {
-      scene: {
-        buttons: [
-          { id: 'help', x: 300, y: 560, w: 48, h: 48 },
-          { id: 'fab-help', x: 252, y: 560, w: 44, h: 44 },
-          { id: 'fab-mute', x: 204, y: 560, w: 48, h: 48 },
-          // 模式切换的 id 各场景不统一：mode / fab-mode / fab-mode-emoji 都要能描边
-          { id: 'mode', x: 188, y: 560, w: 40, h: 40 },
-          { id: 'fab-mode', x: 140, y: 560, w: 44, h: 44 },
-          { id: 'fab-mode-emoji', x: 92, y: 560, w: 48, h: 48 },
-          { id: 'home', x: 16, y: 16, w: 48, h: 48 },
-          { id: 'settings', x: 300, y: 16, w: 48, h: 48 },
-        ],
-      },
-    };
-    App.prototype.drawFabRings.call(fake, ringCtx);
-    check(ringCtx.__arcs.length === 6, `FAB 描边：应画 6 圈，实际 ${ringCtx.__arcs.length}`);
-    const radii = ringCtx.__arcs.map((a) => Math.round(a[2]));
-    check(radii.includes(22) && radii.includes(20) && radii.includes(18), `FAB 描边：半径不对（${radii.join(',')}）`);
-  }
+// FAB 边框：帮助橙 / 静音绿 / 模式蓝 / 分享胭脂红；尺寸统一 44
+{
+  const fabKit = require(path.join(ROOT, 'js/core/fab'));
+  const theme2 = require(path.join(ROOT, 'js/core/theme'));
+  const T2 = theme2.tokens;
+  check(fabKit.SIZE === 44, `FAB：统一尺寸应为 44（实际 ${fabKit.SIZE}）`);
+  check(fabKit.borderOf('help') === T2.god, 'FAB 边框：帮助应为橙色');
+  check(fabKit.borderOf('mute') === T2.primary, 'FAB 边框：静音应为绿色');
+  check(fabKit.borderOf('mode') === (theme2.dark ? '#38bdf8' : '#0ea5e9'), 'FAB 边框：模式应为蓝色');
+  check(fabKit.borderOf('share') === '#962832', 'FAB 边框：分享应为胭脂红');
+  check(fabKit.kindOfId('help') === 'help' && fabKit.kindOfId('fab-help') === 'help'
+    && fabKit.kindOfId('help-fab') === 'help', 'FAB 边框：帮助 id 识别不对');
+  check(fabKit.kindOfId('fab-mute') === 'mute', 'FAB 边框：静音 id 识别不对');
+  check(fabKit.kindOfId('mode') === 'mode' && fabKit.kindOfId('fab-mode-emoji') === 'mode',
+    'FAB 边框：模式 id 识别不对');
+  check(fabKit.kindOfId('fab-share') === 'share', 'FAB 边框：分享 id 识别不对');
+  // 画一次带边框的按钮：描边颜色 / 半径要贴住按钮边缘
+  const strokes = [];
+  const arcs = [];
+  const ctx = makeCtx();
+  ctx.stroke = () => strokes.push({ color: ctx.strokeStyle, width: ctx.lineWidth });
+  ctx.arc = (x, y, r) => arcs.push(r);
+  const scene = {
+    buttons: [],
+    addButton(id, x, y, w, h, fn) { this.buttons.push({ id, x, y, w, h, onTap: fn }); },
+  };
+  fabKit.draw(scene, ctx, { x: 16, y: 600, w: 44, h: 44 },
+    { id: 'fab-share', kind: 'share', icon: false, onTap: () => {} });
+  check(strokes.length === 1 && strokes[0].color === '#962832',
+    `FAB 边框：分享按钮没描胭脂红边（${strokes.map((s2) => s2.color).join(',')}）`);
+  const lastArc = arcs[arcs.length - 1];
+  check(arcs.length >= 2 && Math.abs(lastArc - 21) < 0.6,
+    `FAB 边框：描边半径应贴着按钮边缘（${arcs.join(',')}）`);
+  check(scene.buttons.length === 1, 'FAB：icon:false 时命中区丢了');
+}
+
 
   // 历史成绩推算：成就系统上线前的老玩家（没有任何 achv 记录），只看存档也要能认定
   wx.setStorageSync('__emoji_detective__level', JSON.stringify({ level: 1, hearts: 3, phase: 'play' }));
@@ -2109,6 +2142,86 @@ i18n.setLang('cn');
   wx.showShareMenu = origShowMenu;
 }
 
+// ---------- 25 个游戏：FAB 边框真的画在按钮上（帮助橙 / 模式蓝 / 静音绿） ----------
+{
+  const theme2 = require(path.join(ROOT, 'js/core/theme'));
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const problems = [];
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    // 记录每次 stroke 的颜色 + 圆心，用来确认「边框画在按钮上」而不是没画
+    const strokes = [];
+    const ctx = makeCtx();
+    let lastArc = null;
+    ctx.arc = (x, y, r) => { lastArc = { x, y, r }; };
+    ctx.stroke = () => { if (lastArc) strokes.push({ x: lastArc.x, y: lastArc.y, r: lastArc.r, color: ctx.strokeStyle }); };
+    sc.render(ctx);
+    const ringAt = (b) => strokes.find((st) => Math.abs(st.x - (b.x + b.w / 2)) < 1
+      && Math.abs(st.y - (b.y + b.h / 2)) < 1 && st.r > 10);
+    const help = sc.buttons.find((b) => b.id === 'help' || b.id === 'fab-help' || b.id === 'help-fab');
+    if (!help) problems.push(`${id}: 没有帮助按钮`);
+    else {
+      const ring = ringAt(help);
+      if (!ring) problems.push(`${id}: 帮助按钮没有边框`);
+      else if (ring.color !== theme2.tokens.god) problems.push(`${id}: 帮助边框颜色 ${ring.color}`);
+    }
+    const mute = sc.buttons.find((b) => b.id === 'fab-mute');
+    if (mute) {
+      const ring = ringAt(mute);
+      if (!ring) problems.push(`${id}: 静音按钮没有边框`);
+      else if (ring.color !== theme2.tokens.primary) problems.push(`${id}: 静音边框颜色 ${ring.color}`);
+    }
+    const mode = sc.buttons.find((b) => b.id === 'mode' || /^fab-(mode|wall|robot|dice)/.test(b.id));
+    if (mode) {
+      const ring = ringAt(mode);
+      const blue = theme2.dark ? '#38bdf8' : '#0ea5e9';
+      if (!ring) problems.push(`${id}: 模式按钮没有边框`);
+      else if (ring.color !== blue) problems.push(`${id}: 模式边框颜色 ${ring.color}`);
+    }
+  });
+  check(problems.length === 0, `FAB 边框：${problems.slice(0, 6).join('；')}`);
+}
+
+// ---------- 26 个界面：左下角分享 FAB + FAB 尺寸统一 44 ----------
+{
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const fabKit2 = require(path.join(ROOT, 'js/core/fab'));
+  const IDS = ['home', 'click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const problems = [];
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.render(makeCtx());
+    // 画一次左下角分享按钮（App 在每帧里做）
+    AppCls.prototype.drawShareFab.call({ scene: sc, sceneId: id, transition: null }, makeCtx());
+    const shareBtn = sc.buttons.find((b) => b.id === 'fab-share');
+    if (!shareBtn) { problems.push(`${id}: 没有左下角分享按钮`); return; }
+    if (Math.round(shareBtn.w) !== fabKit2.SIZE) problems.push(`${id}: 分享按钮 ${shareBtn.w}px`);
+    if (shareBtn.x > 40) problems.push(`${id}: 分享按钮不在最左侧（x=${shareBtn.x}）`);
+    const clashes = sc.buttons.filter((b) => b.id !== 'fab-share'
+      && shareBtn.x < b.x + b.w && b.x < shareBtn.x + shareBtn.w
+      && shareBtn.y < b.y + b.h && b.y < shareBtn.y + shareBtn.h);
+    if (clashes.length) problems.push(`${id}: 分享按钮和 ${clashes.map((c) => c.id).slice(0, 2).join(',')} 重叠`);
+    // 其余 FAB（帮助 / 静音 / 模式 / 机器人 / 穿墙…）尺寸也必须 44
+    sc.buttons.forEach((b) => {
+      if (!/^(fab-|help$|robot$|wall$|mode$)/.test(b.id)) return;
+      if (Math.round(b.w) !== fabKit2.SIZE || Math.round(b.h) !== fabKit2.SIZE) {
+        problems.push(`${id}: ${b.id} 尺寸 ${b.w}×${b.h}`);
+      }
+    });
+  });
+  check(problems.length === 0, `分享 FAB / 尺寸统一：${problems.slice(0, 6).join('；')}`);
+}
+
 // ---------- 25 个游戏：结算面板整宽 + 面板内「炫耀一下」 ----------
 {
   const shareMod2 = require(path.join(ROOT, 'js/core/share'));
@@ -2530,6 +2643,68 @@ i18n.setLang('cn');
     check(at1400 === 'lost', `侦探：动画放完 +300ms 之后没有进入失败态（${at1400}）`);
   }
   audio.setGame(null);
+}
+
+// ---------- 帮助 FAB 的小红点：没看过显示，看过永久消失 ----------
+{
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const DMod = require(path.join(ROOT, 'js/core/draw'));
+  const origCircle = DMod.circle;
+  const origSeen = achvMod.seenHelp;
+  const dots = [];
+  DMod.circle = function (c, x, y, r, color) {
+    if (Math.abs(r - 4.2) < 0.01) dots.push({ x, y, color });
+    return origCircle.apply(DMod, arguments);
+  };
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const problems = [];
+  // 前面的用例已经把 25 个帮助都看过了，这里用桩控制「看过 / 没看过」两态
+  achvMod.seenHelp = () => false;
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.render(makeCtx());
+    const helpBtn = sc.buttons.find((b) => b.id === 'help' || b.id === 'fab-help' || b.id === 'help-fab');
+    if (!helpBtn) { problems.push(`${id}: 没有帮助按钮`); return; }
+    dots.length = 0;
+    AppCls.prototype.drawHelpDot.call({ scene: sc, sceneId: id }, makeCtx());
+    if (dots.length !== 1) { problems.push(`${id}: 未看过时有 ${dots.length} 个红点`); return; }
+    const wantX = helpBtn.x + helpBtn.w * 0.84;
+    const wantY = helpBtn.y + helpBtn.h * 0.16;
+    if (Math.abs(dots[0].x - wantX) > 0.5 || Math.abs(dots[0].y - wantY) > 0.5) {
+      problems.push(`${id}: 红点不在帮助按钮右上角`);
+    }
+  });
+  // 看过之后：一个点都不画
+  achvMod.seenHelp = () => true;
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.render(makeCtx());
+    dots.length = 0;
+    AppCls.prototype.drawHelpDot.call({ scene: sc, sceneId: id }, makeCtx());
+    if (dots.length !== 0) problems.push(`${id}: 看过帮助后红点还在`);
+  });
+  achvMod.seenHelp = origSeen;
+  // 首页永远没有红点
+  dots.length = 0;
+  AppCls.prototype.drawHelpDot.call({ scene: { buttons: [] }, sceneId: 'home' }, makeCtx());
+  if (dots.length) problems.push('home: 首页不该有红点');
+  // 真实存档语义：markHelp 之后 seenHelp 为真；问号游戏用老 key 补齐
+  const probeId = 'click';
+  achvMod.markHelp(probeId);
+  check(achvMod.seenHelp(probeId) === true, '帮助红点：markHelp 之后 seenHelp 仍为 false');
+  wx.setStorageSync('__quesheng__help_showed', '1');
+  check(achvMod.seenHelp('quesheng') === true, '帮助红点：奇圣的老存档 key 没被认（会误报红点）');
+  DMod.circle = origCircle;
+  check(problems.length === 0, `帮助红点：${problems.slice(0, 5).join('；')}`);
 }
 
 if (failures.length) {

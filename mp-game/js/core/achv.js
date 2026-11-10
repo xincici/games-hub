@@ -329,6 +329,24 @@ function helpCount() {
   return Object.keys(load().help).length;
 }
 
+// 这个游戏的帮助弹窗看过没有（帮助 FAB 上的小红点就靠它）
+// 老玩家用各游戏自己的「帮助已看过」存档补齐，不要在新版本上突然冒一堆红点。
+const LEGACY_HELP = {
+  quesheng: '__quesheng__help_showed',
+  legend: '__mahjong_legend__help_showed',
+};
+
+function seenHelp(id) {
+  if (!id || id === 'home') return true;
+  if (load().help[id]) return true;
+  const legacyKey = LEGACY_HELP[id];
+  if (legacyKey) {
+    const v = getRaw(legacyKey, '');
+    if (v === '1' || v === 'true') return true;
+  }
+  return false;
+}
+
 // 游戏时长：App 每帧累加，攒够 3 秒或切场景时落盘（别每帧写存储）
 let pendingMs = 0;
 
@@ -1197,6 +1215,7 @@ module.exports = {
   legacyWins,
   totalWins,
   markHelp,
+  seenHelp,
   helpCount,
   addPlayMs,
   flushTime,

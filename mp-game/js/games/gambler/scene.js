@@ -58,7 +58,7 @@ const SHAKE_MS = 620;           // 点错那张牌的一次性抖动 / 标红窗
 const SUBMIT_LOCK_MS = 520;     // 错误提交后 0.52s 内拒绝再次提交（web 同款）
 const RESULT_DELAY_MS = 500;    // 扣完心 → 抖动播完再收尾（web 的 resultDelay）
 const CONFETTI_MS = 1300;
-const FAB_SIZE = 44;
+const FAB_SIZE = fabKit.SIZE;   // 统一尺寸（和帮助/静音/分享一致）
 const ANSWER_ROWS = 2;          // 答案区可见两行，再多就内部滚动
 const ANSWER_GAP = 3;
 const GRID_GAP = 3;
@@ -1181,6 +1181,7 @@ class GamblerScene extends Scene {
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
     D.circle(c, x + size / 2, y + size / 2, size / 2, T.card);
+    fabKit.stroke(c, x + size / 2, y + size / 2, size / 2, fabKit.borderOf(name === 'help' ? 'help' : 'mode'));
     c.restore();
     c.save();
     c.globalAlpha = enabled ? 1 : 0.35;

@@ -247,8 +247,8 @@ class MasterScene extends Scene {
     this.trayY = this.boardY + this.boardSize + 12;
     this.trayW = Math.min(this.cw, 7 * 44 + 6 * 6 + 16);
     this.trayX = (W - this.trayW) / 2;
-    this.fabSize = 40;
-    this.helpFab = { x: W - 16 - 40, y: H - SAFE_BOTTOM - 16 - 40, w: 40, h: 40 };
+    this.fabSize = fabKit.SIZE;
+    this.helpFab = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
   }
   render(c) {
     this.buttons = [];
@@ -433,6 +433,7 @@ class MasterScene extends Scene {
     const drawOne = (rect, key, fallback, color, onTap, id) => {
       c.save(); c.shadowColor = 'rgba(0,0,0,0.12)'; c.shadowBlur = 10; c.shadowOffsetY = 2;
       D.circle(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, T.card); c.restore();
+      fabKit.stroke(c, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, fabKit.borderOf(key === 'help' ? 'help' : 'mode'));
       if (!icons.draw(c, key, rect.x + rect.w / 2, rect.y + rect.h / 2, 20, color)) D.text(c, fallback, rect.x + rect.w / 2, rect.y + rect.h / 2, { size: 18, color, align: 'center' });
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
