@@ -5,6 +5,7 @@
 //   2. 每个游戏自己的静音 `__games_hub__mute__<sceneId>`（游戏内帮助按钮旁边的静音 FAB）。
 //      全局音效关掉时静音 FAB 不展示，但仍保留各自的选择。
 const { getRaw, setRaw } = require('./storage');
+const haptics = require('./haptics');
 
 const MUTE_PREFIX = '__games_hub__mute__';
 let gameId = null;          // 当前场景 id（App.setSceneId 同步），为空时只受全局开关控制
@@ -105,17 +106,30 @@ module.exports = {
   muted,
   gameMuted,
   toggleMute,
-  playSuccess: () => play('success'),
+  // 音效的「语义点」同时就是震动的语义点（震动有自己的开关，不受音效静音影响）
+  playSuccess: () => {
+    play('success');
+    haptics.success();
+  },
   // 失败计数（隐藏成就「锲而不舍」）：由 App 注入，避免 audio 直接依赖成就模块
   playLose: () => {
     if (loseHook) loseHook();
     play('lose');
+    haptics.fail();
   },
-  playFail: () => play('fail'),
-  playFirework: () => { lastFireworkAt = Date.now(); play('firework'); },
+  playFail: () => {
+    play('fail');
+    haptics.fail();
+  },
+  playFirework: () => {
+    lastFireworkAt = Date.now();
+    play('firework');
+    haptics.heavy();
+  },
   playElimination: () => {
     if (Date.now() - lastFireworkAt < ELIM_REPLACE_MS) return;
     play('elimination');
+    haptics.tap();
   },
   setEnabled,
   setLoseHook,

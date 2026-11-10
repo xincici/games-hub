@@ -2,6 +2,7 @@
 // 玩法与视觉基准是 web `src/games/solo/SoloGame.vue`；纯逻辑在 ./board.js，文案在 ./i18n.js。
 // 存档 key 与 web / 小程序完全一致：__solo__state / __solo__streak / __solo__best_streak。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -676,7 +677,7 @@ class SoloScene extends Scene {
     const win = this.phase === WON;
     const top = this.wallY;
     const height = this.handBottom - top;
-    D.fillRoundRect(c, this.cx, top, this.cw, height, 14, T.overlay);
+    share.resultPanel(c, this, top, height);
     const cy = top + height / 2;
     D.text(c, (win ? '🎉 ' : '🀄 ') + t(win ? 'solo.win' : 'solo.lose'), W / 2, cy - 38, {
       size: 20, weight: 'bold', color: win ? T.win : T.lose, align: 'center',

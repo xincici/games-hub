@@ -1,4 +1,5 @@
 const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -405,7 +406,7 @@ class MasterScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, T.overlay);
+    share.resultPanel(c, this, this.boardY, this.boardSize);
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     if (this.phase === 'won') {
       D.text(c, `🎉🎉 ${t('master.tipWin')} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });

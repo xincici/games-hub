@@ -1,4 +1,5 @@
 const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const HEADER = require('../../core/header');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
@@ -494,7 +495,7 @@ class ClickScene extends Scene {
     if (!this.resultVisible(250, 'click:' + this.logic.result)) return;
     if (this.logic.result >= WIN) {
       c.fillStyle = T.overlay;
-      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 8, T.overlay);
+      share.resultPanel(c, this, this.boardY, this.boardH, { radius: 8, color: T.overlay });
       D.text(c, `🎉🎉 ${t('click.tipWin')} 🎉🎉`, W / 2, this.boardY + this.boardH / 2 - 8, {
         size: 18, weight: 'bold', color: T.win, align: 'center',
       });
@@ -504,7 +505,7 @@ class ClickScene extends Scene {
         });
       }
     } else if (this.logic.result === LOSE) {
-      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 8, T.overlay);
+      share.resultPanel(c, this, this.boardY, this.boardH, { radius: 8, color: T.overlay });
       D.text(c, `👻👻 ${t('click.tipLost')} 👻👻`, W / 2, this.boardY + this.boardH / 2, {
         size: 18, weight: 'bold', color: T.lose, align: 'center',
       });

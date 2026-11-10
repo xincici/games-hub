@@ -1,4 +1,5 @@
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -339,7 +340,7 @@ class SnakeScene extends Scene {
       this.addButton('resume-board', x0, y0, this.boardSize, this.boardSize, () => this.togglePause());
     }
     if (this.phase === LOSE && this.resultVisible()) {
-      D.fillRoundRect(c, x0, y0, this.boardSize, this.boardSize, 14, T.overlay);
+      share.resultPanel(c, this, y0, this.boardSize);
       const cy = y0 + this.boardSize / 2;
       D.text(c, `👻👻 ${t('snake.tipLost')} 👻👻`, W / 2, cy - 28, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
       if (this.newBest) D.text(c, t('snake.newBest'), W / 2, cy + 2, { size: 13, color: T.muted, align: 'center' });

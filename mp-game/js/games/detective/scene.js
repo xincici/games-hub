@@ -9,6 +9,7 @@ const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
+const share = require('../../core/share');
 const { drawTimer } = require('../../core/timer');
 const { wrongShake, popScale } = require('../../core/fx');
 const i18nDict = require('./i18n');
@@ -333,10 +334,12 @@ class DetectiveScene extends Scene {
         if (this.hearts <= 0) {
           this.phase = LOST;
           this.stampAt = 0;          // 动画已放完，LOST 态静态保留章（重进不重播）
+          this.shareLine = `${t('detective.levelLabel')} ${this.level + 1}`;
           this.app.audio.playLose();
           this.saveState();
         } else if (this.right >= 0) {
           this.phase = WON;
+          this.shareLine = `${t('detective.levelLabel')} ${this.level + 1}`;
           this.best = Math.max(this.best, this.level + 1);
           achv.win('detective', { mode: this.mode, level: this.level + 1 });
           setRaw(bestKey(this.mode), String(this.best));
@@ -574,27 +577,45 @@ class DetectiveScene extends Scene {
     }
     if (this.phase === WON || this.phase === LOST) this.drawResult(c);
   }
-  drawResult(c) {
-    // 失败遮罩的延时已经在 settleAt 里算过（盖章动画 + 300ms），这里不再叠一层 200ms 通用门槛
-    if (this.phase !== LOST && !this.resultVisible()) return;
-    const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
-    const cx = W / 2;
-    const cy = this.boardY + this.boardH / 2;
-    if (this.phase === WON) {
-      D.text(c, `🎉🎉 ${t('detective.tipWin')} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });
-      const labels = [t('detective.replayLevel'), t('detective.nextLevel')];
-      const gap = 10;
-      const bw = 100;
-      const bx = cx - (bw * 2 + gap) / 2;
-      this.button(c, bx, cy + 18, bw, 32, labels[0], 'outline', () => this.retryLevel());
-      this.button(c, bx + bw + gap, cy + 18, bw, 32, labels[1], 'primary', () => this.nextLevel());
-    } else {
-      D.text(c, `👻👻 ${t('detective.tipLost')} 👻👻`, cx, cy - 18, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
-      this.button(c, cx - 55, cy + 20, 110, 32, t('detective.replayLevel'), 'outline', () => this.retryLevel());
+    // 结算面板：**宽度和上面那张卡片一致**（不是只有棋盘那么宽 —— 第 1、2 关棋盘很窄，
+    // 以前遮罩只有小小一块）。高度取「棋盘高度」和内容所需高度里的大者，垂直居中于棋盘。
+    resultRect() {
+      const w = this.cw;
+      const needH = 196;
+      // 从棋盘顶开始，只往下长：往上会盖住上面的选项卡（那里还有「新游戏」按钮）
+      const bottom = H - SAFE_BOTTOM - 16 - 48 - 8;   // 让开底部 FAB 那一行
+      const room = Math.max(150, bottom - this.boardY);
+      const h = Math.min(Math.max(this.boardH, needH), room);
+      return { x: this.cx, y: this.boardY, w, h };
     }
-    this.lock = true;
-  }
+
+    drawResult(c) {
+      // 失败遮罩的延时已经在 settleAt 里算过（盖章动画 + 300ms），这里不再叠一层 200ms 通用门槛
+      if (this.phase !== LOST && !this.resultVisible()) return;
+      const T = theme.tokens;
+      const r = this.resultRect();
+      // 面板：整宽遮罩 + 细描边，看起来是一张「结算卡」，不再像棋盘上的一块补丁
+      D.fillRoundRect(c, r.x, r.y, r.w, r.h, 16, T.overlay);
+      D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 16, T.border, 1);
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      if (this.phase === WON) {
+        D.text(c, `🎉🎉 ${t('detective.tipWin')} 🎉🎉`, cx, cy - 26, { size: 18, weight: 'bold', color: T.win, align: 'center' });
+        const labels = [t('detective.replayLevel'), t('detective.nextLevel')];
+        const gap = 10;
+        const bw = 100;
+        const bx = cx - (bw * 2 + gap) / 2;
+        this.button(c, bx, cy + 16, bw, 32, labels[0], 'outline', () => this.retryLevel());
+        this.button(c, bx + bw + gap, cy + 16, bw, 32, labels[1], 'primary', () => this.nextLevel());
+      } else {
+        D.text(c, `👻👻 ${t('detective.tipLost')} 👻👻`, cx, cy - 20, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
+        this.button(c, cx - 55, cy + 18, 110, 32, t('detective.replayLevel'), 'outline', () => this.retryLevel());
+      }
+      // 分享入口：结算面板自己的右上角（屏幕右上角被微信胶囊盖着，不能放那儿）
+      share.drawResultChip(c, this, { x: r.x + r.w - 10 - 96, y: r.y + 10, w: 96, h: 28 },
+        { filled: true, label: t('app.shareCta') });
+      this.lock = true;
+    }
   button(c, x, y, w, h, label, kind, onTap) {
     const T = theme.tokens;
     if (kind === 'primary') {

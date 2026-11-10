@@ -4,6 +4,9 @@
 const { t } = require('./i18n');
 const homeI18n = require('../games/home/i18n');
 const i18nCore = require('./i18n');
+const theme = require('./theme');
+const D = require('./draw');
+const { W, H, SAFE_TOP } = require('./canvas');
 
 if (!i18nCore.__shareHomeRegistered) {
   i18nCore.register('home', homeI18n);
@@ -63,22 +66,471 @@ function syncMenu(sceneId) {
   wx.showShareMenu({ withShareTicket: false, menus });
   if (wx.__gamesShareRegistered) return;
   wx.__gamesShareRegistered = true;
-  wx.onShareAppMessage(() => ({
-    title: titleFor(latestSceneId),
-    query: latestSceneId === 'home' ? '' : `game=${latestSceneId}`,
-  }));
-  if (timelineSupported()) {
-    wx.onShareTimeline(() => ({
+  // 菜单分享也带上结算海报（否则分享卡片是微信默认截图，和预览里的图对不上）
+  const menuPayload = () => {
+    const out = {
       title: titleFor(latestSceneId),
       query: latestSceneId === 'home' ? '' : `game=${latestSceneId}`,
-    }));
+    };
+    const id = normalizeGameId(latestSceneId);
+    if (poster && poster.path && poster.gameId === id) out.imageUrl = poster.path;
+    return out;
+  };
+  wx.onShareAppMessage(menuPayload);
+  if (timelineSupported()) wx.onShareTimeline(menuPayload);
+}
+
+// ---------- 结算分享（5:4 海报 + 预览 + 入口） ----------
+// 结果态：各游戏的 phase 都是这些字符串之一；1A2B / 贪吃蛇用数字 result（1 输 / 2 赢）
+const RESULT_PHASES = ['won', 'over', 'lost', 'lose', 'win', 'draw', 'finished'];
+const POSTER_W = 600;
+const POSTER_H = 480;
+
+let poster = null;          // { gameId, line, title, canvas, path }
+let posterBuilding = false;
+let preview = null;         // { gameId, at }：预览弹窗开着的时候
+let captureFn = null;       // 由 App 注入：把当前场景画进海报
+const CHIP = { w: 96, h: 26 };
+// 「炫耀一下」专属的胭脂红（比主色更醒目，也不至于像警告色）
+const ROSE = '#962832';
+
+function latestGameId() {
+  return normalizeGameId(latestSceneId);
+}
+
+function gameTitleOf(gameId) {
+  return gameId ? t(`home.${gameId}Title`) : t('app.shareHomeTitle');
+}
+
+// 分享标题就用这款游戏的名字（再带上这局的成绩），不要用合集的统称
+function resultTitle(gameId, line) {
+  const name = gameTitleOf(gameId);
+  return line ? `${name} · ${line}` : name;
+}
+
+function setCapture(fn) {
+  captureFn = typeof fn === 'function' ? fn : null;
+}
+
+function isResultScene(scene, gameId) {
+  if (!scene) return false;
+  const phase = scene.phase;
+  if (typeof phase === 'string' && RESULT_PHASES.indexOf(phase) >= 0) return true;
+  const result = scene.result;
+  if (typeof result === 'string' && RESULT_PHASES.indexOf(result) >= 0) return true;
+  if ((result === 1 || result === 2) && normalizeGameId(gameId || latestSceneId)) return true;
+  return false;
+}
+
+// 从场景里挑一句「这局怎么样」，没有就退回通用文案
+function resultLine(scene) {
+  if (!scene) return t('app.shareResultLine');
+  if (typeof scene.shareLine === 'string' && scene.shareLine) return scene.shareLine;
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const score = num(scene.score) != null ? num(scene.score)
+    : (num(scene.points) != null ? num(scene.points) : num(scene.cash));
+  const level = num(scene.level);
+  if (score != null && score > 0) return t('app.shareLineScore').replace('{n}', String(Math.round(score)));
+  if (level != null) return t('app.shareLineLevel').replace('{n}', String(level + 1));
+  const moves = num(scene.moves) != null ? num(scene.moves) : num(scene.clicks);
+  if (moves != null) return t('app.shareLineMoves').replace('{n}', String(moves));
+  const streak = num(scene.streak);
+  if (streak != null && streak > 1) return t('app.shareLineStreak').replace('{n}', String(streak));
+  return t('app.shareResultLine');
+}
+
+// 什么时候显示入口：结算态、且没有被帮助 / 二次确认面板挡住
+function shouldShowChip(scene, gameId) {
+  if (!scene) return false;
+  if (scene.helpOpen || scene.confirming) return false;
+  return isResultScene(scene, gameId);
+}
+
+// 兜底位置：右上角、但要让开微信胶囊（大约 SAFE_TOP+2 ~ +34），所以压在 +44
+function chipRect() {
+  return { x: W - 16 - CHIP.w, y: SAFE_TOP + 44, w: CHIP.w, h: CHIP.h };
+}
+
+// 分享图标（图标字体里没有 share）：一个「从盒子里往上的箭头」
+function drawShareIcon(c, cx, cy, size, color) {
+  const h = size * 0.5;
+  c.save();
+  c.strokeStyle = color;
+  c.lineWidth = Math.max(1.2, size * 0.1);
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.beginPath();
+  c.moveTo(cx - h, cy - h * 0.18);
+  c.lineTo(cx - h, cy + h);
+  c.lineTo(cx + h, cy + h);
+  c.lineTo(cx + h, cy - h * 0.18);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(cx, cy + h * 0.42);
+  c.lineTo(cx, cy - h * 1.05);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(cx - h * 0.52, cy - h * 0.52);
+  c.lineTo(cx, cy - h * 1.05);
+  c.lineTo(cx + h * 0.52, cy - h * 0.52);
+  c.stroke();
+  c.restore();
+}
+
+// 把海报画布导出成本地图片。
+// ⚠️ 小游戏里 **没有** `wx.canvasToTempFilePath`（那是小程序的页面 canvas API），
+// 官方文档给的做法是在 Canvas 上调用 `toTempFilePathSync()` / `toTempFilePath()`。
+// 用错 API 的结果就是：预览里画布是对的，但 shareAppMessage 拿不到 imageUrl，
+// 分享卡片退回微信默认图（看起来「还是旧图」）。
+function exportPoster(cv, payload) {
+  const opts = {
+    x: 0, y: 0,
+    width: POSTER_W, height: POSTER_H,
+    destWidth: POSTER_W, destHeight: POSTER_H,
+    fileType: 'jpg',       // 5:4 的游戏画面用 jpg 体积小很多，卡片加载更快
+    quality: 0.92,
+  };
+  // 1) 官方推荐：Canvas 上的同步方法，直接拿到路径
+  if (typeof cv.toTempFilePathSync === 'function') {
+    try {
+      const path = cv.toTempFilePathSync(opts);
+      if (path) { payload.path = path; payload.exported = 'sync'; return; }
+    } catch (e) {
+      payload.exportError = e;
+    }
   }
+  // 2) Canvas 上的异步方法
+  if (typeof cv.toTempFilePath === 'function') {
+    payload.exported = 'async';
+    try {
+      cv.toTempFilePath(Object.assign({}, opts, {
+        success: (res) => { payload.path = (res && res.tempFilePath) || null; },
+        fail: (err) => { payload.path = null; payload.exportError = err; },
+      }));
+      return;
+    } catch (e) {
+      payload.exportError = e;
+    }
+  }
+  // 3) 兜底：部分基础库 / 开发者工具里才有 wx.canvasToTempFilePath
+  if (typeof wx !== 'undefined' && typeof wx.canvasToTempFilePath === 'function') {
+    payload.exported = 'wx';
+    try {
+      wx.canvasToTempFilePath(Object.assign({ canvas: cv }, opts, {
+        success: (res) => { payload.path = (res && res.tempFilePath) || null; },
+        fail: (err) => { payload.path = null; payload.exportError = err; },
+      }));
+      return;
+    } catch (e) {
+      payload.exportError = e;
+    }
+  }
+  payload.exported = 'none';
+  if (!payload.exportError) payload.exportError = new Error('no canvas export api');
+}
+
+// 海报：整屏截图 **contain 居中完整显示**，背景用和页面同色系的底色 + 柔光（不用游戏画面铺底），
+// 文字放在左右两侧的留白里。这样主体内容不被裁掉、又是 5:4。
+function buildPoster(scene, gameId) {
+  const line = resultLine(scene);
+  if (poster && poster.gameId === gameId && poster.line === line && poster.dark === !!theme.dark) return poster;
+  if (posterBuilding) return poster;
+  if (typeof wx === 'undefined' || !wx.createCanvas) return null;
+  posterBuilding = true;
+  try {
+    const cv = wx.createCanvas();
+    if (!cv) { posterBuilding = false; return null; }
+    cv.width = POSTER_W;
+    cv.height = POSTER_H;
+    const c = cv.getContext('2d');
+    // 1) 背景：和页面同色系的底色 + 一团柔光（**不再拿游戏画面当背景**，避免与中间的截图重复）
+    const dark = !!theme.dark;
+    const grad = c.createLinearGradient(0, 0, POSTER_W, POSTER_H);
+    if (dark) {
+      grad.addColorStop(0, '#18211e');
+      grad.addColorStop(0.55, '#131a18');
+      grad.addColorStop(1, '#0e1413');
+    } else {
+      grad.addColorStop(0, '#fbf8ef');
+      grad.addColorStop(0.55, '#f1ecdd');
+      grad.addColorStop(1, '#e4ddc9');
+    }
+    c.fillStyle = grad;
+    c.fillRect(0, 0, POSTER_W, POSTER_H);
+    // 中间一团柔光，把视线引到截图
+    const glow = c.createRadialGradient(POSTER_W / 2, POSTER_H / 2, 20, POSTER_W / 2, POSTER_H / 2, POSTER_W * 0.62);
+    glow.addColorStop(0, dark ? 'rgba(84,170,126,0.20)' : 'rgba(58,150,104,0.16)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = glow;
+    c.fillRect(0, 0, POSTER_W, POSTER_H);
+    const canCapture = typeof captureFn === 'function';
+
+      // 3) 前景：整屏 contain，**水平垂直都居中**；文字放在左右两侧的留白里（对称，不压图片）
+      const top = 20;
+      const fgH = POSTER_H - top * 2;
+      const ratio = W / H;
+      let fgW = fgH * ratio;
+      let fg = null;
+      if (canCapture) {
+        if (fgW > POSTER_W * 0.56) fgW = POSTER_W * 0.56;   // 两侧至少各留 ~22% 放文字
+        fg = { x: (POSTER_W - fgW) / 2, y: top + (fgH - (fgW / ratio)) / 2, w: fgW, h: fgW / ratio };
+      }
+      if (fg) {
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.45)';
+        c.shadowBlur = 18;
+        c.shadowOffsetY = 6;
+        D.fillRoundRect(c, fg.x, fg.y, fg.w, fg.h, 16, 'rgba(0,0,0,0.24)');
+        c.restore();
+        c.save();
+        D.roundRect(c, fg.x, fg.y, fg.w, fg.h, 16);
+        c.clip();
+        try { captureFn(c, fg.x, fg.y, fg.w, fg.h); } catch (e) { /* 画不出来就留底色 */ }
+        c.restore();
+        D.strokeRoundRect(c, fg.x, fg.y, fg.w, fg.h, 16, dark ? 'rgba(255,255,255,0.26)' : 'rgba(0,0,0,0.16)', 1.5);
+      }
+      // 4) 两侧文字：左边「标签 + 来挑战」，右边「游戏名 + 大字成绩」
+      const marginW = (fg ? fg.x - 20 : 24);
+      const gameTitle = gameTitleOf(gameId);
+      const tag = t('app.sharePosterTag');
+      const tagW = Math.min(marginW, D.measure(c, tag, 12) + 26);
+      D.fillRoundRect(c, 20, top + 8, tagW, 26, 13, dark ? 'rgba(84,170,126,0.28)' : 'rgba(35,128,78,0.14)');
+      D.text(c, tag, 20 + tagW / 2, top + 21,
+        { size: 12, weight: 'bold', color: dark ? '#bfe6d0' : '#23804e', align: 'center' });
+      const subColor = dark ? 'rgba(255,255,255,0.6)' : 'rgba(44,62,80,0.62)';
+      const subLines = [t('app.sharePosterSubLead'), t('app.sharePosterSubTail')];
+      subLines.forEach((s, i) => {
+        D.text(c, s, 20, POSTER_H - top - 26 + i * 20, { size: 12, color: subColor });
+      });
+      const rx = (fg ? fg.x + fg.w + 20 : 40);
+      const rw = Math.max(80, POSTER_W - rx - 20);
+      let nameSize = 22;
+      while (nameSize > 13 && D.measure(c, gameTitle, nameSize, 'bold') > rw) nameSize -= 1;
+      D.text(c, gameTitle, rx, top + 34,
+        { size: nameSize, weight: 'bold', color: dark ? '#ffffff' : '#1f2a24' });
+      let lineSize = 28;
+      while (lineSize > 15 && D.measure(c, line, lineSize, 'bold') > rw) lineSize -= 1;
+      D.text(c, line, rx, top + 74,
+        { size: lineSize, weight: 'bold', color: dark ? '#ff9aa8' : ROSE });
+
+    const payload = {
+      gameId, line, dark, title: resultTitle(gameId, line), canvas: cv,
+      path: null, exported: null, exportError: null,
+    };
+    poster = payload;
+    exportPoster(cv, payload);
+    if (!payload.path && typeof console !== 'undefined' && console.warn) {
+      console.warn('[share] 海报导出失败：', payload.exported, payload.exportError && payload.exportError.message);
+    }
+    posterBuilding = false;
+    return poster;
+  } catch (e) {
+    posterBuilding = false;
+    return null;
+  }
+}
+
+// 点「炫耀一下」→ 先开预览（图片 + 取消 / 去分享），玩家点「去分享」才真的分享
+function openPreview(scene, gameId) {
+  const id = gameId || latestGameId();
+  buildPoster(scene, id);
+  preview = { gameId: id, at: Date.now() };
+  return true;
+}
+
+// 海报导出状态（冒烟 / 真机排查用）
+function posterInfo() {
+  if (!poster) return null;
+  return {
+    gameId: poster.gameId,
+    line: poster.line,
+    dark: poster.dark,
+    exported: poster.exported,
+    hasPath: !!poster.path,
+    error: poster.exportError ? String(poster.exportError && poster.exportError.message || poster.exportError) : null,
+  };
+}
+
+function previewOpen() {
+  return !!preview;
+}
+
+function closePreview() {
+  preview = null;
+}
+
+// 发送：此时是「去分享」的点击回调，属于用户手势，微信允许
+function sendResult() {
+  if (typeof wx === 'undefined' || !wx.shareAppMessage) { closePreview(); return false; }
+  const gameId = (poster && poster.gameId) || latestGameId();
+  const opts = {
+    title: poster ? poster.title : resultTitle(gameId, ''),
+    query: gameId ? `game=${gameId}` : '',
+  };
+  if (poster && poster.path) opts.imageUrl = poster.path;
+  try {
+    wx.shareAppMessage(opts);
+    closePreview();
+    return true;
+  } catch (e) {
+    closePreview();
+    return false;
+  }
+}
+
+const PV = {
+  padTop: 18,      // 卡片顶 → 标题（底部留白与之相同）
+  titleH: 18,
+  titleGap: 8,     // 标题 → 图片
+  btnGap: 16,      // 图片 → 按钮
+  btnH: 42,        // 按钮高度（34 太矮，不好点）
+  btnSplit: 0.25,  // 取消 : 去分享 = 1 : 3
+  gap: 12,
+};
+
+function previewRect() {
+  const w = Math.min(W - 48, 336);
+  const h = Math.round(w * (POSTER_H / POSTER_W));
+  const imgY = PV.padTop + PV.titleH + PV.titleGap;
+  const cardH = imgY + h + PV.btnGap + PV.btnH + PV.padTop;
+  const x = (W - w) / 2;
+  const y = Math.max(SAFE_TOP + 18, (H - cardH) / 2);
+  return { x, y, w, h, cardH, imgY, btnY: imgY + h + PV.btnGap };
+}
+
+// 预览弹窗：海报图 + 「取消 / 去分享」
+function drawPreview(c, scene) {
+  const T = theme.tokens;
+  const r = previewRect();
+  const cardX = r.x - 12;
+  const cardY = r.y;
+  const cardW = r.w + 24;
+  // 全屏遮罩（点空白关闭）
+  c.save();
+  c.fillStyle = 'rgba(0,0,0,0.55)';
+  c.fillRect(0, 0, W, H);
+  c.restore();
+  // 卡片
+  D.fillRoundRect(c, cardX, cardY, cardW, r.cardH, 18, theme.dark ? '#2f2f31' : '#ffffff');
+  const title = (poster && poster.title) || gameTitleOf(preview && preview.gameId);
+  D.text(c, title, cardX + cardW / 2, cardY + PV.padTop + PV.titleH / 2,
+    { size: 14, weight: 'bold', color: T.text, align: 'center' });
+  // 图片
+  const imgY = cardY + r.imgY;
+  if (poster && poster.canvas) {
+    try {
+      c.drawImage(poster.canvas, r.x, imgY, r.w, r.h);
+    } catch (e) {
+      D.fillRoundRect(c, r.x, imgY, r.w, r.h, 10, T.bg);
+      D.text(c, t('app.sharePreviewFail'), r.x + r.w / 2, imgY + r.h / 2,
+        { size: 12, color: T.muted, align: 'center' });
+    }
+  } else {
+    D.fillRoundRect(c, r.x, imgY, r.w, r.h, 10, T.bg);
+    D.text(c, t('app.sharePreviewBuilding'), r.x + r.w / 2, imgY + r.h / 2,
+      { size: 12, color: T.muted, align: 'center' });
+  }
+  // 按钮行：取消 : 去分享 = 1 : 3
+  const by = cardY + r.btnY;
+  const bh = PV.btnH;
+  const cancelW = Math.round((r.w - PV.gap) * PV.btnSplit);
+  const goW = r.w - PV.gap - cancelW;
+  const goX = r.x + cancelW + PV.gap;
+  const waited = Date.now() - ((preview && preview.at) || 0);
+  const ready = !!(poster && poster.path);
+  const failed = !!(poster && !poster.path && poster.exportError);
+  const canShare = ready || failed || waited > 2500;
+  D.fillRoundRect(c, r.x, by, cancelW, bh, 11, T.bg);
+  D.strokeRoundRect(c, r.x, by, cancelW, bh, 11, T.border, 1);
+  D.text(c, t('app.shareCancel'), r.x + cancelW / 2, by + bh / 2,
+    { size: 14, weight: 'bold', color: T.text, align: 'center' });
+  D.fillRoundRect(c, goX, by, goW, bh, 11, canShare ? ROSE : T.border);
+  D.text(c, t('app.shareGo'), goX + goW / 2, by + bh / 2,
+    { size: 14, weight: 'bold', color: canShare ? '#ffffff' : T.muted, align: 'center' });
+  if (!ready) {
+    D.text(c, failed || canShare ? t('app.sharePreviewFail') : t('app.sharePreviewBuilding'),
+      r.x + r.w / 2, by - 10, { size: 11, color: T.muted, align: 'center' });
+  }
+  // 命中区（最后注册，压住场景自己的按钮）
+  if (!scene || typeof scene.addButton !== 'function') return;
+  scene.addButton('share-mask', 0, 0, W, H, () => closePreview());
+  scene.addButton('share-cancel', r.x, by, cancelW, bh, () => closePreview());
+  if (canShare) scene.addButton('share-go', goX, by, goW, bh, () => sendResult());
+}
+
+
+// 结算面板：**宽度跟游戏卡片一致**的遮罩 + 右上角分享入口。
+// 场景只要把原来那块「棋盘大小」的遮罩换成它，内容照旧按 cx / cy 居中画即可。
+function resultPanel(c, scene, top, height, opts) {
+  const o = opts || {};
+  const panelW = (typeof scene.cw === 'number' && scene.cw > 0) ? scene.cw : Math.min(W - 32, 440);
+  const x = (W - panelW) / 2;
+  const radius = o.radius != null ? o.radius : 14;
+  const h = Math.max(height, o.minH || 0);
+  D.fillRoundRect(c, x, top, panelW, h, radius, o.color || theme.tokens.overlay);
+  if (o.stroke) D.strokeRoundRect(c, x, top, panelW, h, radius, theme.tokens.border, 1);
+  const rect = { x, y: top, w: panelW, h };
+  if (o.share !== false) {
+    drawResultChip(c, scene, { x: x + panelW - 10 - 96, y: top + 10, w: 96, h: 28 },
+      { filled: true, label: t('app.shareCta') });
+  }
+  return rect;
+}
+
+// 画「分享」入口：默认落在兜底位置（胶囊下方）；结算遮罩自己做样式的游戏传 rect 进来，
+// 就画在它自己的右上角（filled = 主色实心，压在遮罩上更醒目）。
+function drawResultChip(c, scene, rect, opts) {
+  const T = theme.tokens;
+  const o = opts || {};
+  const r = rect || chipRect();
+  const filled = !!o.filled;
+  const label = o.label != null ? o.label : t('app.shareResultCta');
+  if (filled) {
+    D.fillRoundRect(c, r.x, r.y, r.w, r.h, r.h / 2, ROSE);
+  } else {
+    c.save();
+    c.globalAlpha = 0.95;
+    c.shadowColor = 'rgba(0,0,0,0.25)';
+    c.shadowBlur = 10;
+    c.shadowOffsetY = 2;
+    D.fillRoundRect(c, r.x, r.y, r.w, r.h, r.h / 2, theme.dark ? 'rgba(38,38,38,0.72)' : 'rgba(255,255,255,0.92)');
+    c.restore();
+    D.strokeRoundRect(c, r.x, r.y, r.w, r.h, r.h / 2, ROSE, 1.4);
+  }
+  const fg = filled ? '#ffffff' : (theme.dark ? '#ffffff' : ROSE);
+  const iconSize = Math.min(15, r.h - 8);
+  const textW = D.measure(c, label, 11.5, 'bold');
+  const groupW = iconSize + 5 + textW;
+  const gx = r.x + (r.w - groupW) / 2;
+  drawShareIcon(c, gx + iconSize / 2, r.y + r.h / 2, iconSize, fg);
+  D.text(c, label, gx + iconSize + 5, r.y + r.h / 2, { size: 11.5, weight: 'bold', color: fg });
+  if (!scene.buttons.some((b) => b.id === 'share-result')) {
+    const gameId = normalizeGameId(latestSceneId);
+    scene.addButton('share-result', r.x, r.y, r.w, r.h, () => openPreview(scene, gameId));
+  }
+  return { icon: true, label, rect: r };
 }
 
 module.exports = {
   GAME_IDS,
   getQueryGame,
   normalizeGameId,
+  isResultScene,
+  shouldShowChip,
+  buildPoster,
+    setCapture,
+    openPreview,
+    previewOpen,
+    closePreview,
+    drawPreview,
+    previewRect,
+    resultPanel,
+    posterInfo,
+    rose: ROSE,
+  sendResult,
+  drawResultChip,
+  drawShareIcon,
+  chipRect,
   timelineSupported,
   titleFor,
   syncMenu,

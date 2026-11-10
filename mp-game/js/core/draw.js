@@ -135,7 +135,18 @@ function wrapText(c, value, maxWidth, size, weight) {
   return lines;
 }
 
+// 结算数字滚动：从 0 滚到最终值（at = 结算出现时刻，dur 毫秒）
+// 各游戏结算遮罩用 resultVisible() 的 _resultGateAt 当起点即可，一行接入。
+function countUp(value, at, dur) {
+  const v = Number(value) || 0;
+  if (!at || !(dur > 0)) return v;
+  const t = Math.min(1, Math.max(0, (Date.now() - at) / dur));
+  const e = 1 - Math.pow(1 - t, 2.2);
+  return Math.round(v * e);
+}
+
 module.exports = {
+  countUp,
   hintLine,
   divider,
   progressBar,

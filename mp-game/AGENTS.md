@@ -464,6 +464,94 @@ game.js
   （375 是支持下限；320 宽时 24 点的操作键会铺到右下角，`drawMute` 会**自动隐藏**静音 FAB 而不是压住按键）
   （假 wx + canvas 渲染全部场景，检查渲染异常 / 静音 FAB 位置 / 重叠 / 静音是否真的拦住音效）。
 
+## 震动反馈（`core/haptics.js`）
+
+- **独立开关**：`__games_hub__haptic`（默认开），首页设置面板第二行；与音效开关**互不影响**
+  （音效静音时震动照旧；关震动不影响音效）。`haptics.enabled` / `setEnabled(on)`。
+- **语义点跟音效对齐**（因为音效调用本身就是「语义点」，见上面的音效接入点）：
+  `core/audio.js` 里 `playSuccess` → `haptics.success()`（medium）、`playFail` → `fail()`（medium, 90ms 窗口）、
+  `playLose` → `fail()`、`playFirework` → `heavy()`、`playElimination` → `tap()`（light）。
+  **不要**在 25 个场景里各写一遍震动；也别把震动塞进 `play()`，因为 `play()` 会被静音拦掉。
+- **节流 45ms**：连击 / 连消时不会一直震（`ELIM_REPLACE_MS` 的烟花替换规则也一并继承）。
+- `wx.vibrateShort({ type })` 在部分基础库不支持 `type`，包在 try/catch 里、返回 Promise 也 `catch` 掉；
+  震动失败绝不影响游戏。冒烟断言：三个语义点各震一次、音效关掉仍震、关开关后完全不震、连续两次只震一次、
+  设置面板里点开关真的改存档。
+
+## 结算分享（`core/share.js`）
+
+- **入口位置：25 个游戏全部画在结算面板自己的右上角**（`96×28`、**胭脂红 `#962832`**（`ROSE`）
+  实心 + 白色「炫耀一下」+ 图标）。实现统一走两个 helper：
+  - `share.resultPanel(c, scene, top, height, { radius, color, share })` —— **宽度自动等于游戏卡片宽**
+    （`scene.cw`，没有就 `min(W-32, 440)`），铺遮罩 + 右上角分享入口，**返回面板矩形**；
+    23 个游戏直接用它替换原来那块「棋盘大小」的遮罩（`match / link / hunter / master / sudoku / slide /
+    alchemy / mirror / down / snake / guess / g2048 / three / sort / point24 / solo / puzzle / crush /
+    mahjong / quesheng / legend / gambler / click`）。
+  - `share.drawResultChip(c, scene, rect, { filled: true, label: t('app.shareCta') })` —— 需要自定义面板时用：
+    侦探（`resultRect()` 自己算）、扑克（牌桌结果遮罩是 `clip + fillRect`，在遮罩上单独画一枚）。
+  - 场景注册了 `share-result` 之后，`App` **不再**画兜底那一枚（`hasOwn` 判断）。
+  - ⚠️ 面板**只加宽、不改高**：高度继续用各游戏原来的棋盘 / 牌桌范围，所以内容（标题、按钮、分数）
+    一行都不用挪；分享入口固定落在面板右上角，冒烟会断言它**不压住**面板里任何别的按钮。
+  **兜底**（万一某个场景没注册自己的入口）：`App` 画在右上角 `SAFE_TOP + 44`（96×26）——
+  注意**不能**放 `SAFE_TOP + 6`，那里被微信胶囊（关闭 / 更多）压住（踩过）。
+  冒烟断言：兜底矩形与 25 个场景的按钮**零重叠**（375/667、320/568、390/844 都验过）。
+  - **按钮图标**：图标字体里没有 `share`，`share.drawShareIcon()` 用 canvas 画「盒子 + 向上的箭头」，
+    和文字组合居中；`drawResultChip()` 返回 `{ icon, label, rect }`，冒烟据此断言画了图标。
+- **结果态判断** `share.shouldShowChip(scene, gameId)`：`scene.phase` 属于
+  `won / over / lost / lose / win / draw / finished`，或 `scene.result` 是这些字符串 / 1A2B 的 1|2；
+  帮助或二次确认面板打开时不显示。新增游戏只要沿用这些 phase 命名就自动有入口。
+- **海报 = 整屏截图（contain，居中）+ 主题底色背景 + 两侧文字**（**600×480**，5:4）：
+  `App` 通过 `share.setCapture()` 注入 `paintSceneForPoster(c, x, y, w, h, opts)`：
+  - **背景不用游戏画面**（踩过：拿同一张截图 cover 铺底，和中间的截图重复、看着像重影）——
+    改成和页面同色系的**渐变底 + 中间一团柔光**（亮 `#fbf8ef→#e4ddc9`、暗 `#18211e→#0e1413`）；
+  - 前景按 contain 画：整屏完整显示、**水平垂直都居中**，不裁切不拉伸；`opts.cover` 仍保留但不再使用。
+  渲染前临时把 `scene.drawResult` / `drawWin` 换成空函数，所以海报里**没有结算遮罩**、只有真实界面。
+  文字配色跟主题走（暗：白字 / 浅玫瑰成绩；亮：深字 / 胭脂红成绩；标签用主色绿系），
+  海报缓存键含 `theme.dark`，切主题会重画。
+  ⚠️ **截图必须居中**：贴在左边看起来像整张图偏了（踩过）。宽度上限 `POSTER_W * 0.56`，
+  两侧各留 ~22% 放文字：左边「游戏合集 · 25 款」标签 + 两行「来挑战 / 我的成绩」，
+  右边「游戏名 + 大字成绩」，文字放不下自动缩字号。左右留白必须相等（冒烟断言 ≤1px 偏差）。
+  拿不到截图（没有离屏画布 / render 抛错）时才退回纯渐变底。
+  ⚠️ 以前整屏按 cover 铺，**上下被裁掉一大截**（只剩分数区和按钮）—— 必须 contain 保留完整界面，
+  两侧用同一张画面压暗补底；这样 390×844 的屏幕在 600×480 里占约 203×440（≈31% 面积）。
+  ⚠️ **必须在结算出现时预生成**（`App` 每帧调，靠 gameId+文案去重），不能等点击时才生成。
+- **预览弹窗**（`openPreview()` / `drawPreview()`）：点入口**先弹预览**（半透明遮罩 + 弹窗卡：
+  5:4 海报图 + 标题 + **取消 / 去分享**），点「去分享」才调 `sendResult()`；
+  - 尺寸常量在 `PV` 里：**按钮高 42**（34 太矮不好点）、**取消 : 去分享 = 1 : 3**（`btnSplit = 0.25`，
+    「去分享」才是主操作，用胭脂红实心）、**卡片上下留白都是 18**（`padTop`，底部不再多空一截）。
+  点「取消」/ 点遮罩关闭，不分享。预览的命中区在 `scene.buttons` 里**最后注册**（全屏 `share-mask`
+  先注册、取消 / 去分享后注册），所以能压住场景自己的按钮、也不会被遮罩吞掉。
+  这样「去分享」是**直接的用户手势**，不依赖异步生成的时机。
+- **分享文案**：`resultLine()` 优先用 `scene.shareLine`（游戏自己写），否则按
+  `score → points → cash`（`本局 {n} 分`）、`level`（`第 {n} 关`）、`moves / clicks`（`{n} 步完成`）、
+  `streak`（`{n} 连胜`）依次兜底，模板都在 `app.shareLine*`（中英都有），所以 25 个游戏不用各写一遍。
+- **标题用游戏名**：`resultTitle(gameId, line)` = `游戏名 · 第 N 关 / 本局 N 分`
+  （例如「侦探 · 第 3 关」），**不用合集统称「蜂窝益智二十五」**；右上角菜单的分享标题也跟着当前场景走
+  （`App.setSceneId()` 里调 `share.syncMenu()`，以前只在 onShow / 切语言时同步，分享出去一直是首页标题）。
+- **海报导出（真机最容易错的一步）**：小游戏里 **没有 `wx.canvasToTempFilePath`**（那是小程序的页面 canvas API），
+  官方做法是在 Canvas 对象上调用 `toTempFilePathSync()` / `toTempFilePath()`：
+  ```js
+  const path = canvas.toTempFilePathSync({ destWidth, destHeight, fileType: 'jpg', quality: 0.92 });
+  ```
+  `exportPoster()` 的优先级：`cv.toTempFilePathSync` → `cv.toTempFilePath`（异步）→ `wx.canvasToTempFilePath`（兜底，
+  只有部分基础库/开发者工具有）。导出失败会打 `console.warn('[share] 海报导出失败：', 方式, 原因)`，
+  并把 `exported / exportError` 记在 `poster` 上（`share.posterInfo()` 可查）。
+  ⚠️ 用错 API 的症状非常迷惑：**预览里的画布是对的，分享出去却是微信默认图**（因为 `imageUrl` 一直是空的）。
+- **发送** `sendResult()`：`wx.shareAppMessage({ title, query: 'game=<id>', imageUrl })`。
+  ⚠️ **分享卡片图 = 这张海报**，所以有两条必须做对，否则真机上看到的是微信默认截图（"还是旧的那张"）：
+  1. 菜单分享（`syncMenu()` 注册的 `onShareAppMessage` / `onShareTimeline`）也要带 `imageUrl`
+     （`poster.path` 且 `poster.gameId` 与当前场景一致时才带）；
+  2. 预览里的「去分享」必须**等 `poster.path` 出来**才可点（灰色 + 「正在生成分享图…」）；
+     导出**明确失败**（`poster.exportError`）时改成「分享图生成失败，可直接分享标题」并允许只发标题，
+     只有「还在等」的情况才在 2.5s 后降级 —— 不允许悄悄用默认图冒充。
+  **不做「分享得奖励」**：微信判定诱导分享会封。
+
+## 结算数字滚动（`core/draw.js` 的 `countUp`）
+
+- `D.countUp(value, at, dur)`：从 0 滚到最终值（`1 - (1-t)^2.2` 收尾），`at` 传结算开始时刻。
+  结算遮罩里直接用基类的 `this._resultGateAt` 当起点（`resultVisible()` 每次返回同一个值，天然稳定）。
+- 已接：下坠 / 麻将传奇 / 2048（`D.countUp(this.score, this._resultGateAt, 260)`）；
+  新游戏要接就是替换那一处 `String(this.score)`，`at` 为 0 时退化成直接显示最终值。
+
 ## 底部控件与 FAB
 
 - **FAB 彩色描边（统一由 `App.drawFabRings()` 画）**：帮助 = **橙色**（`T.god`）、静音 = **绿色**（`T.primary`）、
@@ -585,7 +673,10 @@ game.js
   （`monitor` / `sun` / `moon`）；最后一张卡是开关行（iOS 风格轨道 + 白色圆钮，选中绿色渐变图标块）。
   展开 / 收起照 web 的 `clip-path: circle()`：**以右下角齿轮中心为圆心、半径 0 → 到最远屏幕角**（600/480ms，ease-in-out），
   做法是把面板内容画到离屏画布，再 `arc + clip + drawImage` 到主画布（内容比圆形晚一点显形）；完全展开后直接画主画布、不再走离屏。内容比屏高时可拖动滚动。关闭按钮就画在齿轮那一格（圆形 ✕）。
-  没有背景音乐资源，因此**不画「背景音乐」开关**（web 有）；音效开关即时生效，无保存按钮。
+  没有背景音乐资源，因此**不画「背景音乐」开关**（web 有）；开关卡是**两行**：
+  「游戏音效」（`__games_hub__sfx`）和「震动反馈」（`__games_hub__haptic`），都即时生效、无保存按钮；
+  开关卡高度 `blockPadY*2 + switchRowH*2 + 8`（两行各 56 + 8 间距），行 y 依次 +64；图标字体没有震动图标，
+  用 `bolt` 表示体感反馈、靠底色区分开关。
 - 六边形用 `hexPath` 双层（外主色、内白卡），卡片区域整个可点。
 - 首页构造时 `tiles.preload()` 预加载麻将雪碧图，进对对碰麻将模式不再先闪空白。
 - **边缘内滑关闭面板**：屏幕左右各 20px 的区域内向内滑 ≥72px（竖直偏移 ≤40px）= 关闭设置 / 成就面板，
@@ -631,6 +722,12 @@ game.js
     `restore()` 按 phase 分流：`answer` → 恢复牌面 / 换牌位置 / 已用时间 / 心数 / 点错的格子接着答（`lock=false`）；
     `won` / `lost` → 保持结算态；`memory` / `flip` → 没有答案可言，重开本关（心数回满）。
     答题态若 `swapped` 越界或心数已经为 0 则不算可恢复 —— 但要按**失败态**恢复（不要重开本关）。
+  - **结算面板是「整宽卡」**：`resultRect()` 返回 `{ x: this.cx, y: this.boardY, w: this.cw, h }` ——
+    **宽度等于上面那张卡片**（`min(W-32, 440)`），不再只盖棋盘（第 1、2 关棋盘只有 210~312px 宽，
+    以前遮罩是一小块补丁）。高度 `max(棋盘高, 196)`，从棋盘顶**只往下长**（往上会盖住选项卡上的「新游戏」按钮），
+    并让开底部 FAB 那一行（`H - SAFE_BOTTOM - 16 - 48 - 8`）。面板是 `T.overlay` + `T.border` 细描边，
+    内容居中；**分享入口画在面板自己的右上角**（72×26 实心 + 白色「分享」+ 图标）。
+    冒烟断言：面板宽 == `cw`、面板不往棋盘上方长、分享按钮完整落在面板内、有图标和文字。
   - **全选错（心扣到 0）不是立刻盖遮罩**：先在正确答案那张牌上**盖一枚章**。
     章是一枚歪 -12° 的标签（`2px T.primary` 边框 + `rgba(255,255,255,0.4)` 半透明白底 + 中间 `✓`
     约 0.42 倍章高 + 下方「正确 / Correct」小字，章高 < 34px 时只留 `✓`），

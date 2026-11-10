@@ -10,6 +10,7 @@
 //   __poker_alchemy__best_1     / __poker_alchemy__best_2
 //   __poker_alchemy__state      / __poker_alchemy__state_2
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const i18n = require('../../core/i18n');
@@ -859,7 +860,7 @@ class AlchemyScene extends Scene {
     if (this.phase !== WON && this.phase !== OVER) return;
     if (!this.resultVisible(420)) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
+    share.resultPanel(c, this, this.boardY, this.boardH);
     const cx = W / 2;
     const cy = this.boardY + this.boardH / 2;
     const titleSize = Math.min(20, Math.max(15, this.boardW / 15));

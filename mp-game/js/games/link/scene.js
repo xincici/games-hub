@@ -1,4 +1,5 @@
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -544,7 +545,7 @@ class LinkScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
+    share.resultPanel(c, this, this.boardY, this.boardH);
     const cx = W / 2, cy = this.boardY + this.boardH / 2;
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('link.levelDone').replace('{n}', this.level)} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });

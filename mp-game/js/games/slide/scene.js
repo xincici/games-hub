@@ -8,6 +8,7 @@
 // - 入场按行优先 row * cols + col 错峰；恢复存档后重新 layout()；
 // - 计时用沙漏 drawTimer('hourglass')，分数卡分隔线一律 24px。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -922,7 +923,7 @@ class SlideScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const win = this.phase === WON;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
+    share.resultPanel(c, this, this.boardY, this.boardH);
     const cx = W / 2;
     const cy = this.boardY + this.boardH / 2;
     if (win) {

@@ -1,4 +1,5 @@
 const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const { Scene } = require('../../core/app');
@@ -514,7 +515,7 @@ class GuessScene extends Scene {
     const T = theme.tokens;
     // 只盖记录区那张卡：下方输入区保持可见（键盘自己画成禁用态），右下 FAB 也还能点
     const card = this.historyRect();
-    D.fillRoundRect(c, card.x, card.y, card.w, card.h, 14, T.overlay);
+    share.resultPanel(c, this, card.y, card.h);
     const cx = W / 2;
     const cy = card.y + card.h / 2;
     if (this.result === WIN) {

@@ -1,4 +1,5 @@
 const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -423,7 +424,7 @@ class HunterScene extends Scene {
     const x = (W - this.candFrameW) / 2;
     const top = this.candY;
     const h = this.candFrameH;
-    D.fillRoundRect(c, x, top, this.candFrameW, h, 14, T.overlay);
+    share.resultPanel(c, this, top, h);
     const cx = W / 2;
     const cy = top + h / 2;
     if (this.phase === WON) {

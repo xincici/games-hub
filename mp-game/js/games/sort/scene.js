@@ -9,6 +9,7 @@
 // 纯逻辑（关卡曲线 / 可解发牌 / 死局搜索）在 board.js；本文件只做 canvas 表现、
 // 动画编排、触控与存档。所有牌面统一走 core/cards.js 的 MODE_EMOJI，不写私有牌面。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const coreI18n = require('../../core/i18n');
@@ -951,7 +952,7 @@ class SortScene extends Scene {
     const h = this.boardH;
     // 遮罩先加：面板按钮后加才不会被吞掉
     this.addButton('result-mask', x, y, w, h, () => {});
-    D.fillRoundRect(c, x, y, w, h, 14, T.overlay);
+    share.resultPanel(c, this, y, h);
     const cx = W / 2;
     const cy = y + h / 2;
     const bw = 118;

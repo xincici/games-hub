@@ -4,6 +4,7 @@
 //        → 猜大小卡（历史 + 当前翻牌）→ 操作卡（发牌 / 换牌 / 大 / 小 / 结算 / 重置）→ 帮助 FAB。
 // 牌面（正面 / 背面 / 边框 / 圆角 / 比例）统一走 core/cards 的 MODE_POKER，不在这里另画一套。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const HEADER = require('../../core/header');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
@@ -971,6 +972,10 @@ class PokerScene extends Scene {
     c.restore();
     const cx = W / 2;
     const cy = this.cardsY + this.cardsH / 2;
+    // 结果遮罩右上角的「炫耀一下」（和别的游戏同一套入口）
+    share.drawResultChip(c, this,
+      { x: this.cx + this.cw - 10 - 96, y: this.cardsY + 10, w: 96, h: 28 },
+      { filled: true, label: t('app.shareCta') });
     if (this.stage === GUESS) {
       const scale = fx.popScale(this.now - (this.resultAt || 0));
       c.save();

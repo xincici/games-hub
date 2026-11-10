@@ -103,6 +103,8 @@ function makeCanvas() {
   const canvas = { width: W, height: H };
   const ctx = makeCtx();
   canvas.getContext = () => ctx;
+  // 小游戏里导出分享图靠 Canvas 上的这两个方法（wx.canvasToTempFilePath 是小程序 API）
+  canvas.toTempFilePathSync = () => 'wxtmp://poster-sync.png';
   return canvas;
 }
 
@@ -1827,6 +1829,440 @@ i18n.setLang('cn');
       }
     });
   });
+}
+
+// ---------- 震动反馈：和音效分开的开关，语义点和音效对齐 ----------
+{
+  const haptics = require(path.join(ROOT, 'js/core/haptics'));
+  const calls = [];
+  const origVibrate = wx.vibrateShort;
+  wx.vibrateShort = (opts) => { calls.push(opts && opts.type); };
+  haptics.setEnabled(true);
+  haptics.resetThrottle();
+  audio.setGame(null);
+  wx.setStorageSync('__games_hub__sfx', '1');
+  // playElimination 在刚放过烟花（240ms 内）会被替换掉，这里把时钟推快去避开
+  withFakeClock(500, () => audio.playElimination());
+  check(calls.length === 1 && calls[0] === 'light', `震动：消除一下没有轻震（${calls.join('/')}）`);
+  haptics.resetThrottle();
+  audio.playFail();
+  check(calls.length === 2 && calls[1] === 'medium', `震动：扣心没有中等震（${calls.join('/')}）`);
+  // 音效静音时震动仍然生效（两个开关独立）
+  calls.length = 0;
+  haptics.resetThrottle();
+  wx.setStorageSync('__games_hub__sfx', '0');
+  audio.playFail();
+  check(calls.length === 1, '震动：音效关掉后震动也应独立生效');
+  wx.setStorageSync('__games_hub__sfx', '1');
+  // 关掉震动开关 → 完全不震
+  calls.length = 0;
+  haptics.resetThrottle();
+  haptics.setEnabled(false);
+  check(haptics.enabled === false, '震动：开关没有写进存档');
+  audio.playFail();
+  haptics.tap();
+  check(calls.length === 0, '震动：关掉开关后还在震');
+  haptics.setEnabled(true);
+  // 节流：连续两次只震一次
+  calls.length = 0;
+  haptics.resetThrottle();
+  haptics.tap();
+  haptics.tap();
+  check(calls.length === 1, `震动：没有节流（${calls.length} 次）`);
+  // 首页设置里要有震动开关，并且点了真的改存档
+  const HomeSceneClass = require(path.join(ROOT, 'js/games/home/scene'));
+  const homeForSettings = new HomeSceneClass(fakeApp);
+  homeForSettings.settingsOpen = true;
+  homeForSettings.settingsAnim = 1;
+  homeForSettings.settingsScroll = 0;
+  homeForSettings.buttons = [];
+  homeForSettings.render(makeCtx());
+  const hapticBtn = homeForSettings.buttons.find((b) => b.id.indexOf('-haptic') >= 0);
+  check(!!hapticBtn, '设置：面板里没有震动开关');
+  haptics.setEnabled(true);
+  hapticBtn.onTap();
+  check(haptics.enabled === false, '设置：点震动开关没有关掉震动');
+  homeForSettings.buttons = [];
+  homeForSettings.render(makeCtx());
+  const hapticBtn2 = homeForSettings.buttons.find((b) => b.id.indexOf('-haptic') >= 0);
+  hapticBtn2.onTap();
+  check(haptics.enabled === true, '设置：点震动开关没有打开震动');
+  wx.vibrateShort = origVibrate;
+}
+
+// ---------- 结算分享：右上角「炫耀一下」+ 5:4 海报 ----------
+{
+  const shareMod = require(path.join(ROOT, 'js/core/share'));
+  // 结果态识别
+  check(shareMod.isResultScene({ phase: 'won' }, 'match'), '分享：won 不算结果态');
+  check(shareMod.isResultScene({ phase: 'over' }, 'down'), '分享：over 不算结果态');
+  check(shareMod.isResultScene({ phase: 'lost' }, 'detective'), '分享：lost 不算结果态');
+  check(shareMod.isResultScene({ result: 2 }, 'guess'), '分享：1A2B 的胜利不算结果态');
+  check(!shareMod.isResultScene({ phase: 'play' }, 'match'), '分享：进行中应该是结果态以外');
+
+  // 入口位置：25 个场景的按钮都不能压到它（右上角，避开标题与 home）
+  const chip = shareMod.chipRect();
+  check(chip.x + chip.w <= W - 8 && chip.y >= 0, `分享：入口位置越界（${JSON.stringify(chip)}）`);
+  const GAME_IDS2 = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const clashes = [];
+  GAME_IDS2.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const scene = new SceneClass(fakeApp);
+    scene.buttons = [];
+    scene.render(makeCtx());
+    scene.buttons.forEach((b) => {
+      if (b.x < chip.x + chip.w && b.x + b.w > chip.x && b.y < chip.y + chip.h && b.y + b.h > chip.y) {
+        clashes.push(`${id}:${b.id}`);
+      }
+    });
+  });
+  check(clashes.length === 0, `分享：入口压到了别的按钮（${clashes.join(', ')}）`);
+
+  // 结算时应该显示入口（画出来 + 注册按钮），进行中不该显示
+  const MatchSceneCls = require(path.join(ROOT, 'js/games/match/scene'));
+  const overScene = new MatchSceneCls(fakeApp);
+  overScene.phase = 'over';
+  overScene.helpOpen = false;
+  overScene.confirming = false;
+  check(shareMod.shouldShowChip(overScene, 'match') === true, '分享：结算时没有显示入口');
+  overScene.phase = 'play';
+  check(shareMod.shouldShowChip(overScene, 'match') === false, '分享：进行中不该显示入口');
+  overScene.phase = 'over';
+  overScene.buttons = [];
+  const chipRec = [];
+  const chipCtx = makeCtx();
+  chipCtx.fillText = (v) => { chipRec.push(String(v)); };
+  shareMod.drawResultChip(chipCtx, overScene);
+  check(overScene.buttons.some((b) => b.id === 'share-result'), '分享：画了入口却没注册点击区');
+  check(chipRec.indexOf(i18n.t('app.shareResultCta')) >= 0,
+    `分享：入口上没有「${i18n.t('app.shareResultCta')}」文字`);
+
+  // 兜底入口要让开微信右上角的胶囊（否则被「关闭 / 更多」压住）
+  const canvasMod = require(path.join(ROOT, 'js/core/canvas'));
+  check(shareMod.chipRect().y >= canvasMod.SAFE_TOP + 36,
+    `分享：兜底入口还压在微信胶囊下面（y ${shareMod.chipRect().y}）`);
+
+  // 侦探：结算面板整宽 + 面板内右上角分享入口（带图标 + 短标签）
+  const DetCls = require(path.join(ROOT, 'js/games/detective/scene'));
+  [0, 1, 2, 3].forEach((lv) => {
+    wx.removeStorageSync('__emoji_detective__level');
+    inDet: {
+      fakeApp.sceneId = 'detective';
+      const dsc = new DetCls(fakeApp);
+      dsc.level = lv;
+      dsc.startLevel();
+      dsc.phase = 'won';
+      dsc._hasRendered = true;
+      dsc._resultGateKey = 'won';
+      dsc._resultGateAt = 0;
+      const rec2 = [];
+      const c3 = makeCtx();
+      c3.fillText = (v) => { rec2.push(String(v)); };
+      dsc.buttons = [];
+      dsc.render(c3);
+      const rr = dsc.resultRect();
+      // 同一个位置再画一次，拿返回值确认「画了图标 + 标签」
+      const rectShare = shareMod.drawResultChip(makeCtx(), dsc,
+        { x: rr.x + rr.w - 82, y: rr.y + 10, w: 72, h: 26 },
+        { filled: true, label: i18n.t('app.shareCta') });
+      check(Math.abs(rr.w - dsc.cw) < 0.5,
+        `侦探第 ${lv + 1} 关：结算面板宽度应等于卡片宽（${rr.w} / ${dsc.cw}）`);
+      check(rr.y >= dsc.boardY - 0.5,
+        `侦探第 ${lv + 1} 关：结算面板往上盖住了选项卡（${rr.y} < ${dsc.boardY}）`);
+      const sbtn = dsc.buttons.find((b) => b.id === 'share-result');
+      check(!!sbtn, `侦探第 ${lv + 1} 关：结算面板里没有分享入口`);
+      check(!!sbtn && sbtn.x >= rr.x && sbtn.x + sbtn.w <= rr.x + rr.w
+        && sbtn.y >= rr.y && sbtn.y + sbtn.h <= rr.y + rr.h,
+      `侦探第 ${lv + 1} 关：分享入口不在结算面板内`);
+      check(rectShare && rectShare.icon === true && rectShare.label === i18n.t('app.shareCta'),
+        `侦探第 ${lv + 1} 关：分享按钮没有图标 / 标签不对`);
+      check(rec2.indexOf(i18n.t('app.shareCta')) >= 0, `侦探第 ${lv + 1} 关：分享按钮没有文字`);
+    }
+  });
+
+  // 海报：把游戏画面铺进去（截图函数被调用），标题用游戏名
+  const shareCalls = [];
+  const origShare = wx.shareAppMessage;
+  const origTemp = wx.canvasToTempFilePath;
+  wx.shareAppMessage = (opts) => { shareCalls.push(opts); };
+  wx.canvasToTempFilePath = (opts) => { if (opts.success) opts.success({ tempFilePath: 'wxtmp://poster.png' }); };
+  let captured = 0;
+  const shotRects = [];
+  shareMod.setCapture((cc, x, y, w, h, opts) => {
+    captured += 1;
+    shotRects.push({ x, y, w, h, cover: !!(opts && opts.cover) });
+    return true;
+  });
+  shareMod.closePreview();
+  const built = shareMod.buildPoster({ phase: 'over', score: 128 }, 'down');
+  check(built && built.exported === 'sync', `分享：应该用 Canvas.toTempFilePathSync 导出（实际 ${built && built.exported}）`);
+  check(!!built && built.path === 'wxtmp://poster-sync.png', `分享：同步导出没拿到路径（${built && built.path}）`);
+  check(captured === 1, `分享：海报应只截一次（前景），实际 ${captured} 次`);
+  check(!!built && !!built.canvas, '分享：海报没有生成画布');
+  // 截图要**居中**放在海报里（不能在左边）
+  const fgShot = shotRects.find((r) => !r.cover);
+  const posterW = built.canvas.width;
+  const posterH = built.canvas.height;
+  check(!!fgShot, '分享：海报里没有前景截图');
+  check(shotRects.every((r) => !r.cover), '分享：背景不该再用游戏画面铺底（应只有前景一次截图）');
+  if (fgShot) {
+    const dx = Math.abs((fgShot.x + fgShot.w / 2) - posterW / 2);
+    const dy = Math.abs((fgShot.y + fgShot.h / 2) - posterH / 2);
+    check(dx <= 1, `分享：截图没有水平居中（偏移 ${dx.toFixed(1)}px，左边留白 ${fgShot.x.toFixed(0)}）`);
+    check(dy <= 1, `分享：截图没有垂直居中（偏移 ${dy.toFixed(1)}px）`);
+    check(Math.abs(fgShot.x - (posterW - fgShot.x - fgShot.w)) <= 1, '分享：左右留白不对称');
+  }
+  check(typeof built.title === 'string' && built.title.indexOf(i18n.t('home.downTitle')) === 0,
+    `分享：标题没有用游戏名（${built && built.title}）`);
+  check(built.title.indexOf(i18n.t('app.shareHomeTitle')) < 0, '分享：标题还是首页统称');
+  shareMod.setCapture(null);
+
+  // 点「炫耀一下」→ 先开预览（不直接分享）
+  const pvScene = {
+    buttons: [],
+    phase: 'over',
+    addButton(id, x, y, w, h, onTap) { this.buttons.push({ id, x, y, w, h, onTap }); },
+  };
+  shareMod.openPreview(pvScene, 'down');
+  check(shareMod.previewOpen() === true, '分享：点炫耀没有打开预览');
+  check(shareCalls.length === 0, '分享：还没点「去分享」就已经分享了');
+  pvScene.buttons = [];
+  shareMod.drawPreview(makeCtx(), pvScene);
+  const cancelBtn = pvScene.buttons.find((b) => b.id === 'share-cancel');
+  const goBtn = pvScene.buttons.find((b) => b.id === 'share-go');
+  check(!!cancelBtn && !!goBtn, '分享：预览弹窗缺少「取消 / 去分享」按钮');
+  check(cancelBtn.h >= 40 && goBtn.h === cancelBtn.h, `分享：预览按钮太矮（${cancelBtn.h}）`);
+  const ratio = goBtn.w / cancelBtn.w;
+  check(Math.abs(ratio - 3) < 0.05, `分享：取消 / 去分享 宽度比应为 1:3（实际 1:${ratio.toFixed(2)}）`);
+  const pv = shareMod.previewRect();
+  const padBottom = pv.y + pv.cardH - (cancelBtn.y + cancelBtn.h);
+  check(Math.abs(padBottom - 18) < 1.5, `分享：弹窗底部留白应和顶部一致 18（实际 ${padBottom.toFixed(0)}）`);
+  check(shareMod.rose === '#962832', `分享：「炫耀一下」应使用胭脂红 #962832（实际 ${shareMod.rose}）`);
+  check(pvScene.buttons.some((b) => b.id === 'share-mask'), '分享：预览弹窗没有全屏遮罩');
+  // 取消：关掉预览、不分享
+  cancelBtn.onTap();
+  check(shareMod.previewOpen() === false && shareCalls.length === 0, '分享：点取消后不该分享');
+  // 去分享：才真的调 wx.shareAppMessage
+  shareMod.openPreview(pvScene, 'down');
+  pvScene.buttons = [];
+  shareMod.drawPreview(makeCtx(), pvScene);
+  pvScene.buttons.find((b) => b.id === 'share-go').onTap();
+  check(shareCalls.length === 1, `分享：点「去分享」没有触发分享（${shareCalls.length}）`);
+  check(!!shareCalls[0] && shareCalls[0].query === 'game=down', `分享：query 不对（${shareCalls[0] && shareCalls[0].query}）`);
+  check(shareCalls[0].imageUrl === 'wxtmp://poster-sync.png', `分享：没有带上海报图（${shareCalls[0].imageUrl}）`);
+  check(shareMod.previewOpen() === false, '分享：分享完没有收起预览');
+  wx.shareAppMessage = origShare;
+  wx.canvasToTempFilePath = origTemp;
+
+  // 导出 API 缺失时必须「降级但如实告知」，不能悄悄拿默认图去分享
+  {
+    const savedCreate = wx.createCanvas;
+    wx.createCanvas = () => {
+      const cv = savedCreate();
+      delete cv.toTempFilePathSync;
+      delete cv.toTempFilePath;
+      return cv;
+    };
+    const savedTemp = wx.canvasToTempFilePath;
+    delete wx.canvasToTempFilePath;
+    const savedWarn = console.warn;
+    console.warn = () => {};   // 这条是负向用例，日志会刷屏
+    shareMod.closePreview();
+    const noExport = shareMod.buildPoster({ phase: 'over', score: 999, shareLine: '第 9 关' }, 'puzzle');
+    const info = shareMod.posterInfo();
+    check(!!info && info.hasPath === false, '分享：没有导出 API 时不该假装有图');
+    check(!!info && info.error != null, '分享：导出失败要留下原因');
+    // 预览里仍然是「去分享」可点（只能分享标题），并且会提示失败
+    const pv2 = {
+      buttons: [],
+      phase: 'over',
+      addButton(id, x, y, w, h, fn) { this.buttons.push({ id, x, y, w, h, onTap: fn }); },
+    };
+    shareMod.openPreview(pv2, 'puzzle');
+    pv2.buttons = [];
+    shareMod.drawPreview(makeCtx(), pv2);
+    check(pv2.buttons.some((b) => b.id === 'share-go'), '分享：导出失败后应该允许「只分享标题」');
+    check(!!noExport, '分享：导出失败时也不该崩');
+    shareMod.closePreview();
+    wx.createCanvas = savedCreate;
+    wx.canvasToTempFilePath = savedTemp;
+    console.warn = savedWarn;
+  }
+
+  // 菜单分享的标题也要跟着当前场景走（不再是首页统称）
+  let menuHandler = null;
+  const origOnShare = wx.onShareAppMessage;
+  const origShowMenu = wx.showShareMenu;
+  wx.onShareAppMessage = (fn) => { menuHandler = fn; };
+  wx.showShareMenu = () => {};
+  delete wx.__gamesShareRegistered;
+  const { App: AppForShare } = require(path.join(ROOT, 'js/core/app'));
+  AppForShare.prototype.setSceneId.call({ sceneId: null }, 'detective');
+  const menuTitle = menuHandler ? menuHandler().title : '';
+  check(typeof menuTitle === 'string' && menuTitle.indexOf(i18n.t('home.detectiveTitle')) >= 0,
+    `分享：菜单分享标题没用游戏名（${menuTitle}）`);
+  check(menuTitle.indexOf(i18n.t('app.shareHomeTitle')) < 0, '分享：菜单分享还是首页统称');
+  wx.onShareAppMessage = origOnShare;
+  wx.showShareMenu = origShowMenu;
+}
+
+// ---------- 25 个游戏：结算面板整宽 + 面板内「炫耀一下」 ----------
+{
+  const shareMod2 = require(path.join(ROOT, 'js/core/share'));
+  const panels = [];
+  const origPanel = shareMod2.resultPanel;
+  shareMod2.resultPanel = function (...args) {
+    const rect = origPanel.apply(shareMod2, args);
+    panels.push(rect);
+    return rect;
+  };
+  const realNow = Date.now;
+  // 每个游戏「怎么进结算态」不一样，这里逐个驱动（和真机流程一致的最小写法）
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const problems = [];
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    panels.length = 0;
+    sc._hasRendered = true;
+    sc.buttons = [];
+    const advance = (ms) => { Date.now = () => realNow() + ms; sc.render(makeCtx()); Date.now = realNow; };
+    try {
+      if (id === 'click') {
+        sc.logic.result = require(path.join(ROOT, 'js/games/click/logic')).WIN;
+        sc.render(makeCtx());
+        if (!sc.buttons.some((b) => b.id === 'share-result')) advance(600);
+      } else if (id === 'snake') {
+        sc.phase = 1;
+        sc.render(makeCtx());
+        advance(600);
+      } else if (id === 'poker') {
+        sc.stage = 'guess';
+        sc.drawTableOverlay(makeCtx());
+        panels.push({ x: sc.cx, y: sc.cardsY, w: sc.cw, h: sc.cardsH });
+      } else if (id === 'quesheng') {
+        sc.phase = 'won';
+        sc.resultSerial = 1;
+        sc.render(makeCtx());
+        if (!sc.buttons.some((b) => b.id === 'share-result')) advance(600);
+      } else if (id === 'detective') {
+        sc.phase = 'won';
+        sc.render(makeCtx());
+        if (!sc.buttons.some((b) => b.id === 'share-result')) advance(600);
+        panels.push(sc.resultRect());
+      } else {
+        let ok = false;
+        for (const ph of ['won', 'over', 'lost', 'lose', 'win']) {
+          sc.phase = ph;
+          if (typeof sc.result === 'number') sc.result = (ph === 'won' || ph === 'win') ? 2 : 1;
+          sc.buttons = [];
+          panels.length = 0;
+          sc.render(makeCtx());
+          if (!panels.length || !sc.buttons.some((b) => b.id === 'share-result')) advance(600);
+          if (panels.length && sc.buttons.some((b) => b.id === 'share-result')) { ok = true; break; }
+        }
+        if (!ok) problems.push(`${id}: 结算态没有分享入口`);
+      }
+    } catch (e) {
+      Date.now = realNow;
+      problems.push(`${id}: 渲染抛错 ${e.message}`);
+      return;
+    }
+    const p = panels[panels.length - 1];
+    const btn = sc.buttons.find((b) => b.id === 'share-result');
+    if (!btn) { problems.push(`${id}: 没有「炫耀一下」按钮`); return; }
+    if (!p) { problems.push(`${id}: 没有画出结算面板`); return; }
+    const cw = typeof sc.cw === 'number' && sc.cw > 0 ? sc.cw : Math.min(W - 32, 440);
+    if (Math.abs(p.w - cw) > 0.6) problems.push(`${id}: 面板宽 ${p.w.toFixed(0)} ≠ 卡片宽 ${cw.toFixed(0)}`);
+    let inside = false;
+    if (id === 'poker') {
+      // 扑克的分享入口画在「牌桌结果遮罩」上，遮罩本身就是整宽
+      inside = btn.x + btn.w <= p.x + p.w + 1 && btn.y >= p.y - 1 && btn.y + btn.h <= p.y + p.h + 1;
+    } else {
+      inside = btn.x >= p.x - 1 && btn.x + btn.w <= p.x + p.w + 1
+        && btn.y >= p.y - 1 && btn.y + btn.h <= p.y + p.h + 1;
+    }
+    if (!inside) problems.push(`${id}: 「炫耀一下」不在结算面板内`);
+    // 不能压住面板里别的按钮（棋盘格子 / 遮罩不算）
+    const others = sc.buttons.filter((b) => b.id !== 'share-result'
+      && !/mask|cell|col-|board|pad-|key-|num-|tile|resume/.test(b.id));
+    others.forEach((o) => {
+      if (btn.x < o.x + o.w - 1 && btn.x + btn.w > o.x + 1
+        && btn.y < o.y + o.h - 1 && btn.y + btn.h > o.y + 1) {
+        problems.push(`${id}: 「炫耀一下」压住了 ${o.id}`);
+      }
+    });
+  });
+  shareMod2.resultPanel = origPanel;
+  Date.now = realNow;
+  check(problems.length === 0, `结算面板：${problems.join('；')}`);
+}
+
+// ---------- 25 个游戏都能生成分享海报（标题带游戏名） ----------
+{
+  const shareMod3 = require(path.join(ROOT, 'js/core/share'));
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  // 用假的截图函数（只要有画布就行，这里不验画面内容）
+  shareMod3.setCapture(() => true);
+  let missing = 0;
+  IDS.forEach((id) => {
+    const poster = shareMod3.buildPoster({ phase: 'over', score: 128 }, id);
+    if (!poster || !poster.canvas) missing += 1;
+    else if (poster.title.indexOf(i18n.t(`home.${id}Title`)) !== 0) missing += 1;
+  });
+  shareMod3.setCapture(null);
+  check(missing === 0, `分享海报：${missing} 个游戏没生成 / 标题不对`);
+}
+
+// ---------- 结算数字滚动（countUp） ----------
+{
+  const D2 = require(path.join(ROOT, 'js/core/draw'));
+  const at = Date.now();
+  check(D2.countUp(120, at, 260) === 0 || D2.countUp(120, at, 260) < 10, '结算滚动：刚出现就该接近 0');
+  check(D2.countUp(120, at - 400, 260) === 120, '结算滚动：结束后应等于最终值');
+  check(D2.countUp(120, 0, 260) === 120, '结算滚动：没有起点时直接显示最终值');
+
+  // 真的接进了结算：下坠结算里的分数应该从 0 滚到最终值
+  const DownCls = require(path.join(ROOT, 'js/games/down/scene'));
+  const downScene = new DownCls(fakeApp);
+  fakeApp.sceneId = 'down';
+  downScene.startGame();
+  downScene.score = 137;
+  downScene.phase = 'over';
+  downScene._hasRendered = true;   // 模拟 App 已经渲染过一帧（resultVisible 的门槛才稳定）
+  const t0 = Date.now();
+  let firstNum = null;
+  let lastNum = null;
+  withFakeClock(16, () => {
+    const paint = (ms) => {
+      const fake = t0 + ms;
+      Date.now = () => fake;
+      const rec = [];
+      const c2 = makeCtx();
+      c2.fillText = (v, x, y) => { rec.push({ v: String(v), y }); };
+      downScene.buttons = [];
+      downScene.render(c2);
+      // 只认结算遮罩里那个大号分数（基线 = 遮罩中心 + 12）
+      const cy = downScene.boardY + downScene.boardH / 2 + 12;
+      const hit = rec.filter((r) => /^\d+$/.test(r.v) && Math.abs(r.y - cy) <= 14);
+      return hit.length ? Number(hit[hit.length - 1].v) : null;
+    };
+    Date.now = () => t0;
+    downScene.buttons = [];
+    downScene.render(makeCtx());        // 第一帧只挂门槛
+    firstNum = paint(300);              // 刚出现
+    lastNum = paint(900);               // 早已滚完
+  });
+  check(lastNum === 137, `结算滚动：滚动结束后不是最终值（${lastNum}）`);
+  check(firstNum !== null && firstNum < 137, `结算滚动：刚出现时就已经是最终值（${firstNum}），没有滚动`);
 }
 
 // ---------- 下坠：分数到整百，游戏区上方放烟花 + 一条夸张鼓励（不拦操作） ----------

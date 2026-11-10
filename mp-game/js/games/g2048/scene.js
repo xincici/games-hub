@@ -1,4 +1,5 @@
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -349,7 +350,7 @@ class Game2048Scene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardSize, this.boardSize, 14, T.overlay);
+    share.resultPanel(c, this, this.boardY, this.boardSize);
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('g2048.tipWin')} 🎉🎉`, cx, cy - 38, { size: 20, weight: 'bold', color: T.win, align: 'center' });
@@ -360,7 +361,7 @@ class Game2048Scene extends Scene {
       this.addButton('keep-going', cx - bw / 2, cy + 22, bw, 34, () => this.keepGoing());
     } else {
       D.text(c, `👻👻 ${t('g2048.tipLost')} 👻👻`, cx, cy - 26, { size: 20, weight: 'bold', color: T.lose, align: 'center' });
-      D.text(c, `${t('g2048.score')} ${this.score}`, cx, cy + 4, { size: 14, color: T.muted, align: 'center' });
+      D.text(c, `${t('g2048.score')} ${D.countUp(this.score, this._resultGateAt, 260)}`, cx, cy + 4, { size: 14, color: T.muted, align: 'center' });
       const bw = 104;
       D.fillRoundRect(c, cx - bw / 2, cy + 26, bw, 32, 8, T.primary);
       D.text(c, t('g2048.start'), cx, cy + 42, { size: 13, weight: 'bold', color: '#fff', align: 'center' });

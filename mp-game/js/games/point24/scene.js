@@ -1,4 +1,5 @@
 const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const HEADER = require('../../core/header');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
@@ -442,7 +443,7 @@ class Point24Scene extends Scene {
     const T = theme.tokens;
     const top = this.exprY;
     const h = this.gameBottom - top;
-    D.fillRoundRect(c, this.cx, top, this.cw, h, 14, T.overlay);
+    share.resultPanel(c, this, top, h);
     const cx = W / 2;
     const cy = top + h / 2;
     D.text(c, `🎉 ${t('point24.win')}`, cx, cy - 34, { size: 18, weight: 'bold', color: T.win, align: 'center' });

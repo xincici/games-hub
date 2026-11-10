@@ -9,6 +9,7 @@
 //       点答案区的牌可以退回选择区。
 // 两种模式的关卡 / 最高关卡 / 连胜 / 局面各自独立（模式 2 的 key 加 _2 后缀）。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -1134,7 +1135,7 @@ class GamblerScene extends Scene {
     const T = theme.tokens;
     const top = this.handY;
     const height = this.gameBottom - top;
-    D.fillRoundRect(c, this.cx, top, this.cw, height, 14, overlayColor());
+    share.resultPanel(c, this, top, height, { radius: 14, color: overlayColor() });
     const cx = this.cx + this.cw / 2;
     const cy = top + height / 2;
     D.text(c, `🎉🎉 ${t('gambler.tipWin')} 🎉🎉`, cx, cy - 52, {

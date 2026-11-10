@@ -1,4 +1,5 @@
 const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const { Scene } = require('../../core/app');
@@ -691,7 +692,7 @@ class MatchScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const win = this.phase === WON;
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
+    share.resultPanel(c, this, this.boardY, this.boardH);
     const cx = W / 2;
     const cy = this.boardY + this.boardH / 2;
     if (win) {

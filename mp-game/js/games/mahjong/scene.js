@@ -3,6 +3,7 @@
 // 这里只负责布局、绘制、输入、动画与存档。牌面统一走 core/cards.js（麻将雪碧图 + 8px 圆角裁切），
 // 本文件不写任何私有牌面绘制。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -978,7 +979,7 @@ class MahjongScene extends Scene {
     const T = theme.tokens;
     const win = this.phase === WON;
     const overlay = theme.dark ? 'rgba(38,38,38,0.94)' : 'rgba(250,248,239,0.94)';
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, overlay);
+    share.resultPanel(c, this, this.boardY, this.boardH, { radius: 14, color: overlay });
     const cx = this.boardX + this.boardW / 2;
     const cy = this.boardY + this.boardH / 2;
     if (win) {

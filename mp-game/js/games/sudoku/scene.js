@@ -8,6 +8,7 @@
 //   __sudoku_game__cand_all     候选按钮行为：1 = 一键填满全盘
 //   __sudoku_game__<1..3>       各难度最佳用时（秒）
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const { Scene } = require('../../core/app');
@@ -699,7 +700,7 @@ class SudokuScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const x = this.boardX, y = this.boardY, size = this.boardSize;
-    D.fillRoundRect(c, x, y, size, size, this.boardR, T.overlay);
+    share.resultPanel(c, this, y, size, { radius: this.boardR });
     const cx = W / 2, cy = y + size / 2;
     const won = this.phase === WON;
     if (won) {

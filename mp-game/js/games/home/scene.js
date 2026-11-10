@@ -5,6 +5,7 @@ const i18n = require('../../core/i18n');
 const { t } = i18n;
 const { getRaw, setRaw } = require('../../core/storage');
 const audio = require('../../core/audio');
+const haptics = require('../../core/haptics');
 const icons = require('../../core/icons');
 const D = require('../../core/draw');
 const ParticleField = require('../../core/particles');
@@ -976,7 +977,7 @@ class HomeScene extends Scene {
     const laid = blocks.map((b) => {
       const h = b.kind === 'seg'
         ? blockPadY * 2 + blockHeadH + segH
-        : blockPadY * 2 + switchRowH;
+        : blockPadY * 2 + switchRowH * 2 + 8;   // 音效 + 震动两行
       const rect = { x: pad, y, w: W - pad * 2, h };
       y += h + blockGap;
       return Object.assign({}, b, { rect });
@@ -1150,29 +1151,55 @@ class HomeScene extends Scene {
             () => meta.onPick(value));
         });
       } else {
-        // 开关卡：小游戏没有背景音乐资源，只画「游戏音效」（与 web 同样的行样式）
-        const row = { x: r.x + 12, y: r.y + 12, w: r.w - 24, h: L.switchRowH };
-        D.fillRoundRect(c, row.x, row.y, row.w, row.h, 14, T.bg);
-        const on = audio.enabled;
-        const tile = { x: row.x + 12, y: row.y + (row.h - 34) / 2, w: 34, h: 34 };
-        if (on) {
-          const tg = c.createLinearGradient(tile.x, tile.y, tile.x + tile.w, tile.y + tile.h);
-          tg.addColorStop(0, T.primary);
-          tg.addColorStop(1, '#37a06a');
-          c.fillStyle = tg;
-          D.fillRoundRect(c, tile.x, tile.y, tile.w, tile.h, 11);
-        } else {
-          D.fillRoundRect(c, tile.x, tile.y, tile.w, tile.h, 11, T.card);
-        }
-        const iconColor = on ? '#fff' : T.muted;
-        if (!icons.draw(c, on ? 'volume' : 'volume-off', tile.x + tile.w / 2, tile.y + tile.h / 2, 19, iconColor)) {
-          D.text(c, on ? '♪' : '×', tile.x + tile.w / 2, tile.y + tile.h / 2, { size: 17, color: iconColor, align: 'center' });
-        }
-        D.text(c, t('home.sfx'), tile.x + tile.w + 12, row.y + row.h / 2, { size: 14, weight: 'bold', color: T.text });
-        const sw = { x: row.x + row.w - 12 - 46, y: row.y + (row.h - 28) / 2, w: 46, h: 28 };
-        D.fillRoundRect(c, sw.x, sw.y, sw.w, sw.h, 14, on ? T.primary : T.border);
-        D.circle(c, sw.x + (on ? 33 : 14), sw.y + 14, 11, '#fff');
-        addBtn(`setting-${bi}-sfx`, row.x, row.y, row.w, row.h, () => audio.setEnabled(!audio.enabled));
+          // 开关卡：两行 —— 游戏音效 / 震动反馈（小游戏没有背景音乐资源，不画音乐开关）
+          const rowsMeta = [
+            {
+              key: 'sfx',
+              label: t('home.sfx'),
+              on: audio.enabled,
+              iconOn: 'volume',
+              iconOff: 'volume-off',
+              textOn: '♪',
+              textOff: '×',
+              toggle: () => audio.setEnabled(!audio.enabled),
+            },
+            {
+              key: 'haptic',
+              label: t('home.haptic'),
+              on: haptics.enabled,
+              // 图标字体没有震动图标：用「闪电」表示体感反馈，靠底色区分开关
+              iconOn: 'bolt',
+              iconOff: 'bolt',
+              textOn: '≈',
+              textOff: '≈',
+              toggle: () => haptics.setEnabled(!haptics.enabled),
+            },
+          ];
+          rowsMeta.forEach((meta, ri) => {
+            const row = { x: r.x + 12, y: r.y + 12 + ri * (L.switchRowH + 8), w: r.w - 24, h: L.switchRowH };
+            D.fillRoundRect(c, row.x, row.y, row.w, row.h, 14, T.bg);
+            const on = meta.on;
+            const tile = { x: row.x + 12, y: row.y + (row.h - 34) / 2, w: 34, h: 34 };
+            if (on) {
+              const tg = c.createLinearGradient(tile.x, tile.y, tile.x + tile.w, tile.y + tile.h);
+              tg.addColorStop(0, T.primary);
+              tg.addColorStop(1, '#37a06a');
+              c.fillStyle = tg;
+              D.fillRoundRect(c, tile.x, tile.y, tile.w, tile.h, 11);
+            } else {
+              D.fillRoundRect(c, tile.x, tile.y, tile.w, tile.h, 11, T.card);
+            }
+            const iconColor = on ? '#fff' : T.muted;
+            if (!icons.draw(c, on ? meta.iconOn : meta.iconOff, tile.x + tile.w / 2, tile.y + tile.h / 2, 19, iconColor)) {
+              D.text(c, on ? meta.textOn : meta.textOff, tile.x + tile.w / 2, tile.y + tile.h / 2,
+                { size: 17, color: iconColor, align: 'center' });
+            }
+            D.text(c, meta.label, tile.x + tile.w + 12, row.y + row.h / 2, { size: 14, weight: 'bold', color: T.text });
+            const sw = { x: row.x + row.w - 12 - 46, y: row.y + (row.h - 28) / 2, w: 46, h: 28 };
+            D.fillRoundRect(c, sw.x, sw.y, sw.w, sw.h, 14, on ? T.primary : T.border);
+            D.circle(c, sw.x + (on ? 33 : 14), sw.y + 14, 11, '#fff');
+            addBtn(`setting-${bi}-${meta.key}`, row.x, row.y, row.w, row.h, meta.toggle);
+          });
       }
     });
 

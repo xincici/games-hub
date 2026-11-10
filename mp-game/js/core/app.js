@@ -68,6 +68,7 @@ class App {
     this.openScene(SceneClass, { id: 'home' });
     if (this.launchGame) this.openGame(this.launchGame);
     share.syncMenu(this.sceneId);
+    share.setCapture((c, x, y, w, h, opts) => this.paintSceneForPoster(c, x, y, w, h, opts));
     this.input.onStart = p => {
       if (this.startEdgeSwipe(p)) return;
       if (this.scene.helpOpen && help.touch(this.scene, 'start', p)) return;
@@ -306,6 +307,44 @@ class App {
   setSceneId(id) {
     this.sceneId = id || null;
     audio.setGame(this.sceneId);
+    // 菜单分享的标题也要跟着当前场景走：以前只在 onShow / 切语言时同步，
+    // 在游戏里分享出去的标题一直是首页统称「蜂窝益智二十五」
+    share.syncMenu(this.sceneId);
+  }
+
+  // 把当前场景画进分享海报的指定矩形里（opts.cover = 铺满裁切，否则完整 contain）。
+  // 渲染前临时把结算层（drawResult / drawWin）换成空函数，海报里只留真实的游戏画面。
+  paintSceneForPoster(c, x, y, w, h, opts) {
+    const scene = this.scene;
+    if (!scene || typeof scene.render !== 'function') return false;
+    if (!(w > 0) || !(h > 0)) return false;
+    const cover = !!(opts && opts.cover);
+    const scale = cover ? Math.max(w / W, h / H) : Math.min(w / W, h / H);
+    const dw = W * scale;
+    const dh = H * scale;
+    const od = scene.drawResult;
+    const ow = scene.drawWin;
+    try {
+      if (od) scene.drawResult = () => {};
+      if (ow) scene.drawWin = () => {};
+      scene.buttons = [];
+      c.save();
+      c.beginPath();
+      c.rect(x, y, w, h);
+      c.clip();
+      c.translate(x + (w - dw) / 2, y + (h - dh) / 2);
+      c.scale(scale, scale);
+      scene.render(c);
+      c.restore();
+      return true;
+    } catch (e) {
+      try { c.restore(); } catch (e2) { /* ignore */ }
+      return false;
+    } finally {
+      if (od) scene.drawResult = od;
+      if (ow) scene.drawWin = ow;
+      scene.buttons = [];
+    }
   }
 
   openScene(SceneClass, options) {
@@ -521,6 +560,17 @@ class App {
         if (drawConfirm) this.scene.drawConfirm = () => {};
         this.scene.render(ctx);
         this.drawFabRings(ctx);
+        // 结算态：右上角一枚「炫耀一下」（生成 5:4 海报，点一下发分享）
+        if (share.shouldShowChip(this.scene, this.sceneId)) {
+          try {
+            share.buildPoster(this.scene, this.sceneId);
+            // 结算遮罩自己带分享入口的游戏（比如侦探）就不再画兜底那一枚
+            const hasOwn = this.scene.buttons.some((b) => b.id === 'share-result');
+            if (!hasOwn) share.drawResultChip(ctx, this.scene);
+          } catch (e) {
+            // 分享出问题不能影响渲染
+          }
+        }
         this.drawToast(ctx);
         if (drawHelp) {
           this.scene.drawHelp = drawHelp;
@@ -532,6 +582,11 @@ class App {
           confirm.draw(ctx, this.scene);
         } else {
           help.reset(this.scene);
+        }
+        // 结算分享的预览弹窗：盖在最上层，点「去分享」才真的分享
+        if (share.previewOpen()) {
+          this.scene.buttons = [];
+          share.drawPreview(ctx, this.scene);
         }
         if (!this.scene.helpOpen && !this.scene.confirming && this.sceneId !== 'home') this.drawHomeAffordance(ctx);
         confetti.draw(ctx, this.globalConfetti);

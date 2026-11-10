@@ -1,4 +1,5 @@
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -523,10 +524,10 @@ class DownScene extends Scene {
       this.addButton('resume', this.boardX, this.boardY, this.boardW, this.boardH, () => this.togglePause());
     }
     if (this.phase === OVER && this.resultVisible()) {
-      D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
+      share.resultPanel(c, this, this.boardY, this.boardH);
       const cy = this.boardY + this.boardH / 2;
       D.text(c, `🏁 ${t('down.tipOver')} 🏁`, W / 2, cy - 20, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
-      D.text(c, String(this.score), W / 2, cy + 12, { size: 30, weight: 'bold', color: T.text, align: 'center' });
+      D.text(c, String(D.countUp(this.score, this._resultGateAt, 260)), W / 2, cy + 12, { size: 30, weight: 'bold', color: T.text, align: 'center' });
       const bw = 110;
       D.fillRoundRect(c, W / 2 - bw / 2, cy + 38, bw, 32, 8, T.primary);
       D.text(c, t('down.start'), W / 2, cy + 54, { size: 13, weight: 'bold', color: '#fff', align: 'center' });

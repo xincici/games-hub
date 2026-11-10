@@ -1,4 +1,5 @@
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -448,7 +449,7 @@ class MirrorScene extends Scene {
     const T = theme.tokens;
     const y0 = this.boardY;
     const y1 = this.gameY + this.displayH;
-    D.fillRoundRect(c, this.cx, y0, this.cw, y1 - y0, 14, T.overlay);
+    share.resultPanel(c, this, y0, y1 - y0);
     const cx = W / 2, cy = y0 + (y1 - y0) / 2;
     D.text(c, `🎉🎉 ${t('mirror.tipWin')} 🎉🎉`, cx, cy - 22, { size: 19, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, fmt(this.elapsed), cx, cy + 6, { size: 18, weight: 'bold', color: T.text, align: 'center' });

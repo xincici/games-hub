@@ -4,6 +4,7 @@
 // （条牌 s1..s9 / 字牌 z1..z7 / 花牌 f1..f8 都在 core/tiles.js 的雪碧图槽位里），
 // 本文件不写任何私有牌面绘制。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
+const share = require('../../core/share');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
@@ -997,7 +998,7 @@ class LegendScene extends Scene {
     if (!this.resultVisible(RESULT_DELAY)) return;
     const T = theme.tokens;
     const overlay = theme.dark ? 'rgba(38,38,38,0.94)' : 'rgba(250,248,239,0.94)';
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, overlay);
+    share.resultPanel(c, this, this.boardY, this.boardH, { radius: 14, color: overlay });
     const cx = this.boardX + this.boardW / 2;
     const cy = this.boardY + this.boardH / 2;
     const title = `💤💤 ${t('legend.tipLost')} 💤💤`;
@@ -1007,7 +1008,7 @@ class LegendScene extends Scene {
     D.text(c, t('legend.finalScore'), cx, cy - 22, {
       size: 12, color: T.muted, align: 'center',
     });
-    D.text(c, String(this.score), cx, cy + 4, {
+    D.text(c, String(D.countUp(this.score, this._resultGateAt, 260)), cx, cy + 4, {
       size: Math.min(30, this.boardW / 9), weight: 'bold', color: T.text, align: 'center',
     });
     if (this.beatBest) {
