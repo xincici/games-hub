@@ -36,6 +36,65 @@ const CARD_MEMORIES = [2000, 2600, 3000, 3400, 3800, 4500, 5000, 5500, 6500, 750
 const HEARTS_MAX = 3;
 // 全部牌翻到背面后，先停留这么久再开始揭面（偷换就发生在这一段里，玩家看不到）
 const REVEAL_HOLD = 160;
+// 失败时「把正确答案盖章标出来」的动画：盖章 420ms，命中后 450ms 开始震牌 500ms = 950ms
+const STAMP_IN_MS = 420;
+const STAMP_SHAKE_DELAY = 450;
+const STAMP_SHAKE_MS = 500;
+const STAMP_TOTAL_MS = STAMP_SHAKE_DELAY + STAMP_SHAKE_MS;
+// 盖章动画放完后再停这么久才出失败遮罩（以前是点错后 500ms 直接盖遮罩，来不及看清答案）
+const LOSE_AFTER_STAMP = 300;
+// 盖章：章从「z 轴很远的地方」飞过来 —— 一开始大到显示不全（4.2 倍），
+// 越靠近卡片缩得越快（3.4 → 2.0 → 1.25），贴上去时压过一点（0.96），再回弹 1.04 → 1 落定
+const STAMP_IN_KEYS = [
+  { t: 0, s: 4.2, a: 0 },
+  { t: 0.1, s: 3.4, a: 1 },
+  { t: 0.3, s: 2.0, a: 1 },
+  { t: 0.48, s: 1.25, a: 1 },
+  { t: 0.62, s: 0.96, a: 1 },   // 盖上去，压过一点
+  { t: 0.78, s: 1.04, a: 1 },   // 回弹
+  { t: 1, s: 1, a: 1 },
+];
+// 落定后章占卡片的一半（用户指定），不随关卡变大
+const STAMP_W_RATIO = 0.52;
+const STAMP_H_RATIO = 0.52;
+// 章落定后这张牌被「按」得晃一下（幅度比点错小，关键帧照 web 的 stamp-shake）
+const STAMP_SHAKE_KEYS = [
+  { t: 0, x: 0, y: 0, r: 0 },
+  { t: 0.2, x: -2, y: 1, r: -1.2 },
+  { t: 0.45, x: 2, y: -1, r: 1.2 },
+  { t: 0.7, x: -1, y: 1, r: -0.8 },
+  { t: 1, x: 0, y: 0, r: 0 },
+];
+
+// 关键帧插值：keys 里 t 递增，返回 { ... } 线性插值
+function lerpKeys(keys, t) {
+  const k = Math.max(0, Math.min(1, t));
+  for (let i = 1; i < keys.length; i += 1) {
+    const a = keys[i - 1];
+    const b = keys[i];
+    if (k <= b.t) {
+      const f = b.t === a.t ? 0 : (k - a.t) / (b.t - a.t);
+      const out = {};
+      Object.keys(a).forEach((key) => {
+        if (key === 't') return;
+        out[key] = a[key] + (b[key] - a[key]) * f;
+      });
+      return out;
+    }
+  }
+  const last = keys[keys.length - 1];
+  const out = {};
+  Object.keys(last).forEach((key) => { if (key !== 't') out[key] = last[key]; });
+  return out;
+}
+
+function stampInOf(age) {
+  return lerpKeys(STAMP_IN_KEYS, age / STAMP_IN_MS);
+}
+
+function stampShakeOf(age) {
+  return lerpKeys(STAMP_SHAKE_KEYS, age / STAMP_SHAKE_MS);
+}
 // 存档版本：v2 起支持「答题中途退出后接着答」
 const STATE_V = 2;
 
@@ -88,6 +147,7 @@ class DetectiveScene extends Scene {
     this.time = 0;
     this.memoryEnd = 0;
     this.revealAt = 0;
+    this.stampAt = 0;      // 失败时盖章动画的起点（0 = 没在播 / 结算态静态显示）
     this.playStart = 0;
     this.settleAt = 0;
     this.lock = false;
@@ -132,10 +192,11 @@ class DetectiveScene extends Scene {
       this.level = Math.min(this.sizes.length - 1, Math.max(0, s.level));
       const n = this.rows * this.cols;
       const boardOk = Array.isArray(s.board) && s.board.length === n;
-      const phase = s.phase;
+      const savedHearts = typeof s.hearts === 'number' ? s.hearts : HEARTS_MAX;
+      // 心已经扣到 0（含「盖章动画还没播完就退出」这种）按失败态恢复，不要重开本关
+      const phase = s.phase === ANSWER && savedHearts <= 0 ? LOST : s.phase;
       // 观察阶段（记忆 / 翻面）没有「答案」可言，也没损失，直接重开本关最干净
-      const heartsOk = !(phase === ANSWER && !(typeof s.hearts === 'number' && s.hearts > 0));
-      const resumable = boardOk && heartsOk && (phase === ANSWER || phase === WON || phase === LOST)
+      const resumable = boardOk && (phase === ANSWER || phase === WON || phase === LOST)
         && !(phase === ANSWER && !Number.isInteger(+s.swapped));
       if (!resumable) {
         this.startLevel();
@@ -144,7 +205,7 @@ class DetectiveScene extends Scene {
       this.board = s.board.slice();
       this.swapped = Number.isInteger(+s.swapped) && +s.swapped >= 0 && +s.swapped < n ? +s.swapped : -1;
       this.wrong = Array.isArray(s.wrong) ? s.wrong.filter((i) => Number.isInteger(+i) && +i >= 0 && +i < n) : [];
-      this.hearts = typeof s.hearts === 'number' ? Math.max(0, Math.min(HEARTS_MAX, s.hearts)) : HEARTS_MAX;
+      this.hearts = Math.max(0, Math.min(HEARTS_MAX, savedHearts));
       this.time = Math.max(0, +s.time || 0);
       this.flips = new Array(n).fill(1);
       this.flipTargets = new Array(n).fill(1);
@@ -152,6 +213,7 @@ class DetectiveScene extends Scene {
       this.right = -1;
       this.rightAt = 0;
       this.settleAt = 0;
+      this.stampAt = 0;          // 结算态静态保留盖章，不重播动画
       this.confirming = false;
       this.wrongFx = new Map();
       this.layout();
@@ -270,6 +332,7 @@ class DetectiveScene extends Scene {
       if (this.lock && this.settleAt && this.now >= this.settleAt) {
         if (this.hearts <= 0) {
           this.phase = LOST;
+          this.stampAt = 0;          // 动画已放完，LOST 态静态保留章（重进不重播）
           this.app.audio.playLose();
           this.saveState();
         } else if (this.right >= 0) {
@@ -308,7 +371,9 @@ class DetectiveScene extends Scene {
     this.app.audio.playFail();
     if (this.hearts <= 0) {
       this.lock = true;
-      this.settleAt = this.now + 500;
+      this.stampAt = Date.now();
+      // 先把正确答案盖章标出来（STAMP_TOTAL_MS），动画完整播完再停 LOSE_AFTER_STAMP 才盖失败遮罩
+      this.settleAt = this.now + STAMP_TOTAL_MS + LOSE_AFTER_STAMP;
     }
     this.saveState();
   }
@@ -434,24 +499,72 @@ class DetectiveScene extends Scene {
       const sx = Math.max(0.04, Math.abs(Math.cos(Math.PI * flip)));
       const faceUp = flip > 0.5;
       const wrongAt = this.wrongFx.get(i);
-      const shake = wrongAt ? wrongShake(this.now - wrongAt) : 0;
+      let shake = wrongAt ? wrongShake(this.now - wrongAt) : 0;
+      // 盖章落定后这张牌被按住晃一下（章本身不动，才有「盖上去」的感觉）
+      const stampAge = this.stampAt ? this.now - this.stampAt : -1;
+      let cardDy = 0;
+      let cardRot = 0;
+      if (this.swapped === i && stampAge >= STAMP_SHAKE_DELAY && stampAge < STAMP_TOTAL_MS) {
+        const sk = stampShakeOf(stampAge - STAMP_SHAKE_DELAY);
+        shake += sk.x;
+        cardDy = sk.y;
+        cardRot = sk.r;
+      }
       const scale = i === this.right && this.rightAt ? popScale(this.now - this.rightAt) : 1;
       c.save();
-      c.translate(r.x + r.w / 2 + shake, r.y + r.h / 2);
+      c.translate(r.x + r.w / 2 + shake, r.y + r.h / 2 + cardDy);
+      if (cardRot) c.rotate((cardRot * Math.PI) / 180);
       c.scale(sx * scale, scale);
       cards.draw(c, item, this.mode, -r.w / 2, -r.h / 2, r.w, r.h, faceUp, 'incognito', '🕵');
       c.restore();
-      if (this.right === i || (this.phase === LOST && this.swapped === i)) {
+      // 失败：正确答案那张先播「盖章 + 震牌」，放完停在结算态
+      const stamped = this.swapped === i && (this.phase === LOST || stampAge >= 0);
+      if (this.right === i || stamped) {
         D.strokeRoundRect(c, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 7, this.right === i ? T.primary : T.win, 3);
       }
       if (this.wrong.includes(i)) D.strokeRoundRect(c, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 7, T.lose, 3);
-      if (this.phase === LOST && this.swapped === i) {
-        D.text(c, '✓', r.x + r.w / 2, r.y + r.h / 2, { size: 22, weight: 'bold', color: T.primary, align: 'center' });
-      }
       if (this.phase === ANSWER && !this.lock && !this.wrong.includes(i)) {
         this.addButton('cell-' + i, r.x, r.y, r.w, r.h, () => this.onCellClick(i));
       }
     });
+    // 失败盖章画在所有牌之上：大章会压住周围一圈牌，才像真的盖上去
+    const stampAgeAll = this.stampAt ? this.now - this.stampAt : -1;
+    if (this.swapped >= 0 && this.swapped < this.board.length
+      && (this.phase === LOST || stampAgeAll >= 0)) {
+      const sr = this.cardRect(this.swapped);
+      const st = stampAgeAll < 0 ? { s: 1, a: 1 } : stampInOf(stampAgeAll);
+      const bw = sr.w * STAMP_W_RATIO;      // 就是卡片的一半，不封顶
+      const bh = sr.h * STAMP_H_RATIO;
+      const drawStamp = (fn) => {
+        c.save();
+        c.globalAlpha = st.a;
+        c.translate(sr.x + sr.w / 2, sr.y + sr.h / 2);
+        c.rotate((-12 * Math.PI) / 180);          // 盖章的手感：歪一点
+        c.scale(st.s, st.s);
+        fn();
+        c.restore();
+      };
+      drawStamp(() => {
+        c.shadowColor = 'rgba(0,0,0,0.12)';
+        c.shadowBlur = 2;
+        c.shadowOffsetY = 1;
+        D.fillRoundRect(c, -bw / 2, -bh / 2, bw, bh, 9, 'rgba(255,255,255,0.4)');
+      });
+      drawStamp(() => D.strokeRoundRect(c, -bw / 2, -bh / 2, bw, bh, 9, T.primary, 2));
+      drawStamp(() => {
+        // 章只占卡片一半：太小就只留对钩，不再挤「正确」两个字
+        const withText = bh >= 34;
+        D.text(c, '✓', 0, withText ? -bh * 0.14 : 0, {
+          size: Math.min(bw, bh) * (withText ? 0.42 : 0.6), weight: 'bold', color: T.primary, align: 'center',
+        });
+        if (withText) {
+          D.text(c, t('detective.stampText'), 0, bh * 0.28, {
+            size: Math.max(9, Math.min(bh * 0.22, bw * 0.28)), weight: 'bold', color: T.primary, align: 'center',
+          });
+        }
+      });
+    }
+
     const hint = this.phase === MEMORY ? t('detective.phaseMemory') : this.phase === FLIP ? t('detective.phaseFlip') : this.phase === ANSWER ? (this.mode === 1 ? t('detective.phaseAnswer') : t('detective.phaseAnswerCard')) : '';
     if (hint) {
       const tw = D.measure(c, hint, 13, 'bold');
@@ -462,7 +575,8 @@ class DetectiveScene extends Scene {
     if (this.phase === WON || this.phase === LOST) this.drawResult(c);
   }
   drawResult(c) {
-    if (!this.resultVisible()) return;
+    // 失败遮罩的延时已经在 settleAt 里算过（盖章动画 + 300ms），这里不再叠一层 200ms 通用门槛
+    if (this.phase !== LOST && !this.resultVisible()) return;
     const T = theme.tokens;
     D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.overlay);
     const cx = W / 2;

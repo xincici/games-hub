@@ -64,7 +64,7 @@ class MatchScene extends Scene {
     this.firstCard = null;
     this.lock = false;
     this.pendingMatch = null;
-    this.pendingMismatch = null;
+    this.mismatches = [];
     this.winAt = 0;
     this.finished = false;
     this.silent = false;
@@ -207,7 +207,7 @@ class MatchScene extends Scene {
     this.firstCard = null;
     this.lock = false;
     this.pendingMatch = null;
-    this.pendingMismatch = null;
+    this.mismatches = [];
     this.winAt = 0;
     this.combo = 0;
     this.comboAt = 0;
@@ -280,7 +280,14 @@ class MatchScene extends Scene {
       if (this.elapsed >= this.conf.time) this.loseLevel();
     }
     if (this.pendingMatch && this.now >= this.pendingMatch.at) this.resolveMatch();
-    if (this.pendingMismatch && this.now >= this.pendingMismatch.at) this.resolveMismatch();
+    // 不配对的一对牌到点自己翻回去；期间玩家点别的牌照常响应（可能同时有几对在翻）
+    if (this.mismatches.length) {
+      const due = this.mismatches.filter((m) => this.now >= m.at);
+      if (due.length) {
+        this.mismatches = this.mismatches.filter((m) => this.now < m.at);
+        due.forEach((m) => this.resolveMismatch(m));
+      }
+    }
     if (this.winAt && this.now >= this.winAt) this.win();
     if (this.now < this.confettiUntil && this.now - this.lastConfettiAt >= 40) {
       this.lastConfettiAt = this.now;
@@ -360,8 +367,9 @@ class MatchScene extends Scene {
     } else {
       this.mistakes = (this.mistakes || 0) + 1;   // 完美操作 = 整局零次配对失败
       this.breakCombo();
-      this.lock = true;
-      this.pendingMismatch = { a, b: card, at: Date.now() + FLIP_BACK_MS };
+      // 不锁输入：这一对先亮着让玩家记（FLIP_BACK_MS 后自动翻回去），
+      // 玩家可以立刻去点别的牌 —— 以前这里 lock 整盘，白等 700ms，手感很卡
+      this.mismatches.push({ a, b: card, at: Date.now() + FLIP_BACK_MS });
     }
   }
 
@@ -382,14 +390,14 @@ class MatchScene extends Scene {
     }
   }
 
-  resolveMismatch() {
-    const { a, b } = this.pendingMismatch;
-    this.pendingMismatch = null;
-    a.flipped = false;
-    b.flipped = false;
-    a.flipTarget = 0;
-    b.flipTarget = 0;
-    this.lock = false;
+  resolveMismatch(entry) {
+    const { a, b } = entry;
+    [a, b].forEach((card) => {
+      // 保险：万一这张牌这期间已经被配对掉，就不要再盖回背面
+      if (!card || card.matched) return;
+      card.flipped = false;
+      card.flipTarget = 0;
+    });
   }
 
   registerClear() {
@@ -455,7 +463,7 @@ class MatchScene extends Scene {
     if (this.comboUntil) this.comboUntil += p;
     if (this.lastClearAt) this.lastClearAt += p;
     if (this.pendingMatch) this.pendingMatch.at += p;
-    if (this.pendingMismatch) this.pendingMismatch.at += p;
+    this.mismatches.forEach((m) => { m.at += p; });
     if (this.winAt) this.winAt += p;
     if (this.confettiUntil) this.confettiUntil += p;
   }

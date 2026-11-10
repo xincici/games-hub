@@ -20,7 +20,8 @@ const CARD_GAP = 9;
 const LEFT_W = Math.round(CARD_W * 0.3);
 const RIGHT_W = CARD_W - LEFT_W;
 const ROW_GAP = 12;
-const HIDDEN_ROW_H = 34;   // 隐藏成就行更高：已达成时名字下面还有一句说明
+const HIDDEN_ROW_H = 34;
+const SPOT_MS = 1600;       // 新达成那一行的高亮动画时长（只播一次）   // 隐藏成就行更高：已达成时名字下面还有一句说明
 const HEX_R = 22;          // 卡片左列六边形半径
 const NAME_LH = 14;        // 游戏名行高   // 隐藏成就行更高：已达成时名字下面还有一句说明   // 分隔线到成就列表的间距（右边留 10）
 // 卡片最小高度 = 放得下 3 条成就 —— 否则只有 2 条时卡片变矮，左侧图标会被顶出卡片外
@@ -257,6 +258,7 @@ class AchvPage {
     this.celebration = new Celebration(this.safeTop);
     this.data = { summary: { unlocked: 0, total: 1, cleared: 0, plays: 0 }, games: [] };
     this.headerH = this.safeTop + 106;
+    this.spot = null;   // { key, at }：刚达成的那一行，播一次高亮
   }
 
   setData(data) {
@@ -265,6 +267,78 @@ class AchvPage {
 
   update(dt) {
     this.celebration.update(dt);
+    if (this.spot && Date.now() - this.spot.at > SPOT_MS) this.spot = null;
+  }
+
+  // 数据里的成就行 key：游戏行是「<gameId>#<行号>」，隐藏成就是「hidden#<key>」
+  hiddenKeyOf(item) {
+    return `hidden#${item && item.key}`;
+  }
+
+  // 新达成那一条的高亮进度（-1 = 不在播）
+  spotAgeOf(key) {
+    if (!this.spot || !key || this.spot.key !== key) return -1;
+    const age = Date.now() - this.spot.at;
+    return age >= 0 && age <= SPOT_MS ? age : -1;
+  }
+
+  startSpot(key) {
+    this.spot = key ? { key, at: Date.now() } : null;
+  }
+
+  // 打开面板时要滚到的位置：让这张卡的**中心**落在可视区偏上的位置
+  focusNew(key) {
+    if (!key) return 0;
+    const list = this.cardList(0);
+    let target = null;
+    list.forEach((c) => {
+      const game = c.game;
+      if (!game || !game.achv) return;
+      if (game.hidden) {
+        if (game.achv.some((a) => this.hiddenKeyOf(a) === key)) target = target || c;
+        return;
+      }
+      if (game.achv.some((a) => a.key === key)) target = target || c;
+    });
+    if (!target) return 0;
+    const viewTop = this.headerH;
+    const viewH = this.viewH();
+    // 卡片中心 → 可视区 40% 处（中间偏上）
+    const want = viewTop + viewH * 0.4;
+    const center = target.y + target.h / 2;
+    return Math.min(this.maxScroll(), Math.max(0, center - want));
+  }
+
+  // 给「新达成」那一行套一层高亮：呼吸描边 + 浅橙底 + 右上角「新」+ 轻微放大
+  withSpot(c, x, y, w, h, key, draw) {
+    const age = this.spotAgeOf(key);
+    if (age < 0) {
+      draw();
+      return;
+    }
+    const T = theme.tokens;
+    const k = Math.min(1, age / 220);
+    const pulse = 0.5 + 0.5 * Math.sin(age / 95);
+    const fade = age > SPOT_MS - 420 ? Math.max(0, (SPOT_MS - age) / 420) : 1;
+    const scale = 1 + 0.06 * Math.sin(k * Math.PI);
+    c.save();
+    c.translate(x + w / 2, y + h / 2);
+    c.scale(scale, scale);
+    c.translate(-(x + w / 2), -(y + h / 2));
+    draw();
+    // 高亮盖在这一行之上：橙描边呼吸 + 一点点橙底
+    c.globalAlpha = fade * (0.14 + 0.14 * pulse);
+    D.fillRoundRect(c, x - 1, y - 1, w + 2, h + 2, (h + 2) / 2, T.god);
+    c.globalAlpha = fade * (0.55 + 0.45 * pulse);
+    D.strokeRoundRect(c, x - 1, y - 1, w + 2, h + 2, (h + 2) / 2, T.god, 1.8);
+    // 右上角「新」小胶囊
+    c.globalAlpha = fade;
+    const label = t('achvNew');
+    const bw = Math.max(18, D.measure(c, label, 8.5, 'bold') + 10);
+    D.fillRoundRect(c, x + w - bw, y - 7, bw, 13, 6.5, T.god);
+    D.text(c, label, x + w - bw / 2, y - 0.5, { size: 8.5, weight: 'bold', color: '#ffffff', align: 'center' });
+    c.globalAlpha = 1;
+    c.restore();
   }
 
   cardHeight(game) {
@@ -511,14 +585,18 @@ class AchvPage {
       const listH = rows * HIDDEN_ROW_H;
       let rowY = y + (h - listH) / 2;
       game.achv.forEach((item) => {
-        this.drawHiddenRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, HIDDEN_ROW_H, item, dark);
+        this.withSpot(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, HIDDEN_ROW_H - 4, this.hiddenKeyOf(item), () => {
+          this.drawHiddenRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, HIDDEN_ROW_H, item, dark);
+        });
         rowY += HIDDEN_ROW_H;
       });
     } else {
       const listH = rows * ROW_H;
       let rowY = y + (h - listH) / 2;
       game.achv.forEach((a) => {
-        this.drawAchvRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, ROW_H - 6, a, dark);
+        this.withSpot(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, ROW_H - 6, a.key, () => {
+          this.drawAchvRow(c, SIDE + LEFT_W + ROW_GAP, rowY, rowW, ROW_H - 6, a, dark);
+        });
         rowY += ROW_H;
       });
     }

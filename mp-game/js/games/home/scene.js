@@ -185,6 +185,15 @@ class HomeScene extends Scene {
     if (this.dailyOpen) this.dailyAnim = Math.min(1, this.dailyAnim + step / 600);
     else if (this.dailyAnim > 0) this.dailyAnim = Math.max(0, this.dailyAnim - step / 480);
     if (this.achvAnim > 0) this.achvPage.update(step);
+    // 新达成的成就：打开面板时自动滚到那张卡（缓动 520ms，用户一动手就取消）
+    if (this.achvScrollAnim) {
+      const a = this.achvScrollAnim;
+      const now = Date.now();
+      const t = Math.max(0, Math.min(1, (now - a.at) / a.dur));
+      const e = 1 - Math.pow(1 - t, 3);
+      this.achvScroll = a.from + (a.to - a.from) * e;
+      if (t >= 1) this.achvScrollAnim = null;
+    }
     if (!this.achvDrag && !this.achvCard && Math.abs(this.achvVel) > 0.2) {
       // 甩动惯性：松手后继续滑、按 0.94/帧 衰减，撞到两端就停
       const max = this.achvPage.maxScroll();
@@ -279,6 +288,7 @@ class HomeScene extends Scene {
       return;
     }
     if (this.achvOpen) {
+      this.achvScrollAnim = null;
       this.achvVel = 0;
       this.achvTrack.length = 0;
       const index = this.achvPage.hitIndex(p.y, this.achvScroll);
@@ -589,11 +599,23 @@ class HomeScene extends Scene {
   // ---------- 成就 ----------
 
   openAchv() {
-    achv.markSeen();
+    // 取走「最新达成」：取走即清空 + 标记已看过，所以这个动画每次解锁只播一次
+    const newest = achv.takeNewest();
     this.achvPage.setData(achv.pageData());
     this.achvOpen = true;
     this.achvAnim = 0;
     this.achvScroll = 0;
+    this.achvScrollAnim = null;
+    // 没有新解锁就清掉上次的高亮（保证动画只在「刚达成」的那次打开时播）
+    this.achvPage.startSpot(newest && newest.key ? newest.key : null);
+    if (newest && newest.key) {
+      // 滚到那张卡（中心落在可视区偏上）
+      const to = this.achvPage.focusNew(newest.key);
+      if (to > 0.5) {
+        // 等圆形展开一点再滚，不然会跟展开动画抢视线
+        this.achvScrollAnim = { from: 0, to, at: Date.now() + 280, dur: 520 };
+      }
+    }
     this.achvDrag = null;
     this.achvCard = null;
     this.achvPress = null;

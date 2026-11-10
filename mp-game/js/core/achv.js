@@ -45,6 +45,10 @@ function load() {
     timeMs: num(data.timeMs),
     fails: num(data.fails),
     seen: data.seen !== false,
+    // 最近一次新解锁（只保留最新一条）：成就面板打开时滚动过去并高亮一次
+    newest: data.newest && typeof data.newest === 'object' && data.newest.key
+      ? { key: String(data.newest.key), at: num(data.newest.at) }
+      : null,
   };
   return cache;
 }
@@ -67,6 +71,7 @@ function save() {
       timeMs: data.timeMs,
       fails: data.fails,
       seen: data.seen !== false,
+      newest: data.newest,
     }));
   } catch (e) {
     // 存储异常不影响游玩
@@ -169,15 +174,21 @@ function collectUnlocks() {
   }
   const first = !knownUnlocks;
   const fresh = [];
+  const freshKeys = [];
   const keys = new Set();
   list.forEach((it) => {
     keys.add(it.key);
-    if (!first && !knownUnlocks.has(it.key)) fresh.push(it.name);
+    if (!first && !knownUnlocks.has(it.key)) {
+      fresh.push(it.name);
+      freshKeys.push(it.key);
+    }
   });
   knownUnlocks = keys;
   if (fresh.length) {
     const data = load();
     data.seen = false;
+    // 只保留最新的一条（后覆盖前）：面板打开时只滚动 / 高亮这一个
+    data.newest = { key: freshKeys[freshKeys.length - 1], at: Date.now() };
     save();
   }
   return fresh;
@@ -362,6 +373,23 @@ function markSeen() {
     data.seen = true;
     save();
   }
+}
+
+// 最近一次解锁（只读，不清）
+function newestUnlock() {
+  return load().newest;
+}
+
+// 取走最近一次解锁：返回后即清空 + 标记已看过，所以面板每次打开最多播一次动画
+function takeNewest() {
+  const data = load();
+  const n = data.newest;
+  if (n || data.seen === false) {
+    data.newest = null;
+    data.seen = true;
+    save();
+  }
+  return n;
 }
 
 function playsOf(id) {
@@ -1149,6 +1177,8 @@ module.exports = {
   sweepUnlocks,
   hasNew,
   markSeen,
+  newestUnlock,
+  takeNewest,
   win,
   playsOf,
   winsOf,

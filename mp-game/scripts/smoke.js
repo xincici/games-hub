@@ -917,6 +917,65 @@ i18n.setLang('cn');
     check(normal, '成就：其它卡片不该全变橙');
   }
 
+  // 新达成的成就：打开面板自动滚到那张卡（中间偏上）+ 只播一次高亮
+  {
+    // ① 存储层：连解两条只保留最新一条（后覆盖前）、取走即清空
+    achv.takeNewest();                      // 先清掉之前的，从干净的「无新成就」开始
+    const gotKeys = [];
+    achv.pageData().games.forEach((g) => {
+      // 直接跳到 50 / 100 关：会同时命中「完成第 50 / 100 关」这类里程碑行
+      [50, 100, 500].forEach((lv) => {
+        if (gotKeys.length >= 2) return;
+        achv.win(g.id, { level: lv, mode: 1, perfect: true });
+        achv.trackPlay(g.id);
+        const n = achv.newestUnlock();
+        if (n && n.key && gotKeys.indexOf(n.key) < 0) gotKeys.push(n.key);
+      });
+    });
+    check(gotKeys.length >= 2, `成就：没法凑出两条新解锁（${gotKeys.join('/')}）`);
+    const latestKey = gotKeys[gotKeys.length - 1];
+    check(achv.newestUnlock().key === latestKey,
+      `成就：最新达成不是最后那条（${achv.newestUnlock().key} / ${latestKey}）`);
+    check(achv.hasNew() === true, '成就：解锁后没有亮红点');
+
+    // ② 页面几何：随便挑一张中段的卡，滚过去后卡片中心应落在可视区 40%（中间偏上）
+    const gamesList = achv.pageData().games;
+    const midGame = gamesList[Math.floor(gamesList.length * 0.6)];
+    const geomKey = midGame.achv[0].key;
+    home.achvPage.setData(achv.pageData());
+    const target = home.achvPage.focusNew(geomKey);
+    check(target > 0, `成就：没有算出滚动目标（${target}，key ${geomKey}）`);
+    const card = home.achvPage.cardList(target).find((c) => c.game && c.game.id === midGame.id);
+    check(!!card, '成就：滚动后找不到那张卡');
+    const centerY = card.y + card.h / 2;
+    const wantY = home.achvPage.headerH + home.achvPage.viewH() * 0.4;
+    check(Math.abs(centerY - wantY) < 2,
+      `成就：新达成的卡片没有停在中间偏上（中心 ${centerY.toFixed(0)} / 目标 ${wantY.toFixed(0)}）`);
+
+    // ③ 那一行要有「新」角标（渲染不炸）
+    home.achvPage.startSpot(geomKey);
+    const spotRec = [];
+    const spotCtx = makeCtx();
+    spotCtx.fillText = (v) => { spotRec.push(String(v)); };
+    home.achvPage.draw(spotCtx, { ease: 1, scroll: target, interactive: true });
+    check(spotRec.indexOf(i18n.t('achvNew')) >= 0, `成就：新达成那一行没有「${i18n.t('achvNew')}」角标`);
+
+    // ④ 场景：打开面板 → 自动滚动 + 高亮；再打开（没有新成就）→ 都不播
+    const origTake = achv.takeNewest;
+    achv.takeNewest = () => ({ key: geomKey, at: Date.now() });
+    home.achvOpen = false;
+    home.openAchv();
+    check(!!home.achvScrollAnim && home.achvScrollAnim.to > 0, '成就：打开面板没有自动滚到新成就');
+    check(!!home.achvPage.spot && home.achvPage.spot.key === geomKey,
+      '成就：打开面板没有高亮新达成的那一行');
+    achv.takeNewest = origTake;
+    achv.takeNewest();                      // 真实路径：把「最新达成」取走
+    home.achvOpen = false;
+    home.openAchv();
+    check(!home.achvScrollAnim && !home.achvPage.spot,
+      '成就：再次打开还在播新成就动画（应该只播一次）');
+  }
+
   // 设置 / 成就面板：从屏幕边缘内滑关闭（和点 ✕ 同一套收起）
   {
     const { App: AppClass } = require(path.join(ROOT, 'js/core/app'));
@@ -1770,6 +1829,116 @@ i18n.setLang('cn');
   });
 }
 
+// ---------- 下坠：分数到整百，游戏区上方放烟花 + 一条夸张鼓励（不拦操作） ----------
+{
+  const DownScene = require(path.join(ROOT, 'js/games/down/scene'));
+  const sc = new DownScene(fakeApp);
+  fakeApp.sceneId = 'down';
+  audio.setGame('down');
+  sc.startGame();
+  check(sc.score === 0, `下坠：开局分数不是 0（${sc.score}）`);
+
+  // 整百这一次：不播普通消除音，改播烟花（多消 / 连击）音
+  const playedBefore = [];
+  const origElim = audio.playElimination;
+  const origFire = audio.playFirework;
+  audio.playElimination = () => playedBefore.push('elimination');
+  audio.playFirework = () => playedBefore.push('firework');
+  sc.score = 99;
+  sc.clearRow();
+  check(playedBefore.indexOf('elimination') < 0, '下坠：整百那一次还播了普通消除音');
+  sc.finishClearRow();
+  audio.playElimination = origElim;
+  audio.playFirework = origFire;
+  check(playedBefore.indexOf('firework') >= 0, '下坠：整百那一次没有播烟花音');
+  check(sc.score === 100, `下坠：消一排没有加分（${sc.score}）`);
+  check(!!sc.cheer && !!sc.cheer.text, '下坠：分数到 100 没有出现鼓励语');
+  check(sc.bursts.length > 0, '下坠：分数到 100 没有放烟花');
+
+  // 渲染：鼓励语画出来了、列点击区没被破坏、且是「从顶部落下来」的
+  const rec = [];
+  const cCheer = makeCtx();
+  cCheer.fillText = (v, x, y) => { rec.push({ v: String(v), x, y }); };
+  sc.buttons = [];
+  sc.render(cCheer);
+  check(rec.some((r) => r.v === sc.cheer.text), `下坠：鼓励语没画出来（${rec.map((r) => r.v).slice(0, 6).join('/')}）`);
+  const cols = sc.buttons.filter((b) => b.id.indexOf('col-') === 0).length;
+  check(cols === 6, `下坠：庆祝时列点击区被破坏（${cols}）`);
+  const startTop = sc.cheerRect ? sc.cheerRect.y : 0;
+  check(startTop < sc.optY, `下坠：鼓励条不是从顶部落下来的（起始顶边 ${startTop.toFixed(0)}）`);
+
+  // 落定位置：在选项卡上半区，不压牌面、也不跑出屏幕
+  let settled = null;
+  withFakeClock(16, () => {
+    // 每次 update 内部会读好几次 Date.now（假时钟每读一次 +16ms），
+    // 所以只跑 20 次：足够越过 420ms 的下落，又不会越过 1.5s 的存在时间
+    for (let i = 0; i < 20; i += 1) sc.update(16);
+    sc.drawCheer(makeCtx());
+    settled = sc.cheerRect;
+  });
+  check(!!settled && settled.y + settled.h <= sc.boardY + 1,
+    `下坠：鼓励条压住了牌面（底边 ${settled && (settled.y + settled.h).toFixed(0)} / boardY ${sc.boardY.toFixed(0)}）`);
+  check(!!settled && settled.y >= 0, '下坠：鼓励条跑出屏幕顶部');
+  check(!!settled && Math.abs(settled.y + settled.h - sc.boardY) <= 2,
+    `下坠：落点不对（底边 ${settled && (settled.y + settled.h).toFixed(0)}，应贴着游戏区顶部 ${sc.boardY.toFixed(0)}）`);
+
+  // 连续整百要换一句；非整百不触发
+  const firstCheer = sc.cheer.text;
+  sc.score = 199;
+  sc.finishClearRow();
+  check(sc.score === 200 && sc.cheer.text !== firstCheer, '下坠：连续两次整百出现了同一句鼓励');
+  const keepCheer = sc.cheer.text;
+  sc.score = 250;
+  sc.finishClearRow();
+  check(sc.score === 251 && sc.cheer.text === keepCheer, '下坠：不是整百也触发了鼓励');
+  audio.setGame(null);
+}
+
+
+// ---------- 对对碰：不配对的一对翻回去期间，其它牌必须照常可以点 ----------
+{
+  const MatchScene = require(path.join(ROOT, 'js/games/match/scene'));
+  const cardsMod = require(path.join(ROOT, 'js/core/cards'));
+  const sc = new MatchScene(fakeApp);
+  fakeApp.sceneId = 'match';
+  audio.setGame('match');
+  sc.level = 2;
+  sc.initLevel(2, null);
+  sc.endPreview();
+  check(sc.phase === 'play', `对对碰：没有进入可玩阶段（${sc.phase}）`);
+
+  const keyOf = cardsMod.keyOf;
+  const a = sc.cards[0];
+  const b = sc.cards.find((c) => keyOf(c.item) !== keyOf(a.item));
+  sc.onCardClick(a);
+  sc.onCardClick(b);
+  check(sc.lock === false, '对对碰：不配对之后锁住了整盘（以前要白等 700ms，其它牌点不动）');
+  check(a.flipped && b.flipped, '对对碰：不配对的牌应该先亮着让玩家记');
+
+  // 翻回去之前点第三张牌：必须立刻响应
+  const c3 = sc.cards.find((c) => c !== a && c !== b && keyOf(c.item) !== keyOf(a.item));
+  sc.onCardClick(c3);
+  check(sc.firstCard === c3 && c3.flipped, '对对碰：翻回去期间点其它牌没有响应');
+  check(sc.lock === false, '对对碰：点第三张牌之后又被锁住了');
+
+  // 再凑一对不配对：两对要能各自排队、各自翻回去
+  const c4 = sc.cards.find((c) => c !== a && c !== b && c !== c3 && keyOf(c.item) !== keyOf(c3.item));
+  sc.onCardClick(c4);
+  check(sc.mismatches.length === 2, `对对碰：两对不配对没有各自排队（${sc.mismatches.length}）`);
+
+  // 亮着的时间段内，不配对的牌仍然是正面（给玩家记）
+  withFakeClock(16, () => { for (let i = 0; i < 20; i += 1) sc.update(16); });
+  check(a.flipped && b.flipped, '对对碰：不配对的牌太早翻回去了（应该先亮一会儿）');
+
+  // 过了 700ms 两对都要翻回去，队列清空，输入依旧不锁
+  withFakeClock(16, () => { for (let i = 0; i < 60; i += 1) sc.update(16); });
+  check(a.flipTarget === 0 && b.flipTarget === 0 && c3.flipTarget === 0 && c4.flipTarget === 0,
+    '对对碰：到点后不配对的牌没有翻回去');
+  check(sc.mismatches.length === 0, '对对碰：翻回去的队列没有清空');
+  check(sc.lock === false, '对对碰：翻回去结束后仍处于锁定状态');
+  audio.setGame(null);
+}
+
 // ---------- 侦探：偷换必须等牌全翻到背面；中途退出要能接着答 ----------
 {
   const DetectiveScene = require(path.join(ROOT, 'js/games/detective/scene'));
@@ -1849,6 +2018,80 @@ i18n.setLang('cn');
     s3.saveState();
     const s4 = new DetectiveScene(fakeApp);
     check(s4.phase === 'lost' && s4.lock === true, `侦探：失败态退出后没保持（${s4.phase}）`);
+
+    // ⑥ 全选错：先把正确答案「盖章」标出来（盖章 + 震牌动画），动画放完再停 300ms 才出失败遮罩
+    wx.removeStorageSync(LEVEL_KEY);          // 上一步存的是 LOST 态，这里要一局干净的
+    const lose = new DetectiveScene(fakeApp);
+    lose.level = 3;                           // 8 张牌，扣光 3 颗心才点得到
+    lose.startLevel();
+    let settleDelay = 0;
+    let stampScale0 = 0;      // 第一帧的章缩放（4.2 → …：从 z 轴很远的地方飞过来）
+    let stampScale300 = 0;    // 盖章结束后应回到 1
+    let stampTexts = [];
+    let stampRect = null;     // 章的最终尺寸要与卡片一半对得上
+    let at300 = '';
+    let at1000 = '';
+    let at1400 = '';
+    withFakeClock(16, () => {
+      let k = 0;
+      while (lose.phase === 'memory' && k < 900) { k += 1; lose.update(16); }
+      k = 0;
+      while (lose.phase !== 'answer' && k < 400) { k += 1; lose.update(16); }
+      const wrongs = lose.board.map((_, i) => i).filter((i) => i !== lose.swapped).slice(0, 3);
+      wrongs.forEach((i) => lose.onCellClick(i));
+      settleDelay = lose.settleAt - lose.now;
+      lose.update(16);            // 让 this.now 跟上盖章起点，否则 stampAge 还是负数
+      // 盖章是「大章砸下来」：量一下第一帧的缩放（2.4 倍）和画了哪些字
+      const sample = () => {
+        const scales = [];
+        const texts = [];
+        const rects = [];
+        const dev = makeCtx();
+        dev.scale = (sx) => { scales.push(sx); };
+        const origText = D.text;
+        const origFill = D.fillRoundRect;
+        D.text = (c, v) => { texts.push(String(v)); };
+        D.fillRoundRect = (c, x, y, w, h, r, color) => {
+          if (color === 'rgba(255,255,255,0.4)') rects.push({ w, h });
+          return origFill(c, x, y, w, h, r, color);
+        };
+        lose.buttons = [];
+        lose.render(dev);
+        D.text = origText;
+        D.fillRoundRect = origFill;
+        return { scale: scales.length ? Math.max(...scales) : 0, texts, rect: rects[0] || null };
+      };
+      const first = sample();
+      stampScale0 = first.scale;
+      stampTexts = first.texts;
+      stampRect = first.rect;
+      const walk = (ms) => { for (let i = 0; i < Math.round(ms / 16); i += 1) lose.update(16); };
+      walk(300);
+      at300 = lose.phase;
+      stampScale300 = sample().scale;
+      walk(700);
+      at1000 = lose.phase;
+      walk(400);
+      at1400 = lose.phase;
+    });
+    check(lose.hearts === 0, `侦探：全选错之后心没有归零（${lose.hearts}）`);
+    check(settleDelay >= 1200 && settleDelay <= 1300,
+      `侦探：失败遮罩的延时应是「盖章动画 950ms + 300ms」，实际 ${settleDelay}ms`);
+    check(stampScale0 > 3.5, `侦探：盖章没有「从 z 轴飞过来」的入场（第一帧缩放 ${stampScale0}，应约 4.2）`);
+    const cardRect = lose.cardRect(lose.swapped);
+    check(!!stampRect && Math.abs(stampRect.w - cardRect.w * 0.52) < 1.5
+      && Math.abs(stampRect.h - cardRect.h * 0.52) < 1.5,
+    `侦探：章的大小应正好占卡片一半（章 ${stampRect && stampRect.w.toFixed(1)}×${stampRect && stampRect.h.toFixed(1)}，卡片 ${cardRect.w.toFixed(1)}×${cardRect.h.toFixed(1)}）`);
+    check(stampScale300 > 0.95 && stampScale300 < 1.08,
+      `侦探：盖章动画结束后章应该回到 1 倍（实际 ${stampScale300}）`);
+    // 章小到放不下两个字时只留 ✓（320 宽那一档卡片很小）
+    const stampH = cardRect.h * 0.52;
+    check(stampTexts.indexOf('✓') >= 0, `侦探：章上应该有对钩（实际 ${stampTexts.join('/')}）`);
+    check(stampH < 34 || stampTexts.indexOf(i18n.t('detective.stampText')) >= 0,
+      `侦探：章上应该有「${i18n.t('detective.stampText')}」两个字（章高 ${stampH.toFixed(0)}，实际 ${stampTexts.join('/')}）`);
+    check(at300 === 'answer', `侦探：盖章动画还没放完就进失败态了（${at300}）`);
+    check(at1000 === 'answer', `侦探：动画刚放完就立刻盖遮罩了，没有留 300ms（${at1000}）`);
+    check(at1400 === 'lost', `侦探：动画放完 +300ms 之后没有进入失败态（${at1400}）`);
   }
   audio.setGame(null);
 }
