@@ -494,8 +494,9 @@ game.js
   **兜底**（万一某个场景没注册自己的入口）：`App` 画在右上角 `SAFE_TOP + 44`（96×26）——
   注意**不能**放 `SAFE_TOP + 6`，那里被微信胶囊（关闭 / 更多）压住（踩过）。
   冒烟断言：兜底矩形与 25 个场景的按钮**零重叠**（375/667、320/568、390/844 都验过）。
-  - **按钮图标**：图标字体里没有 `share`，`share.drawShareIcon()` 用 canvas 画「盒子 + 向上的箭头」，
-    和文字组合居中；`drawResultChip()` 返回 `{ icon, label, rect }`，冒烟据此断言画了图标。
+  - **按钮图标**：`share.drawShareIcon()` 优先用图标字体里的 `share`（**mdi:share-variant-outline**），
+    字体没加载出来时才退回手绘「盒子 + 向上的箭头」；左下角分享 FAB 和结算遮罩的「炫耀一下」共用它。
+    `drawResultChip()` 返回 `{ icon, label, rect }`，冒烟据此断言画了图标。
 - **结果态判断** `share.shouldShowChip(scene, gameId)`：`scene.phase` 属于
   `won / over / lost / lose / win / draw / finished`，或 `scene.result` 是这些字符串 / 1A2B 的 1|2；
   帮助或二次确认面板打开时不显示。新增游戏只要沿用这些 phase 命名就自动有入口。
@@ -707,7 +708,35 @@ game.js
 
 ## 首页（`js/games/home/`）
 
-- 当前二十五个入口，按 4+3+4+3+4+3+4 蜂窝；长按 260ms 可拖动排序，顺序存 `__games_hub__home_order`（与 web 同一个 key）。水平间距按小程序 6rpx 口径缩小，行间用负 overlap 咬合。
+- **版式（2026-11 重做，不再是蜂窝）**：三段落式「刊物索引」——
+  1. **页眉**（`mastheadY`）：左边标题（17px 加粗），右边一行 9.5px 极小字统计「已玩 7/25 款 · 连续 3 天 · 累计 12 次」
+     （已玩 = `achv.playsOf(id) > 0` 的格子数），下面一条 1px 发丝线；
+     ⚠️ **页眉必须在微信胶囊按钮下方**：`mastheadY = HEADER.TOP + HEADER.HEIGHT + 10 + 12`。
+     别用 `HEADER.TITLE_Y`（那是胶囊那一行的垂直中线，标题会压在 ●●●◉ 上，真机截图已经踩过）；
+  2. **每日挑战卡**（`heroRect`，h=62~78，圆角 14、1% 绿底 + 1px 绿描边 + 左侧 3px 绿色竖条）：
+     标题「每日挑战」+ 今日任务一句话（超长尾部省略）+ 右侧**细描边药丸**「去挑战 / 已完成」（不用实心大色块）；
+     整卡点击打开每日挑战面板（`home-hero`）；
+  3. **5×5 索引网格**（`grid`，格子 `cellW=(W-32)/5`、`cellH` 夹在 52~92 且整体垂直居中）：
+     每格 = 左上角序号 `01`（8.5px 弱色）+ 分类色图标 + 10.5px 游戏名（放不下自动缩到 7.5px）+ 名字下方 2px 分类色条。
+     **不画卡片底、不加阴影**，靠 1px 发丝分割线把它分成一张表（`drawGridRules`）。
+- **为什么要这么改**：原来 25 个六边形卡片平铺，每张都有阴影和彩色描边，看起来像一堆贴纸；
+  改成「页眉 + 一张重点卡 + 一张索引表」之后有主次，位置固定、带序号，老玩家可以直接记位置。
+- **加图标要重建字体**：`mp-game/scripts/build-icons.py`（Python + fontTools）把 `@iconify-json/{carbon,mdi,dinkie-icons}`
+  的路径画成 TTF，并在 `js/core/icon-glyphs.js` 里写 `名字 → 私有区码位`。**字体和映射必须一起重新生成**
+  （只改 JS 映射会画成豆腐块）。当前 57 个 glyph，包含 `trophy`（mdi:trophy-outline）、`calendar`
+  （mdi:calendar-month-outline）、`infinity`（mdi:infinity）。
+  ⚠️ 本机 `python3 -m pip install fonttools` 会被沙箱挡在 `~/.local`；可装到临时目录再跑：
+  `pip install --target /tmp/pydeps fonttools` → 删掉里面的 `*.so`（签名冲突）→
+  `PYTHONPATH=/tmp/pydeps python3 mp-game/scripts/build-icons.py`（纯 Python 版 fontTools 够用）。
+- **图标必须和 web 版一致**（web 的 `src/shared/games.js` 里每个游戏都有 `icon:`）：2048 = `mdi:numeric`
+  （**不是计算器**，2026-11 被玩家指出）、Threes = `mdi:numeric-3`、24 点 = `mdi:calculator`。
+  web 给了 `iconScale` 的（2048 1.2、Threes 1.5）在小程序里也要按同比例放大（`ICON_SCALE`），
+  否则数字类图标看着比邻居小一圈；上限压到 0.5 格宽。
+- **短名**：`Emoji 连连看 / 镜像 / 下坠 / 消消乐 / 排序 / 滑行` 在 68px 格子里会被缩到 7px，
+  用 `home.<id>TitleShort`（`linkTitleShort` 等，`SHORT_NAMES` 显式列出这 6 个），别用「拼 key 猜」的方式判断是否缺 key。
+- 长按 260ms 可拖动排序（现在按矩形格子命中，`hexAt` 就是格子矩形），顺序存 `__games_hub__home_order`（与 web 同一个 key）。
+- 面板（设置 / 成就 / 每日挑战）打开时整屏被盖住，**首页本体不再绘制**（`covered` 判断），
+  否则面板里的文字会被重复计数、也白费绘制。
 - 每个入口按 accent 上色：logic `#23804e`、number `#2c6aad`、memory `#7550ad`、action `#bd5420`、card `#8f6419`；六边形外层用 18% 混色边框，图标用完整 accent。
 - 右下角齿轮打开**整屏设置面板**（照 web `src/shared/SettingsSheet.vue` 的排版）：
   顶部绿色渐变徽章 + 「设置」标题；三张分组卡（主题 / 语言 / 偏好设置），卡内是「h3 + 分段控件」，

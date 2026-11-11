@@ -22,7 +22,8 @@ const SEG_SLIDE_MS = 320;
 const HEADER = require('../../core/header');
 
 const ORDER_KEY = '__games_hub__home_order';
-const ROW_SIZES = [4, 3, 4, 3, 4, 3, 4];
+// 首页 5×5 网格里用短名，避免长名字被缩到看不清
+const SHORT_NAMES = { link: 1, mirror: 1, down: 1, crush: 1, sort: 1, slide: 1 };
 let homeIntroPlayed = false;
 function entryHash(str) {
   let h = 0;
@@ -46,16 +47,6 @@ if (!coreI18n.__homeRegistered) {
   coreI18n.__homeRegistered = true;
 }
 
-function hexPath(c, cx, cy, r) {
-  c.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = -Math.PI / 2 + i * Math.PI / 3;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r;
-    if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
-  }
-  c.closePath();
-}
 
 class HomeScene extends Scene {
   constructor(app) {
@@ -119,27 +110,24 @@ class HomeScene extends Scene {
     this.achvRect = { x: this.gearRect.x - 12 - fabKit.SIZE, y: this.gearRect.y, w: fabKit.SIZE, h: fabKit.SIZE };
     // 每日挑战按钮：成就按钮左边一格
     this.dailyRect = { x: this.achvRect.x - 12 - fabKit.SIZE, y: this.gearRect.y, w: fabKit.SIZE, h: fabKit.SIZE };
-    const gap = Math.max(2, W * 0.008);
-    const avail = W - 32;
-    const hexW = (avail - gap * 3) / 4;
-    // 小程序蜂窝用 -40rpx 的负 margin 让两行咬合；折算到当前屏宽，
-    // 让斜边间的视觉缝隙与水平 gap 一致，而不是把两行完全分开。
-    const overlap = W * 40 / 750;
-    const rows = [];
-    let oi = 0;
-    ROW_SIZES.forEach((size) => {
-      const ids = this.order.slice(oi, oi + size);
-      if (ids.length) rows.push(ids);
-      oi += size;
-    });
-    if (oi < this.order.length) rows.push(this.order.slice(oi));
-    // 25 格七行：水平宽度和「标题下沿 → 齿轮上沿」的竖向预算同时约束六边形半径。
-    const topLimit = this.titleY + 32;
-    const verticalRoom = Math.max(300, this.gearRect.y - 16 - topLimit);
-    const maxByHeight = (verticalRoom + (rows.length - 1) * overlap) / (2 * rows.length);
-    this.hexR = Math.min(52, hexW / 1.732, maxByHeight);
-    this.hexCy = Math.min(H * 0.51, H - 190);
-    const step = this.hexR * 2 - overlap;
+    // ---- 版式：页眉 / 每日挑战卡 / 5×5 索引网格（固定位置，比「卡片平铺」更像一本目录）
+    const pad = 16;
+    const heroH = Math.max(62, Math.min(78, Math.round(H * 0.095)));
+    // 页眉必须**整个落在微信胶囊按钮下方**：胶囊那一行（HEADER.TITLE_Y）右边是 ●●●◉，
+    // 标题行贴着它会压在一起（玩家截图里就是这里）。留 10px 呼吸位。
+    this.mastheadY = Math.round(HEADER.TOP + HEADER.HEIGHT + 10 + 12);
+    this.mastheadRect = { x: pad, y: this.mastheadY - 12, w: W - pad * 2, h: 24 };
+    this.heroRect = { x: pad, y: this.mastheadY + 18, w: W - pad * 2, h: heroH };
+    const gridTop = this.heroRect.y + heroH + 12;
+    const gridBottom = this.gearRect.y - 10;
+    const cols = 5;
+    const rows = 5;
+    const cellW = (W - pad * 2) / cols;
+    // 单元格高度夹在 52~92 之间，剩余空间上下均分（大屏不稀稀拉拉）
+    const cellH = Math.max(52, Math.min(92, (gridBottom - gridTop) / rows));
+    const gridH = cellH * rows;
+    const gy = Math.max(gridTop, gridTop + (gridBottom - gridTop - gridH) / 2);
+    this.grid = { x: pad, y: gy, w: W - pad * 2, h: gridH, cellW, cellH, cols, rows };
     const names = {
       click: ['home.clickTitle', 'click'], match: ['home.matchTitle', 'match'],
       point24: ['home.point24Title', 'point24'], guess: ['home.guessTitle', 'guess'],
@@ -165,12 +153,19 @@ class HomeScene extends Scene {
       alchemy: 'card', quesheng: 'card', legend: 'card', gambler: 'card',
     };
     this.hexes = [];
-    const top = this.hexCy - (rows.length - 1) * step / 2;
-    rows.forEach((ids, ri) => {
-      const total = ids.length * hexW + (ids.length - 1) * gap;
-      const start = (W - total) / 2 + hexW / 2;
-      ids.forEach((id, i) => {
-        this.hexes.push({ id, cx: start + i * (hexW + gap), cy: top + ri * step, title: t(names[id][0]), kind: names[id][1], accent: accents[id] || 'logic' });
+    this.order.forEach((id, i) => {
+      if (!names[id]) return;
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = this.grid.x + col * cellW;
+      const y = this.grid.y + row * cellH;
+      this.hexes.push({
+        id, x, y, w: cellW, h: cellH,
+        cx: x + cellW / 2, cy: y + cellH / 2,
+        index: i + 1,
+        // 网格里用短名（「Emoji 连连看」这种在 68px 格子里会被缩到 7px）
+        title: SHORT_NAMES[id] ? t(names[id][0] + 'Short') : t(names[id][0]),
+        kind: names[id][1], accent: accents[id] || 'logic',
       });
     });
   }
@@ -231,19 +226,43 @@ class HomeScene extends Scene {
     c.fillStyle = T.bg;
     c.fillRect(0, 0, W, H);
     this.bg.draw(c, theme.dark);
-    // 首页顶部固定展示小游戏名称；中英文使用同一个名字。
-    D.text(c, t('home.homeTitle'), W / 2, this.titleY, {
-      size: 16, weight: 'bold', color: T.muted, align: 'center',
-    });
-
-    this.hexes.forEach((item) => {
-      if (this.drag && this.drag.id === item.id) return;
-      this.drawHex(c, item, item.cx, item.cy, false);
-    });
-    if (this.drag) {
-      const item = this.hexes.find(h => h.id === this.drag.id);
-      if (item) this.drawHex(c, item, this.drag.x, this.drag.y, true);
-    }
+      // 面板打开时整屏被盖住，不必再画首页本体（也避免文字被重复计数）
+      const covered = this.dailyOpen || this.achvOpen || this.settingsOpen;
+      if (!covered) {
+        // 页眉：左边标题（正体加粗），右边一行极小字统计 —— 像刊物的刊头
+        const pad = 16;
+        D.text(c, t('home.homeTitle'), pad, this.mastheadY, {
+          size: 17, weight: 'bold', color: T.text,
+        });
+        let played = 0;
+        this.hexes.forEach((h) => { if (achv.playsOf(h.id) > 0) played += 1; });
+        // 页眉统计：已玩几款 + 连签几天（没有连签就只显示已玩）
+        const streak = daily.bestStreak();
+        const stat = t('home.playCount').replace('{a}', String(played)).replace('{b}', String(this.hexes.length))
+          + (streak > 0 ? '  ·  ' + t('home.heroStat').replace('{a}', String(streak))
+            .replace('{b}', String(daily.completedTotal())) : '');
+        D.text(c, stat, W - pad, this.mastheadY, {
+          size: 9.5, weight: 'bold', color: T.muted, align: 'right',
+        });
+        c.save();
+        c.strokeStyle = theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(44,62,80,0.12)';
+        c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(pad, Math.round(this.mastheadY) + 12.5);
+        c.lineTo(W - pad, Math.round(this.mastheadY) + 12.5);
+        c.stroke();
+        c.restore();
+        this.drawHero(c);
+        this.drawGridRules(c);
+        this.hexes.forEach((item) => {
+          if (this.drag && this.drag.id === item.id) return;
+          this.drawTile(c, item, item.cx, item.cy, false);
+        });
+        if (this.drag) {
+          const item = this.hexes.find(h => h.id === this.drag.id);
+          if (item) this.drawTile(c, item, this.drag.x, this.drag.y, true, 1.08);
+        }
+      }
     if (this.dailyAnim > 0) this.drawDaily(c);
     else if (this.achvAnim > 0) this.drawAchv(c);
     else if (this.settingsAnim > 0) this.drawSettings(c);
@@ -259,12 +278,11 @@ class HomeScene extends Scene {
   }
 
   // ---------- 长按拖动排序 ----------
+  // 命中：网格里每个条目就是一个矩形单元格（和绘制完全一致，不用再估算外接框）
   hexAt(x, y) {
-    const w = this.hexR * 1.55;
-    const h = this.hexR * 1.8;
     for (let i = this.hexes.length - 1; i >= 0; i--) {
       const item = this.hexes[i];
-      if (Math.abs(x - item.cx) <= w / 2 && Math.abs(y - item.cy) <= h / 2) return item;
+      if (x >= item.x && x <= item.x + item.w && y >= item.y && y <= item.y + item.h) return item;
     }
     return null;
   }
@@ -479,19 +497,25 @@ class HomeScene extends Scene {
     return { scale, alpha };
   }
 
-  drawHex(c, item, cx, cy, ghost) {
+  // 目录式单元格：序号 + 图标 + 名称 + 分类色条（不画卡片底，靠发丝分割线分区）
+  drawTile(c, item, cx, cy, ghost, scale) {
     const T = theme.tokens;
     const anim = ghost ? null : this.entryAnim(item.id);
     if (anim && anim.skip) {
-      // 小程序入场延迟期间虽然透明，卡片仍然可点；按钮也照常存在。
-      const bw = this.hexR * 1.55;
-      const bh = this.hexR * 1.8;
-      this.addButton(item.id + '-game', cx - bw / 2, cy - bh / 2, bw, bh, () => {
+      // 入场延迟期间虽然透明，格子仍然可点
+      this.addButton(item.id + '-game', item.x, item.y, item.w, item.h, () => {
         if (this.suppressOpen) { this.suppressOpen = false; return; }
         this.app.openGame(item.id, { x: cx, y: cy });
       });
       return;
     }
+    const accents = {
+      logic: '#23804e', number: '#2c6aad', memory: '#7550ad',
+      action: '#bd5420', card: '#8f6419',
+    };
+    const accent = accents[item.accent] || accents.logic;
+    const w = item.w;
+    const h = item.h;
     c.save();
     if (anim) {
       c.globalAlpha = anim.alpha;
@@ -499,36 +523,35 @@ class HomeScene extends Scene {
       c.scale(anim.scale, anim.scale);
       c.translate(-cx, -cy);
     }
-    const accents = {
-      logic: '#23804e', number: '#2c6aad', memory: '#7550ad',
-      action: '#bd5420', card: '#8f6419',
-    };
-    const accent = accents[item.accent] || accents.logic;
-    c.save();
     if (ghost) {
-      c.globalAlpha = 0.95;
-      c.shadowColor = 'rgba(0,0,0,0.22)';
-      c.shadowBlur = 24;
+      // 拖动时浮起：只在这时给一点阴影，平时保持平面
+      c.save();
+      c.globalAlpha = 0.96;
+      c.shadowColor = 'rgba(0,0,0,0.18)';
+      c.shadowBlur = 20;
       c.shadowOffsetY = 8;
-    } else {
-      c.shadowColor = T.cardShadow;
-      c.shadowBlur = 15;
-      c.shadowOffsetY = 5;
+      D.roundRect(c, cx - w / 2, cy - h / 2, w, h, 12);
+      c.fillStyle = T.card;
+      c.fill();
+      c.restore();
+      D.strokeRoundRect(c, cx - w / 2, cy - h / 2, w, h, 12, T.border, 1);
     }
-    hexPath(c, cx, cy, this.hexR);
-    c.fillStyle = accent;
-    c.fill();
-    c.restore();
-    hexPath(c, cx, cy, this.hexR - 2.5);
-    c.fillStyle = T.card;
-    c.fill();
-
-    const iconW = 30;
-    const iy = cy - this.hexR * 0.44;
+    const baseX = cx - w / 2;
+    const baseY = cy - h / 2;
+    const k = scale || 1;
+    // 序号（左上角，等宽感的极小字）
+    D.text(c, (item.index < 10 ? '0' : '') + item.index, baseX + 8, baseY + 13, {
+      size: 8.5, weight: 'bold', color: theme.dark ? 'rgba(255,255,255,0.28)' : 'rgba(44,62,80,0.3)',
+    });
+    // 图标：分类色，不套色块
+    // web 版给「数字类」图标额外放大（2048: 1.2、Threes: 1.5），小程序也照这个比例
+    const ICON_SCALE = { g2048: 1.2, three: 1.5 };
+    const iconSize = Math.min(27 * k * (ICON_SCALE[item.id] || 1), w * 0.5);
+    const iy = baseY + h * 0.44;
     const glyphs = {
       click: 'idea', match: 'bulb', point24: 'calculator', guess: 'counter',
       detective: 'incognito', hunter: 'target', master: 'layers',
-      g2048: 'calculator', three: 'numeric-3', snake: 'snake', link: 'link',
+      g2048: 'numeric', three: 'numeric-3', snake: 'snake', link: 'link',
       puzzle: 'puzzle', mirror: 'mirror', down: 'down',
       crush: 'crush', sudoku: 'sudoku', sort: 'sort', slide: 'slide',
       poker: 'mode-poker', mahjong: 'mode-mahjong', solo: 'mode-mahjong',
@@ -543,24 +566,108 @@ class HomeScene extends Scene {
       poker: '🃏', mahjong: '🀄', solo: '🀄',
       alchemy: '⚗', quesheng: '🀄', legend: '🀄', gambler: '🀄',
     };
-    if (!icons.draw(c, glyphs[item.kind], cx, iy + iconW / 2, 25, accent)) {
-      D.text(c, fallbacks[item.kind], cx, iy + iconW / 2, {
-        size: fallbacks[item.kind] === '1A2B' ? 10 : 19,
+    if (!icons.draw(c, glyphs[item.kind], cx, iy, iconSize, accent)) {
+      D.text(c, fallbacks[item.kind], cx, iy, {
+        size: fallbacks[item.kind] === '1A2B' ? 10 : Math.round(iconSize * 0.74),
         weight: 'bold', color: accent, align: 'center',
         family: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
       });
     }
-    D.text(c, item.title, cx, cy + this.hexR * 0.38, {
-      size: this.hexes.length >= 4 ? 12 : 14, weight: 'bold', color: T.text, align: 'center',
-    });
+    // 名称
+    let nameSize = w < 62 ? 9.5 : 10.5;
+    while (nameSize > 7.5 && D.measure(c, item.title, nameSize, 'bold') > w - 8) nameSize -= 0.5;
+    D.text(c, item.title, cx, baseY + h * 0.75, { size: nameSize, weight: 'bold', color: T.text, align: 'center' });
+    // 分类色条：一小段，像目录里的分类标记
+    const barW = Math.min(16, w * 0.3);
+    D.fillRoundRect(c, cx - barW / 2, baseY + h * 0.75 + 7.5, barW, 2, 1, accent);
     c.restore();
     if (ghost) return;
-    const w = this.hexR * 1.55;
-    const h = this.hexR * 1.8;
-    this.addButton(item.id + '-game', cx - w / 2, cy - h / 2, w, h, () => {
+    this.addButton(item.id + '-game', item.x, item.y, item.w, item.h, () => {
       if (this.suppressOpen) { this.suppressOpen = false; return; }
       this.app.openGame(item.id, { x: cx, y: cy });
     });
+  }
+
+  // 每日挑战卡（页眉下方）：今天玩什么 + 连签进度，一眼看到、一点直达
+  drawHero(c) {
+    const T = theme.tokens;
+    const r = this.heroRect;
+    const dark = theme.dark;
+    // todayTask() 已经带回 desc / done，别再自己 descOf(task)（那不是 POOL 里的任务对象）
+    const task = daily.todayTask ? daily.todayTask() : null;
+    const done = task ? !!task.done : !daily.hasNew();
+    const accent = T.primary;
+    c.save();
+    D.roundRect(c, r.x, r.y, r.w, r.h, 14);
+    c.fillStyle = dark ? 'rgba(255,255,255,0.05)' : 'rgba(35,128,78,0.05)';
+    c.fill();
+    D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 14, dark ? 'rgba(255,255,255,0.12)' : 'rgba(35,128,78,0.16)', 1);
+    c.restore();
+    // 左侧一条 3px 分类色，取代整块底色
+    D.fillRoundRect(c, r.x, r.y + 12, 3, r.h - 24, 1.5, accent);
+    const iconCx = r.x + 34;
+    const iconCy = r.y + r.h / 2;
+    // mdi:calendar-month-outline；字体里取不到时才退回手绘日历
+    if (!icons.draw(c, 'calendar', iconCx, iconCy, 20, accent)) {
+      this.drawCalendarGlyph(c, iconCx, iconCy, 20, accent);
+    }
+    const textX = r.x + 58;
+    const pillW = 58;
+    const pillH = 24;
+    const pillX = r.x + r.w - 12 - pillW;
+    const textW = pillX - textX - 10;
+    D.text(c, t('dailyTitle'), textX, r.y + r.h * 0.36, {
+      size: 13.5, weight: 'bold', color: T.text,
+    });
+    const desc = task && task.desc ? task.desc : '';
+    let size = 10.5;
+    const maxW = textW;
+    let shown = desc;
+    if (shown && D.measure(c, shown, size, 'bold') > maxW) {
+      // 只留一行：超长就从尾部截断加省略号
+      while (shown.length > 4 && D.measure(c, shown + '…', size) > maxW) shown = shown.slice(0, -1);
+      shown += '…';
+    }
+    D.text(c, shown, textX, r.y + r.h * 0.68, { size, color: T.muted });
+    // 右侧药丸：细描边 + 同色文字（比实心大绿块更克制），已完成转灰
+    const pillColor = done ? T.muted : accent;
+    c.save();
+    D.roundRect(c, pillX, iconCy - pillH / 2, pillW, pillH, pillH / 2);
+    c.strokeStyle = done
+      ? (dark ? 'rgba(255,255,255,0.18)' : 'rgba(44,62,80,0.18)')
+      : (dark ? 'rgba(84,190,130,0.55)' : 'rgba(35,128,78,0.45)');
+    c.lineWidth = 1;
+    c.stroke();
+    c.restore();
+    D.text(c, done ? t('home.heroDone') : t('home.heroGo'), pillX + pillW / 2, iconCy, {
+      size: 11, weight: 'bold', color: pillColor, align: 'center',
+    });
+    this.addButton('home-hero', r.x, r.y, r.w, r.h, () => this.openDaily());
+  }
+
+  // 发丝分割线：把 5×5 网格画成一张表，而不是 25 张浮在空中的卡
+  drawGridRules(c) {
+    const T = theme.tokens;
+    const g = this.grid;
+    const line = theme.dark ? 'rgba(255,255,255,0.09)' : 'rgba(44,62,80,0.12)';
+    c.save();
+    c.strokeStyle = line;
+    c.lineWidth = 1;
+    for (let i = 1; i < g.cols; i += 1) {
+      const x = Math.round(g.x + i * g.cellW) + 0.5;
+      c.beginPath();
+      c.moveTo(x, g.y + 6);
+      c.lineTo(x, g.y + g.h - 6);
+      c.stroke();
+    }
+    for (let j = 1; j < g.rows; j += 1) {
+      const y = Math.round(g.y + j * g.cellH) + 0.5;
+      c.beginPath();
+      c.moveTo(g.x + 6, y);
+      c.lineTo(g.x + g.w - 6, y);
+      c.stroke();
+    }
+    c.restore();
   }
 
   getGameOrigin(id) {
@@ -709,7 +816,10 @@ class HomeScene extends Scene {
       c.stroke();
     }
     c.restore();
-    this.drawTrophy(c, cx, cy - 1, 21, unlocked > 0 ? T.primary : T.text);
+    // 用 mdi:trophy-outline（和 web 的图标语言一致）；字体里取不到时才退回手绘奖杯
+    if (!icons.draw(c, 'trophy', cx, cy - 1, 21, unlocked > 0 ? T.primary : T.text)) {
+      this.drawTrophy(c, cx, cy - 1, 21, unlocked > 0 ? T.primary : T.text);
+    }
     // 有新解锁：右上角一个暖色小圆点
     if (achv.hasNew()) {
       D.circle(c, cx + r.w * 0.34, cy - r.h * 0.34, 4.2, T.god || T.primary);

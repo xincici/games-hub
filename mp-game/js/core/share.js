@@ -6,6 +6,7 @@ const homeI18n = require('../games/home/i18n');
 const i18nCore = require('./i18n');
 const theme = require('./theme');
 const D = require('./draw');
+const icons = require('./icons');
 const { W, H, SAFE_TOP } = require('./canvas');
 
 if (!i18nCore.__shareHomeRegistered) {
@@ -212,7 +213,15 @@ function chipRect() {
 }
 
 // 分享图标（图标字体里没有 share）：一个「从盒子里往上的箭头」
+// 分享图标：优先用图标字体里的 mdi:share-variant-outline（和 web / 其他图标同一套语言），
+// 字体没加载出来时退回手绘「盒子 + 向上箭头」，保证任何机型都有图标。
+function drawIconFontShare(c, cx, cy, size, color) {
+  if (!icons.draw(c, 'share', cx, cy, size, color)) return false;
+  return true;
+}
+
 function drawShareIcon(c, cx, cy, size, color) {
+  if (drawIconFontShare(c, cx, cy, size, color)) return true;
   const h = size * 0.5;
   c.save();
   c.strokeStyle = color;
@@ -235,6 +244,7 @@ function drawShareIcon(c, cx, cy, size, color) {
   c.lineTo(cx + h * 0.52, cy - h * 0.52);
   c.stroke();
   c.restore();
+  return false;
 }
 
 // 把海报画布导出成本地图片。

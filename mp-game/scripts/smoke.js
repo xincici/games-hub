@@ -2813,6 +2813,117 @@ i18n.setLang('cn');
   check(problems.length === 0, `截图裁剪：${problems.slice(0, 5).join('；')}`);
 }
 
+// ---------- 图标：用到的 glyph 必须在字体映射里；首页奖杯 = mdi:trophy-outline ----------
+{
+  const CODES = require(path.join(ROOT, 'js/core/icon-glyphs'));
+  const problems = [];
+  if (!CODES.trophy) problems.push('图标字体里没有 trophy（需要重跑 scripts/build-icons.py）');
+  // 所有场景里 icons.draw(c, 'xxx') 引用的名字都要在映射里，否则真机会画成豆腐块
+  const fsMod = require('fs');
+  const files = [];
+  const walk = (dir) => {
+    fsMod.readdirSync(dir, { withFileTypes: true }).forEach((d) => {
+      const full = path.join(dir, d.name);
+      if (d.isDirectory()) walk(full);
+      else if (/\.js$/.test(d.name)) files.push(full);
+    });
+  };
+  walk(path.join(ROOT, 'js/games'));
+  walk(path.join(ROOT, 'js/core'));   // core 里也会 icons.draw（例如分享图标）
+  const missing = new Set();
+  files.forEach((f) => {
+    const src = fsMod.readFileSync(f, 'utf8');
+    const re = /icons\.draw\(\s*c\s*,\s*'([\w-]+)'/g;
+    let m;
+    while ((m = re.exec(src))) {
+      if (!CODES[m[1]]) missing.add(`${path.basename(path.dirname(f))}:${m[1]}`);
+    }
+  });
+  if (missing.size) problems.push(`图标名不在映射里：${[...missing].slice(0, 6).join('、')}`);
+  // 首页成就按钮必须是 trophy-outline
+  const homeSrc = fsMod.readFileSync(path.join(ROOT, 'js/games/home/scene.js'), 'utf8');
+  if (!/icons\.draw\(c, 'trophy'/.test(homeSrc)) problems.push('首页成就按钮没有用 trophy 图标');
+  // 分享图标：mdi:share-variant-outline（字体缺失时才走手绘兜底）
+  const shareSrc = fsMod.readFileSync(path.join(ROOT, 'js/core/share.js'), 'utf8');
+  if (!/icons\.draw\(c, 'share'/.test(shareSrc)) problems.push('分享图标没有用 share glyph');
+  check(problems.length === 0, `图标：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 首页版式：页眉 + 每日挑战卡 + 5×5 索引网格 ----------
+{
+  const { HomeScene } = (() => {
+    const Cls = require(path.join(ROOT, 'js/games/home/scene'));
+    return { HomeScene: Cls };
+  })();
+  fakeApp.sceneId = 'home';
+  const home = new HomeScene({
+    ...fakeApp,
+    openGame(id) { this.lastGame = id; },
+  });
+  home.layout();
+  const problems = [];
+  const g = home.grid;
+  if (!g || g.cols !== 5 || g.rows !== 5) problems.push('网格不是 5×5');
+  if (home.hexes.length !== 25) problems.push(`格子数 ${home.hexes.length}（应 25）`);
+  // 单元格不重叠、都在屏内
+  for (let a = 0; a < home.hexes.length; a += 1) {
+    const p1 = home.hexes[a];
+    if (p1.x < 0 || p1.x + p1.w > W + 0.5 || p1.y < 0 || p1.y + p1.h > H + 0.5) {
+      problems.push(`${p1.id} 出界`);
+    }
+    for (let b = a + 1; b < home.hexes.length; b += 1) {
+      const p2 = home.hexes[b];
+      if (p1.x < p2.x + p2.w - 0.5 && p2.x < p1.x + p1.w - 0.5
+        && p1.y < p2.y + p2.h - 0.5 && p2.y < p1.y + p1.h - 0.5) {
+        problems.push(`${p1.id} 和 ${p2.id} 重叠`);
+      }
+    }
+  }
+  // 网格要让开底部 FAB，也不压每日挑战卡
+  if (g.y + g.h > home.gearRect.y - 6) problems.push('网格压到底部 FAB');
+  if (g.y < home.heroRect.y + home.heroRect.h) problems.push('网格压到每日挑战卡');
+  if (home.heroRect.y < home.mastheadY + 12) problems.push('每日挑战卡压到页眉');
+  // 页眉必须在微信胶囊下方（胶囊那一行右上是 ●●●◉，标题贴着它会压在一起）
+  {
+    const HEADER = require(path.join(ROOT, 'js/core/header'));
+    const capsuleBottom = HEADER.TOP + HEADER.HEIGHT;
+    if (home.mastheadY < capsuleBottom + 8) {
+      problems.push(`页眉 y=${home.mastheadY} 没让开胶囊（胶囊下沿 ${capsuleBottom}）`);
+    }
+  }
+  // 图标要和 web 版一致：2048 用 mdi:numeric（不是计算器），Threes 用 numeric-3
+  {
+    const homeSrc = require('fs').readFileSync(path.join(ROOT, 'js/games/home/scene.js'), 'utf8');
+    if (!/g2048: 'numeric'/.test(homeSrc)) problems.push('2048 的图标不是 numeric（web 版是 i-mdi-numeric）');
+    if (!/three: 'numeric-3'/.test(homeSrc)) problems.push('Threes 的图标不是 numeric-3');
+  }
+
+  // 绘制：25 个入口 + 每日挑战卡都能点
+  const ctx2 = makeCtx();
+  home.buttons = [];
+  home.render(ctx2);
+  const slots = home.buttons.filter((b) => /-game$/.test(b.id));
+  if (slots.length !== 25) problems.push(`渲染只注册了 ${slots.length} 个游戏入口（应 25）`);
+  if (!home.buttons.some((b) => b.id === 'home-hero')) problems.push('每日挑战卡没注册可点区域');
+  // 点第一个格子进对应游戏；命中矩形 = 绘制矩形
+  const first = home.hexes[0];
+  const hit = home.hexAt(first.cx, first.cy);
+  if (!hit || hit.id !== first.id) problems.push('hexAt 命中的不是第一个格子');
+  const slot = home.buttons.find((b) => b.id === `${first.id}-game`);
+  if (!slot) problems.push('第一个格子的入口没注册');
+  else slot.onTap();
+  if (home.app.lastGame !== first.id) problems.push(`点格子打开的是 ${home.app.lastGame}（应 ${first.id}）`);
+  // 长按拖动仍然换序
+  const before = home.order.slice();
+  home.press = { id: before[0], x: first.cx, y: first.cy };
+  home.startDrag();
+  const second = home.hexes[1];
+  home.onTouchMove({ x: second.cx, y: second.cy });
+  home.drag = null;
+  if (home.order[0] === before[0] && home.order[1] === before[1]) problems.push('拖动没有交换顺序');
+  check(problems.length === 0, `首页版式：${problems.slice(0, 5).join('；')}`);
+}
+
 // ---------- 截图留白：顶部按「安全区 - 24」裁，海报里再留 4% 边距 ----------
 {
   const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));

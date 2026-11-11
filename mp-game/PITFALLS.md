@@ -1030,6 +1030,24 @@
   ②结算遮罩有 200ms 延迟，`resultVisible()` 在刚赢下时返回 false；而 click / poker 这类还传了自定义 key
   （`'click:'+logic.result`、`'poker-win:'+resultAt`），改 `_resultGateAt` 会被 key 变化重置回 +200ms。
   现在截图期间直接把 `scene.resultVisible` 换成 `() => true`，截完恢复；`drawResult` 也不再 stub。
+- **手绘图标要先查字体**：分享图标原本是 canvas 手绘的（当时字体里没有 share），现在字体有 `share`
+  （mdi:share-variant-outline）就走了图标，手绘只当兜底 —— 改图标前先看 `scripts/build-icons.py` 的 ICONS 列表。
+- **`icons.draw(c, 'xxx')` 用了字体里没有的 glyph**：不会报错，只在真机上画成豆腐块/走文字兜底
+  （首页的奖杯、日历就是这么"消失"的）。现在冒烟会扫描所有 `icons.draw(c, '…')` 引用，只要有名字不在
+  `js/core/icon-glyphs.js` 里就红。加图标 = 改 `scripts/build-icons.py` 的 `ICONS` + **重跑脚本**（字体与映射一起重建）。
+- **2048 的图标画成了计算器**：web 版 `src/shared/games.js` 给 2048 的是 `i-mdi-numeric`（123 那个），
+  小程序首页却写了 `calculator`（那是 24 点的图标）。改图标前先看 web 注册表，别按游戏名猜。
+  另外 web 的 `iconScale`（2048 1.2 / Threes 1.5）也要带上，数字类字形天生偏小。
+- **首页页眉压在微信胶囊上**：`HEADER.TITLE_Y` 是胶囊那一行的**垂直中线**，标题行放那里就会和右上角 ●●●◉ 重叠
+  （真机上标题被胶囊切掉一半）。现在 `mastheadY = HEADER.TOP + HEADER.HEIGHT + 10 + 12`，
+  页眉整个落在胶囊下方；冒烟断言 `mastheadY >= 胶囊下沿 + 8`。
+- **首页「25 张卡片平铺」显得廉价**：蜂窝 + 每张卡都带彩色描边和阴影，看起来像贴纸堆。
+  重做成「页眉 + 每日挑战卡 + 5×5 索引表」：卡片不再有底色和阴影，靠发丝分割线分区，
+  序号固定、位置固定。改完之后 `hexAt` / 拖动排序都按格子矩形来，不要再引用 `hexR`。
+- **`daily.todayTask()` 不是 POOL 里的任务对象**：它已经返回 `{ id, date, done, prog, desc, ... }`，
+  直接取 `task.desc`，别再过 `daily.descOf(task)`（那里读的是 `task.cn`，会拿到 undefined → 文案空白）。
+- **home 的 i18n 别再起 `dailyXxx` 这种名字**：会和 core 里的 `dailyTitle / dailyDone / dailyStreak` 撞，
+  现在统一前缀 `heroGo / heroDone / heroStat`。
 - **分享图上的玩法介绍写错**：`INTRO` 表是手写的，很容易按「游戏名」猜规则 —— click 写成了「点亮所有灯」，
   实际规则是**全关掉**过关。写之前必须对照 `js/games/<id>/i18n.js` 的 `helpMsg`，并且控制在 30 字内
   （冒烟现在会静态检查长度和覆盖率）。
