@@ -2905,6 +2905,57 @@ i18n.setLang('cn');
   const slots = home.buttons.filter((b) => /-game$/.test(b.id));
   if (slots.length !== 25) problems.push(`渲染只注册了 ${slots.length} 个游戏入口（应 25）`);
   if (!home.buttons.some((b) => b.id === 'home-hero')) problems.push('每日挑战卡没注册可点区域');
+  // 每日挑战卡：药丸未完成 → 直接进任务对应的游戏；卡片其它部分 → 开面板
+  {
+    const dailyMod = require(path.join(ROOT, 'js/core/daily'));
+    const origTask = dailyMod.todayTask;
+    const home2 = new HomeScene({
+      ...fakeApp,
+      openGame(id) { this.lastGame = id; },
+    });
+    let opened = 0;
+    home2.openDaily = () => { opened += 1; };
+    // 未完成、绑定了具体游戏
+    dailyMod.todayTask = () => ({ id: 't1', game: 'guess', desc: '赢一局 1A2B', done: false });
+    home2.buttons = [];
+    home2.render(makeCtx());
+    const go = home2.buttons.find((b) => b.id === 'home-hero-go');
+    const card = home2.buttons.find((b) => b.id === 'home-hero');
+    if (!go) problems.push('每日挑战药丸没注册命中区');
+    if (!card) problems.push('每日挑战卡本体没注册命中区');
+    if (go) {
+      go.onTap();
+      if (home2.app.lastGame !== 'guess') problems.push(`药丸没直接进游戏（打开了 ${home2.app.lastGame}）`);
+      if (opened) problems.push('药丸不该打开每日挑战面板');
+    }
+    // 卡片其它部分 → 开面板
+    if (card) card.onTap();
+    if (opened !== 1) problems.push('点卡片本体没打开每日挑战面板');
+    // 已完成时药丸也只开面板
+    dailyMod.todayTask = () => ({ id: 't1', game: 'guess', desc: '赢一局 1A2B', done: true });
+    home2.buttons = [];
+    opened = 0;
+    home2.app.lastGame = null;
+    home2.render(makeCtx());
+    const go2 = home2.buttons.find((b) => b.id === 'home-hero-go');
+    if (go2) {
+      go2.onTap();
+      if (opened !== 1 || home2.app.lastGame) problems.push('已完成时药丸不该进游戏');
+    }
+    // 任意游戏任务（game === '*'）也只能开面板
+    dailyMod.todayTask = () => ({ id: 't2', game: '*', desc: '任意游戏赢 4 局', done: false });
+    home2.buttons = [];
+    opened = 0;
+    home2.app.lastGame = null;
+    home2.render(makeCtx());
+    const go3 = home2.buttons.find((b) => b.id === 'home-hero-go');
+    if (go3) {
+      go3.onTap();
+      if (opened !== 1 || home2.app.lastGame) problems.push('任意游戏任务的药丸不该进游戏');
+    }
+    dailyMod.todayTask = origTask;
+  }
+
   // 点第一个格子进对应游戏；命中矩形 = 绘制矩形
   const first = home.hexes[0];
   const hit = home.hexAt(first.cx, first.cy);

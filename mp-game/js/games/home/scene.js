@@ -642,7 +642,17 @@ class HomeScene extends Scene {
     D.text(c, done ? t('home.heroDone') : t('home.heroGo'), pillX + pillW / 2, iconCy, {
       size: 11, weight: 'bold', color: pillColor, align: 'center',
     });
+    // 卡片本体：进每日挑战面板（先注册，药丸后注册 → 命中时药丸优先）
     this.addButton('home-hero', r.x, r.y, r.w, r.h, () => this.openDaily());
+    // 右侧药丸：未完成且任务绑定了具体游戏 → 直接进那个游戏；已完成 / 任意游戏 → 还是开面板
+    const taskGame = task && task.game && task.game !== '*' ? task.game : null;
+    this.addButton('home-hero-go', pillX, iconCy - pillH / 2, pillW, pillH, () => {
+      if (!done && taskGame) {
+        this.app.openGame(taskGame, { x: pillX + pillW / 2, y: iconCy });
+        return;
+      }
+      this.openDaily();
+    });
   }
 
   // 发丝分割线：把 5×5 网格画成一张表，而不是 25 张浮在空中的卡

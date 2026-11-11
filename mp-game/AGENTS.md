@@ -732,6 +732,10 @@ game.js
   （**不是计算器**，2026-11 被玩家指出）、Threes = `mdi:numeric-3`、24 点 = `mdi:calculator`。
   web 给了 `iconScale` 的（2048 1.2、Threes 1.5）在小程序里也要按同比例放大（`ICON_SCALE`），
   否则数字类图标看着比邻居小一圈；上限压到 0.5 格宽。
+- **每日挑战卡的点击分区**（两个命中区，药丸后注册 → 优先命中）：
+  - `home-hero`（整卡）→ 打开每日挑战面板；
+  - `home-hero-go`（右侧药丸）→ **未完成且任务绑定了具体游戏时直接 `openGame` 进那个游戏**
+    （`daily.todayTask().game`，带药丸中心当转场起点）；**已完成**或任务是 `game: '*'`（任意游戏）时仍开面板。
 - **短名**：`Emoji 连连看 / 镜像 / 下坠 / 消消乐 / 排序 / 滑行` 在 68px 格子里会被缩到 7px，
   用 `home.<id>TitleShort`（`linkTitleShort` 等，`SHORT_NAMES` 显式列出这 6 个），别用「拼 key 猜」的方式判断是否缺 key。
 - 长按 260ms 可拖动排序（现在按矩形格子命中，`hexAt` 就是格子矩形），顺序存 `__games_hub__home_order`（与 web 同一个 key）。
