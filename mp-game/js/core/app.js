@@ -315,20 +315,54 @@ class App {
 
   // 把当前场景画进分享海报的指定矩形里（opts.cover = 铺满裁切，否则完整 contain）。
   // 渲染前临时把结算层（drawResult / drawWin）换成空函数，海报里只留真实的游戏画面。
+  // 截图区域：顶部去掉状态栏那块；底部按「最低的那个按钮」再留 12px。
+  // 按 SAFE_BOTTOM 硬留会在 FAB 行下面剩一截纯背景（看着就是一条灰边）；
+  // 海报的 contain 也按这个尺寸算（share.setSource），否则圆角里会留空白。
+  captureSize() {
+    const scene = this.scene;
+    let contentBottom = H - SAFE_BOTTOM - 16;      // 底部 FAB 行的下沿
+    ((scene && scene.buttons) || []).forEach((b) => {
+      // 全屏遮罩 / 大棋盘不算「最低内容」，只认按钮 / 键盘这种小控件
+      if (!b || b.h > H * 0.35 || b.w > W * 0.9) return;
+      contentBottom = Math.max(contentBottom, b.y + b.h);
+    });
+    const cropBottom = Math.min(H, Math.round(contentBottom + 12));
+    // 顶部：不要把安全区整块裁光 —— 那会让标题贴到图片上边缘。
+    // 默认留 24px 当图片自己的上边距；再兜一层：标题栏里那排小按钮上方至少留 22px。
+    let sy = Math.max(0, Math.min(SAFE_TOP, 60) - 24);
+    let headerTop = Infinity;
+    ((scene && scene.buttons) || []).forEach((b) => {
+      if (!b || b.h > H * 0.35 || b.w > W * 0.9) return;
+      if (b.y < SAFE_TOP + 90) headerTop = Math.min(headerTop, b.y);
+    });
+    if (headerTop < Infinity) sy = Math.min(sy, Math.max(0, Math.round(headerTop) - 22));
+    const sh = Math.max(Math.round(H * 0.55), cropBottom - sy);
+    return { sy, sw: W, sh, cropBottom };
+  }
+
+  // 把「当前画面」画进分享海报的指定矩形。
+  // - 顶部状态栏留白裁掉、底部按最低按钮 + 12px
+  // - **结算遮罩、帮助弹窗、二次确认、首页各面板全部包含**（用户要的是「截屏」）
+  // - 结算遮罩有 200ms 出现延时（resultVisible），截图时临时把 gate 打开，
+  //   否则刚赢下那一瞬间生成的分享图里没有遮罩
   paintSceneForPoster(c, x, y, w, h, opts) {
     const scene = this.scene;
     if (!scene || typeof scene.render !== 'function') return false;
     if (!(w > 0) || !(h > 0)) return false;
     const cover = !!(opts && opts.cover);
-    const live = !!(opts && opts.live);   // 实时分享：连结算遮罩一起截
-    const scale = cover ? Math.max(w / W, h / H) : Math.min(w / W, h / H);
-    const dw = W * scale;
-    const dh = H * scale;
-    const od = scene.drawResult;
-    const ow = scene.drawWin;
+    const live = !!(opts && opts.live);
+    const { sy, sw, sh } = this.captureSize();
+    const scale = cover ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
+    const dw = sw * scale;
+    const dh = sh * scale;
+    const savedButtons = scene.buttons;
+    // 强制让结算遮罩可见：resultVisible 有 200ms 延迟，而且不少场景传的是自定义 key
+    // （click 是 'click:'+logic.result、poker 是 'poker-win:'+时间戳），
+    // 改 _resultGateAt 会被 key 变化重置，所以直接临时把方法换成「恒 true」。
+    const hadOwnRV = Object.prototype.hasOwnProperty.call(scene, 'resultVisible');
+    const savedRV = scene.resultVisible;
     try {
-      if (od && !live) scene.drawResult = () => {};
-      if (ow && !live) scene.drawWin = () => {};
+      scene.resultVisible = () => true;
       scene.buttons = [];
       c.save();
       c.beginPath();
@@ -336,16 +370,31 @@ class App {
       c.clip();
       c.translate(x + (w - dw) / 2, y + (h - dh) / 2);
       c.scale(scale, scale);
+      c.translate(0, -sy);
       scene.render(c);
+      // live：App 层的弹窗也截进去（它们不在 scene.render 里）
+      if (live) {
+        try {
+          if (scene.helpOpen || help.animating(scene)) {
+            scene.buttons = [];
+            help.forceOpen(scene);   // 截图要的是「展开后的样子」，不是第 0 帧
+            help.draw(c, scene);
+          } else if (scene.confirming && confirm.canOverride(scene)
+            && typeof scene.drawConfirm === 'function') {
+            scene.buttons = [];
+            scene.drawConfirm(c);
+          }
+        } catch (e) { /* 弹窗画不出来就算了，主体截图不丢 */ }
+      }
       c.restore();
       return true;
     } catch (e) {
       try { c.restore(); } catch (e2) { /* ignore */ }
       return false;
     } finally {
-      if (od) scene.drawResult = od;
-      if (ow) scene.drawWin = ow;
-      scene.buttons = [];
+      if (hadOwnRV) scene.resultVisible = savedRV;
+      else delete scene.resultVisible;
+      scene.buttons = savedButtons;
     }
   }
 
@@ -367,7 +416,6 @@ class App {
   drawHelpDot(c) {
     const scene = this.scene;
     if (!scene || this.sceneId === 'home' || !this.sceneId) return;
-    if (scene.helpOpen || scene.confirming) return;
     if (achv.seenHelp(this.sceneId)) return;
     const helpBtn = scene.buttons.find((b) => b.id === 'help' || b.id === 'fab-help' || b.id === 'help-fab');
     if (!helpBtn) return;
@@ -375,24 +423,37 @@ class App {
     D.circle(c, helpBtn.x + helpBtn.w * 0.84, helpBtn.y + helpBtn.h * 0.16, 4.2, T.god || T.primary);
   }
 
+  // 首页四个面板分享时，右侧多给一行统计（游戏里给玩法介绍就够）
+  shareExtras() {
+    const scene = this.scene;
+    if (!scene || this.sceneId !== 'home') return [];
+    if (scene.dailyOpen) {
+      return [t('app.shareStatDaily').replace('{a}', String(daily.bestStreak()))
+        .replace('{b}', String(daily.completedTotal()))];
+    }
+    if (scene.achvOpen) {
+      return [t('app.shareStatAchv').replace('{a}', String(achv.unlockedCount()))
+        .replace('{b}', String(achv.totalCount()))];
+    }
+    return [];
+  }
+
   // 左下角统一的「分享」FAB：点是当前界面的实时截图 + 预览弹窗（和结算分享同一条链路）。
   // 边框（胭脂红）和按钮一起画，不再事后补圈。
   drawShareFab(c) {
     const scene = this.scene;
     if (!scene) return;
-    if (scene.helpOpen || scene.confirming) return;
-    if (typeof scene.overlayOpen === 'function' && scene.overlayOpen()) return;
+    // 只在预览弹窗开着 / 转场动画中隐藏；帮助、二次确认、首页各面板打开时也常驻
     if (share.previewOpen() || this.transition) return;
     const size = fabKit.SIZE;
+    // 常驻：任何界面 / 弹窗打开时都在，且画在最上层（最后注册命中区）
     const rect = { x: 16, y: H - SAFE_BOTTOM - 16 - size, w: size, h: size };
-    // 和场景里已有的可点区域重叠时就不画（宁可少一个入口，也不能挡住操作）
-    if (scene.buttons.some((b) => fabKit.overlaps(b, rect))) return;
     const app = this;
     fabKit.draw(scene, c, rect, {
       id: 'fab-share',
       kind: 'share',
       icon: false,
-      onTap: () => share.openPreview(scene, app.sceneId, { live: true }),
+      onTap: () => share.openPreview(scene, app.sceneId, { live: true, extra: app.shareExtras() }),
     });
     share.drawShareIcon(c, rect.x + size / 2, rect.y + size / 2, 19, fabKit.ROSE);
   }
@@ -570,7 +631,11 @@ class App {
         if (drawConfirm) this.scene.drawConfirm = () => {};
         this.scene.render(ctx);
         this.drawHelpDot(ctx);
-        this.drawShareFab(ctx);
+        // 每帧同步「截图源尺寸」：海报的 contain 比例要用它，晚一帧就会留白
+        {
+          const cs = this.captureSize();
+          share.setSource(cs.sw, cs.sh);
+        }
         // 结算态：右上角一枚「炫耀一下」（生成 5:4 海报，点一下发分享）
         if (share.shouldShowChip(this.scene, this.sceneId)) {
           try {
@@ -594,6 +659,8 @@ class App {
         } else {
           help.reset(this.scene);
         }
+        // 左下角分享按钮：常驻、画在所有弹窗之上（点它就是对当前画面截图）
+        this.drawShareFab(ctx);
         // 结算分享的预览弹窗：盖在最上层，点「去分享」才真的分享
         if (share.previewOpen()) {
           this.scene.buttons = [];

@@ -90,12 +90,72 @@ let poster = null;          // { gameId, line, title, canvas, path }
 let posterBuilding = false;
 let preview = null;         // { gameId, at }：预览弹窗开着的时候
 let captureFn = null;       // 由 App 注入：把当前场景画进海报
+// 截图源尺寸（App 会裁掉顶部状态栏 / 底部空白，所以和 W×H 不一样）；
+// 海报里的 contain 必须按这个比例算，否则圆角里会剩一条空白。
+let srcSize = { w: W, h: H };
+
+function setSource(w, h) {
+  if (w > 0 && h > 0) srcSize = { w, h };
+}
 const CHIP = { w: 96, h: 26 };
 // 「炫耀一下」专属的胭脂红（比主色更醒目，也不至于像警告色）
 const ROSE = '#962832';
 
 function latestGameId() {
   return normalizeGameId(latestSceneId);
+}
+
+// 每个游戏一句话玩法（分享海报右侧用；中英各一行，不写进 25 个 i18n 文件）
+const INTRO = {
+  // 每个游戏一句玩法（≤30 字，中英各一行）：只讲「怎么操作 + 怎么赢」，别写数值细节
+  click: ['点灯会连带上下左右一起变档，把所有灯关掉即过关', 'Each tap flips a lamp and its neighbours; switch them all off'],
+  guess: ['猜 4 位不重复数字，8 次机会；A 位置对、B 数字对', 'Guess 4 unique digits in 8 tries: A right place, B wrong place'],
+  poker: ['发牌、留牌、换牌凑牌型，中奖还能猜大小翻倍', 'Draw, hold and swap to make a hand, then call high or low'],
+  puzzle: ['点空格旁的数字滑动，把 1、2、3… 按顺序排好', 'Slide the tiles beside the gap back into 1, 2, 3 order'],
+  g2048: ['滑动合并相同数字，凑出 2048 即获胜', 'Swipe to merge equal tiles and reach 2048'],
+  snake: ['吃食物变长，别撞墙也别咬自己', 'Eat, grow, and avoid walls and your own tail'],
+  match: ['翻两张找相同图案，限时内清空全部牌', 'Flip two cards for a pair, clear the board before time'],
+  link: ['两个拐点内连起相同图案，限时清空全场', 'Link identical tiles with at most two turns, clear in time'],
+  detective: ['记住牌面，找出被偷换的那一张', 'Memorise the cards, spot the one that changed'],
+  hunter: ['记住上方目标牌，再从网格里把它们全找出来', 'Memorise the targets, then find them all in the grid'],
+  three: ['滑动合并：1+2=3，3 以上只有相同数字能合成', 'Slide to merge: 1+2=3, above 3 only equal tiles combine'],
+  crush: ['交换相邻图案凑成三连，步数用完前达标', 'Swap neighbouring tiles into rows of three before moves end'],
+  sudoku: ['每行每列每宫填 1-9 不重复', 'Fill 1-9 once per row, column and box'],
+  master: ['点露出的牌收进下方托盘，三张相同自动消除', 'Tap exposed tiles into the tray; three of a kind clear'],
+  sort: ['把槽顶相同水果整叠搬到空槽或同种上，每槽一种', 'Move stacked fruit onto the same kind or an empty slot'],
+  down: ['点一列让落下的图案滑过去，落在同类正上方即消除', 'Tap a column to slide the drop; land it on its twin to pop'],
+  slide: ['拖动整排图案，让相同的挨到旁边就一起消除', 'Drag a run so matching tiles touch and pop together'],
+  alchemy: ['落牌凑成一行、列或斜线四张成牌型即消除', 'Lay four in a line or diagonal to make a poker hand'],
+  mahjong: ['在 3×3 落牌，一行、列或斜线凑成三张成组即消除', 'Lay tiles on the 3x3; a line of three that forms a set clears'],
+  quesheng: ['滑动让成组牌挨在一起，再点掉三张一组或一对', 'Slide sets together, then tap the three of a set or the pair'],
+  legend: ['往空格落牌或点牌换掉，凑成顺子、刻子、杠得分', 'Drop or swap tiles to form runs, triplets and kongs'],
+  mirror: ['记住上方图案，点两张交换位置，复原即过关', 'Memorise the pattern, swap two tiles at a time to restore it'],
+  point24: ['四个数字各用一次，加减乘除凑出 24', 'Use all four numbers once with + - x / to make 24'],
+  solo: ['凑齐四组顺子或刻子加一对即胡牌', 'Make four sets plus one pair to win'],
+  gambler: ['从 13 张里挑出能凑成胡牌的那几张，错两张即失败', 'Pick the tiles that complete the hand; two misses end it'],
+};
+function introFor(gameId) {
+  const pair = INTRO[gameId];
+  if (!pair) return '';
+  return pair[i18nCore.lang === 'en' ? 1 : 0];
+}
+
+// 海报右侧文案：实时分享给「游戏名 + 一句玩法」，结算分享给「游戏名 + 这局成绩」
+function posterBody(gameId, scene, live, extra) {
+  if (!live) return { title: gameTitleOf(gameId), big: resultLine(scene), lines: [], extra: [] };
+  if (gameId === 'home') {
+    const panel = scene && scene.dailyOpen ? 'daily'
+      : scene && scene.achvOpen ? 'achv'
+        : scene && scene.settingsOpen ? 'settings' : 'home';
+    const keys = {
+      daily: ['app.sharePanelDaily', 'app.shareIntroDaily'],
+      achv: ['app.sharePanelAchv', 'app.shareIntroAchv'],
+      settings: ['app.sharePanelSettings', 'app.shareIntroSettings'],
+      home: ['app.sharePanelHome', 'app.shareIntroHome'],
+    }[panel];
+    return { title: t(keys[0]), big: null, lines: [t(keys[1])], extra: extra || [] };
+  }
+  return { title: gameTitleOf(gameId), big: null, lines: [introFor(gameId)], extra: extra || [] };
 }
 
 function gameTitleOf(gameId) {
@@ -234,10 +294,15 @@ function exportPoster(cv, payload) {
 function buildPoster(scene, gameId, buildOpts) {
   const bo = buildOpts || {};
   const live = !!bo.live;
+  const extra = Array.isArray(bo.extra) ? bo.extra : [];
+  // force：强制重新截图（实时分享每次点都必须重拍，否则会拿到上一次的缓存图）
+  const force = !!bo.force;
+  const body = posterBody(gameId, scene, live, extra);
   // 实时分享（左下角那颗分享按钮）：用当前界面的截图，不再叠「本局成绩」那一行
   const line = live ? '' : resultLine(scene);
-  if (poster && poster.gameId === gameId && poster.line === line && poster.live === live
-    && poster.dark === !!theme.dark) return poster;
+  if (!force && poster && poster.gameId === gameId && poster.line === line && poster.live === live
+    && poster.dark === !!theme.dark && poster.srcKey === `${srcSize.w}x${srcSize.h}`
+    && poster.bodyKey === `${body.title}|${body.big || ''}|${(body.lines || []).join('|')}|${(body.extra || []).join('|')}`) return poster;
   if (posterBuilding) return poster;
   if (typeof wx === 'undefined' || !wx.createCanvas) return null;
   posterBuilding = true;
@@ -272,12 +337,15 @@ function buildPoster(scene, gameId, buildOpts) {
       // 3) 前景：整屏 contain，**水平垂直都居中**；文字放在左右两侧的留白里（对称，不压图片）
       const top = 20;
       const fgH = POSTER_H - top * 2;
-      const ratio = W / H;
+      const ratio = (srcSize.w > 0 && srcSize.h > 0) ? srcSize.w / srcSize.h : W / H;
       let fgW = fgH * ratio;
       let fg = null;
       if (canCapture) {
         if (fgW > POSTER_W * 0.56) fgW = POSTER_W * 0.56;   // 两侧至少各留 ~22% 放文字
-        fg = { x: (POSTER_W - fgW) / 2, y: top + (fgH - (fgW / ratio)) / 2, w: fgW, h: fgW / ratio };
+        // 四周再收 4%：不依赖机型安全区（有些机型 SAFE_TOP = 0），图永远有一圈看得出来的边距
+        fgW *= 0.92;
+        const fgFit = fgW / ratio;
+        fg = { x: (POSTER_W - fgW) / 2, y: top + (fgH - fgFit) / 2, w: fgW, h: fgFit };
       }
       if (fg) {
         c.save();
@@ -308,19 +376,40 @@ function buildPoster(scene, gameId, buildOpts) {
       });
       const rx = (fg ? fg.x + fg.w + 20 : 40);
       const rw = Math.max(80, POSTER_W - rx - 20);
+      // 游戏名：一行放不下就缩字号
       let nameSize = 22;
-      while (nameSize > 13 && D.measure(c, gameTitle, nameSize, 'bold') > rw) nameSize -= 1;
-      D.text(c, gameTitle, rx, top + 34,
+      while (nameSize > 13 && D.measure(c, body.title, nameSize, 'bold') > rw) nameSize -= 1;
+      D.text(c, body.title, rx, top + 34,
         { size: nameSize, weight: 'bold', color: dark ? '#ffffff' : '#1f2a24' });
-      if (line) {
-        let lineSize = 28;
-        while (lineSize > 15 && D.measure(c, line, lineSize, 'bold') > rw) lineSize -= 1;
-        D.text(c, line, rx, top + 74,
-          { size: lineSize, weight: 'bold', color: dark ? '#ff9aa8' : ROSE });
+      if (body.big) {
+        // 结算：大字成绩
+        let bigSize = 28;
+        while (bigSize > 15 && D.measure(c, body.big, bigSize, 'bold') > rw) bigSize -= 1;
+        D.text(c, body.big, rx, top + 74,
+          { size: bigSize, weight: 'bold', color: dark ? '#ff9aa8' : ROSE });
+      } else {
+        // 实时：一句玩法（自动折行，最多 4 行）
+        let y = top + 66;
+        const introLines = [];
+        (body.lines || []).forEach((txt2) => {
+          D.wrapText(c, txt2, rw, 15, 'bold').forEach((l) => introLines.push(l));
+        });
+        introLines.slice(0, 4).forEach((l) => {
+          D.text(c, l, rx, y, { size: 15, weight: 'bold', color: dark ? '#e8f2ec' : '#243b2f' });
+          y += 20;
+        });
+        (body.extra || []).slice(0, 3).forEach((l) => {
+          D.text(c, l, rx, y + 4, { size: 12.5, color: dark ? 'rgba(255,255,255,0.62)' : 'rgba(44,62,80,0.6)' });
+          y += 18;
+        });
       }
 
     const payload = {
-      gameId, line, live, dark, title: resultTitle(gameId, line), canvas: cv,
+      gameId, line, live, dark, body,
+      bodyKey: `${body.title}|${body.big || ''}|${(body.lines || []).join('|')}|${(body.extra || []).join('|')}`,
+      srcKey: `${srcSize.w}x${srcSize.h}`,
+      // 实时分享用面板 / 游戏名当标题；结算分享才带「第 N 关 / 本局 N 分」
+      title: live ? body.title : resultTitle(gameId, line), canvas: cv,
       path: null, exported: null, exportError: null,
     };
     poster = payload;
@@ -340,7 +429,8 @@ function buildPoster(scene, gameId, buildOpts) {
 function openPreview(scene, gameId, opts) {
   const id = gameId || latestGameId();
   const o = opts || {};
-  buildPoster(scene, id, { live: !!o.live });
+  // 每次打开预览都重拍：实时分享要的是「此刻」的画面，用缓存会看到点开前的界面
+  buildPoster(scene, id, { live: !!o.live, extra: o.extra, force: true });
   preview = { gameId: id, at: Date.now(), live: !!o.live };
   return true;
 }
@@ -531,6 +621,7 @@ module.exports = {
     closePreview,
     drawPreview,
     previewRect,
+    setSource,
     resultPanel,
     posterInfo,
     rose: ROSE,

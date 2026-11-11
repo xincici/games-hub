@@ -320,4 +320,12 @@ function reset(scene) {
   s.at = 0;
 }
 
-module.exports = { draw, touch, reset, animating, fabCenter };
+// 截图用：把帮助面板直接当成「完全展开」画一次（否则动画第 0 帧什么都没画）
+function forceOpen(scene) {
+  const s = stateOf(scene);
+  s.anim = 1;
+  s.at = 0;
+  return s;
+}
+
+module.exports = { draw, touch, reset, animating, fabCenter, forceOpen };

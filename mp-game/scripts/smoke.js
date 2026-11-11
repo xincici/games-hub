@@ -2142,6 +2142,34 @@ i18n.setLang('cn');
   wx.showShareMenu = origShowMenu;
 }
 
+// ---------- 左下角分享按钮常驻：帮助弹窗 / 首页面板打开时也能点 ----------
+{
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const problems = [];
+  // 游戏里：帮助弹窗打开着
+  {
+    const SceneClass = require(path.join(ROOT, 'js/games/match/scene'));
+    fakeApp.sceneId = 'match';
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.helpOpen = true;
+    sc.buttons = [{ id: 'help-ok', x: 100, y: 500, w: 120, h: 40 }];
+    AppCls.prototype.drawShareFab.call({ scene: sc, sceneId: 'match', transition: null }, makeCtx());
+    if (!sc.buttons.some((b) => b.id === 'fab-share')) problems.push('帮助弹窗打开时没有分享按钮');
+  }
+  // 首页：设置 / 成就 / 每日挑战面板打开着
+  ['settingsOpen', 'achvOpen', 'dailyOpen'].forEach((flag) => {
+    const SceneClass = require(path.join(ROOT, 'js/games/home/scene'));
+    fakeApp.sceneId = 'home';
+    const sc = new SceneClass(fakeApp);
+    sc[flag] = true;
+    sc.buttons = [];
+    AppCls.prototype.drawShareFab.call({ scene: sc, sceneId: 'home', transition: null }, makeCtx());
+    if (!sc.buttons.some((b) => b.id === 'fab-share')) problems.push(`首页 ${flag} 打开时没有分享按钮`);
+  });
+  check(problems.length === 0, `分享按钮常驻：${problems.join('；')}`);
+}
+
 // ---------- 25 个游戏：FAB 边框真的画在按钮上（帮助橙 / 模式蓝 / 静音绿） ----------
 {
   const theme2 = require(path.join(ROOT, 'js/core/theme'));
@@ -2643,6 +2671,316 @@ i18n.setLang('cn');
     check(at1400 === 'lost', `侦探：动画放完 +300ms 之后没有进入失败态（${at1400}）`);
   }
   audio.setGame(null);
+}
+
+// ---------- 实时分享必须每次都重拍（不能吃海报缓存） ----------
+{
+  const shareMod = require(path.join(ROOT, 'js/core/share'));
+  const problems = [];
+  let shots = 0;
+  const savedCreate = wx.createCanvas;
+  wx.createCanvas = () => ({
+    width: 600, height: 480, getContext: () => makeCtx(), toTempFilePathSync: () => 't.png',
+  });
+  shareMod.setCapture(() => { shots += 1; return true; });
+  // 用当前画布尺寸做源，确保和 App 报上来的一致（缓存键含 srcKey）
+  shareMod.setSource(require(path.join(ROOT, 'js/core/canvas')).W, 786);
+  const scene = { phase: 'play', buttons: [], render: () => {} };
+  // 同一状态下连点两次：第二次命中缓存，不重拍（每帧预生成才不会烧渲染）
+  shots = 0;
+  shareMod.buildPoster(scene, 'match', { live: true });
+  shareMod.buildPoster(scene, 'match', { live: true });
+  if (shots !== 1) problems.push(`同一状态连续两次实时海报应该只截 1 次（实际 ${shots}）`);
+  // 但每点一次分享（openPreview）都必须重拍
+  shots = 0;
+  shareMod.openPreview(scene, 'match', { live: true });
+  shareMod.openPreview(scene, 'match', { live: true });
+  if (shots !== 2) problems.push(`连开两次分享预览必须各截一次（实际 ${shots} 次）`);
+  shareMod.setCapture(null);
+  wx.createCanvas = savedCreate;
+  check(problems.length === 0, `实时分享：${problems.join('；')}`);
+}
+
+// ---------- 截图必须包含结算遮罩（连刚赢下、遮罩还在 200ms 延迟里时也要有） ----------
+{
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const app = Object.create(AppCls.prototype);
+  const RESULT = { snake: 1, three: 'lose', down: 'over', legend: 'over', poker: 'over' };
+  const problems = [];
+  // 1) 机制：resultVisible 的延迟必须被绕过（不管场景传的是什么 key）
+  {
+    const sc = {
+      phase: 'won',
+      buttons: [],
+      _hasRendered: true,
+      _resultGateAt: Date.now() + 100000,
+      gateValue: null,
+      resultVisible() { return Date.now() >= this._resultGateAt; },
+      render(c) { this.gateValue = this.resultVisible(); },
+    };
+    app.scene = sc;
+    app.paintSceneForPoster(makeCtx(), 0, 0, 300, 400, { live: false });
+    if (sc.gateValue !== true) problems.push('截图时结算遮罩的 200ms 延迟没被绕过');
+    if (typeof sc.resultVisible !== 'function') problems.push('截图后没恢复 resultVisible');
+  }
+  // 2) 25 个游戏：结算态的截图比进行态多出遮罩内容（标题 / 分数 / 按钮 / 分享）
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc._hasRendered = true;
+    app.scene = sc;
+    const shot = () => {
+      const texts = [];
+      const c = makeCtx();
+      c.fillText = (v) => { texts.push(String(v)); };
+      app.paintSceneForPoster(c, 0, 0, 300, 400, { live: false });
+      return texts;
+    };
+    if ('phase' in sc) sc.phase = 'play';
+    if ('result' in sc) sc.result = 0;
+    if (sc.logic) sc.logic.result = 0;
+    if ('over' in sc) sc.over = false;
+    const base = shot();
+    if ('phase' in sc) sc.phase = RESULT[id] != null ? RESULT[id] : 'won';
+    if ('result' in sc) sc.result = 2;
+    if (sc.logic) sc.logic.result = 2;
+    if ('over' in sc) sc.over = true;
+    if (id === 'poker') { sc.winMask = { times: 1, key: 'x' }; sc.resultAt = Date.now(); }
+    const won = shot();
+    if (won.length <= base.length) problems.push(`${id}: 结算截图里没有遮罩内容`);
+  });
+  check(problems.length === 0, `截图含遮罩：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 截图裁剪：底部紧贴最低按钮（不留灰边），海报按裁剪后的比例 contain ----------
+{
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const shareMod = require(path.join(ROOT, 'js/core/share'));
+  const IDS = ['home', 'click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const problems = [];
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.render(makeCtx());
+    const fake = { scene: sc, sceneId: id, captureSize: AppCls.prototype.captureSize };
+    const { sy, sh, cropBottom } = fake.captureSize();
+    if (!(sh > 0) || sy + sh > H + 0.5) problems.push(`${id}: 裁剪越界`);
+    // 最低的那个小按钮
+    let lowest = H - (require(path.join(ROOT, 'js/core/canvas')).SAFE_BOTTOM) - 16;
+    sc.buttons.forEach((b) => {
+      if (!b || b.h > H * 0.35 || b.w > W * 0.9) return;
+      lowest = Math.max(lowest, b.y + b.h);
+    });
+    if (cropBottom < lowest - 0.5) problems.push(`${id}: 裁掉了最下面的按钮`);
+    if (cropBottom - lowest > 16) problems.push(`${id}: 底部还留着 ${(cropBottom - lowest).toFixed(0)}px 背景`);
+    // 只有在「显然还有空白」时才要求必须裁（安全区为 0 且内容贴到底时不强求）
+    if (H - lowest > 30 && cropBottom >= H) problems.push(`${id}: 底部一点都没裁`);
+  });
+  // 海报 contain 的比例必须跟「裁剪后的源尺寸」一致（否则圆角里留一条空白）
+  {
+    const shot = [];
+    const texts = [];
+    const c2 = makeCtx();
+    c2.fillText = (v) => { texts.push(String(v)); };
+    const savedCreate = wx.createCanvas;
+    wx.createCanvas = () => ({ width: 600, height: 480, getContext: () => c2, toTempFilePathSync: () => 't.png' });
+    shareMod.setCapture((c, x, y, w, h) => { shot.push({ x, y, w, h }); return true; });
+    shareMod.setSource(390, 760);
+    shareMod.buildPoster({ phase: 'play' }, 'match', { live: true });
+    const fg = shot[shot.length - 1];
+    if (!fg) problems.push('海报：没有截图区域');
+    else {
+      const wantRatio = 390 / 760;
+      const gotRatio = fg.w / fg.h;
+      if (Math.abs(gotRatio - wantRatio) > 0.02) {
+        problems.push(`海报：截图区比例 ${gotRatio.toFixed(3)} 与裁剪后源 ${wantRatio.toFixed(3)} 不一致`);
+      }
+    }
+    shareMod.setSource(require(path.join(ROOT, 'js/core/canvas')).W,
+      require(path.join(ROOT, 'js/core/canvas')).H);
+    shareMod.setCapture(null);
+    wx.createCanvas = savedCreate;
+  }
+  check(problems.length === 0, `截图裁剪：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 截图留白：顶部按「安全区 - 24」裁，海报里再留 4% 边距 ----------
+{
+  const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
+  const canvasMod = require(path.join(ROOT, 'js/core/canvas'));
+  const problems = [];
+  const IDS = ['home', 'click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  // 顶部公式：安全区 - 24（不小于 0），有标题栏按钮时再保证按钮上方 ≥18px
+  // mock 里 SAFE_TOP = 0，运行期算出来一定是 0，所以再对源码断言一次（防止改回「裁满安全区」）
+  {
+    const appSrc = require('fs').readFileSync(path.join(ROOT, 'js/core/app.js'), 'utf8');
+    if (!/Math\.min\(SAFE_TOP, 60\) - 24/.test(appSrc)) problems.push('顶部裁剪不是「安全区 - 24」（会贴到标题）');
+    if (!/headerTop\) - 22/.test(appSrc)) problems.push('顶部缺「标题栏按钮上方 ≥22px」兜底');
+  }
+  IDS.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.render(makeCtx());
+    const fake = { scene: sc, sceneId: id, captureSize: AppCls.prototype.captureSize };
+    const { sy } = fake.captureSize();
+    const want = Math.max(0, Math.min(canvasMod.SAFE_TOP, 60) - 24);
+    if (sy > want + 0.5) problems.push(`${id}: 顶部裁了 ${sy}px（应 ≤${want}）`);
+    let headerTop = Infinity;
+    sc.buttons.forEach((b) => {
+      if (!b || b.h > H * 0.35 || b.w > W * 0.9) return;
+      if (b.y < canvasMod.SAFE_TOP + 90) headerTop = Math.min(headerTop, b.y);
+    });
+    if (headerTop < Infinity && headerTop - sy < 18) {
+      problems.push(`${id}: 标题栏按钮上方只剩 ${Math.round(headerTop - sy)}px`);
+    }
+  });
+  // 海报里截图四周的边距（宽高都按比例缩，比例不变）
+  {
+    const shot = [];
+    const c2 = makeCtx();
+    const savedCreate = wx.createCanvas;
+    wx.createCanvas = () => ({ width: 600, height: 480, getContext: () => c2, toTempFilePathSync: () => 't.png' });
+    const shareMod = require(path.join(ROOT, 'js/core/share'));
+    shareMod.setCapture((c, x, y, w, h) => { shot.push({ x, y, w, h }); return true; });
+    shareMod.setSource(392, 761);   // 换个源尺寸避开海报缓存
+    shareMod.buildPoster({ phase: 'play' }, 'match', { live: true });
+    const fg = shot[shot.length - 1];
+    if (!fg) problems.push('海报：没有截图区域');
+    else {
+      // 纵向边距（可用高 440）：截图四周收 4% 才会有 ≥12px
+      const vPad = (440 - fg.h) / 2;
+      if (vPad < 12) problems.push(`海报：截图上下边距只有 ${vPad.toFixed(0)}px`);
+      if (fg.x < 12) problems.push(`海报：截图左边距只有 ${fg.x.toFixed(0)}px`);
+      if (Math.abs(fg.w / fg.h - 392 / 761) > 0.02) problems.push('海报：截图比例被改了');
+    }
+    shareMod.setSource(require(path.join(ROOT, 'js/core/canvas')).W,
+      require(path.join(ROOT, 'js/core/canvas')).H);
+    shareMod.setCapture(null);
+    wx.createCanvas = savedCreate;
+  }
+  check(problems.length === 0, `截图留白：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 分享海报：实时=游戏名+玩法一句话，结算=游戏名+成绩，首页面板有专属文案 ----------
+{
+  const shareMod = require(path.join(ROOT, 'js/core/share'));
+  const canvasMod = require(path.join(ROOT, 'js/core/canvas'));
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const texts = [];
+  const ctx = makeCtx();
+  ctx.fillText = (v) => { texts.push(String(v)); };
+  const savedCreate = wx.createCanvas;
+  wx.createCanvas = () => ({
+    width: 600, height: 480, getContext: () => ctx,
+    toTempFilePathSync: () => 'wxtmp://poster.png',
+  });
+  shareMod.setCapture(() => true);
+  const problems = [];
+  IDS.forEach((id) => {
+    texts.length = 0;
+    const poster = shareMod.buildPoster({ phase: 'play' }, id, { live: true });
+    const name = i18n.t(`home.${id}Title`);
+    if (!poster) { problems.push(`${id}: 没生成海报`); return; }
+    if (poster.title !== name) problems.push(`${id}: 标题不是游戏名（${poster.title}）`);
+    // 右侧应该有一句玩法（中英都非空，且不是游戏名本身）
+    const intro = texts.find((v) => v.length > 6 && v !== name && v !== i18n.t('app.sharePosterTag')
+      && v !== i18n.t('app.sharePosterSubLead') && v !== i18n.t('app.sharePosterSubTail'));
+    if (!intro) problems.push(`${id}: 实时分享没有一句玩法`);
+
+  });
+  // 首页四个面板各有标题
+  const panels = [['dailyOpen', 'app.sharePanelDaily'], ['achvOpen', 'app.sharePanelAchv'],
+    ['settingsOpen', 'app.sharePanelSettings'], [null, 'app.sharePanelHome']];
+  panels.forEach(([flag, key]) => {
+    texts.length = 0;
+    const scene = flag ? { [flag]: true } : {};
+    const poster = shareMod.buildPoster(scene, 'home', { live: true, extra: ['统计行'] });
+    const want = i18n.t(key);
+    if (!poster || texts.indexOf(want) < 0) problems.push(`home${flag ? '.' + flag : ''}: 面板标题不是「${want}」`);
+    if (texts.indexOf('统计行') < 0) problems.push(`home${flag ? '.' + flag : ''}: 没画出统计行`);
+  });
+  // 结算分享：不写玩法，写成绩
+  texts.length = 0;
+  const resultPoster = shareMod.buildPoster({ phase: 'won', level: 2, score: 128 }, 'match', {});
+  if (!resultPoster || resultPoster.title.indexOf(i18n.t('home.matchTitle')) !== 0) {
+    problems.push(`结算分享：标题不对（${resultPoster && resultPoster.title}）`);
+  }
+  if (texts.indexOf('本局 128 分') < 0) problems.push('结算分享：没写出本局成绩');
+  // 截图裁剪：顶部状态栏留白裁掉、底部只留 ~18px
+  {
+    const calls = [];
+    const c2 = makeCtx();
+    c2.translate = (x, y) => calls.push(['translate', x, y]);
+    c2.scale = (x, y) => calls.push(['scale', x, y]);
+    const AppProto = require(path.join(ROOT, 'js/core/app')).App.prototype;
+    const fake = {
+      scene: { buttons: [], render: () => {} },
+      sceneId: 'match',
+      captureSize: AppProto.captureSize,
+      paintSceneForPoster: AppProto.paintSceneForPoster,
+    };
+    fake.paintSceneForPoster(c2, 100, 20, 300, 240, { live: true, cover: false });
+    const sy = Math.max(0, Math.min(canvasMod.SAFE_TOP, 60) - 24);   // 这个用例的场景没有按钮
+    // 底部按「最低按钮 + 12px」裁（这个用例的场景没有按钮 → 用 FAB 行下沿）
+    const cropBottom = Math.min(canvasMod.H, Math.round(canvasMod.H - canvasMod.SAFE_BOTTOM - 16 + 12));
+    const sh = Math.max(Math.round(canvasMod.H * 0.55), cropBottom - sy);
+    const scale = Math.min(300 / canvasMod.W, 240 / sh);
+    const vert = calls.filter((c) => c[0] === 'translate')[1];
+    if (!vert || Math.abs(vert[2] + sy) > 0.5) problems.push(`截图裁剪：没有裁掉顶部 ${sy}px`);
+    const sc = calls.filter((c) => c[0] === 'scale')[0];
+    if (!sc || Math.abs(sc[1] - scale) > 1e-6) problems.push('截图裁剪：缩放比例不对');
+  }
+  // 帮助弹窗打开时的截图要连弹窗一起截
+  {
+    const helpTexts = [];
+    const c3 = makeCtx();
+    c3.fillText = (v) => { helpTexts.push(String(v)); };
+    const SceneClass = require(path.join(ROOT, 'js/games/match/scene'));
+    fakeApp.sceneId = 'match';
+    const sc = new SceneClass(fakeApp);
+    sc.buttons = [];
+    sc.helpOpen = true;
+    const AppProto2 = require(path.join(ROOT, 'js/core/app')).App.prototype;
+    const fake = {
+      scene: sc,
+      captureSize: AppProto2.captureSize,
+      paintSceneForPoster: AppProto2.paintSceneForPoster,
+    };
+    fake.paintSceneForPoster(c3, 20, 20, 300, 240, { live: true });
+    if (helpTexts.indexOf(i18n.t('helpTitle')) < 0) problems.push('截图：帮助弹窗没截进去');
+  }
+  wx.createCanvas = savedCreate;
+  shareMod.setCapture(null);
+  // 玩法表：25 个游戏都在、中文 ≤30 字、英文 ≤90 字符（海报右侧就一行，写长了会挤掉游戏名）
+  {
+    const src = require('fs').readFileSync(path.join(ROOT, 'js/core/share.js'), 'utf8');
+    const table = src.slice(src.indexOf('const INTRO = {'), src.indexOf('};', src.indexOf('const INTRO = {')));
+    const seen = [];
+    table.replace(/(\w+): \['([^']*)', '([^']*)'\]/g, (m, id, cn, en) => {
+      seen.push(id);
+      if (!cn || !en) problems.push(`${id}: 玩法介绍缺中/英`);
+      if (cn.length > 30) problems.push(`${id}: 中文玩法 ${cn.length} 字（应 ≤30）`);
+      if (en.length > 90) problems.push(`${id}: 英文玩法 ${en.length} 字符（应 ≤90）`);
+      return m;
+    });
+    IDS.forEach((id) => { if (seen.indexOf(id) < 0) problems.push(`${id}: INTRO 表里没有它`); });
+  }
+  check(problems.length === 0, `分享文案：${problems.slice(0, 6).join('；')}`);
 }
 
 // ---------- 帮助 FAB 的小红点：没看过显示，看过永久消失 ----------

@@ -1024,6 +1024,27 @@
   另：0 心 + 盖章途中退出，`restore()` 要按 `lost` 恢复（不能因为「心为 0 不可恢复」就重开本关）。
 - **海报背景别用同一张游戏截图**（结算炫耀）：cover 铺一张、中间再放一张，看起来像重影 / 卡了两层。
   背景用和页面同色系的渐变 + 柔光就够了，中间那张截图才是主角。
+- **「分享按钮要常驻」= 别加隐藏条件**：一开始在 `helpOpen` / `confirming` / 首页面板打开时把它藏了，
+  结果是「弹窗一开就没法分享」。现在只在预览弹窗 / 转场时隐藏，并且画在 `help.draw()` 之后、命中区最后注册。
+- **胜利遮罩没进分享图**：两个原因叠加 —— ①海报生成时把 `scene.drawResult` stub 掉了（旧设计「海报只留干净界面」）；
+  ②结算遮罩有 200ms 延迟，`resultVisible()` 在刚赢下时返回 false；而 click / poker 这类还传了自定义 key
+  （`'click:'+logic.result`、`'poker-win:'+resultAt`），改 `_resultGateAt` 会被 key 变化重置回 +200ms。
+  现在截图期间直接把 `scene.resultVisible` 换成 `() => true`，截完恢复；`drawResult` 也不再 stub。
+- **分享图上的玩法介绍写错**：`INTRO` 表是手写的，很容易按「游戏名」猜规则 —— click 写成了「点亮所有灯」，
+  实际规则是**全关掉**过关。写之前必须对照 `js/games/<id>/i18n.js` 的 `helpMsg`，并且控制在 30 字内
+  （冒烟现在会静态检查长度和覆盖率）。
+- **「截图不是实时的」= 吃了海报缓存**：`buildPoster` 按 gameId + 文案 + 主题 + 源尺寸缓存，
+  玩几步界面变了但这些键没变，于是第二次点分享还是第一张图。现在 `openPreview` 传 `force: true` 强制重拍，
+  每帧预生成的结算海报**不要**加 force（否则每帧都截一次屏）。
+- **截图顶部贴到标题**：裁剪按「安全区整块去掉」时，标题栏就在安全区正下方，图片上缘直接贴字。
+  现在顶部只裁 `SAFE_TOP - 24`，海报里截图还要再收 4% —— 只调裁剪数字不够，因为 SAFE_TOP=0 的机型裁出来是 0。
+- **截图底部剩一条灰边**：别按 `SAFE_BOTTOM` 硬留底部空白，`safeArea.bottom` 在小游戏里常常等于屏高、
+  或者比 FAB 行低很多，结果 FAB 下面留了 16~34px 纯背景。要按「最低的那个按钮 + 12px」算。
+- **海报圆角里留白**：截图裁剪后源比例已经变了（不是 `W/H`），`buildPoster` 里的 contain 还得用
+  `share.setSource(sw, sh)` 报上来的比例，否则那条空白就在圆角里露出来。
+- **截图里要有 App 层弹窗**：`scene.render()` 不画帮助 / 二次确认（那是 `App` 画的），
+  所以 `paintSceneForPoster` 的 live 分支要自己补 `help.draw()` / `scene.drawConfirm()`；
+  而且帮助面板有 0→1 的展开动画，**必须先 `help.forceOpen(scene)`**，否则截到的是动画第 0 帧（空白）。
 - **帮助红点要放对层**（帮助 FAB）：红点画在 `App`（场景 render 之后）而不是各游戏里，
   这样 25 个游戏只要 `achv.seenHelp()` 一处逻辑；位置按 `scene.buttons` 里帮助按钮的矩形算，
   别写死坐标（各游戏 helpFab 位置不统一，guess 的还在键盘上方）。
