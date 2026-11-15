@@ -1356,6 +1356,17 @@
 - 旧的 `poker_*` 当天任务由 `healToday()` 处理：未完成自动换题，已完成保留「已完成」但不再显示扑克文案；`recent` 也会过滤不在池子里的旧 id。
 - 井字棋的 `achv.win('ttt')` 负责 `win` 任务；`achv.trackPlay` / `achv.peak` 仍保留其他统计，但不再对应每日任务。
 
+### 130. 井字棋点击计数 / 胜利连线
+
+- `startRound()` 每开一局（含「下一局」、新游戏、目标模式无存档时）把 `clicks` 清零；恢复进行中的存档仍保留当时的点击数，模式切换恢复各自记录。
+- 胜利连线在棋盘之后、结算面板之前画：`finish()` 记 `winLineStartAt`，650ms 内只播一次生长 / 收光 / 端点扩散；到点后 `drawResult()` 才画面板，面板自然盖住连线。恢复结算态时 `winLineStartAt` 设为过去时间、`resultShownAt=0`，直接显示静态连线 + 遮罩，不重播。
+
+### 131. 最高得分成就 / 全达成卡片
+
+- 2048 与 Threes 各加一条 `stat: true` 的「最高得分」，值分别读 `__game_2048__best` / `__threes_game__best`，历史记录为 0 时显示 —。
+- 纯指标行（`stat: true`）的 `unlocked` 仍固定 false，避免进入总解锁数 / 解锁提示；但 `gamesData()` 额外给 `achieved: value > 0`，成就卡背景用 `a.achieved` 判断全部达成。这样最长连胜 / 最高分等指标只要不为 0 就参与「全达成」底色，但不冒充正式成就。
+- `dailyCard` 的行也补 `achieved`，保持和游戏行同结构。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

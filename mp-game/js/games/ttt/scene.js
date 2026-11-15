@@ -34,6 +34,7 @@ const MODE_KEY = '__ttt__mode';
 const STATE_KEY = '__ttt__state';   // 旧版单存档，保留迁移
 function stateKey(mode) { return `__ttt__state_${mode}`; }
 const BOT_DELAY = 420;
+const LINE_MS = 650;
 
 class TttScene extends Scene {
   constructor(app) {
@@ -49,6 +50,8 @@ class TttScene extends Scene {
     this.clicks = 0;
     this.winner = null;
     this.winLine = null;
+    this.winLineStartAt = 0;
+    this.resultShownAt = 0;
     this.confetti = [];
     this.confettiUntil = 0;
     this.lastConfettiAt = 0;
@@ -157,6 +160,12 @@ class TttScene extends Scene {
     }
     if ((phase === WON || phase === LOST) && this.winner) {
       this.phase = phase;
+      // 恢复结算态：连线直接是完成态，遮罩也立即出现，不再重播动画。
+      this.winLineStartAt = Date.now() - LINE_MS - 500;
+      this.resultShownAt = 0;
+      this._resultGateKey = 'ttt:' + this.resultSerial;
+      this._resultGateAt = 0;
+      this._resultVisibleAt = 0;
       if (this.resultSerial < 1) this.resultSerial = 1;
       return true;
     }
@@ -170,6 +179,9 @@ class TttScene extends Scene {
     this.history = logic.emptyHistory();
     this.winner = null;
     this.winLine = null;
+    this.winLineStartAt = 0;
+    this.resultShownAt = 0;
+    this.clicks = 0;
     this.phase = PLAY;
     this.current = randomFirst && Math.random() < 0.5 ? 'O' : 'X';
     this.botAt = 0;
@@ -251,7 +263,13 @@ class TttScene extends Scene {
   finish(player, line) {
     this.winner = player;
     this.winLine = line;
+    this.winLineStartAt = Date.now();
     this.resultSerial += 1;
+    // 先让连线在棋盘上播完，再让结算面板盖住它。
+    this.resultShownAt = this.winLineStartAt + LINE_MS;
+    this._resultGateKey = 'ttt:' + this.resultSerial;
+    this._resultGateAt = this.resultShownAt;
+    this._resultVisibleAt = 0;
     if (this.mode === MODE_PVP) {
       this.streak = this.pvpLast === player ? this.streak + 1 : 1;
       this.pvpLast = player;
@@ -313,6 +331,7 @@ class TttScene extends Scene {
     this.drawScore(c, T);
     this.drawOptions(c, T);
     this.drawBoard(c, T);
+    if (this.phase === WON || this.phase === LOST) this.drawWinLine(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c, T);
     if (this.phase === WON || this.phase === LOST) this.drawResult(c, T);
     confetti.draw(c, this.confetti);
@@ -409,20 +428,7 @@ class TttScene extends Scene {
         this.addButton('ttt-cell-' + i, r.x, r.y, r.w, r.h, () => this.onCell(i));
       }
     }
-    if (this.winLine) {
-      const a = this.cellRect(this.winLine[0]);
-      const b = this.cellRect(this.winLine[2]);
-      c.save();
-      c.strokeStyle = T.win;
-      c.globalAlpha = 0.75;
-      c.lineWidth = Math.max(3, this.cell * 0.07);
-      c.lineCap = 'round';
-      c.beginPath();
-      c.moveTo(a.x + a.w / 2, a.y + a.h / 2);
-      c.lineTo(b.x + b.w / 2, b.y + b.h / 2);
-      c.stroke();
-      c.restore();
-    }
+    // 胜利连线在 render 里、结算面板之前画，面板出现后会把它盖住。
   }
 
   drawPiece(c, idx, r) {
@@ -493,8 +499,74 @@ class TttScene extends Scene {
     this.addButton('ttt-confirm-ok', x + 20 + bw + gap, by, bw, 32, () => this.startNewGame());
   }
 
+  // 胜利连线：只播一次生长动画，随后停成一条静态线。
+  drawWinLine(c) {
+    if (!this.winLine || !this.winLineStartAt) return;
+    const a = this.cellRect(this.winLine[0]);
+    const b = this.cellRect(this.winLine[2]);
+    const x0 = a.x + a.w / 2;
+    const y0 = a.y + a.h / 2;
+    const x1 = b.x + b.w / 2;
+    const y1 = b.y + b.h / 2;
+    const now = Date.now();
+    const age = Math.max(0, now - this.winLineStartAt);
+    const growP = Math.min(1, age / 360);
+    const grow = 1 - Math.pow(1 - growP, 3);
+    const ex = x0 + (x1 - x0) * grow;
+    const ey = y0 + (y1 - y0) * grow;
+    // 只在开头短暂收光，约 650ms 后完全静止。
+    const flash = Math.max(0, 1 - age / 650);
+    const T = theme.tokens;
+    const color = this.phase === LOST ? T.lose : T.win;
+    c.save();
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.strokeStyle = color;
+    // 柔光底：比之前更窄、更淡，并且不再随时间循环呼吸。
+    c.globalAlpha = 0.14 + 0.10 * flash;
+    c.shadowColor = color;
+    c.shadowBlur = 8 + 5 * flash;
+    c.lineWidth = Math.max(7, this.cell * 0.15);
+    c.beginPath();
+    c.moveTo(x0, y0);
+    c.lineTo(ex, ey);
+    c.stroke();
+    // 亮芯。
+    c.globalAlpha = 0.88;
+    c.shadowBlur = 4 + 3 * flash;
+    c.lineWidth = Math.max(2.5, this.cell * 0.055);
+    c.beginPath();
+    c.moveTo(x0, y0);
+    c.lineTo(ex, ey);
+    c.stroke();
+    // 生长过程中的一个前导光点，线画完就消失。
+    if (growP < 1) {
+      c.globalAlpha = 0.85 * (1 - growP);
+      c.fillStyle = '#ffffff';
+      c.shadowBlur = 8;
+      c.beginPath();
+      c.arc(ex, ey, Math.max(2, this.cell * 0.038), 0, Math.PI * 2);
+      c.fill();
+    }
+    // 两端只扩散一次，不循环。
+    if (age < 520) {
+      const ring = Math.min(1, age / 520);
+      c.globalAlpha = (1 - ring) * 0.30;
+      c.strokeStyle = color;
+      c.shadowBlur = 0;
+      c.lineWidth = 1.5;
+      [[x0, y0], [x1, y1]].forEach(([x, y]) => {
+        c.beginPath();
+        c.arc(x, y, 4 + ring * this.cell * 0.12, 0, Math.PI * 2);
+        c.stroke();
+      });
+    }
+    c.restore();
+  }
+
   drawResult(c, T) {
     if (this.phase !== WON && this.phase !== LOST) return;
+    if (Date.now() < this.resultShownAt) return;
     if (!this.resultVisible(200, 'ttt:' + this.resultSerial)) return;
     share.resultPanel(c, this, this.boardY, this.boardSize);
     const cx = W / 2;

@@ -688,6 +688,7 @@ const SPEC = {
     icon: 'numeric-3', accent: '#2c6aad',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__game_2048__best'))}`,
     achv: [
+      A('最高得分', 'Top score', () => ({ value: read('__game_2048__best'), target: 1 }), { stat: true, unit: 'achvScore' }),
       A('达成 1024', 'Reach 1024', () => ({ value: reachCount('g2048', 1024, '__game_2048__best'), target: 1 }), { counter: true }),
       A('达成 2048', 'Reach 2048', () => ({ value: reachCount('g2048', 2048, '__game_2048__best'), target: 1 }), { counter: true }),
       A('达成 4096', 'Reach 4096', () => ({ value: reachCount('g2048', 4096, '__game_2048__best'), target: 1 }), { counter: true }),
@@ -748,6 +749,7 @@ const SPEC = {
     icon: 'numeric-3', accent: '#2c6aad',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__threes_game__best'))}`,
     achv: [
+      A('最高得分', 'Top score', () => ({ value: read('__threes_game__best'), target: 1 }), { stat: true, unit: 'achvScore' }),
       A('达成 2000 分', 'Score 2000', () => ({ value: reachCount('three', 2000, '__threes_game__best'), target: 1 }), { counter: true }),
       A('达成 10000 分', 'Score 10000', () => ({ value: reachCount('three', 10000, '__threes_game__best'), target: 1 }), { counter: true }),
       A('达成 30000 分', 'Score 30000', () => ({ value: reachCount('three', 30000, '__threes_game__best'), target: 1 }), { counter: true }),
@@ -1086,6 +1088,7 @@ function gamesData() {
         value: p.value,
         target: p.target,
         unlocked: p.unlocked,
+        achieved: def.stat ? p.value > 0 : p.unlocked,
         lte: def.lte,
         counter: !!def.counter,
         stat: !!def.stat,
@@ -1127,6 +1130,7 @@ function dailyCard() {
       value: p.value,
       target: p.target,
       unlocked: p.unlocked,
+      achieved: p.unlocked,
       lte: def.lte,
       counter: !!def.counter,
       stat: !!def.stat,

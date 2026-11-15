@@ -555,7 +555,8 @@ class AchvPage {
       c.translate(-W / 2, -(y + h / 2));
     }
     // 某个游戏的成就全部达成：整张卡换成浅橙底
-    const allDone = !game.hidden && game.achv.length > 0 && game.achv.every((a) => a.unlocked);
+    const allDone = !game.hidden && game.achv.length > 0
+      && game.achv.every((a) => (a.achieved !== undefined ? a.achieved : a.unlocked));
     glassCard(c, SIDE, y, CARD_W, h, 14, dark, lifted, flat, allDone);
 
     // 左 3：只有图标 + 游戏名，整组垂直居中（成绩行留给右侧的指标行，这里不放）
