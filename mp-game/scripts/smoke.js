@@ -160,7 +160,7 @@ const D = require(path.join(ROOT, 'js/core/draw'));
 
 const GAMES = [
   'click', 'match', 'point24', 'guess', 'detective', 'hunter', 'master', 'g2048', 'snake',
-  'three', 'link', 'puzzle', 'mirror', 'down', 'crush', 'sudoku', 'sort', 'slide', 'poker',
+  'three', 'link', 'puzzle', 'mirror', 'down', 'crush', 'sudoku', 'sort', 'slide', 'ttt',
   'mahjong', 'solo', 'alchemy', 'quesheng', 'legend', 'gambler',
 ];
 
@@ -455,7 +455,7 @@ i18n.setLang('cn');
   }
   const ids = scene.buttons.map((b) => b.id);
   ['settings-close', 'settings-mask', 'setting-0-system', 'setting-0-light', 'setting-0-dark',
-    'setting-1-cn', 'setting-1-en', 'setting-2-emoji', 'setting-2-mahjong', 'setting-3-sfx']
+    'setting-1-cn', 'setting-1-en', 'setting-2-emoji', 'setting-2-mahjong', 'setting-3-small', 'setting-3-large', 'setting-4-sfx']
     .forEach((id) => check(ids.includes(id), `设置面板缺少按钮 ${id}`));
   // 圆形展开：动画中间帧必须走「离屏 + clip + drawImage」，且此时不注册选项按钮
   [0.2, 0.55, 0.9].forEach((anim) => {
@@ -533,7 +533,7 @@ i18n.setLang('cn');
   check(scene.settingsOpen === true, '设置面板：点选项之后把面板关掉了');
   scene.buttons = [];
   scene.render(ctx3);
-  tapButton('setting-3-sfx');
+  tapButton('setting-4-sfx');
   check(storage.get('__games_hub__sfx') === '0', '设置面板：点音效开关没有切换音效');
   check(scene.settingsOpen === true, '设置面板：点开关之后把面板关掉了');
   // 点卡片（组标题 / 卡内空白）不能关闭面板；点卡片外的空白才关闭
@@ -680,7 +680,7 @@ i18n.setLang('cn');
   // 隐藏成就：8 条都在列表末尾，未达成时名字是 ******，达成后显示真名 + 说明
   {
     const hidden = achv.hiddenList();
-    check(hidden.length === 8, `隐藏成就：应有 8 条，实际 ${hidden.length}`);
+    check(hidden.length === 7, `隐藏成就：应有 7 条，实际 ${hidden.length}`);
     check(hidden.every((h) => h.name && h.desc), '隐藏成就：名称/说明缺失');
     // 隐藏成就的解锁也要能实时提示（markHelp / markFail / 时长这些写入口以前完全不给提示）
     {
@@ -706,24 +706,22 @@ i18n.setLang('cn');
     wx.setStorageSync('__poker_alchemy__best_1', '13');
     wx.setStorageSync('__quesheng__level', '12');
     wx.setStorageSync('__gambler__best', '13');
-    // 新增三条：单次猜大小输 >10000 / 任一游戏 800 胜 / 任一闯关游戏 500 关
-    achv.peak('poker', 'lost', 12000);
+    // 任一游戏 800 胜 / 任一闯关游戏 500 关
     wx.setStorageSync('__emoji_crush__level', '501');
     for (let i = 0; i < 800; i += 1) achv.win('click');
     const done = achv.hiddenList();
-    // 前 7 条是行为型条件，这一轮都能满足；「成就达人」要累计解锁 100 个，本轮不一定够，
+    // 前 6 条是行为型条件，这一轮都能满足；「成就达人」要累计解锁 100 个，本轮不一定够，
     // 所以它单独和 unlockedCount() 对账（口径一致性比「一定解锁」更重要）
-    check(done.slice(0, 7).every((h) => h.unlocked), `隐藏成就：条件满足后没有全部解锁（${done.filter((h) => !h.unlocked).map((h) => h.name).join(',')}）`);
-    check(done[7].unlocked === (achv.unlockedCount() >= 100),
+    check(done.slice(0, 6).every((h) => h.unlocked), `隐藏成就：条件满足后没有全部解锁（${done.filter((h) => !h.unlocked).map((h) => h.name).join(',')}）`);
+    check(done[6].unlocked === (achv.unlockedCount() >= 100),
       `隐藏成就：成就达人状态与已解锁数不一致（${achv.unlockedCount()} 个）`);
-    check(/\d+/.test(done[7].desc), `隐藏成就：成就达人文案不对（${done[7].desc}）`);
+    check(/\d+/.test(done[6].desc), `隐藏成就：成就达人文案不对（${done[6].desc}）`);
     check(done[0].name === '求知好学' && done[1].name === '我已沉迷' && done[2].name === '锲而不舍' && done[3].name === '我爱闯关'
-      && done[4].name === '再也不赌了' && done[5].name === '赢上瘾了' && done[6].name === '闯关英豪'
-      && done[7].name === '成就达人',
+      && done[4].name === '赢上瘾了' && done[5].name === '闯关英豪'
+      && done[6].name === '成就达人',
     '隐藏成就：名字不对');
-    check(/12000/.test(done[4].desc), `隐藏成就：输掉奖金文案不对（${done[4].desc}）`);
-    check(/800/.test(done[5].desc), `隐藏成就：800 胜文案不对（${done[5].desc}）`);
-    check(/500/.test(done[6].desc), `隐藏成就：500 关文案不对（${done[6].desc}）`);
+    check(/800/.test(done[4].desc), `隐藏成就：800 胜文案不对（${done[4].desc}）`);
+    check(/500/.test(done[5].desc), `隐藏成就：500 关文案不对（${done[5].desc}）`);
 
     // 「超过第 10 关」的阈值口径：通过第 10 关（存档 best = 11）就算，只到第 10 关（未通过）不算
     // —— 这里用连连看单独验一遍，曾经写成 >= 11 导致差一关永远解锁不了
@@ -1337,7 +1335,9 @@ i18n.setLang('cn');
 // ---------- 场景里用到的 i18n key 必须真的存在（中英都要），否则界面上会直接显示 key ----------
 {
   const fs = require('fs');
-  const GAME_IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+  // 扑克入口已隐藏，但冒烟仍检查它的旧文件；ttt 是首页新入口。
+  require(path.join(ROOT, 'js/games/poker/scene'));
+  const GAME_IDS = ['click', 'guess', 'poker', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
     'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const missing = [];
@@ -1360,7 +1360,7 @@ i18n.setLang('cn');
 // ---------- 帮助弹窗：标题统一「玩法介绍」，文案是分块格式（小标题 + 项目符号） ----------
 {
   const helpPanel = require(path.join(ROOT, 'js/core/help'));
-  const GAME_IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+  const GAME_IDS = ['click', 'guess', 'poker', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
     'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   GAME_IDS.forEach((id) => {
@@ -1957,13 +1957,15 @@ i18n.setLang('cn');
   // 结算时应该显示入口（画出来 + 注册按钮），进行中不该显示
   const MatchSceneCls = require(path.join(ROOT, 'js/games/match/scene'));
   const overScene = new MatchSceneCls(fakeApp);
-  overScene.phase = 'over';
+  overScene.phase = 'won';
   overScene.helpOpen = false;
   overScene.confirming = false;
-  check(shareMod.shouldShowChip(overScene, 'match') === true, '分享：结算时没有显示入口');
+  check(shareMod.shouldShowChip(overScene, 'match') === true, '分享：胜利结算时没有显示入口');
   overScene.phase = 'play';
   check(shareMod.shouldShowChip(overScene, 'match') === false, '分享：进行中不该显示入口');
   overScene.phase = 'over';
+  check(shareMod.shouldShowChip(overScene, 'match') === false, '分享：失败结算不该显示入口');
+  overScene.phase = 'won';
   overScene.buttons = [];
   const chipRec = [];
   const chipCtx = makeCtx();
@@ -2262,10 +2264,24 @@ i18n.setLang('cn');
   };
   const realNow = Date.now;
   // 每个游戏「怎么进结算态」不一样，这里逐个驱动（和真机流程一致的最小写法）
-  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
-    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  // 这四个游戏没有胜利态（无尽 / 失败结束），永远不应该出现「炫耀一下」
+  const NO_WIN = ['snake', 'three', 'down', 'legend'];
+  const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'match', 'link', 'detective',
+    'hunter', 'crush', 'sudoku', 'master', 'sort', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'mirror', 'point24', 'solo', 'gambler'];
   const problems = [];
+  NO_WIN.forEach((id) => {
+    const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new SceneClass(fakeApp);
+    sc._hasRendered = true;
+    sc.buttons = [];
+    if (id === 'snake') sc.phase = 1;
+    else if (id === 'three') sc.phase = 'lose';
+    else sc.phase = 'over';
+    sc.render(makeCtx());
+    if (sc.buttons.some((b) => b.id === 'share-result')) problems.push(`${id}: 失败态不该有「炫耀一下」`);
+  });
   IDS.forEach((id) => {
     const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
     fakeApp.sceneId = id;
@@ -2279,10 +2295,6 @@ i18n.setLang('cn');
         sc.logic.result = require(path.join(ROOT, 'js/games/click/logic')).WIN;
         sc.render(makeCtx());
         if (!sc.buttons.some((b) => b.id === 'share-result')) advance(600);
-      } else if (id === 'snake') {
-        sc.phase = 1;
-        sc.render(makeCtx());
-        advance(600);
       } else if (id === 'poker') {
         sc.stage = 'guess';
         sc.drawTableOverlay(makeCtx());

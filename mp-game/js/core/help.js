@@ -150,7 +150,9 @@ function helpBlocks(c, scene) {
       const raw = line.trim();
       if (!raw) { gap = true; return; }
       const kind = raw.startsWith('## ') ? 'head' : raw.startsWith('- ') ? 'bullet' : 'para';
-      const text = kind === 'head' ? raw.slice(3).trim() : kind === 'bullet' ? raw.slice(2).trim() : raw;
+      // 帮助文案统一不在句尾带句号（中英文都去掉），保持条目干净。
+      const text = (kind === 'head' ? raw.slice(3).trim() : kind === 'bullet' ? raw.slice(2).trim() : raw)
+        .replace(/[。.]\s*$/, '');
       const indent = kind === 'bullet' ? 12 : 0;
       const lines = D.wrapText(c, text, W - 72 - 20 - indent, kind === 'head' ? 15 : 13);
       blocks.push({ kind, lines, gap: gap || (kind === 'head' && blocks.length > 0), indent });

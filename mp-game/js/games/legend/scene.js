@@ -778,19 +778,13 @@ class LegendScene extends Scene {
     c.save();
     c.translate(sx, sy);
 
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.boardBg);
+    // 麻将牌面不用点阵底纹：外框 + 每格浅底，和雀圣保持同一套麻将棋盘样式。
+    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 16, T.boardBg);
+    D.strokeRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 16, T.border, 1);
+    const cellBg = theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.52)';
     c.save();
-    D.roundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14);
+    D.roundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 16);
     c.clip();
-    // 点阵底纹
-    c.fillStyle = T.boardDot;
-    for (let x = this.boardX + 5; x < this.boardX + this.boardW; x += 10) {
-      for (let y = this.boardY + 5; y < this.boardY + this.boardH; y += 10) {
-        c.beginPath();
-        c.arc(x, y, 1.1, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
 
     // 升行：整盘内容先向下一行、再滑回原位；棋盘 clip 把被顶出去的牌裁掉
     const riseP = this.rise ? clamp((now - this.rise.at) / this.rise.dur, 0, 1) : 1;
@@ -802,7 +796,7 @@ class LegendScene extends Scene {
     const canTap = this.canPlay && !(this.rise && now < this.rise.at + this.rise.dur);
     for (let i = 0; i < logic.CELLS; i++) {
       const r = this.cellRect(i);
-      D.fillRoundRect(c, r.x, r.y, r.w, r.h, 8, 'rgba(255,255,255,0.06)');
+      D.fillRoundRect(c, r.x, r.y, r.w, r.h, 8, cellBg);
       c.save();
       c.globalAlpha = this.grid[Math.floor(i / logic.COLS)][i % logic.COLS] ? 0.75 : 0.5;
       D.strokeRoundRect(c, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 8, T.tileBorder, 1);

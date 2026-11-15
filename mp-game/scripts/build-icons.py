@@ -76,6 +76,7 @@ ICONS = {
     'bulb': ('mdi', 'lightbulb-on-50'),
     'crush': ('mdi', 'star-four-points'),
     'sudoku': ('mdi', 'grid'),
+    'ttt': ('mdi', 'pound-box'),
     'sort': ('mdi', 'test-tube'),
     'slide': ('mdi', 'arrow-all'),
     'volume': ('mdi', 'volume-high'),

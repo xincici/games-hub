@@ -36,7 +36,8 @@ game.js
       ├─ js/games/sudoku/    数独（sudoku + scene）
       ├─ js/games/sort/      Emoji 排序（board + scene）
       ├─ js/games/slide/     Emoji 滑行（board + scene）
-      ├─ js/games/poker/     德州扑克（rules + scene）
+      ├─ js/games/poker/     德州扑克（隐藏入口，仅保留代码）
+      ├─ js/games/ttt/       井字棋（board + scene + i18n）
       ├─ js/games/mahjong/   麻将英雄（board + scene）
       ├─ js/games/solo/      单人麻将（board + scene）
       ├─ js/games/alchemy/   扑克炼金术（board + scene）
@@ -259,7 +260,7 @@ game.js
   （后三个是隐藏成就用的：看过帮助的游戏、累计游戏毫秒数、累计失败次数）：
   - 对局：`App.openGame()` → `achv.trackPlay(id)`
   - 胜利：`achv.win(id, { level, mode, perfect, fast })`（全部可选）—— 21 个有胜场的游戏都接了：
-    click / guess / poker / puzzle / g2048 / match / link / detective / hunter / crush / sudoku /
+    click / guess / ttt / puzzle / g2048 / match / link / detective / hunter / crush / sudoku /
     master / sort / slide / alchemy / mahjong / quesheng / mirror / point24 / solo / gambler
     - `level`：本局关卡（1 基）→ 记 `bestLevel` + `modes[id][mode].max / .first`
     - `mode`：模式号 / 难度号 → `modes[id][mode].wins` 分开统计

@@ -771,41 +771,23 @@ class MahjongScene extends Scene {
     }
     c.save();
     c.translate(sx, sy);
-    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.boardBg);
-    // 点阵底纹，裁在棋盘圆角里
-    c.save();
-    D.roundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14);
-    c.clip();
-    c.fillStyle = T.boardDot;
-    for (let x = this.boardX + 5; x < this.boardX + this.boardW; x += 10) {
-      for (let y = this.boardY + 5; y < this.boardY + this.boardH; y += 10) {
-        c.beginPath();
-        c.arc(x, y, 1.1, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
-    c.restore();
+    // 麻将牌面不用点阵底纹：外框 + 每格浅底，和雀圣保持同一套麻将棋盘样式。
+    D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 16, T.boardBg);
+    D.strokeRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 16, T.border, 1);
+    const cellBg = theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.52)';
 
     const can = this.canPlace;
     const hover = this.drag && this.drag.active ? this.drag.cell : -1;
-    // 9 个常驻格位：空格用虚线（可放）、有牌用实线（点它 = 替换）
+    // 9 个常驻格位：统一中性边框，不再用绿色虚线框
     for (let i = 0; i < logic.CELLS; i++) {
       const r = this.cellRect(i);
       const p = this.cellDealProgress(i);
       if (p <= 0) continue;
       c.save();
       c.globalAlpha = Math.min(1, p);
-      if (this.board[i]) {
-        D.fillRoundRect(c, r.x, r.y, r.w, r.h, 8, 'rgba(255,255,255,0.08)');
-        D.strokeRoundRect(c, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 8, T.tileBorder, 1);
-      } else if (can) {
-        c.save();
-        if (c.setLineDash) c.setLineDash([4, 3]);
-        D.strokeRoundRect(c, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 8, T.primary, 1);
-        c.restore();
-      } else {
-        D.strokeRoundRect(c, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 8, T.tileBorder, 1);
-      }
+      D.fillRoundRect(c, r.x, r.y, r.w, r.h, 8, cellBg);
+      // 空格不再画绿色虚线框，统一用中性细边框；可放 / 不可放只由交互状态提示。
+      D.strokeRoundRect(c, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 8, T.tileBorder, 1);
       if (hover === i) D.strokeRoundRect(c, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 8, T.primary, 2);
       c.restore();
     }

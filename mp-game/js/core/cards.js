@@ -233,7 +233,12 @@ function drawMahjong(c, item, x, y, w, h) {
   c.save();
   D.roundRect(c, x, y, w, h, radius);
   c.clip();
-  const drawn = tiles.drawFace(c, key, x, y, w, h);
+  // 雪碧图外圈自带一圈绿边：不要把牌面内缩（会露出一圈白/米色假边），
+  // 而是让牌面稍微放大、铺满圆角并溢出裁剪区，把绿边推到裁切外。
+  c.fillStyle = '#f7f4ee';
+  c.fillRect(x, y, w, h);
+  const over = Math.max(0.5, Math.min(1.5, w * 0.015));
+  const drawn = tiles.drawFace(c, key, x - over, y - over, w + over * 2, h + over * 2);
   c.restore();
   if (drawn) return;
   D.fillRoundRect(c, x, y, w, h, radius, '#f7f4ee');

@@ -661,15 +661,15 @@ const SPEC = {
       A('天选之子（4 次内猜中）', 'Lucky guess (≤4 tries)', () => ({ value: fastOf('guess'), target: 1 }), { counter: true }),
     ],
   },
-  poker: {
-    icon: 'mode-poker', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(totalWins('poker'))}`,
+  ttt: {
+    icon: 'ttt', accent: '#23804e',
+    stats: () => `${i18n.t('achvBest')} ${V(read('__ttt__best'))}${winTag('ttt')}`.trim(),
     achv: [
-      A('最高资产', 'Top chips', () => ({ value: read('__poker_game_total'), target: 1 }), { stat: true }),
-      A('单次最高奖金', 'Best single payout', () => ({ value: peakOf('poker', 'payout'), target: 1 }), { stat: true }),
-      A('猜大小最长连胜', 'Best high-low streak', () => ({ value: peakOf('poker', 'gstreak'), target: 1 }), { stat: true, unit: 'achvStreak' }),
-      A('四条达成次数', 'Four of a kind', () => ({ value: countOf('poker', 'four'), target: 1 }), { counter: true }),
-      A('同花顺达成次数', 'Straight flush', () => ({ value: countOf('poker', 'flush'), target: 1 }), { counter: true }),
+      A('最长连胜', 'Best streak', () => ({ value: Math.max(peakOf('ttt', 'streak'), read('__ttt__best')), target: 1 }), { stat: true, unit: 'achvStreak' }),
+      A('达成 5 连胜', 'Win 5 in a row', () => ({ value: Math.max(peakOf('ttt', 'streak'), read('__ttt__best')), target: 5 })),
+      A('累计 100 胜', '100 wins', () => ({ value: totalWins('ttt'), target: 100 })),
+      A('累计 500 胜', '500 wins', () => ({ value: totalWins('ttt'), target: 500 })),
+      A('累计对局 100 局', '100 games played', () => ({ value: playsOf('ttt'), target: 100 })),
     ],
   },
   puzzle: {
@@ -929,7 +929,7 @@ Object.keys(SPEC).forEach((id) => {
   SPEC[id].achv = qty.concat(prog);
 });
 
-const ORDER = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective', 'hunter',
+const ORDER = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective', 'hunter',
   'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong', 'quesheng',
   'legend', 'mirror', 'point24', 'solo', 'gambler'];
 
@@ -941,7 +941,7 @@ function loadOrder() {
   try {
     const raw = getRaw(ORDER_KEY, '');
     const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (Array.isArray(arr)) saved = arr.filter((id) => typeof id === 'string' && ORDER.includes(id));
+    if (Array.isArray(arr)) saved = arr.map((id) => (id === 'poker' ? 'ttt' : id)).filter((id) => typeof id === 'string' && ORDER.includes(id));
   } catch (e) {
     saved = [];
   }
@@ -1020,13 +1020,6 @@ function hiddenList() {
       desc: T('achvHiddenLevelDesc'),
       unlocked: clearedGames >= HIDDEN_GAMES.length,
       hint: `${clearedGames}/${HIDDEN_GAMES.length}`,
-    },
-    {
-      key: 'lost',
-      name: T('achvHiddenLost'),
-      desc: `${T('achvHiddenLostDesc')} ${peakOf('poker', 'lost')}`,
-      unlocked: peakOf('poker', 'lost') > 10000,
-      hint: `${Math.min(peakOf('poker', 'lost'), 10000)}/10000`,
     },
     {
       key: 'wins800',

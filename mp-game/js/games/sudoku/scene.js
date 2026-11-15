@@ -189,7 +189,8 @@ class SudokuScene extends Scene {
 
   // ---------- 存档 ----------
   saveState() {
-    if (this.phase !== PLAY || this.winAt) return;
+    // OVER 也要落档：失败后的最后一步错误不能被回退；WON / 胜利动画期间才清档。
+    if (this.phase === WON || this.winAt) return;
     if (this.isFinished()) { removeRaw(STATE_KEY); return; }
     const payload = {
       difficulty: this.difficulty,
@@ -240,13 +241,14 @@ class SudokuScene extends Scene {
       this.hearts = hv >= 0 && hv <= d ? hv : d;
       this.selected = -1;
       this.notesMode = false;
-      this.phase = PLAY;
+      this.phase = saved.phase === OVER ? OVER : PLAY;
       this.newBest = false;
       this.winAt = 0;
       this.cellFx.clear();
       this.best = this.loadBest();
       this.baseTime = Math.max(0, Math.floor(+saved.time || 0));
-      this.startAt = Date.now();
+      // 失败局面不继续计时；首帧会直接显示失败遮罩。
+      this.startAt = this.phase === PLAY ? Date.now() : 0;
       this.time = this.baseTime;
       this.confirming = false;
       this.helpOpen = false;
@@ -865,6 +867,7 @@ class SudokuScene extends Scene {
     this.baseTime = this.seconds(); this.startAt = 0; this.time = this.baseTime;
     this.phase = OVER;
     this.selected = -1;
+    this.saveState();   // 保留最后一次错误、0 心与 OVER 状态
     this.app.audio.playLose();
   }
 }

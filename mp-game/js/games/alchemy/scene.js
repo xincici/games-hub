@@ -708,14 +708,10 @@ class AlchemyScene extends Scene {
       const r = this.cellRect(idx);
       const occupied = !!this.grid[idx];
       D.fillRoundRect(c, r.x, r.y, r.w, r.h, 8, 'rgba(255,255,255,0.10)');
-      if (!occupied && place) {
-        c.save();
-        if (c.setLineDash) c.setLineDash([4, 3]);
-        D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 8, T.primary, 1.2);
-        c.restore();
-      } else if (occupied && place && this.mode === 2) {
+      if (occupied && place && this.mode === 2) {
         D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 8, 'rgba(35,128,78,0.55)', 1.2);
       } else {
+        // 空格不再画绿色虚线框，保持中性细边框。
         D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 8, T.tileBorder, 1);
       }
       this.addButton('cell-' + idx, r.x, r.y, r.w, r.h, () => this.onCellTap(idx));

@@ -32,14 +32,18 @@ class Scene {
     if (!this._hasRendered) {
       this._resultGateKey = gateKey;
       this._resultGateAt = now;
+      this._resultVisibleAt = now;
       return true;
     }
     if (this._resultGateKey !== gateKey) {
       this._resultGateKey = gateKey;
       this._resultGateAt = now + 200;
+      this._resultVisibleAt = 0;
       return false;
     }
-    return now >= this._resultGateAt;
+    const visible = now >= this._resultGateAt;
+    this._resultVisibleAt = visible ? now : 0;
+    return visible;
   }
   update() {}
   render() {}
@@ -627,9 +631,21 @@ class App {
           ? this.scene.drawHelp : null;
         const drawConfirm = !drawHelp && confirm.canOverride(this.scene) && typeof this.scene.drawConfirm === 'function'
           ? this.scene.drawConfirm : null;
+        if (!share.isWinScene(this.scene, this.sceneId)) share.resetChip(this.scene);
         if (drawHelp) this.scene.drawHelp = () => {};
         if (drawConfirm) this.scene.drawConfirm = () => {};
-        this.scene.render(ctx);
+        const shake = share.shakeOffset(this.scene);
+        if (shake) {
+          // 先铺满底色再位移，避免抖动时屏幕边缘露出上一帧。
+          ctx.fillStyle = theme.tokens.bg;
+          ctx.fillRect(0, 0, W, H);
+          ctx.save();
+          ctx.translate(shake.x, shake.y);
+          this.scene.render(ctx);
+          ctx.restore();
+        } else {
+          this.scene.render(ctx);
+        }
         this.drawHelpDot(ctx);
         // 每帧同步「截图源尺寸」：海报的 contain 比例要用它，晚一帧就会留白
         {
@@ -637,7 +653,7 @@ class App {
           share.setSource(cs.sw, cs.sh);
         }
         // 结算态：右上角一枚「炫耀一下」（生成 5:4 海报，点一下发分享）
-        if (share.shouldShowChip(this.scene, this.sceneId)) {
+        if (share.shouldShowChip(this.scene, this.sceneId) && this.scene._resultVisibleAt) {
           try {
             share.buildPoster(this.scene, this.sceneId);
             // 结算遮罩自己带分享入口的游戏（比如侦探）就不再画兜底那一枚

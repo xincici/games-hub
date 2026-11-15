@@ -1269,6 +1269,93 @@
 - **验证**：冒烟逐个断言 `helpMsg` 以 `## ` 开头、≥2 条 `- `、长度在合理区间，并把 25 个帮助面板各画一遍
   （断言关闭按钮存在、不抛错）。
 
+### 115. 首页三处联动问题
+
+- **拖拽后「Emoji」前缀消失**：`layout()` 用 `TitleShort` 短名，而 `refreshLabels()` 用完整 `Title`。拖拽会走 `layout()`，切语言会走 `refreshLabels()`，于是同一格出现两套名字。现在统一只用完整名称；不要再按 `SHORT_NAMES` 分叉。
+- **每日挑战「去挑战」进面板**：`daily.todayTask()` 原来只返回 `id/desc/done`，没把任务池里的 `game` 带出来，`drawHero` 的 `taskGame` 永远为空。现在返回 `game`；`game === '*'` 的任务仍只能开面板。
+- **面板展开时首页先消失**：`render()` 原来只要 `dailyOpen||achvOpen||settingsOpen` 就不画首页，圆形还没长出来背后已经空了。现在**展开 / 收起期间照画首页**，只 `panelCovered()`（anim≥0.995）后才停画；动画期间 `panelActive()` 让首页所有按钮失效，避免点穿。设置面板的离屏画布失败分支也必须先按圆形 clip 再铺底。
+
+### 116. 麻将棋盘底纹
+
+- 点阵 `T.boardDot` 只服务于 emoji 牌面：link / match(emoji) / crush / slide / sort 等保留；mahjong / legend / quesheng / poker / alchemy 等麻将 / 扑克牌面全部不用。
+- 麻将英雄和麻将传奇的空格改成雀圣同款：外框 `T.boardBg` + 1px `T.border`、每格 8px 圆角浅底（暗 0.05 / 亮 0.52 白）、`T.tileBorder` 描边。不要只在有牌 / 可放时画格子。
+- match 的棋盘底纹按 `this.mode === MODE_EMOJI` 条件画；切到扑克 / 麻将模式必须自动消失。
+
+### 117. 结算分享入口：只给胜利、盖章式出现
+
+- 分享入口只在胜利态出现：`share.isWinScene()` 统一判断 `phase=won/win`、`result=2`、`logic.result=2`、扑克 `stage=guess`；`over/lost/lose/giveup/guesslose` 和没有胜利态的无尽游戏一律不画、不注册按钮。
+- 兜底入口必须等 `Scene.resultVisible()` 真正返回 true（`_resultVisibleAt`）后再画；否则会在 200ms 结算遮罩出现前先落到屏幕右上角。
+- `drawResultChip` 首次绘制记录 `_shareChipAt/_shareChipShakeAt`，360ms 内 1.7→0.85→1 盖章缩放 + 轻微旋转；App 在下一帧给整个场景约 4.5px 的短震动（先铺底色，避免边缘露上一帧）。`isWinScene` 为 false 时 App 调 `share.resetChip()`，下一局重新盖章。
+
+### 118. 数字迷宫连续移动 / 数独失败存档
+
+- 数字迷宫：点击当下 `cells/blank` 已经更新，140ms 的 `moveAnim` 只是视觉补间；`onCell` 不再因为 `moveAnim` 阻止下一步，开始新一步时直接清掉上一条补间。`drawBoard` 在补间期间也要继续注册 `cell-*` 按钮，否则玩家只能等动画结束。
+- 数独：`saveState()` 以前 `phase !== PLAY` 直接 return，`lose()` 设 `OVER` 后没有落档，最后一步错误会回退。现在允许 `OVER` 落档，`lose()` 在设置 `phase=OVER` 后显式 `saveState()`；`restore()` 读回 `OVER` 并停表，首帧由 `resultVisible()` 直接显示失败遮罩。
+
+### 119. 首页文字大小设置
+
+- 新增 `core/textsize.js`：key `__games_hub__text_size`，三档 `small .9 / medium 1 / large 1.2`（10px 基准下大号 = 12px），默认 medium。
+- 缩放在 `core/draw.js` 的 `font()` 统一做，所以 `D.text / D.measure / D.wrapText` 同步缩放；不要只改 `D.text` 否则测量宽度和实际字号对不上，换行 / 居中会漂。
+- 首页设置新增 `setting-3-*` 分段（小 / 中 / 大）；音效 / 震动开关因此从 `setting-3-*` 变成 `setting-4-*`。首页格子名最小字号从 7.5 放宽到 6.5，避免大字号下长名称溢出。
+
+### 120. 设置页顶部对齐
+
+- 设置页徽章 / 「设置」文字的中心改为 `HEADER.TITLE_Y`（与微信胶囊同一水平线），徽章 `heroH=38` 因此 y 从 `TITLE_Y` 减 19；后续内容起点比原来的 `SAFE_TOP+18` 更靠上。
+- 徽章到第一张卡片的间距 20→12，卡片组间距 14→12；设置项变多后不靠压缩卡片高度，避免文字大小切换时挤爆。
+
+### 121. 麻将牌四周绿线
+
+- 雪碧图每格自身带外圈绿边，直接按牌大小 `drawImage` 会在圆角裁切后露出 1px 绿线。
+- `tiles.drawFace` 把每格源图裁掉边缘 3px；`cards.drawMahjong` **不能内缩**（会露出一圈白/米色假边），而是把目标矩形向外放大 `max(0.5, min(1.5, w*0.015))` 再绘制，让牌面铺满圆角、绿边被推到圆角裁剪外。
+
+### 122. 麻将英雄 / 炼金术空格框
+
+- 麻将英雄 9 宫格和扑克炼金术 4×4 / 3×3 棋盘的空格不再画 `T.primary` 绿色虚线框；统一中性 `T.tileBorder` 实线。可放状态由落牌 / hover 状态承担，不靠虚线圈。
+- Mahjong 的「下一张为空」占位虚线属于候选区，不是游戏区格位，可保留。
+
+### 123. 井字棋替换扑克英雄入口
+
+- 首页 `DEFAULT_ORDER` 把 `poker` 换成 `ttt`；旧 `__games_hub__home_order` 里的 `poker` 在 `loadOrder()` 中迁移成 `ttt`，否则老玩家会少一格 / 入口消失。
+- `ttt` 需同步：`game.js` 注册、`home` 名称/图标/accent/兜底、`share.GAME_IDS/INTRO`、`daily.POOL`、`achv.ORDER/SPEC`、icon font 的 `ttt` 字形（`pound-box`）。扑克文件保留但不再注册，属于「隐藏」不是删除。
+- 规则实现：`board.place()` 在落第 4 子前先移除己方 `history[0]`；`winner()` 必须在移除后判定。人机模式赢/输一局后同样进入 `won` / `lost` 结算遮罩，当前连胜已更新；遮罩里的「下一局」保留当前连胜，顶部「新游戏」才清零。双人模式一方三连后 `phase='won'` 结束本局。
+- `newGame` 必须二次确认、清零当前连胜和点击数、重新随机先手；人机 / 双人 FAB 切换也重开一局。
+- 机器人在 `bestMove()` 只做一层：先找自己胜点、再堵对手胜点，否则中宫→角→边；不要让它阻塞主线程。
+
+### 124. 井字棋状态恢复 / 棋子亮度 / 回合子类型
+
+- `__ttt__state` 保存完整对局：`mode / board / history / current / phase / winner / winLine / clicks / streak / pvpLast / resultSerial`。每步、每次结算、`startRound` 和 `onHide` 都写；重进时校验 board 与 history 完全一致，再恢复。`phase=won/lost` 恢复结算态，首帧立即显示；旧版 `phase=round` 存档兼容为直接开下一局。
+- 恢复时 `history` 顺序不能重排，否则棋子亮度顺序全错；最旧子 alpha `.16`、中间 `.42`、最新 `1`，两子时 `.30/1`。
+- 人机回合文案必须带玩家子类型：`轮到你 · X` / `电脑回合 · O`；双人模式文案本身已带 X / O。
+
+### 125. 井字棋胜利烟花
+
+- `ttt` 必须实现 `startConfetti()`，App 的 `wrapSceneConfetti()` 才会接管成全局烟花；否则 `openGame` 时判断不到该方法，胜利遮罩出来也不会放烟花。
+- 人机玩家胜利和双人胜利调用；人机失败不调用。场景本地保留 `confetti` 数组和 `update` 生成作为非 App 测试兜底。
+
+### 126. 首页标题连点五次打开隐藏扑克
+
+- 首页标题 `home-title-egg` 热区只在 `!panelActive()` 时注册；面板打开 / 动画期间不响应，并且 `render()` 会清零 `secretTaps`，避免点面板时误累积。
+- 五次点击间隔上限 1100ms；打开后清零。`game.js` 仍注册 `poker` 场景，但首页 `DEFAULT_ORDER` 不包含它，所以只能从彩蛋进入。
+- 扑克相关成就已移除：`achv.SPEC.poker` 和隐藏 `lost` 条目都不再展示；每日任务也不再出现扑克。`poker` 文件本身保留作为彩蛋内容。
+
+### 127. 井字棋模式切换保留各自棋局
+
+- 不能只用一个 `__ttt__state`：人机 / 双人切换会互相覆盖，切回来就只剩空盘。现在每个模式独立存 `__ttt__state_bot` / `__ttt__state_pvp`，旧 `__ttt__state` 只在 `s.mode` 匹配时做迁移。
+- `toggleMode()` 先把当前模式 `saveState()`，再切模式并 `restoreState(target)`；目标模式没有存档才 `startRound()`。双方各自的棋盘、落子顺序、点击数和连胜都保留。
+- App 的 `wrapSceneModeSwitch` 会在 mode 变化时把 `_hasRendered=false`，恢复的 `won/lost` 结算态首帧立即显示。
+
+### 128. 井字棋双人模式胜场
+
+- 双人顶栏不再显示「最长 / 当前连胜」，改为 X 方胜场、O 方胜场、点击次数；人机仍显示最长 / 当前连胜。
+- `pvpWins` 存在每个模式各自的 `__ttt__state_*` 里，模式切换会恢复；`finish()` 只给胜方 +1，点击次数仍只统计双方手动落子。
+- 新游戏只清当前连胜 / 点击，不抹掉两边累计胜场（用户要的是记录展示，不是新开一局就清零战绩）。
+
+### 129. 每日挑战移除扑克 / 增加井字棋
+
+- `core/daily.js` 的 `POOL` 已无任何 `poker_*`；井字棋保留 `ttt_win1`、`ttt_win2` 两条胜场任务（开一局 / 连胜 3 场两条已按需求删除）。
+- 旧的 `poker_*` 当天任务由 `healToday()` 处理：未完成自动换题，已完成保留「已完成」但不再显示扑克文案；`recent` 也会过滤不在池子里的旧 id。
+- 井字棋的 `achv.win('ttt')` 负责 `win` 任务；`achv.trackPlay` / `achv.peak` 仍保留其他统计，但不再对应每日任务。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

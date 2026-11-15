@@ -103,7 +103,10 @@ class PuzzleScene extends Scene {
     return Math.abs(r - br) + Math.abs(c - bc) === 1;
   }
   onCell(idx) {
-    if (this.phase !== PLAY || this.moveAnim || this.dealing || !this.adjacent(idx)) return;
+    if (this.phase !== PLAY || this.dealing || !this.adjacent(idx)) return;
+    // 上一步的视觉补间可以直接结束；cells 和 blank 在点击当下已经更新，
+    // 不能因为 140ms 的移动动画把后续点击吞掉。
+    this.moveAnim = null;
     const to = this.blank;
     const value = this.cells[idx];
     this.cells[this.blank] = this.cells[idx];
@@ -127,13 +130,13 @@ class PuzzleScene extends Scene {
     }
   }
   onTouchStart(p) {
-    if (!p || this.phase !== PLAY || this.dealing || this.moveAnim) return;
+    if (!p || this.phase !== PLAY || this.dealing) return;
     this.touch = p;
   }
   onTouchEnd(p) {
     const start = this.touch;
     this.touch = null;
-    if (!start || !p || this.phase !== PLAY || this.dealing || this.moveAnim) return;
+    if (!start || !p || this.phase !== PLAY || this.dealing) return;
     const dx = p.x - start.x;
     const dy = p.y - start.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
@@ -288,7 +291,7 @@ class PuzzleScene extends Scene {
           this.drawNumber(c, value, -q.w / 2, -q.h / 2, q.w, q.h);
           c.restore();
         }
-        if (this.phase === PLAY && !this.moveAnim && !this.dealing) this.addButton('cell-' + idx, q.x, q.y, q.w, q.h, () => this.onCell(idx));
+        if (this.phase === PLAY && !this.dealing) this.addButton('cell-' + idx, q.x, q.y, q.w, q.h, () => this.onCell(idx));
       }
     }
     if (this.phase === WON && this.cells[this.blank] === 0) {

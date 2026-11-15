@@ -1,5 +1,6 @@
 // Canvas 2D 绘制小工具：圆角卡片、居中文本、按钮、颜色混合、文字换行。
 const { ctx } = require('./canvas');
+const textsize = require('./textsize');
 
 function roundRect(c, x, y, w, h, r) {
   const radius = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -26,7 +27,7 @@ function strokeRoundRect(c, x, y, w, h, r, stroke, width) {
 }
 
 function font(size, weight, family) {
-  return `${weight || 'normal'} ${size}px ${family || '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif'}`;
+  return `${weight || 'normal'} ${textsize.scale(size)}px ${family || '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif'}`;
 }
 
 function text(c, value, x, y, opts) {

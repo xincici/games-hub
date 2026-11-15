@@ -20,10 +20,9 @@ const DailyPage = require('./daily-page');
 // 分段控件滑块动画时长（web 的 .seg-slider 是 0.32s）
 const SEG_SLIDE_MS = 320;
 const HEADER = require('../../core/header');
+const textsize = require('../../core/textsize');
 
 const ORDER_KEY = '__games_hub__home_order';
-// 首页 5×5 网格里用短名，避免长名字被缩到看不清
-const SHORT_NAMES = { link: 1, mirror: 1, down: 1, crush: 1, sort: 1, slide: 1 };
 let homeIntroPlayed = false;
 function entryHash(str) {
   let h = 0;
@@ -37,7 +36,7 @@ const DEFAULT_ORDER = [
   'g2048', 'three', 'snake', 'link',
   'puzzle', 'mirror', 'down',
   'crush', 'sudoku', 'sort', 'slide',
-  'poker', 'mahjong', 'solo',
+  'ttt', 'mahjong', 'solo',
   'alchemy', 'quesheng', 'legend', 'gambler',
 ];
 
@@ -78,6 +77,8 @@ class HomeScene extends Scene {
     this.press = null;
     this.pressTimer = null;
     this.suppressOpen = false;
+    this.secretTaps = 0;
+    this.secretAt = 0;
     this.now = Date.now();
     // 与小程序一致：首次进入首页播一次逐格跳动，返回首页不重播。
     this.enterStart = homeIntroPlayed ? 0 : Date.now();
@@ -93,6 +94,7 @@ class HomeScene extends Scene {
       if (Array.isArray(arr)) saved = arr.filter(id => typeof id === 'string');
     } catch (e) { saved = []; }
     const out = [];
+    saved = saved.map(id => (id === 'poker' ? 'ttt' : id));
     saved.forEach((id) => { if (DEFAULT_ORDER.includes(id) && !out.includes(id)) out.push(id); });
     DEFAULT_ORDER.forEach((id) => { if (!out.includes(id)) out.push(id); });
     return out;
@@ -138,7 +140,7 @@ class HomeScene extends Scene {
       puzzle: ['home.puzzleTitle', 'puzzle'], mirror: ['home.mirrorTitle', 'mirror'], down: ['home.downTitle', 'down'],
       crush: ['home.crushTitle', 'crush'], sudoku: ['home.sudokuTitle', 'sudoku'],
       sort: ['home.sortTitle', 'sort'], slide: ['home.slideTitle', 'slide'],
-      poker: ['home.pokerTitle', 'poker'], mahjong: ['home.mahjongTitle', 'mahjong'],
+      ttt: ['home.tttTitle', 'ttt'], mahjong: ['home.mahjongTitle', 'mahjong'],
       solo: ['home.soloTitle', 'solo'],
       alchemy: ['home.alchemyTitle', 'alchemy'], quesheng: ['home.queshengTitle', 'quesheng'],
       legend: ['home.legendTitle', 'legend'], gambler: ['home.gamblerTitle', 'gambler'],
@@ -149,7 +151,7 @@ class HomeScene extends Scene {
       g2048: 'number', three: 'number', snake: 'action', link: 'logic',
       puzzle: 'logic', mirror: 'memory', down: 'action',
       crush: 'memory', sudoku: 'number', sort: 'logic', slide: 'action',
-      poker: 'card', mahjong: 'card', solo: 'card',
+      ttt: 'logic', mahjong: 'card', solo: 'card',
       alchemy: 'card', quesheng: 'card', legend: 'card', gambler: 'card',
     };
     this.hexes = [];
@@ -163,8 +165,8 @@ class HomeScene extends Scene {
         id, x, y, w: cellW, h: cellH,
         cx: x + cellW / 2, cy: y + cellH / 2,
         index: i + 1,
-        // 网格里用短名（「Emoji 连连看」这种在 68px 格子里会被缩到 7px）
-        title: SHORT_NAMES[id] ? t(names[id][0] + 'Short') : t(names[id][0]),
+        // 始终使用完整名称；拖拽重排 / 切语言都走同一份 title，不能一套短名一套全名。
+        title: t(names[id][0]),
         kind: names[id][1], accent: accents[id] || 'logic',
       });
     });
@@ -222,47 +224,51 @@ class HomeScene extends Scene {
   }
 
   render(c) {
+    if (this.panelActive()) this.secretTaps = 0;
     const T = theme.tokens;
     c.fillStyle = T.bg;
     c.fillRect(0, 0, W, H);
     this.bg.draw(c, theme.dark);
-      // 面板打开时整屏被盖住，不必再画首页本体（也避免文字被重复计数）
-      const covered = this.dailyOpen || this.achvOpen || this.settingsOpen;
-      if (!covered) {
-        // 页眉：左边标题（正体加粗），右边一行极小字统计 —— 像刊物的刊头
-        const pad = 16;
-        D.text(c, t('home.homeTitle'), pad, this.mastheadY, {
-          size: 17, weight: 'bold', color: T.text,
-        });
-        let played = 0;
-        this.hexes.forEach((h) => { if (achv.playsOf(h.id) > 0) played += 1; });
-        // 页眉统计：已玩几款 + 连签几天（没有连签就只显示已玩）
-        const streak = daily.bestStreak();
-        const stat = t('home.playCount').replace('{a}', String(played)).replace('{b}', String(this.hexes.length))
-          + (streak > 0 ? '  ·  ' + t('home.heroStat').replace('{a}', String(streak))
-            .replace('{b}', String(daily.completedTotal())) : '');
-        D.text(c, stat, W - pad, this.mastheadY, {
-          size: 9.5, weight: 'bold', color: T.muted, align: 'right',
-        });
-        c.save();
-        c.strokeStyle = theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(44,62,80,0.12)';
-        c.lineWidth = 1;
-        c.beginPath();
-        c.moveTo(pad, Math.round(this.mastheadY) + 12.5);
-        c.lineTo(W - pad, Math.round(this.mastheadY) + 12.5);
-        c.stroke();
-        c.restore();
-        this.drawHero(c);
-        this.drawGridRules(c);
-        this.hexes.forEach((item) => {
-          if (this.drag && this.drag.id === item.id) return;
-          this.drawTile(c, item, item.cx, item.cy, false);
-        });
-        if (this.drag) {
-          const item = this.hexes.find(h => h.id === this.drag.id);
-          if (item) this.drawTile(c, item, this.drag.x, this.drag.y, true, 1.08);
-        }
+    // 首页本体始终先画：面板圆形展开时要能逐渐盖住它，而不是先整屏清空。
+    if (!this.panelCovered()) {
+      const pad = 16;
+      D.text(c, t('home.homeTitle'), pad, this.mastheadY, {
+        size: 17, weight: 'bold', color: T.text,
+      });
+      if (!this.panelActive()) {
+        const titleW = D.measure(c, t('home.homeTitle'), 17, 'bold');
+        this.addButton('home-title-egg', pad - 6, this.mastheadY - 14, Math.min(titleW + 12, W * 0.56), 28,
+          () => this.tapSecretTitle());
       }
+      let played = 0;
+      this.hexes.forEach((h) => { if (achv.playsOf(h.id) > 0) played += 1; });
+      const streak = daily.bestStreak();
+      const stat = t('home.playCount').replace('{a}', String(played)).replace('{b}', String(this.hexes.length))
+        + (streak > 0 ? '  ·  ' + t('home.heroStat').replace('{a}', String(streak))
+          .replace('{b}', String(daily.completedTotal())) : '');
+      D.text(c, stat, W - pad, this.mastheadY, {
+        size: 9.5, weight: 'bold', color: T.muted, align: 'right',
+      });
+      c.save();
+      c.strokeStyle = theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(44,62,80,0.12)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(pad, Math.round(this.mastheadY) + 12.5);
+      c.lineTo(W - pad, Math.round(this.mastheadY) + 12.5);
+      c.stroke();
+      c.restore();
+      // 面板动画期间仍然画首页内容，但不注册首页按钮，避免点到盖在下面的格子。
+      this.drawHero(c);
+      this.drawGridRules(c);
+      this.hexes.forEach((item) => {
+        if (this.drag && this.drag.id === item.id) return;
+        this.drawTile(c, item, item.cx, item.cy, false);
+      });
+      if (this.drag) {
+        const item = this.hexes.find(h => h.id === this.drag.id);
+        if (item) this.drawTile(c, item, this.drag.x, this.drag.y, true, 1.08);
+      }
+    }
     if (this.dailyAnim > 0) this.drawDaily(c);
     else if (this.achvAnim > 0) this.drawAchv(c);
     else if (this.settingsAnim > 0) this.drawSettings(c);
@@ -271,6 +277,32 @@ class HomeScene extends Scene {
       this.drawAchvButton(c);
       this.drawSettingsButton(c);
     }
+  }
+
+  // 彩蛋：首页标题连续点 5 次，打开已隐藏的扑克英雄。超时或其他操作不清零，
+  // 只靠每次点击的间隔判断「连续」，避免玩家点得稍慢就被吞。
+  tapSecretTitle() {
+    const now = Date.now();
+    if (now - this.secretAt > 1100) this.secretTaps = 0;
+    this.secretAt = now;
+    this.secretTaps += 1;
+    if (this.secretTaps < 5) return;
+    this.secretTaps = 0;
+    this.secretAt = 0;
+    this.app.openGame('poker', { x: W / 2, y: this.mastheadY });
+  }
+
+  // 面板完全展开后整屏已被不透明面板盖住，可以停画首页；展开 / 收起过程中仍要画。
+  panelCovered() {
+    return (this.dailyOpen && this.dailyAnim >= 0.995)
+      || (this.achvOpen && this.achvAnim >= 0.995)
+      || (this.settingsOpen && this.settingsAnim >= 0.995);
+  }
+
+  // 面板展开 / 收起期间：首页继续作为底图，但首页按钮全部失效。
+  panelActive() {
+    return !!(this.dailyOpen || this.achvOpen || this.settingsOpen
+      || this.dailyAnim > 0 || this.achvAnim > 0 || this.settingsAnim > 0);
   }
 
   onTheme() {
@@ -502,11 +534,13 @@ class HomeScene extends Scene {
     const T = theme.tokens;
     const anim = ghost ? null : this.entryAnim(item.id);
     if (anim && anim.skip) {
-      // 入场延迟期间虽然透明，格子仍然可点
-      this.addButton(item.id + '-game', item.x, item.y, item.w, item.h, () => {
-        if (this.suppressOpen) { this.suppressOpen = false; return; }
-        this.app.openGame(item.id, { x: cx, y: cy });
-      });
+      // 入场延迟期间虽然透明，格子仍然可点；面板动画期间不能穿透。
+      if (!this.panelActive()) {
+        this.addButton(item.id + '-game', item.x, item.y, item.w, item.h, () => {
+          if (this.suppressOpen) { this.suppressOpen = false; return; }
+          this.app.openGame(item.id, { x: cx, y: cy });
+        });
+      }
       return;
     }
     const accents = {
@@ -554,7 +588,7 @@ class HomeScene extends Scene {
       g2048: 'numeric', three: 'numeric-3', snake: 'snake', link: 'link',
       puzzle: 'puzzle', mirror: 'mirror', down: 'down',
       crush: 'crush', sudoku: 'sudoku', sort: 'sort', slide: 'slide',
-      poker: 'mode-poker', mahjong: 'mode-mahjong', solo: 'mode-mahjong',
+      ttt: 'ttt', poker: 'mode-poker', mahjong: 'mode-mahjong', solo: 'mode-mahjong',
       alchemy: 'alchemy', quesheng: 'quesheng', legend: 'legend', gambler: 'gambler',
     };
     const fallbacks = {
@@ -563,7 +597,7 @@ class HomeScene extends Scene {
       g2048: '2048', three: '3', snake: '🐍', link: '🔗',
       puzzle: '🧩', mirror: '🪞', down: '⬇️',
       crush: '😄', sudoku: '数', sort: '🧃', slide: '↔',
-      poker: '🃏', mahjong: '🀄', solo: '🀄',
+      ttt: '#', poker: '🃏', mahjong: '🀄', solo: '🀄',
       alchemy: '⚗', quesheng: '🀄', legend: '🀄', gambler: '🀄',
     };
     if (!icons.draw(c, glyphs[item.kind], cx, iy, iconSize, accent)) {
@@ -575,13 +609,13 @@ class HomeScene extends Scene {
     }
     // 名称
     let nameSize = w < 62 ? 9.5 : 10.5;
-    while (nameSize > 7.5 && D.measure(c, item.title, nameSize, 'bold') > w - 8) nameSize -= 0.5;
+    while (nameSize > 6.5 && D.measure(c, item.title, nameSize, 'bold') > w - 8) nameSize -= 0.5;
     D.text(c, item.title, cx, baseY + h * 0.75, { size: nameSize, weight: 'bold', color: T.text, align: 'center' });
     // 分类色条：一小段，像目录里的分类标记
     const barW = Math.min(16, w * 0.3);
     D.fillRoundRect(c, cx - barW / 2, baseY + h * 0.75 + 7.5, barW, 2, 1, accent);
     c.restore();
-    if (ghost) return;
+    if (ghost || this.panelActive()) return;
     this.addButton(item.id + '-game', item.x, item.y, item.w, item.h, () => {
       if (this.suppressOpen) { this.suppressOpen = false; return; }
       this.app.openGame(item.id, { x: cx, y: cy });
@@ -642,6 +676,7 @@ class HomeScene extends Scene {
     D.text(c, done ? t('home.heroDone') : t('home.heroGo'), pillX + pillW / 2, iconCy, {
       size: 11, weight: 'bold', color: pillColor, align: 'center',
     });
+    if (this.panelActive()) return;
     // 卡片本体：进每日挑战面板（先注册，药丸后注册 → 命中时药丸优先）
     this.addButton('home-hero', r.x, r.y, r.w, r.h, () => this.openDaily());
     // 右侧药丸：未完成且任务绑定了具体游戏 → 直接进那个游戏；已完成 / 任意游戏 → 还是开面板
@@ -705,6 +740,7 @@ class HomeScene extends Scene {
       if (item.id === 'sudoku') item.title = t('home.sudokuTitle');
       if (item.id === 'sort') item.title = t('home.sortTitle');
       if (item.id === 'slide') item.title = t('home.slideTitle');
+      if (item.id === 'ttt') item.title = t('home.tttTitle');
       if (item.id === 'poker') item.title = t('home.pokerTitle');
       if (item.id === 'mahjong') item.title = t('home.mahjongTitle');
       if (item.id === 'solo') item.title = t('home.soloTitle');
@@ -1082,7 +1118,7 @@ class HomeScene extends Scene {
   // （web 是点击处圆形扩张；canvas 里改成淡入 + 轻微上移，内容布局保持一致。）
   settingsLayout() {
     const pad = 16;
-    const blockGap = 14;
+    const blockGap = 12;
     const segPad = 4;
     const segItemH = 40;
     const segH = segItemH + segPad * 2;
@@ -1090,16 +1126,18 @@ class HomeScene extends Scene {
     const blockPadY = 12;
     const switchRowH = 56;
     const heroH = 38;
-    const top = SAFE_TOP + 18;
+    // 设置徽章 / 文字与微信右上角胶囊同一水平线；后续内容整体上移。
+    const top = HEADER.TITLE_Y - heroH / 2;
     const blocks = [
       { kind: 'seg', title: t('home.theme'), key: 'theme' },
       { kind: 'seg', title: t('home.language'), key: 'lang' },
       { kind: 'seg', title: t('home.face'), key: 'face' },
+      { kind: 'seg', title: t('home.textSize'), key: 'textSize' },
       { kind: 'switch', title: '', key: 'switch' },
     ];
     let y = top;
     const hero = { x: pad, y, w: heroH, h: heroH };
-    y += heroH + 20;
+    y += heroH + 12;
     const laid = blocks.map((b) => {
       const h = b.kind === 'seg'
         ? blockPadY * 2 + blockHeadH + segH
@@ -1188,6 +1226,21 @@ class HomeScene extends Scene {
           ['en', t('home.english'), null],
         ],
         onPick: (value) => { this.slideSeg('lang', value); i18n.setLangMode(value); this.refreshLabels(); },
+      };
+    }
+    if (key === 'textSize') {
+      return {
+        current: textsize.mode,
+        options: [
+          ['small', t('home.textSmall')],
+          ['medium', t('home.textMedium')],
+          ['large', t('home.textLarge')],
+        ],
+        onPick: (value) => {
+          this.slideSeg('textSize', value);
+          textsize.setMode(value);
+          this.layout();
+        },
       };
     }
     return {
@@ -1387,7 +1440,11 @@ class HomeScene extends Scene {
     } else {
       const surface = this.ensureSettingsSurface();
       if (!surface) {
+        // 没有第二块画布时也必须按圆形裁剪；整屏铺底会让首页在展开时先消失。
         c.save();
+        c.beginPath();
+        c.arc(cx, cy, Math.max(0.1, maxR * ease), 0, Math.PI * 2);
+        c.clip();
         c.fillStyle = theme.tokens.bg;
         c.fillRect(0, 0, W, H);
         c.translate(0, -scroll);

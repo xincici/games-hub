@@ -8,7 +8,7 @@ const VERSION = 1;
 const KEEP_RECENT = 5;
 const KEEP_DAYS = 400;
 
-// ---- 任务池（42 条，覆盖 25 个游戏）----
+// ---- 任务池（41 条，覆盖 25 个游戏）----
 // kind：play 开一局 / win 赢一局 / perfect 完美胜利 / fast 速通 / level 通关到第 N 关 /
 //       reach 分数或里程碑到 N / bump 计数（四条、同花顺…）/ peak 峰值（连胜…）
 const POOL = [
@@ -35,9 +35,8 @@ const POOL = [
   { id: 'hunter_win1', game: 'hunter', kind: 'win', need: 1, cn: '赢一局猎手', en: 'Win a Hunter round' },
   { id: 'mahjong_win1', game: 'mahjong', kind: 'win', need: 1, cn: '赢一局麻将英雄', en: 'Win a Mahjong Hero round' },
   { id: 'solo_win1', game: 'solo', kind: 'win', need: 1, cn: '赢一局单人麻将', en: 'Win a Solo Mahjong round' },
-  { id: 'poker_win1', game: 'poker', kind: 'win', need: 1, cn: '扑克英雄：结算一次奖金', en: 'Poker: bank a win once' },
-  { id: 'poker_win2', game: 'poker', kind: 'win', need: 2, cn: '扑克英雄：结算两次奖金', en: 'Poker: bank 2 wins' },
-  { id: 'poker_gstreak3', game: 'poker', kind: 'peak', field: 'gstreak', need: 3, cn: '扑克英雄：猜大小连中 3 次', en: 'Poker: guess 3 in a row' },
+  { id: 'ttt_win1', game: 'ttt', kind: 'win', need: 1, cn: '赢一局井字棋', en: 'Win a Tic-Tac-Toe round' },
+  { id: 'ttt_win2', game: 'ttt', kind: 'win', need: 2, cn: '赢 2 局井字棋', en: 'Win 2 Tic-Tac-Toe rounds' },
   { id: 'alchemy_win1', game: 'alchemy', kind: 'win', need: 1, cn: '赢一局扑克炼金术', en: 'Win an Alchemy round' },
   { id: 'quesheng_win1', game: 'quesheng', kind: 'win', need: 1, cn: '赢一局雀圣', en: 'Win a Quesheng round' },
   { id: 'gambler_win1', game: 'gambler', kind: 'win', need: 1, cn: '赢一局赌神', en: 'Win a Gambler round' },
@@ -295,6 +294,7 @@ function todayTask() {
   const desc = task ? descOf(task) : i18n.t('dailyDone');
   return {
     id: cur.id,
+    game: task ? task.game : null,
     date: cur.date,
     done: !!cur.done,
     prog: Math.min(num(cur.prog), task ? task.need : 0),

@@ -20,7 +20,7 @@ const GAME_IDS = [
   'g2048', 'three', 'snake', 'link',
   'puzzle', 'mirror', 'down',
   'crush', 'sudoku', 'sort', 'slide',
-  'poker', 'mahjong', 'solo',
+  'ttt', 'mahjong', 'solo',
   'alchemy', 'quesheng', 'legend', 'gambler',
 ];
 
@@ -111,6 +111,7 @@ const INTRO = {
   // 每个游戏一句玩法（≤30 字，中英各一行）：只讲「怎么操作 + 怎么赢」，别写数值细节
   click: ['点灯会连带上下左右一起变档，把所有灯关掉即过关', 'Each tap flips a lamp and its neighbours; switch them all off'],
   guess: ['猜 4 位不重复数字，8 次机会；A 位置对、B 数字对', 'Guess 4 unique digits in 8 tries: A right place, B wrong place'],
+  ttt: ['落子三连即胜；每方最多 3 子，第 4 子挤掉最旧子', 'Place three in a row to win; keep 3 pieces and the oldest leaves on your 4th move'],
   poker: ['发牌、留牌、换牌凑牌型，中奖还能猜大小翻倍', 'Draw, hold and swap to make a hand, then call high or low'],
   puzzle: ['点空格旁的数字滑动，把 1、2、3… 按顺序排好', 'Slide the tiles beside the gap back into 1, 2, 3 order'],
   g2048: ['滑动合并相同数字，凑出 2048 即获胜', 'Swipe to merge equal tiles and reach 2048'],
@@ -200,11 +201,38 @@ function resultLine(scene) {
   return t('app.shareResultLine');
 }
 
-// 什么时候显示入口：结算态、且没有被帮助 / 二次确认面板挡住
+// 是否胜利态：失败 / 结束 / 放弃一律不展示分享入口。
+// 1A2B 和关灯用数字 result（1 输 / 2 赢）；扑克用 stage（guess 才是中牌型）。
+function isWinScene(scene, gameId) {
+  if (!scene) return false;
+  if (scene.stage === 'guess') return true;
+  if (scene.stage === 'lose' || scene.stage === 'guesslose') return false;
+  if (scene.phase === 'won' || scene.phase === 'win') return true;
+  if (scene.logic && scene.logic.result === 2) return true;
+  if (scene.result === 2) return true;
+  return false;
+}
+
+// 什么时候显示入口：胜利结算态、且没有被帮助 / 二次确认面板挡住
 function shouldShowChip(scene, gameId) {
   if (!scene) return false;
   if (scene.helpOpen || scene.confirming) return false;
-  return isResultScene(scene, gameId);
+  return isWinScene(scene, gameId);
+}
+
+function resetChip(scene) {
+  if (!scene) return;
+  scene._shareChipAt = 0;
+  scene._shareChipShakeAt = 0;
+}
+
+// 「炫耀一下」盖章时给整个场景一个短促位移；App 在 scene.render 外包一层 translate。
+function shakeOffset(scene) {
+  if (!scene || !scene._shareChipShakeAt) return null;
+  const age = Date.now() - scene._shareChipShakeAt;
+  if (age < 0 || age > 280) return null;
+  const k = 1 - age / 280;
+  return { x: Math.sin(age / 20) * 4.5 * k, y: Math.cos(age / 16) * 2.4 * k };
 }
 
 // 兜底位置：右上角、但要让开微信胶囊（大约 SAFE_TOP+2 ~ +34），所以压在 +44
@@ -587,16 +615,39 @@ function resultPanel(c, scene, top, height, opts) {
 // 画「分享」入口：默认落在兜底位置（胶囊下方）；结算遮罩自己做样式的游戏传 rect 进来，
 // 就画在它自己的右上角（filled = 主色实心，压在遮罩上更醒目）。
 function drawResultChip(c, scene, rect, opts) {
+  if (!isWinScene(scene)) return null;
   const T = theme.tokens;
   const o = opts || {};
   const r = rect || chipRect();
   const filled = !!o.filled;
   const label = o.label != null ? o.label : t('app.shareResultCta');
+  const now = Date.now();
+  if (!scene._shareChipAt) {
+    scene._shareChipAt = now;
+    scene._shareChipShakeAt = now;
+  }
+  const age = now - scene._shareChipAt;
+  const p = Math.min(1, Math.max(0, age / 360));
+  // 盖章：1.7 倍落下 → 压到 0.85 → 回弹到 1；最后一段淡出前的旋正。
+  let scale;
+  if (p < 0.58) scale = 1.7 - 0.85 * (1 - Math.pow(1 - p / 0.58, 3));
+  else if (p < 0.8) scale = 0.85 + 0.2 * (1 - Math.pow(1 - (p - 0.58) / 0.22, 3));
+  else scale = 1.05 - 0.05 * ((p - 0.8) / 0.2);
+  const alpha = Math.min(1, p / 0.16);
+  const rot = p < 0.7 ? -0.10 * (1 - p / 0.7) : 0;
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  c.save();
+  c.globalAlpha = alpha;
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.scale(scale, scale);
+  c.translate(-cx, -cy);
   if (filled) {
     D.fillRoundRect(c, r.x, r.y, r.w, r.h, r.h / 2, ROSE);
   } else {
     c.save();
-    c.globalAlpha = 0.95;
+    c.globalAlpha *= 0.95;
     c.shadowColor = 'rgba(0,0,0,0.25)';
     c.shadowBlur = 10;
     c.shadowOffsetY = 2;
@@ -611,6 +662,7 @@ function drawResultChip(c, scene, rect, opts) {
   const gx = r.x + (r.w - groupW) / 2;
   drawShareIcon(c, gx + iconSize / 2, r.y + r.h / 2, iconSize, fg);
   D.text(c, label, gx + iconSize + 5, r.y + r.h / 2, { size: 11.5, weight: 'bold', color: fg });
+  c.restore();
   if (!scene.buttons.some((b) => b.id === 'share-result')) {
     const gameId = normalizeGameId(latestSceneId);
     scene.addButton('share-result', r.x, r.y, r.w, r.h, () => openPreview(scene, gameId));
@@ -623,7 +675,10 @@ module.exports = {
   getQueryGame,
   normalizeGameId,
   isResultScene,
+  isWinScene,
   shouldShowChip,
+  resetChip,
+  shakeOffset,
   buildPoster,
     setCapture,
     openPreview,

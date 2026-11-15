@@ -41,7 +41,7 @@
 | 数独 | ✅ 已移植 | `SudokuScene` |
 | Emoji 排序 | ✅ 已移植 | `SortScene` |
 | Emoji 滑行 | ✅ 已移植 | `SlideScene` |
-| 扑克英雄 | ✅ 已移植 | `PokerScene` |
+| 井字棋 | ✅ 新入口（扑克英雄入口已隐藏） | `TttScene` |
 | 麻将英雄 | ✅ 已移植 | `MahjongScene` |
 | 单人麻将 | ✅ 已移植 | `SoloScene` |
 | 扑克炼金术 | ✅ 已移植 | `AlchemyScene` |
@@ -83,7 +83,7 @@ mp-game/
         ├── sudoku/         数独（sudoku + scene + i18n）
         ├── sort/           Emoji 排序（board + scene + i18n）
         ├── slide/          Emoji 滑行（board + scene + i18n）
-        ├── poker/          扑克英雄（rules + scene + i18n）
+        ├── ttt/            井字棋（board + scene + i18n；扑克入口已隐藏）
         ├── mahjong/        麻将英雄（board + scene + i18n）
         ├── solo/           单人麻将（board + scene + i18n）
         ├── alchemy/        扑克炼金术（board + scene + i18n）
@@ -157,9 +157,9 @@ mp-game/
 - **Emoji 排序**：水排序，经典/紧凑两种模式；抬起整摞同种水果、自动搬运、暗牌翻面、死局判定；存档按模式独立 `__emoji_sort__*`。
 - **Emoji 滑行**：棋盘成对消除，点按找同款 / 拖动整段滑行；限时、连击、自动重排、胜利礼炮；存档 `__emoji_slide__state`。
 
-## 已实现：扑克英雄 / 麻将英雄 / 单人麻将
+## 已实现：井字棋 / 麻将英雄 / 单人麻将
 
-- **扑克英雄**：单人视频扑克，下注 → 发牌 → 选牌保留 → 换牌 → 结算，支持加成/猜大小与资金记录；存档 `__poker__*`。
+- **井字棋**：3×3 连三获胜；每方最多 3 子，第 4 子挤掉己方最旧子；棋子按落子顺序渐暗；支持人机（自动续局、连胜记录）和双人模式；存档 `__ttt__*`。
 - **麻将英雄**：3×3 麻将落子，一行/列/对角线凑顺子或刻子消除，支持闯关/无尽、连击与关卡曲线；存档 `__mahjong__*`。
 - **单人麻将**：14 张手牌摸打，四组+将或七对子胡牌；有限牌墙、缺一门、连胜难度与最佳连胜；存档 `__solo__*`。
 
@@ -226,7 +226,7 @@ python3 mp-game/scripts/build-icons.py
 - `fonts/games-hub-icons.ttf`
 - `js/core/icon-glyphs.js`
 
-`game.js` 启动时 `icons.init()` 调 `wx.loadFont()`；场景用 `icons.draw(ctx, name, x, y, size, color)` 绘制。首页 25 个游戏图标也全部来自这套 Iconify 字体：关灯 `idea`、对对碰 `bulb`、24 点 `calculator`、1A2B `counter`、侦探 `incognito`、猎手 `target`、消除大师 `layers`、2048 `calculator`、Threes `numeric-3`、贪吃蛇 `snake`、连连看 `link`、数字迷宫 `puzzle`、镜像 `mirror`、下坠 `down`、消消乐 `crush`、数独 `sudoku`、排序 `sort`、滑行 `slide`、扑克 `mode-poker`、麻将英雄/单人麻将 `mode-mahjong`、炼金 `alchemy`、雀圣 `quesheng`、传奇 `legend`、赌神 `gambler`。没加载成功时保留文字 / emoji 兜底。彩色牌面（麻将）仍走图片雪碧图，因为 icon font 只能单色。
+`game.js` 启动时 `icons.init()` 调 `wx.loadFont()`；场景用 `icons.draw(ctx, name, x, y, size, color)` 绘制。首页 25 个游戏图标也全部来自这套 Iconify 字体：关灯 `idea`、对对碰 `bulb`、24 点 `calculator`、1A2B `counter`、侦探 `incognito`、猎手 `target`、消除大师 `layers`、2048 `calculator`、Threes `numeric-3`、贪吃蛇 `snake`、连连看 `link`、数字迷宫 `puzzle`、镜像 `mirror`、下坠 `down`、消消乐 `crush`、数独 `sudoku`、排序 `sort`、滑行 `slide`、井字棋 `ttt`、麻将英雄/单人麻将 `mode-mahjong`、炼金 `alchemy`、雀圣 `quesheng`、传奇 `legend`、赌神 `gambler`。没加载成功时保留文字 / emoji 兜底。彩色牌面（麻将）仍走图片雪碧图，因为 icon font 只能单色。
 
 ## 后续移植约定
 

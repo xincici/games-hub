@@ -31,8 +31,8 @@ function drawFace(c, key, x, y, w, h) {
   if (!ready || !image) return false;
   const slot = SLOT[key] || SLOT.m1;
   const [row, col] = slot;
-  // 内缩 1px，避免雪碧图邻格边缘毛边
-  c.drawImage(image, col * SW + 1, row * SH + 1, SW - 2, SH - 2, x, y, w, h);
+  // 裁掉雪碧图每格边缘 3px：邻格毛边和牌面自带的外圈绿线都不要。
+  c.drawImage(image, col * SW + 3, row * SH + 3, SW - 6, SH - 6, x, y, w, h);
   return true;
 }
 

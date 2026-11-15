@@ -631,19 +631,21 @@ class MatchScene extends Scene {
   drawBoard(c) {
     const T = theme.tokens;
     D.fillRoundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14, T.boardBg);
-    // 点阵底纹（web 的 .dot-board）
-    c.save();
-    D.roundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14);
-    c.clip();
-    c.fillStyle = T.boardDot;
-    for (let x = this.boardX + 5; x < this.boardX + this.boardW; x += 10) {
-      for (let y = this.boardY + 5; y < this.boardY + this.boardH; y += 10) {
-        c.beginPath();
-        c.arc(x, y, 1.1, 0, Math.PI * 2);
-        c.fill();
+    // 点阵只给 emoji 牌面用；扑克 / 麻将牌面保持干净底。
+    if (this.mode === MODE_EMOJI) {
+      c.save();
+      D.roundRect(c, this.boardX, this.boardY, this.boardW, this.boardH, 14);
+      c.clip();
+      c.fillStyle = T.boardDot;
+      for (let x = this.boardX + 5; x < this.boardX + this.boardW; x += 10) {
+        for (let y = this.boardY + 5; y < this.boardY + this.boardH; y += 10) {
+          c.beginPath();
+          c.arc(x, y, 1.1, 0, Math.PI * 2);
+          c.fill();
+        }
       }
+      c.restore();
     }
-    c.restore();
     this.cards.forEach((card, i) => {
       this.drawCard(c, card, i);
       const r = this.cardRect(i);
