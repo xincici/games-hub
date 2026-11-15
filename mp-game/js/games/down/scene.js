@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -445,21 +446,19 @@ class DownScene extends Scene {
 
     const by = this.optY + (this.optH - 32) / 2;
     const startLabel = t('down.start');
-    const startW = Math.min(third - 16, Math.max(80, D.measure(c, startLabel, 13, 'bold') + 22));
+    const startW = Math.min(third - 16, Math.max(80, actionLabel.width(c, startLabel, { size: 13 })));
     const startX = this.cx + third + (third - startW) / 2;
     D.fillRoundRect(c, startX, by, startW, 32, 8, T.primary);
-    D.text(c, startLabel, startX + startW / 2, by + 16, {
-      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
-    });
+    actionLabel.draw(c, 'gamepad', startLabel, startX + startW / 2, by + 16, { size: 13, color: '#ffffff' });
     this.addButton('new', startX, by, startW, 32, () => this.startGame());
 
     const label = this.paused ? t('down.resume') : t('down.pause');
-    const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, D.measure(c, label, 13, 'bold') + 22));
+    const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, actionLabel.width(c, label, { size: 13 })));
     const px = this.cx + third * 2 + (third - pw) / 2;
     const canPause = this.phase === PLAY;
     D.fillRoundRect(c, px, by, pw, 32, 8, canPause ? T.god : T.disabled);
-    D.text(c, label, px + pw / 2, by + 16, {
-      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
+    actionLabel.draw(c, this.paused ? 'play' : 'pause', label, px + pw / 2, by + 16, {
+      size: 13, color: '#ffffff', iconSize: 13, gap: 4,
     });
     if (canPause) this.addButton('pause', px, by, pw, 32, () => this.togglePause());
   }
@@ -519,7 +518,9 @@ class DownScene extends Scene {
         D.text(c, String(this.resumeCount), W / 2, this.boardY + this.boardH / 2 - 10, { size: 56, weight: 'bold', color: T.primary, align: 'center' });
         D.text(c, t('down.readyTip'), W / 2, this.boardY + this.boardH / 2 + 36, { size: 14, weight: 'bold', color: T.text, align: 'center' });
       } else {
-        D.text(c, '⏸', W / 2, this.boardY + this.boardH / 2 - 20, { size: 34, color: T.text, align: 'center' });
+        if (!icons.draw(c, 'play', W / 2, this.boardY + this.boardH / 2 - 20, 34, T.text)) {
+          D.text(c, '>', W / 2, this.boardY + this.boardH / 2 - 20, { size: 30, weight: 'bold', color: T.text, align: 'center' });
+        }
         D.text(c, t('down.resumeTip'), W / 2, this.boardY + this.boardH / 2 + 24, { size: 14, weight: 'bold', color: T.text, align: 'center' });
       }
       this.addButton('resume', this.boardX, this.boardY, this.boardW, this.boardH, () => this.togglePause());
@@ -531,7 +532,7 @@ class DownScene extends Scene {
       D.text(c, String(D.countUp(this.score, this._resultGateAt, 260)), W / 2, cy + 12, { size: 30, weight: 'bold', color: T.text, align: 'center' });
       const label = t('down.start');
       const bw = resultButton.width(c, label);
-      resultButton.draw(c, this, label, 'replay', W / 2 - bw / 2, cy + 38, {
+      resultButton.draw(c, this, label, 'new', W / 2 - bw / 2, cy + 38, {
         id: 'retry', onTap: () => this.startGame(),
       });
     }

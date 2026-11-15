@@ -4,6 +4,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -478,11 +479,11 @@ class DetectiveScene extends Scene {
     drawTimer(c, observing ? 'hourglass' : 'stopwatch', (x1 + x2) / 2, this.optY + this.optH / 2,
       fmt(observing ? this.memLeft : this.time), { size: 15, color: observing ? T.del : T.text });
     const label = t('detective.start');
-    const bw = Math.min(110, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(110, actionLabel.width(c, label, { size: 13 }));
     const bx = (x2 + this.cx + this.cw) / 2 - bw / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => { this.confirming = true; });
   }
   cardRect(i) {
@@ -653,7 +654,7 @@ class DetectiveScene extends Scene {
     const muteRect = fabKit.muteSlot(this.helpFab);
     if (muteRect) fabKit.drawMute(this, c, muteRect);
     const key = this.mode === 2 ? 'mode-poker' : this.mode === 3 ? 'mode-mahjong' : 'mode-emoji';
-    const fallback = this.mode === 2 ? '🃏' : this.mode === 3 ? '🀄' : '😀';
+    const fallback = this.mode === 2 ? 'P' : this.mode === 3 ? 'M' : 'E';
     drawOne(fabKit.slotLeft(this.helpFab, muteRect ? 2 : 1), key, fallback, T.primary, () => this.toggleMode(), 'mode');
   }
 

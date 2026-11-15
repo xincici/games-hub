@@ -19,7 +19,7 @@ function cleanLabel(label) {
 }
 
 function kindOf(kind) {
-  return kind === 'next' ? 'next' : 'replay';
+  return kind === 'next' || kind === 'new' || kind === 'continue' ? kind : 'replay';
 }
 
 function width(c, label) {
@@ -34,7 +34,8 @@ function draw(c, scene, label, kind, x, y, opts) {
   const text = cleanLabel(label);
   const w = o.width || width(c, label);
   const h = o.h || H;
-  const primary = k === 'next';
+  const primary = k !== 'replay';
+  const iconKey = k === 'new' ? 'gamepad' : k === 'continue' ? 'play' : primary ? 'arrow-right' : 'undo';
   if (primary) {
     D.fillRoundRect(c, x, y, w, h, 8, T.primary);
   } else {
@@ -46,9 +47,8 @@ function draw(c, scene, label, kind, x, y, opts) {
   const groupW = iconSize + GAP + textW;
   const gx = x + (w - groupW) / 2;
   const cy = y + h / 2;
-  const iconKey = primary ? 'arrow-right' : 'undo';
   if (!icons.draw(c, iconKey, gx + iconSize / 2, cy, iconSize, fg)) {
-    D.text(c, primary ? '→' : '↺', gx + iconSize / 2, cy, {
+    D.text(c, primary ? (k === 'new' ? '▣' : k === 'continue' ? '▶' : '→') : '↺', gx + iconSize / 2, cy, {
       size: iconSize, weight: 'bold', color: fg, align: 'center',
     });
   }

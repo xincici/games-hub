@@ -9,6 +9,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -719,11 +720,11 @@ class MahjongScene extends Scene {
     D.divider(c, split, this.optY + this.optH / 2, 24, T.border, 1);
     this.drawHand(c);
     const label = t('mahjong.start');
-    const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = split + (this.cx + this.cw - split) / 2 - bw / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => this.openConfirm());
   }
 
@@ -1012,7 +1013,7 @@ class MahjongScene extends Scene {
     // 闯关 = 奖杯、无尽 = 无限（web 顶栏同款语义）。图标字体里暂时没有这两个 glyph，
     // 字体是共享资源、不在本游戏改动范围内，所以先用文字兜底；以后补 glyph 会自动走图标。
     this.drawRoundFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, levelMode ? 'trophy' : 'infinity',
-      levelMode ? '🏆' : '∞', () => this.toggleMode(), 'mode');
+      levelMode ? 'T' : '∞', () => this.toggleMode(), 'mode');
   }
 
   drawRoundFab(c, x, y, iconKey, fallback, onTap, id) {
@@ -1026,7 +1027,7 @@ class MahjongScene extends Scene {
     fabKit.stroke(c, x + size / 2, y + size / 2, size / 2, fabKit.borderOf(iconKey === 'help' ? 'help' : 'mode'));
     c.restore();
     if (!icons.glyph(iconKey) || !icons.draw(c, iconKey, x + size / 2, y + size / 2, 20, T.primary)) {
-      const emoji = fallback === '🏆';
+      const emoji = fallback === 'T';
       D.text(c, fallback, x + size / 2, y + size / 2 + (emoji ? 1 : 0), {
         size: emoji ? 19 : 24,
         weight: 'bold',

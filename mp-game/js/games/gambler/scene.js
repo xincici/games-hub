@@ -15,6 +15,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, clearPrefix } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -668,7 +669,7 @@ class GamblerScene extends Scene {
     this.scoreH = 64;
     // 操作区：新游戏在左、查看答案（橙）在右，两格各 50%
     this.optY = this.scoreY + this.scoreH + 10;
-    this.optH = 44;
+    this.optH = 58;   // 与雀圣操作卡同高
 
     // 底部两个 FAB：帮助 + 模式切换（结算时也保持显示）
     this.fabSize = FAB_SIZE;
@@ -859,28 +860,21 @@ class GamblerScene extends Scene {
     const enabled = this.phase === PLAY && !this.revealing && !this.pendingLoss;
 
     this.drawButton(c, this.cx + this.cw / 4, midY, t('gambler.start'),
-      T.primary, '#ffffff', enabled, () => this.onNewGameClick(), 'new-game');
+      T.primary, enabled, () => this.onNewGameClick(), 'new-game', 'gamepad');
     // 查看答案 = 放弃（橙色，和 24 点的「查看答案」同款）
     this.drawButton(c, midX + this.cw / 4, midY, t('gambler.reveal'),
-      enabled ? T.god : T.disabled, '#ffffff', enabled, () => this.revealAnswers(), 'reveal');
+      enabled ? T.god : T.disabled, enabled, () => this.revealAnswers(), 'reveal', 'eye');
   }
 
-  drawButton(c, cx, cy, label, bg, color, enabled, onTap, id, outline) {
-    const T = theme.tokens;
-    const w = Math.min(132, D.measure(c, label, 12.5, 'bold') + 24);
-    const h = 30;
+  // 与 24 点操作按钮同款：32 高、8 圆角、13px 文案、图标 + 文案居中。
+  drawButton(c, cx, cy, label, color, enabled, onTap, id, iconKey) {
+    const w = Math.min(132, D.measure(c, label, 13, 'bold') + 40);
+    const h = 32;
     const x = cx - w / 2;
     const y = cy - h / 2;
-    if (outline) {
-      // 「重玩本关」= 橙色描边按钮（透明底 + 橙色字 + 1px 橙边，与全局约定一致）
-      D.strokeRoundRect(c, x + 0.5, y + 0.5, w - 1, h - 1, 8, T.god, 1);
-      D.text(c, label, cx, cy, { size: 12.5, weight: 'bold', color: T.god, align: 'center' });
-    } else {
-      D.fillRoundRect(c, x, y, w, h, 8, bg || T.primary);
-      D.text(c, label, cx, cy, { size: 12.5, weight: 'bold', color: color || '#ffffff', align: 'center' });
-    }
-    if (enabled && onTap) this.addButton(id, x, y, w, h, onTap);
-    return { x, y, w, h };
+    D.fillRoundRect(c, x, y, w, h, 8, color);
+    actionLabel.draw(c, iconKey || 'gamepad', label, cx, cy, { size: 13, color: '#fff' });
+    if (enabled) this.addButton(id, x, y, w, h, onTap);
   }
 
   drawHand(c) {
@@ -1124,7 +1118,7 @@ class GamblerScene extends Scene {
     c.restore();
     // 遮罩本身不是按钮；两颗按钮后加，命中优先于下面已经被遮住的牌
     resultButton.draw(c, this, l1, 'replay', bx, y, { id: 'lost-replay', onTap: () => this.replayLevel() });
-    resultButton.draw(c, this, l2, 'next', bx + w1 + gap, y, { id: 'lost-new', onTap: () => this.startNewGame() });
+    resultButton.draw(c, this, l2, 'new', bx + w1 + gap, y, { id: 'lost-new', onTap: () => this.startNewGame() });
   }
 
   // 胜利浮层盖住游戏区（手牌 / 答案区 / 选择区），FAB 仍然显示
@@ -1164,7 +1158,7 @@ class GamblerScene extends Scene {
     // 模式切换：即时判断 = 闪电、提交判断 = 双勾（与小程序一致）。
     const busy = this.revealing || this.flights.length > 0 || this.pendingLoss;
     const isEmoji = this.mode === MODE_INSTANT;
-    this.drawFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, 'mode', isEmoji ? '⚡' : '✓', T.primary,
+    this.drawFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, 'mode', isEmoji ? '!' : '✓', T.primary,
       !busy, () => this.toggleMode(), isEmoji ? 'bolt' : 'check-all', isEmoji ? 17 : 22);
   }
 
@@ -1182,7 +1176,7 @@ class GamblerScene extends Scene {
     c.save();
     c.globalAlpha = enabled ? 1 : 0.35;
     if (!icons.draw(c, name, x + size / 2, y + size / 2, 22, color)) {
-      const emoji = fallback === '⚡';
+      const emoji = fallback === '!';
       D.text(c, fallback, x + size / 2, y + size / 2 + (emoji ? 1 : 0), {
         size: fallbackSize || 22,
         weight: 'bold',

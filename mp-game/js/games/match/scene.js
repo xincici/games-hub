@@ -7,6 +7,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -587,11 +588,11 @@ class MatchScene extends Scene {
       size: urgent ? 15 : 14, color: urgent ? T.del : T.primary,
     });
     const btnText = t('match.start');
-    const bw = Math.min(105, D.measure(c, btnText, 13, 'bold') + 24);
+    const bw = Math.min(105, actionLabel.width(c, btnText, { size: 13 }));
     const bx = this.cx + s2 + (this.cw - s2) / 2 - bw / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, btnText, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', btnText, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => { this.confirming = true; });
   }
 
@@ -746,7 +747,7 @@ class MatchScene extends Scene {
     const muteRect = fabKit.muteSlot(helpRect);
     if (muteRect) fabKit.drawMute(this, c, muteRect);
     const modeKey = this.mode === MODE_POKER ? 'mode-poker' : this.mode === MODE_MAHJONG ? 'mode-mahjong' : 'mode-emoji';
-    const fallback = this.mode === MODE_POKER ? '🃏' : this.mode === MODE_MAHJONG ? '🀄' : '😀';
+    const fallback = this.mode === MODE_POKER ? 'P' : this.mode === MODE_MAHJONG ? 'M' : 'E';
     this.drawRoundFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, modeKey, fallback, () => this.toggleMode());
   }
 

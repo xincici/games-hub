@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -306,10 +307,10 @@ class Game2048Scene extends Scene {
     const time = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
     drawTimer(c, 'stopwatch', this.cx + half / 2, this.optY + this.optH / 2, time, { size: 15, color: T.text });
     const label = t('g2048.start');
-    const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
     D.fillRoundRect(c, bx, this.optY + 20, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, this.optY + 36, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, this.optY + 36, { size: 13, color: '#fff' });
     this.addButton('new', bx, this.optY + 20, bw, 32, () => this.startGame());
   }
   tileRect(tile, p) {
@@ -358,13 +359,13 @@ class Game2048Scene extends Scene {
       if (this.newBest) D.text(c, t('g2048.newBest'), cx, cy - 8, { size: 13, color: T.muted, align: 'center' });
       const label = t('g2048.keepGoing');
       const bw = resultButton.width(c, label);
-      resultButton.draw(c, this, label, 'next', cx - bw / 2, cy + 22, { id: 'keep-going', onTap: () => this.keepGoing() });
+      resultButton.draw(c, this, label, 'continue', cx - bw / 2, cy + 22, { id: 'keep-going', onTap: () => this.keepGoing() });
     } else {
       D.text(c, `👻👻 ${t('g2048.tipLost')} 👻👻`, cx, cy - 26, { size: 20, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, `${t('g2048.score')} ${D.countUp(this.score, this._resultGateAt, 260)}`, cx, cy + 4, { size: 14, color: T.muted, align: 'center' });
       const label = t('g2048.start');
       const bw = resultButton.width(c, label);
-      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 26, { id: 'retry', onTap: () => this.startGame() });
+      resultButton.draw(c, this, label, 'new', cx - bw / 2, cy + 26, { id: 'retry', onTap: () => this.startGame() });
     }
   }
   drawFab(c) {

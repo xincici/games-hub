@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -311,11 +312,11 @@ class MasterScene extends Scene {
       : '';
     D.text(c, info, this.cx + half / 2, this.optY + this.optH / 2, { size: 13, color: T.muted, align: 'center' });
     const label = t('master.start');
-    const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => { this.confirming = true; });
   }
   tileSize() {

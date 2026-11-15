@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -346,10 +347,10 @@ class LinkScene extends Scene {
     const note = `${this.rows}×${this.cols} · ${kinds}${walls}`;
     D.text(c, note, this.cx + (x1 - this.cx) / 2, this.optY + this.optH / 2, { size: 13, color: T.muted, align: 'center' });
     const label = t('link.start');
-    const bw = Math.min(110, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(110, actionLabel.width(c, label, { size: 13 }));
     const bx = (x1 + this.cx + this.cw) / 2 - bw / 2;
     D.fillRoundRect(c, bx, this.optY + 20, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, this.optY + 36, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, this.optY + 36, { size: 13, color: '#fff' });
     this.addButton('new', bx, this.optY + 20, bw, 32, () => { this.confirming = true; });
   }
   drawTip(c) {

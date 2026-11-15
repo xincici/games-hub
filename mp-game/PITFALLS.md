@@ -1373,6 +1373,22 @@
 - 宽度 = 左右 padding 14 + 图标 14 + 间距 6 + 文案实测宽度，不再写死 100/110/118；双按钮用各自 `width()` 算总宽后居中，gap 10/12。
 - 改按钮只改 helper 或传入 kind；不要在场景里重新画固定宽度按钮。重玩本关 / 再来一局 / 重新开始用 `replay`，下一关 / 下一局 / 继续用 `next`；与「重玩」并排的「新游戏」保留 `next` 以区分主次。
 
+### 133. 按钮 emoji → 图标字体
+
+- 新图标：`gamepad`（mdi gamepad-variant-outline）、`pause`（pause-circle-outline）、`play`（play-circle-outline）、`eye`（eye-outline）。
+- 操作区 / 结算里所有「新游戏」用 `gamepad`；暂停用 `pause`；继续 / 继续游戏用 `play`；查看答案用 `eye`；上帝模式用 `bolt`。操作按钮宽度统一用 `actionLabel.width()`（图标 + 文案 + 左右各 12px padding），结算按钮用 `resultButton` 的左右 14px padding，不再只按纯文字宽度算。
+- `core/action-label.js` 负责按钮内「图标 + 文案」居中渲染，并剥离旧 emoji；`core/result-button.js` 额外支持 `new` / `continue` kind。各游戏 i18n 的 start / newGame / keepGoing / pause / resume / godMode / godStop / reveal / replayLevel / nextLevel / nextRound / replay 已去掉 emoji。
+- 扑克英雄按需求保留原样，不参与这次替换。
+
+### 134. 赌神操作按钮对齐 24 点
+
+- 赌神「新游戏 / 查看答案」不再用 30 高、12.5px 的私版按钮；直接复用 24 点 `drawButton` 的规格：高 32、圆角 8、宽度 `min(132, 测量宽度 + 40)`、13px 文案、`gamepad` / `eye` 图标。
+- 两个按钮仍分别位于操作区左右半格中心，颜色保持「新游戏主色 / 查看答案橙色（禁用灰）」；操作卡高度从 44 改为与雀圣一致的 58，按钮上下各留 13px。
+
+### 135. Emoji 消消乐操作区去掉最高关卡
+
+- 新游戏左侧只保留 `列×行 · 种类 · 墙数`；不再显示「🏆 最高 N」那行，`crush.bestLabel` 不再参与渲染。历史最高关卡仍按原 key 存档和成就统计。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

@@ -7,6 +7,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -349,11 +350,11 @@ class GuessScene extends Scene {
       size: 16, color: T.text,
     });
     const label = t('guess.start');
-    const bw = Math.min(118, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(118, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => this.onNewGame());
   }
 
@@ -557,7 +558,7 @@ class GuessScene extends Scene {
       }
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
-    drawOne(robotRect, this.robot ? 'robot' : 'robot-off', '🤖', this.robot ? T.primary : T.muted, () => this.toggleRobot(), 'robot');
+    drawOne(robotRect, this.robot ? 'robot' : 'robot-off', 'R', this.robot ? T.primary : T.muted, () => this.toggleRobot(), 'robot');
     drawOne(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
     if (muteRect) fabKit.drawMute(this, c, muteRect);
   }

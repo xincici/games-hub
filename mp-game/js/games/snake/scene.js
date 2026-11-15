@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -273,17 +274,19 @@ class SnakeScene extends Scene {
     this.drawMiniButton(c, plus, '+', this.difficulty < 5, () => this.changeDifficulty(1));
     D.text(c, String(this.difficulty), (minus.x + 28 + plus.x) / 2, mid, { size: 18, weight: 'bold', color: T.text, align: 'center' });
     const label = t('snake.start');
-    const bw = Math.min(100, D.measure(c, label, 12, 'bold') + 18);
+    const bw = Math.min(100, actionLabel.width(c, label, { size: 12, iconSize: 12, gap: 4 }));
     const bx = (x1 + x2) / 2 - bw / 2;
     D.fillRoundRect(c, bx, mid - 16, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, mid, { size: 12, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, mid, { size: 12, color: '#fff', iconSize: 12, gap: 4 });
     this.addButton('new', bx, mid - 16, bw, 32, () => { this.startGame(); });
     const pauseLabel = this.paused ? t('snake.resume') : t('snake.pause');
-    const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, D.measure(c, pauseLabel, 13, 'bold') + 22));
+    const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, actionLabel.width(c, pauseLabel, { size: 13 })));
     const px = (x2 + this.cx + this.cw) / 2 - pw / 2;
     // 与 Emoji 下坠的暂停 / 继续按钮统一：主色实心 + 白字。
     D.fillRoundRect(c, px, mid - 16, pw, 32, 8, this.phase === LOSE ? T.disabled : T.god);
-    D.text(c, pauseLabel, px + pw / 2, mid, { size: 12, weight: 'bold', color: this.phase === LOSE ? '#f3f3f3' : '#fff', align: 'center' });
+    actionLabel.draw(c, this.paused ? 'play' : 'pause', pauseLabel, px + pw / 2, mid, {
+      size: 12, color: this.phase === LOSE ? '#f3f3f3' : '#fff', iconSize: 12, gap: 4,
+    });
     if (this.phase !== LOSE) this.addButton('pause', px, mid - 16, pw, 32, () => this.togglePause());
   }
   drawMiniButton(c, r, label, enabled, onTap) {
@@ -335,7 +338,9 @@ class SnakeScene extends Scene {
         D.text(c, String(this.resumeCount), W / 2, y0 + this.boardSize / 2 - 12, { size: 56, weight: 'bold', color: T.primary, align: 'center' });
         D.text(c, t('snake.readyTip'), W / 2, y0 + this.boardSize / 2 + 34, { size: 14, weight: 'bold', color: T.text, align: 'center' });
       } else {
-        D.text(c, '⏸', W / 2, y0 + this.boardSize / 2 - 22, { size: 34, align: 'center' });
+        if (!icons.draw(c, 'play', W / 2, y0 + this.boardSize / 2 - 22, 34, T.text)) {
+          D.text(c, '>', W / 2, y0 + this.boardSize / 2 - 22, { size: 30, weight: 'bold', color: T.text, align: 'center' });
+        }
         D.text(c, t('snake.resumeTip'), W / 2, y0 + this.boardSize / 2 + 24, { size: 14, weight: 'bold', color: T.text, align: 'center' });
       }
       this.addButton('resume-board', x0, y0, this.boardSize, this.boardSize, () => this.togglePause());
@@ -347,7 +352,7 @@ class SnakeScene extends Scene {
       if (this.newBest) D.text(c, t('snake.newBest'), W / 2, cy + 2, { size: 13, color: T.muted, align: 'center' });
       const label = t('snake.start');
       const bw = resultButton.width(c, label);
-      resultButton.draw(c, this, label, 'replay', W / 2 - bw / 2, cy + 24, {
+      resultButton.draw(c, this, label, 'new', W / 2 - bw / 2, cy + 24, {
         id: 'lose-retry', onTap: () => this.startGame(),
       });
     }

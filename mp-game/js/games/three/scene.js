@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -356,10 +357,10 @@ class ThreeScene extends Scene {
     const time = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
     drawTimer(c, 'stopwatch', this.cx + half / 2, this.optY + this.optH / 2, time, { size: 15, color: T.text });
     const label = t('three.start');
-    const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
     D.fillRoundRect(c, bx, this.optY + 20, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, this.optY + 36, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, this.optY + 36, { size: 13, color: '#fff' });
     this.addButton('new', bx, this.optY + 20, bw, 32, () => this.startGame());
   }
   tileRect(tile) {
@@ -416,7 +417,7 @@ class ThreeScene extends Scene {
     D.text(c, `${t('three.score')} ${this.score}`, cx, cy + 8, { size: 14, color: T.muted, align: 'center' });
     const label = t('three.start');
     const bw = resultButton.width(c, label);
-    resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 30, { id: 'retry', onTap: () => this.startGame() });
+    resultButton.draw(c, this, label, 'new', cx - bw / 2, cy + 30, { id: 'retry', onTap: () => this.startGame() });
   }
   drawFab(c) {
     const T = theme.tokens, r = this.helpFab;

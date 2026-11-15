@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -368,10 +369,10 @@ class MirrorScene extends Scene {
     this.drawMiniButton(c, plus, '+', this.difficulty < 5, () => this.changeDifficulty(1));
     D.text(c, String(this.count), gx + 28 + gap + numW / 2, mid, { size: 18, weight: 'bold', color: T.text, align: 'center' });
     const label = t('mirror.start');
-    const bw = Math.min(120, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(120, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + x1 + (this.cw - (x1 - this.cx) - bw) / 2;
     D.fillRoundRect(c, bx, mid - 16, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, mid, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, mid, { size: 13, color: '#fff' });
     this.addButton('new', bx, mid - 16, bw, 32, () => this.startRound(this.difficulty));
   }
   drawMiniButton(c, r, label, enabled, onTap) {
@@ -457,7 +458,7 @@ class MirrorScene extends Scene {
     if (this.newBest) D.text(c, t('mirror.newBest'), cx, cy + 30, { size: 13, color: T.muted, align: 'center' });
     const label = t('mirror.start');
     const bw = resultButton.width(c, label);
-    resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 46, {
+    resultButton.draw(c, this, label, 'new', cx - bw / 2, cy + 46, {
       id: 'retry', onTap: () => this.startRound(this.difficulty),
     });
     void displayRects; void gameRects;

@@ -7,6 +7,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -853,7 +854,7 @@ class CrushScene extends Scene {
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
     const split = this.cx + this.cw / 2;
     D.divider(c, split, this.optY + this.optH / 2, 24, T.border, 1);
-    // 盘面信息：列×行 · 种类 · 实际墙数（0 面墙不显示）；最高关卡单独一行，避免挤到 9px
+    // 盘面信息：列×行 · 种类 · 实际墙数（0 面墙不显示）；最高关卡不在这里展示
     const wallCount = this.cells.filter(logic.isWall).length;
     const kinds = t('crush.kindsLabel').replace('{n}', String(this.conf.kinds));
     const walls = wallCount ? ` · ${t('crush.wallsLabel').replace('{n}', String(wallCount))}` : '';
@@ -864,25 +865,16 @@ class CrushScene extends Scene {
       while (next > min && D.measure(c, value, next) > maxW) next -= 0.5;
       return next;
     };
-    if (this.best > 1) {
-      D.text(c, info, this.cx + (split - this.cx) / 2, this.optY + 27, {
-        size: fitSize(info, 12, 9), color: T.muted, align: 'center',
-      });
-      const bestText = `${t('crush.bestLabel')} ${this.best}`;
-      D.text(c, bestText, this.cx + (split - this.cx) / 2, this.optY + 47, {
-        size: fitSize(bestText, 10.5, 8.5), color: T.muted, align: 'center',
-      });
-    } else {
-      D.text(c, info, this.cx + (split - this.cx) / 2, this.optY + this.optH / 2, {
-        size: fitSize(info, 12, 9), color: T.muted, align: 'center',
-      });
-    }
+    // 只保留盘面信息；最高关卡不在操作区重复展示。
+    D.text(c, info, this.cx + (split - this.cx) / 2, this.optY + this.optH / 2, {
+      size: fitSize(info, 12, 9), color: T.muted, align: 'center',
+    });
     const label = t('crush.start');
-    const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = split + (this.cx + this.cw - split) / 2 - bw / 2;
     const by = this.optY + 20;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => this.openConfirm());
   }
 

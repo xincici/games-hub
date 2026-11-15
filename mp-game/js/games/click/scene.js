@@ -7,6 +7,7 @@ const { t } = require('../../core/i18n');
 const { getRaw, setRaw } = require('../../core/storage');
 const { ClickLogic, GAMING, LOSE, WIN, NB } = require('./logic');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -369,19 +370,19 @@ class ClickScene extends Scene {
 
     // 新游戏
     const startText = t('click.start');
-    const startW = Math.min(x2 - x1 - 12, D.measure(c, startText, 13, 'bold') + 24);
+    const startW = Math.min(x2 - x1 - 12, actionLabel.width(c, startText, { size: 13 }));
     const startX = (x1 + x2) / 2 - startW / 2;
     const startY = y + (this.optH - 32) / 2;
-    this.drawPrimaryButton(c, startX, startY, startW, 32, startText, T.primary, true, () => this.newGame(), 'new');
+    this.drawPrimaryButton(c, startX, startY, startW, 32, startText, T.primary, true, () => this.newGame(), 'new', 'gamepad');
 
     // 上帝模式
     const godText = this.autoplaying ? t('click.godPause') : t('click.godMode');
     const godSegment = this.cx + this.cw - x2;
-    const godW = Math.min(godSegment - 12, D.measure(c, godText, 13, 'bold') + 24);
+    const godW = Math.min(godSegment - 12, actionLabel.width(c, godText, { size: 13 }));
     const godX = (x2 + this.cx + this.cw) / 2 - godW / 2;
     const godY = y + (this.optH - 32) / 2;
     const godEnabled = this.autoplaying || this.logic.undoIndex === -1;
-    this.drawPrimaryButton(c, godX, godY, godW, 32, godText, godEnabled ? T.god : T.disabled, godEnabled, () => this.autoplay(), 'god');
+    this.drawPrimaryButton(c, godX, godY, godW, 32, godText, godEnabled ? T.god : T.disabled, godEnabled, () => this.autoplay(), 'god', this.autoplaying ? 'pause' : 'bolt');
   }
 
   drawMiniButton(c, r, label, enabled, onTap) {
@@ -394,12 +395,10 @@ class ClickScene extends Scene {
     if (enabled) this.addButton('diff-' + label, r.x - 8, r.y - 8, r.w + 16, r.h + 16, onTap);
   }
 
-  drawPrimaryButton(c, x, y, w, h, label, color, enabled, onTap, id) {
-    const T = theme.tokens;
+  drawPrimaryButton(c, x, y, w, h, label, color, enabled, onTap, id, iconKey) {
     D.fillRoundRect(c, x, y, w, h, 8, color);
-    D.text(c, label, x + w / 2, y + h / 2, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, iconKey || 'gamepad', label, x + w / 2, y + h / 2, { size: 13, color: '#fff' });
     if (enabled) this.addButton(id, x, y, w, h, onTap);
-    void T;
   }
 
   drawLegend(c) {

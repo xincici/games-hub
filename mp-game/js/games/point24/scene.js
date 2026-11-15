@@ -6,6 +6,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -312,20 +313,18 @@ class Point24Scene extends Scene {
     sx += D.measure(c, '·', 12) + 4;
     D.text(c, String(this.score), sx, midY, { size: 16, weight: 'bold', color: T.text });
 
-    this.drawButton(c, (x1 + x2) / 2, midY, t('point24.start'), T.primary, true, () => this.onNewGameClick(), 'new');
-    this.drawButton(c, (x2 + this.cx + this.cw) / 2, midY, t('point24.reveal'), this.phase === PLAY ? T.god : T.disabled, this.phase === PLAY, () => this.revealAnswer(), 'reveal');
+    this.drawButton(c, (x1 + x2) / 2, midY, t('point24.start'), T.primary, true, () => this.onNewGameClick(), 'new', 'gamepad');
+    this.drawButton(c, (x2 + this.cx + this.cw) / 2, midY, t('point24.reveal'), this.phase === PLAY ? T.god : T.disabled, this.phase === PLAY, () => this.revealAnswer(), 'reveal', 'eye');
   }
 
-  drawButton(c, cx, cy, label, color, enabled, onTap, id) {
-    const T = theme.tokens;
-    const w = Math.min(118, D.measure(c, label, 13, 'bold') + 24);
+  drawButton(c, cx, cy, label, color, enabled, onTap, id, iconKey) {
+    const w = Math.min(132, D.measure(c, label, 13, 'bold') + 40);
     const h = 32;
     const x = cx - w / 2;
     const y = cy - h / 2;
     D.fillRoundRect(c, x, y, w, h, 8, color);
-    D.text(c, label, cx, cy, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, iconKey || 'gamepad', label, cx, cy, { size: 13, color: '#fff' });
     if (enabled) this.addButton(id, x, y, w, h, onTap);
-    void T;
   }
 
   drawGame(c) {

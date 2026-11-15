@@ -16,6 +16,7 @@ const theme = require('../../core/theme');
 const i18n = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -941,13 +942,11 @@ class AlchemyScene extends Scene {
     });
 
     const label = t('alchemy.start');
-    const bw = Math.min(this.cw / 2 - 16, Math.max(96, D.measure(c, label, 13, 'bold') + 24));
+    const bw = Math.min(this.cw / 2 - 16, Math.max(96, actionLabel.width(c, label, { size: 13 })));
     const bx = this.cx + this.cw * 0.75 - bw / 2;
     const by = this.rowY + (this.rowH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, {
-      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
-    });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#ffffff' });
     this.addButton('new-game', bx, by, bw, 32, () => {
       if (!this.helpOpen && !this.confirming) this.confirming = true;
     });
@@ -969,7 +968,7 @@ class AlchemyScene extends Scene {
       this.addButton(id, rect.x, rect.y, rect.w, rect.h, onTap);
     };
     const modeKey = this.mode === 2 ? 'mode-poker' : 'alchemy';
-    const modeFallback = this.mode === 2 ? '🃏' : '⚗';
+    const modeFallback = this.mode === 2 ? 'P' : 'A';
     fab(this.helpFab, 'help', '?', T.text, () => { this.helpOpen = true; }, 'help');
     const muteRect = fabKit.muteSlot(this.helpFab);
     if (muteRect) fabKit.drawMute(this, c, muteRect);

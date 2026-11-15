@@ -9,6 +9,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -938,23 +939,20 @@ class QueshengScene extends Scene {
     const by = this.optY + (this.optH - bh) / 2;
 
     const startLabel = t('quesheng.start');
-    const sw = Math.min(half - 24, Math.max(96, D.measure(c, startLabel, 13, 'bold') + 22));
+    const sw = Math.min(half - 24, Math.max(96, actionLabel.width(c, startLabel, { size: 13 })));
     const sx = this.cx + half / 2 - sw / 2;
     D.fillRoundRect(c, sx, by, sw, bh, 8, T.primary);
-    D.text(c, startLabel, sx + sw / 2, by + bh / 2, {
-      size: 13, weight: 'bold', color: '#ffffff', align: 'center',
-    });
+    actionLabel.draw(c, 'gamepad', startLabel, sx + sw / 2, by + bh / 2, { size: 13, color: '#ffffff' });
     this.addButton('new', sx, by, sw, bh, () => this.openConfirm());
 
     // 上帝模式：与关灯游戏一致，使用闪电前缀；橙底。
     const godLabel = this.godPlaying ? t('quesheng.godStop') : t('quesheng.godMode');
-    const gw = Math.min(half - 24, Math.max(96, D.measure(c, godLabel, 12.5, 'bold') + 20));
+    const gw = Math.min(half - 24, Math.max(96, actionLabel.width(c, godLabel, { size: 12.5, iconSize: 12, gap: 4 })));
     const gx = midX + half / 2 - gw / 2;
     const godOn = this.canGod() || this.godPlaying;
     D.fillRoundRect(c, gx, by, gw, bh, 8, godOn ? T.god : T.disabled);
-    D.text(c, godLabel, gx + gw / 2, by + bh / 2, {
-      size: 12.5, weight: 'bold',
-      color: godOn ? '#ffffff' : '#f3f3f3', align: 'center',
+    actionLabel.draw(c, this.godPlaying ? 'pause' : 'bolt', godLabel, gx + gw / 2, by + bh / 2, {
+      size: 12.5, color: godOn ? '#ffffff' : '#f3f3f3', iconSize: 12, gap: 4,
     });
     if (godOn) this.addButton('god', gx, by, gw, bh, () => this.godPlay());
   }

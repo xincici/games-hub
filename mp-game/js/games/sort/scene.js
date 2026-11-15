@@ -16,6 +16,7 @@ const coreI18n = require('../../core/i18n');
 const { t } = coreI18n;
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -774,11 +775,11 @@ class SortScene extends Scene {
     });
 
     const startLabel = t('sort.start');
-    const bw = Math.min(120, D.measure(c, startLabel, 13, 'bold') + 24);
+    const bw = Math.min(120, actionLabel.width(c, startLabel, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, startLabel, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', startLabel, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('new', bx, by, bw, 32, () => { this.confirming = true; });
   }
 
@@ -980,7 +981,7 @@ class SortScene extends Scene {
         size: 14, color: T.muted, align: 'center',
       });
       resultButton.draw(c, this, r1, 'replay', bx, cy + 18, { id: 'result-replay', onTap: () => this.replayLevel() });
-      resultButton.draw(c, this, r2, 'next', bx + w1 + gap, cy + 18, { id: 'result-next', onTap: () => { this.confirming = true; } });
+      resultButton.draw(c, this, r2, 'new', bx + w1 + gap, cy + 18, { id: 'result-next', onTap: () => { this.confirming = true; } });
     }
   }
 

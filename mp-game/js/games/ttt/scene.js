@@ -9,6 +9,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const actionLabel = require('../../core/action-label');
 const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
@@ -398,11 +399,11 @@ class TttScene extends Scene {
         size: 10, color: T.muted, align: 'center',
       });
     const label = t('ttt.newGame');
-    const bw = Math.min(112, D.measure(c, label, 13, 'bold') + 24);
+    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
+    actionLabel.draw(c, 'gamepad', label, bx + bw / 2, by + 16, { size: 13, color: '#fff' });
     this.addButton('ttt-new', bx, by, bw, 32, () => this.openConfirm());
   }
 
@@ -471,7 +472,7 @@ class TttScene extends Scene {
     const bot = this.mode === MODE_BOT;
     fabKit.draw(this, c, this.modeRect, {
       id: 'ttt-mode', kind: 'mode', icon: bot ? 'robot' : 'mode-emoji',
-      fallback: bot ? '🤖' : '👥', color: T.primary,
+      fallback: bot ? 'R' : '2', color: T.primary,
       onTap: () => this.toggleMode(),
     });
   }
