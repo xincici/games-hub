@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -454,10 +455,11 @@ class MirrorScene extends Scene {
     D.text(c, `🎉🎉 ${t('mirror.tipWin')} 🎉🎉`, cx, cy - 22, { size: 19, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, fmt(this.elapsed), cx, cy + 6, { size: 18, weight: 'bold', color: T.text, align: 'center' });
     if (this.newBest) D.text(c, t('mirror.newBest'), cx, cy + 30, { size: 13, color: T.muted, align: 'center' });
-    const bw = 110;
-    D.fillRoundRect(c, cx - bw / 2, cy + 46, bw, 32, 8, T.primary);
-    D.text(c, t('mirror.start'), cx, cy + 62, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    this.addButton('retry', cx - bw / 2, cy + 46, bw, 32, () => this.startRound(this.difficulty));
+    const label = t('mirror.start');
+    const bw = resultButton.width(c, label);
+    resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 46, {
+      id: 'retry', onTap: () => this.startRound(this.difficulty),
+    });
     void displayRects; void gameRects;
   }
   drawFab(c) {

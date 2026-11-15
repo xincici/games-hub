@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
@@ -528,10 +529,11 @@ class DownScene extends Scene {
       const cy = this.boardY + this.boardH / 2;
       D.text(c, `🏁 ${t('down.tipOver')} 🏁`, W / 2, cy - 20, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, String(D.countUp(this.score, this._resultGateAt, 260)), W / 2, cy + 12, { size: 30, weight: 'bold', color: T.text, align: 'center' });
-      const bw = 110;
-      D.fillRoundRect(c, W / 2 - bw / 2, cy + 38, bw, 32, 8, T.primary);
-      D.text(c, t('down.start'), W / 2, cy + 54, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('retry', W / 2 - bw / 2, cy + 38, bw, 32, () => this.startGame());
+      const label = t('down.start');
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', W / 2 - bw / 2, cy + 38, {
+        id: 'retry', onTap: () => this.startGame(),
+      });
     }
   }
   drawFab(c) {

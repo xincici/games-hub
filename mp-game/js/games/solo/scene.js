@@ -8,6 +8,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -686,13 +687,11 @@ class SoloScene extends Scene {
       size: 14, color: win ? T.win : T.lose, align: 'center',
     });
     const label = t('solo.nextRound');
-    const bw = Math.min(176, D.measure(c, label, 13, 'bold') + 30);
+    const bw = resultButton.width(c, label);
     const bx = W / 2 - bw / 2;
     const by = cy + 24;
-    D.fillRoundRect(c, bx, by, bw, 34, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 17, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
     // 保留连胜继续打：按当前连胜给更难的档，不清连胜。
-    this.addButton('result-next', bx, by, bw, 34, () => this.dealRound());
+    resultButton.draw(c, this, label, 'next', bx, by, { id: 'result-next', onTap: () => this.dealRound() });
   }
 
   drawFabs(c, T) {

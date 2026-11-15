@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -430,13 +431,17 @@ class HunterScene extends Scene {
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('hunter.tipWin')} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });
       const labels = [t('hunter.replayLevel'), t('hunter.nextLevel')];
-      const bw = 100, gap = 10;
-      const bx = cx - (bw * 2 + gap) / 2;
-      this.button(c, bx, cy + 18, bw, 32, labels[0], false, () => this.retryLevel());
-      this.button(c, bx + bw + gap, cy + 18, bw, 32, labels[1], true, () => this.nextLevel());
+      const gap = 10;
+      const w1 = resultButton.width(c, labels[0]);
+      const w2 = resultButton.width(c, labels[1]);
+      const bx = cx - (w1 + w2 + gap) / 2;
+      resultButton.draw(c, this, labels[0], 'replay', bx, cy + 18, { id: 'result-replay', onTap: () => this.retryLevel() });
+      resultButton.draw(c, this, labels[1], 'next', bx + w1 + gap, cy + 18, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `👻👻 ${t('hunter.tipLost')} 👻👻`, cx, cy - 18, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
-      this.button(c, cx - 55, cy + 20, 110, 32, t('hunter.replayLevel'), false, () => this.retryLevel());
+      const label = t('hunter.replayLevel');
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 20, { id: 'result-replay', onTap: () => this.retryLevel() });
     }
     this.lock = true;
   }

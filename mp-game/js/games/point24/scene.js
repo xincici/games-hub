@@ -6,6 +6,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -449,12 +450,10 @@ class Point24Scene extends Scene {
     D.text(c, `🎉 ${t('point24.win')}`, cx, cy - 34, { size: 18, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, `🔥 ${t('point24.streak')} ${this.streak}`, cx, cy - 4, { size: 16, weight: 'bold', color: T.win, align: 'center' });
     const label = t('point24.nextLevel');
-    const bw = Math.min(160, D.measure(c, label, 13, 'bold') + 24);
+    const bw = resultButton.width(c, label);
     const bx = cx - bw / 2;
     const by = cy + 28;
-    D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-    D.text(c, label, cx, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    this.addButton('next', bx, by, bw, 32, () => this.nextLevel());
+    resultButton.draw(c, this, label, 'next', bx, by, { id: 'result-next', onTap: () => this.nextLevel() });
   }
 
   drawFab(c) {

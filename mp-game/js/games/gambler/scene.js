@@ -15,6 +15,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, clearPrefix } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -1116,17 +1117,14 @@ class GamblerScene extends Scene {
     const gap = 10;
     const l1 = t('gambler.replayLevel');
     const l2 = t('gambler.start');
-    const w1 = Math.min(126, D.measure(c, l1, 12, 'bold') + 24);
-    const w2 = Math.min(112, D.measure(c, l2, 12, 'bold') + 24);
+    const w1 = resultButton.width(c, l1);
+    const w2 = resultButton.width(c, l2);
     const total = w1 + w2 + gap;
-    let bx = this.cx + (this.cw - total) / 2;
+    const bx = this.cx + (this.cw - total) / 2;
     c.restore();
     // 遮罩本身不是按钮；两颗按钮后加，命中优先于下面已经被遮住的牌
-    const b1 = this.drawButton(c, bx + w1 / 2, y + 15, l1, null, null, true,
-      () => this.replayLevel(), 'lost-replay', true);
-    const b2 = this.drawButton(c, b1.x + b1.w + gap + w2 / 2, y + 15, l2, T.primary, '#ffffff', true,
-      () => this.startNewGame(), 'lost-new');
-    void b2;
+    resultButton.draw(c, this, l1, 'replay', bx, y, { id: 'lost-replay', onTap: () => this.replayLevel() });
+    resultButton.draw(c, this, l2, 'next', bx + w1 + gap, y, { id: 'lost-new', onTap: () => this.startNewGame() });
   }
 
   // 胜利浮层盖住游戏区（手牌 / 答案区 / 选择区），FAB 仍然显示
@@ -1148,14 +1146,12 @@ class GamblerScene extends Scene {
     const gap = 10;
     const l1 = t('gambler.replayLevel');
     const l2 = t('gambler.nextLevel');
-    const w1 = Math.min(126, D.measure(c, l1, 12, 'bold') + 24);
-    const w2 = Math.min(120, D.measure(c, l2, 12, 'bold') + 24);
+    const w1 = resultButton.width(c, l1);
+    const w2 = resultButton.width(c, l2);
     const bx = cx - (w1 + w2 + gap) / 2;
     const by = cy + 6;
-    this.drawButton(c, bx + w1 / 2, by + 15, l1, null, null, true,
-      () => this.replayLevel(), 'win-replay', true);
-    this.drawButton(c, bx + w1 + gap + w2 / 2, by + 15, l2, T.primary, '#ffffff', true,
-      () => this.nextLevel(), 'win-next');
+    resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'win-replay', onTap: () => this.replayLevel() });
+    resultButton.draw(c, this, l2, 'next', bx + w1 + gap, by, { id: 'win-next', onTap: () => this.nextLevel() });
   }
 
   drawFabs(c) {

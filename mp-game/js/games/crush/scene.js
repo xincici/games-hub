@@ -7,6 +7,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -1200,18 +1201,13 @@ class CrushScene extends Scene {
       D.text(c, String(this.score), cx, cy - 18, { size: 30, weight: 'bold', color: T.text, align: 'center' });
       const l1 = t('crush.replayLevel');
       const l2 = t('crush.nextLevel');
-      const w1 = Math.min(120, D.measure(c, l1, 12, 'bold') + 22);
-      const w2 = Math.min(112, D.measure(c, l2, 12, 'bold') + 22);
+      const w1 = resultButton.width(c, l1);
+      const w2 = resultButton.width(c, l2);
       const gap = 10;
       const bx = cx - (w1 + w2 + gap) / 2;
       const by = cy + 24;
-      D.fillRoundRect(c, bx, by, w1, 32, 8, 'rgba(0,0,0,0)');
-      D.strokeRoundRect(c, bx, by, w1, 32, 8, T.god, 1);
-      D.text(c, l1, bx + w1 / 2, by + 16, { size: 12, weight: 'bold', color: T.god, align: 'center' });
-      this.addButton('result-replay', bx, by, w1, 32, () => this.replayLevel());
-      D.fillRoundRect(c, bx + w1 + gap, by, w2, 32, 8, T.primary);
-      D.text(c, l2, bx + w1 + gap + w2 / 2, by + 16, { size: 12, weight: 'bold', color: '#ffffff', align: 'center' });
-      this.addButton('result-next', bx + w1 + gap, by, w2, 32, () => this.nextLevel());
+      resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, l2, 'next', bx + w1 + gap, by, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `👻👻 ${t('crush.gameover')} 👻👻`, cx, cy - 52, {
         size: 17, weight: 'bold', color: T.lose, align: 'center',
@@ -1220,13 +1216,10 @@ class CrushScene extends Scene {
         size: 26, weight: 'bold', color: T.text, align: 'center',
       });
       const label = t('crush.replayLevel');
-      const bw = Math.min(128, D.measure(c, label, 12, 'bold') + 24);
-      const bx = cx - bw / 2;
-      const by = cy + 28;
-      D.fillRoundRect(c, bx, by, bw, 32, 8, 'rgba(0,0,0,0)');
-      D.strokeRoundRect(c, bx, by, bw, 32, 8, T.god, 1);
-      D.text(c, label, cx, by + 16, { size: 12, weight: 'bold', color: T.god, align: 'center' });
-      this.addButton('result-replay', bx, by, bw, 32, () => this.replayLevel());
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 28, {
+        id: 'result-replay', onTap: () => this.replayLevel(),
+      });
     }
   }
 

@@ -16,6 +16,7 @@ const theme = require('../../core/theme');
 const i18n = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -869,13 +870,13 @@ class AlchemyScene extends Scene {
       });
       const labelA = t('alchemy.replayLevel');
       const labelB = t('alchemy.nextLevel');
-      const wA = Math.max(84, D.measure(c, labelA, 12, 'bold') + 20);
-      const wB = Math.max(84, D.measure(c, labelB, 12, 'bold') + 20);
-      const gap = 8;
+      const wA = resultButton.width(c, labelA);
+      const wB = resultButton.width(c, labelB);
+      const gap = 10;
       const bx = cx - (wA + wB + gap) / 2;
       const by = cy + 18;
-      this.drawResultButton(c, bx, by, wA, 32, labelA, false, () => this.retryLevel());
-      this.drawResultButton(c, bx + wA + gap, by, wB, 32, labelB, true, () => this.nextLevel());
+      resultButton.draw(c, this, labelA, 'replay', bx, by, { id: 'result-replay', onTap: () => this.retryLevel() });
+      resultButton.draw(c, this, labelB, 'next', bx + wA + gap, by, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `💤💤 ${t('alchemy.tipLost')} 💤💤`, cx, cy - 30, {
         size: titleSize, weight: 'bold', color: T.lose, align: 'center',
@@ -884,8 +885,10 @@ class AlchemyScene extends Scene {
         size: 14, color: T.text, align: 'center',
       });
       const label = t('alchemy.replayLevel');
-      const bw = Math.max(96, D.measure(c, label, 12, 'bold') + 24);
-      this.drawResultButton(c, cx - bw / 2, cy + 30, bw, 32, label, false, () => this.retryLevel());
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 30, {
+        id: 'result-replay', onTap: () => this.retryLevel(),
+      });
     }
   }
 

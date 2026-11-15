@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -355,17 +356,15 @@ class Game2048Scene extends Scene {
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('g2048.tipWin')} 🎉🎉`, cx, cy - 38, { size: 20, weight: 'bold', color: T.win, align: 'center' });
       if (this.newBest) D.text(c, t('g2048.newBest'), cx, cy - 8, { size: 13, color: T.muted, align: 'center' });
-      const bw = 120;
-      D.fillRoundRect(c, cx - bw / 2, cy + 22, bw, 34, 8, T.primary);
-      D.text(c, t('g2048.keepGoing'), cx, cy + 39, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('keep-going', cx - bw / 2, cy + 22, bw, 34, () => this.keepGoing());
+      const label = t('g2048.keepGoing');
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'next', cx - bw / 2, cy + 22, { id: 'keep-going', onTap: () => this.keepGoing() });
     } else {
       D.text(c, `👻👻 ${t('g2048.tipLost')} 👻👻`, cx, cy - 26, { size: 20, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, `${t('g2048.score')} ${D.countUp(this.score, this._resultGateAt, 260)}`, cx, cy + 4, { size: 14, color: T.muted, align: 'center' });
-      const bw = 104;
-      D.fillRoundRect(c, cx - bw / 2, cy + 26, bw, 32, 8, T.primary);
-      D.text(c, t('g2048.start'), cx, cy + 42, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('retry', cx - bw / 2, cy + 26, bw, 32, () => this.startGame());
+      const label = t('g2048.start');
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 26, { id: 'retry', onTap: () => this.startGame() });
     }
   }
   drawFab(c) {

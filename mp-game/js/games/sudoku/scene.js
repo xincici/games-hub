@@ -16,6 +16,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -711,18 +712,18 @@ class SudokuScene extends Scene {
       D.text(c, fmt(this.time), cx, cy + 2, { size: 28, weight: 'bold', color: T.win, align: 'center' });
       if (this.newBest) D.text(c, t('sudoku.newBest'), cx, cy + 30, { size: 13, color: T.muted, align: 'center' });
       const label = t('sudoku.replayLevel');
-      const bw = Math.min(150, D.measure(c, label, 13, 'bold') + 24);
-      D.fillRoundRect(c, cx - bw / 2, cy + 52, bw, 32, 8, T.primary);
-      D.text(c, label, cx, cy + 68, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('result-replay', cx - bw / 2, cy + 52, bw, 32, () => this.newGame());
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 52, {
+        id: 'result-replay', onTap: () => this.newGame(),
+      });
     } else {
       D.text(c, `💥 ${t('sudoku.tipLost')} 💥`, cx, cy - 26, { size: 20, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, `${this.hearts} ${t('sudoku.hearts')}`, cx, cy + 10, { size: 16, color: T.lose, align: 'center' });
       const label = t('sudoku.replayLevel');
-      const bw = Math.min(150, D.measure(c, label, 13, 'bold') + 24);
-      D.fillRoundRect(c, cx - bw / 2, cy + 42, bw, 32, 8, T.primary);
-      D.text(c, label, cx, cy + 58, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('result-replay', cx - bw / 2, cy + 42, bw, 32, () => this.newGame());
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 42, {
+        id: 'result-replay', onTap: () => this.newGame(),
+      });
     }
   }
 

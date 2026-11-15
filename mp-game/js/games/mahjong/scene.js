@@ -9,6 +9,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -977,19 +978,12 @@ class MahjongScene extends Scene {
       const gap = 10;
       const l1 = t('mahjong.replayLevel');
       const l2 = t('mahjong.nextLevel');
-      const w1 = Math.min(122, D.measure(c, l1, 12, 'bold') + 24);
-      const w2 = Math.min(112, D.measure(c, l2, 12, 'bold') + 24);
+      const w1 = resultButton.width(c, l1);
+      const w2 = resultButton.width(c, l2);
       const bx = cx - (w1 + w2 + gap) / 2;
       const by = cy + 30;
-      // 「重玩本关」= 橙色描边按钮（与全局约定一致）
-      D.strokeRoundRect(c, bx, by, w1, 32, 8, T.god, 1);
-      D.text(c, l1, bx + w1 / 2, by + 16, { size: 12, weight: 'bold', color: T.god, align: 'center' });
-      this.addButton('result-replay', bx, by, w1, 32, () => this.replayLevel());
-      D.fillRoundRect(c, bx + w1 + gap, by, w2, 32, 8, T.primary);
-      D.text(c, l2, bx + w1 + gap + w2 / 2, by + 16, {
-        size: 12, weight: 'bold', color: '#ffffff', align: 'center',
-      });
-      this.addButton('result-next', bx + w1 + gap, by, w2, 32, () => this.nextLevel());
+      resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, l2, 'next', bx + w1 + gap, by, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `💤💤 ${t('mahjong.tipLost')} 💤💤`, cx, cy - 56, {
         size: Math.min(17, this.boardW / 18), weight: 'bold', color: T.lose, align: 'center',
@@ -998,12 +992,10 @@ class MahjongScene extends Scene {
         size: 24, weight: 'bold', color: T.text, align: 'center',
       });
       const label = t('mahjong.replayLevel');
-      const bw = Math.min(128, D.measure(c, label, 12, 'bold') + 24);
-      const bx = cx - bw / 2;
-      const by = cy + 28;
-      D.strokeRoundRect(c, bx, by, bw, 32, 8, T.god, 1);
-      D.text(c, label, cx, by + 16, { size: 12, weight: 'bold', color: T.god, align: 'center' });
-      this.addButton('result-replay', bx, by, bw, 32, () => this.replayLevel());
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 28, {
+        id: 'result-replay', onTap: () => this.replayLevel(),
+      });
     }
   }
 

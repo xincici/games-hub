@@ -6,6 +6,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -332,10 +333,9 @@ class PuzzleScene extends Scene {
     D.text(c, `🎉🎉 ${t('puzzle.tipWin')} 🎉🎉`, cx, cy - 22, { size: 20, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, t('puzzle.movesDone').replace('{n}', String(this.clicks)), cx, cy + 8, { size: 15, color: T.muted, align: 'center' });
     if (this.newBest) D.text(c, t('puzzle.newBest'), cx, cy + 32, { size: 13, color: T.muted, align: 'center' });
-    const bw = 110;
-    D.fillRoundRect(c, cx - bw / 2, cy + 52, bw, 32, 8, T.primary);
-    D.text(c, t('puzzle.start'), cx, cy + 68, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    this.addButton('retry', cx - bw / 2, cy + 52, bw, 32, () => this.newGame());
+    const label = t('puzzle.start');
+    const bw = resultButton.width(c, label);
+    resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 52, { id: 'retry', onTap: () => this.newGame() });
   }
   drawFab(c) {
     const T = theme.tokens, r = this.helpFab;

@@ -9,6 +9,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -580,11 +581,10 @@ class TttScene extends Scene {
       size: 20, weight: 'bold', color, align: 'center',
     });
     const label = this.mode === MODE_BOT ? t('ttt.nextRoundCta') : t('ttt.replay');
-    const bw = 110;
-    D.fillRoundRect(c, cx - bw / 2, cy + 18, bw, 32, 8, T.primary);
-    D.text(c, label, cx, cy + 34, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    this.addButton('ttt-replay', cx - bw / 2, cy + 18, bw, 32, () => {
-      this.startRound(true);
+    const kind = this.mode === MODE_BOT ? 'next' : 'replay';
+    const bw = resultButton.width(c, label);
+    resultButton.draw(c, this, label, kind, cx - bw / 2, cy + 18, {
+      id: 'ttt-replay', onTap: () => { this.startRound(true); },
     });
   }
 

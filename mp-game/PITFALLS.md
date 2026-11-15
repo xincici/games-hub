@@ -1367,6 +1367,12 @@
 - 纯指标行（`stat: true`）的 `unlocked` 仍固定 false，避免进入总解锁数 / 解锁提示；但 `gamesData()` 额外给 `achieved: value > 0`，成就卡背景用 `a.achieved` 判断全部达成。这样最长连胜 / 最高分等指标只要不为 0 就参与「全达成」底色，但不冒充正式成就。
 - `dailyCard` 的行也补 `achieved`，保持和游戏行同结构。
 
+### 132. 结算按钮统一（重玩 / 下一局）
+
+- 统一走 `core/result-button.js`：`replay` = 橙色描边 + `undo`，`next` = 主色实心 + `arrow-right`；标签里的旧 emoji（🔄 / ➡ / 🎮）会在 helper 里剥掉，不再出现「图标 + emoji」双重前缀。
+- 宽度 = 左右 padding 14 + 图标 14 + 间距 6 + 文案实测宽度，不再写死 100/110/118；双按钮用各自 `width()` 算总宽后居中，gap 10/12。
+- 改按钮只改 helper 或传入 kind；不要在场景里重新画固定宽度按钮。重玩本关 / 再来一局 / 重新开始用 `replay`，下一关 / 下一局 / 继续用 `next`；与「重玩」并排的「新游戏」保留 `next` 以区分主次。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

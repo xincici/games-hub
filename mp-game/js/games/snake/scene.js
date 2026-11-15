@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
@@ -344,10 +345,11 @@ class SnakeScene extends Scene {
       const cy = y0 + this.boardSize / 2;
       D.text(c, `👻👻 ${t('snake.tipLost')} 👻👻`, W / 2, cy - 28, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
       if (this.newBest) D.text(c, t('snake.newBest'), W / 2, cy + 2, { size: 13, color: T.muted, align: 'center' });
-      const bw = 104;
-      D.fillRoundRect(c, W / 2 - bw / 2, cy + 24, bw, 32, 8, T.primary);
-      D.text(c, t('snake.start'), W / 2, cy + 40, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('lose-retry', W / 2 - bw / 2, cy + 24, bw, 32, () => this.startGame());
+      const label = t('snake.start');
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', W / 2 - bw / 2, cy + 24, {
+        id: 'lose-retry', onTap: () => this.startGame(),
+      });
     }
   }
   drawFabs(c) {

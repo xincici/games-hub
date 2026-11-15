@@ -7,6 +7,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -528,13 +529,11 @@ class GuessScene extends Scene {
       D.text(c, `🎉🎉 ${t('guess.tipWin')} 🎉🎉`, cx, cy - 30, { size: 18, weight: 'bold', color: T.win, align: 'center' });
       D.text(c, `${t('guess.curStreak')} ${this.streak}`, cx, cy + 2, { size: 14, color: T.win, align: 'center' });
       const label = t('guess.nextRound');
-      const bw = Math.min(160, D.measure(c, label, 13, 'bold') + 24);
+      const bw = resultButton.width(c, label);
       const bx = cx - bw / 2;
       // 按钮锚在记录卡底部：320 宽下记录区只有 126px 高，写死 cy + 32 会溢出边缘
       const by = Math.min(cy + 32, card.y + card.h - 12 - 32);
-      D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
-      D.text(c, label, cx, by + 16, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-      this.addButton('next', bx, by, bw, 32, () => this.nextRound());
+      resultButton.draw(c, this, label, 'next', bx, by, { id: 'next', onTap: () => this.nextRound() });
     } else {
       D.text(c, `👻👻 ${t('guess.tipLost')} 👻👻`, cx, cy - 22, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, `${t('guess.anwserIs')}${this.answer}`, cx, cy + 12, { size: 16, color: T.lose, align: 'center' });

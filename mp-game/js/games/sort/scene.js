@@ -16,6 +16,7 @@ const coreI18n = require('../../core/i18n');
 const { t } = coreI18n;
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -955,9 +956,12 @@ class SortScene extends Scene {
     share.resultPanel(c, this, y, h);
     const cx = W / 2;
     const cy = y + h / 2;
-    const bw = 118;
     const gap = 12;
-    const bx = cx - bw - gap / 2;
+    const r1 = t('sort.replayLevel');
+    const r2 = win ? t('sort.nextLevel') : t('sort.start');
+    const w1 = resultButton.width(c, r1);
+    const w2 = resultButton.width(c, r2);
+    const bx = cx - (w1 + w2 + gap) / 2;
     if (win) {
       D.text(c, `🎉🎉 ${t('sort.levelDone').replace('{n}', this.level)} 🎉🎉`, cx, cy - 44, {
         size: 18, weight: 'bold', color: T.win, align: 'center',
@@ -965,8 +969,8 @@ class SortScene extends Scene {
       D.text(c, t('sort.movesDone').replace('{n}', this.moves), cx, cy - 10, {
         size: 22, weight: 'bold', color: T.text, align: 'center',
       });
-      this.resultButton(c, T, bx, cy + 22, bw, 34, t('sort.replayLevel'), false, () => this.replayLevel());
-      this.resultButton(c, T, bx + bw + gap, cy + 22, bw, 34, t('sort.nextLevel'), true, () => this.nextLevel());
+      resultButton.draw(c, this, r1, 'replay', bx, cy + 22, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, r2, 'next', bx + w1 + gap, cy + 22, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `🚧 ${t('sort.stuckTitle')} 🚧`, cx, cy - 44, {
         size: 18, weight: 'bold', color: T.lose, align: 'center',
@@ -975,8 +979,8 @@ class SortScene extends Scene {
       D.text(c, t('sort.stuckNote').replace('{n}', done), cx, cy - 10, {
         size: 14, color: T.muted, align: 'center',
       });
-      this.resultButton(c, T, bx, cy + 18, bw, 34, t('sort.replayLevel'), false, () => this.replayLevel());
-      this.resultButton(c, T, bx + bw + gap, cy + 18, bw, 34, t('sort.start'), true, () => { this.confirming = true; });
+      resultButton.draw(c, this, r1, 'replay', bx, cy + 18, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, r2, 'next', bx + w1 + gap, cy + 18, { id: 'result-next', onTap: () => { this.confirming = true; } });
     }
   }
 

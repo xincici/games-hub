@@ -5,6 +5,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
@@ -413,10 +414,9 @@ class ThreeScene extends Scene {
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     D.text(c, `👻👻 ${t('three.tipLost')} 👻👻`, cx, cy - 22, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
     D.text(c, `${t('three.score')} ${this.score}`, cx, cy + 8, { size: 14, color: T.muted, align: 'center' });
-    const bw = 110;
-    D.fillRoundRect(c, cx - bw / 2, cy + 30, bw, 32, 8, T.primary);
-    D.text(c, t('three.start'), cx, cy + 46, { size: 13, weight: 'bold', color: '#fff', align: 'center' });
-    this.addButton('retry', cx - bw / 2, cy + 30, bw, 32, () => this.startGame());
+    const label = t('three.start');
+    const bw = resultButton.width(c, label);
+    resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 30, { id: 'retry', onTap: () => this.startGame() });
   }
   drawFab(c) {
     const T = theme.tokens, r = this.helpFab;

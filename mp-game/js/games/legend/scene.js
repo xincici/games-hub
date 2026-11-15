@@ -10,6 +10,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const achv = require('../../core/achv');
@@ -1011,12 +1012,12 @@ class LegendScene extends Scene {
       });
     }
     const label = t('legend.replay');
-    const bw = Math.min(140, D.measure(c, label, 13, 'bold') + 26);
+    const bw = resultButton.width(c, label);
     const bx = cx - bw / 2;
     const by = cy + 50;
-    D.fillRoundRect(c, bx, by, bw, 34, 8, T.primary);
-    D.text(c, label, bx + bw / 2, by + 17, { size: 13, weight: 'bold', color: '#ffffff', align: 'center' });
-    this.addButton('result-replay', bx, by, bw, 34, () => this.startNewRun());
+    resultButton.draw(c, this, label, 'replay', bx, by, {
+      id: 'result-replay', onTap: () => this.startNewRun(),
+    });
   }
 
   drawConfetti(c) {

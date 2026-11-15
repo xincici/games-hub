@@ -7,6 +7,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -702,13 +703,15 @@ class MatchScene extends Scene {
         size: Math.min(18, this.boardW / 18), weight: 'bold', color: T.win, align: 'center',
       });
       D.text(c, fmt(this.usedTime), cx, cy + 4, { size: 28, weight: 'bold', color: T.win, align: 'center' });
-      const bw = 100;
+      const l1 = t('match.replayLevel');
+      const l2 = t('match.nextLevel');
+      const w1 = resultButton.width(c, l1);
+      const w2 = resultButton.width(c, l2);
       const gap = 12;
-      const total = bw * 2 + gap;
-      const bx = cx - total / 2;
+      const bx = cx - (w1 + w2 + gap) / 2;
       const by = cy + 38;
-      this.drawOutlineButton(c, bx, by, bw, 32, t('match.replayLevel'), () => this.replayLevel());
-      this.drawPrimaryButton(c, bx + bw + gap, by, bw, 32, t('match.nextLevel'), () => this.nextLevel());
+      resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, l2, 'next', bx + w1 + gap, by, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `⏰ ${t('match.timeUp')} ⏰`, cx, cy - 24, {
         size: Math.min(20, this.boardW / 16), weight: 'bold', color: T.lose, align: 'center',
@@ -716,8 +719,9 @@ class MatchScene extends Scene {
       D.text(c, `${this.leftPairs()} ${t('match.leftPairsShort')}`, cx, cy + 10, {
         size: 15, color: T.lose, align: 'center',
       });
-      const bw = 110;
-      this.drawOutlineButton(c, cx - bw / 2, cy + 40, bw, 32, t('match.replayLevel'), () => this.replayLevel());
+      const label = t('match.replayLevel');
+      const bw = resultButton.width(c, label);
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 40, { id: 'result-replay', onTap: () => this.replayLevel() });
     }
   }
 

@@ -4,6 +4,7 @@ const theme = require('../../core/theme');
 const { t } = require('../../core/i18n');
 const { getRaw, setRaw, removeRaw } = require('../../core/storage');
 const D = require('../../core/draw');
+const resultButton = require('../../core/result-button');
 const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
@@ -603,13 +604,16 @@ class DetectiveScene extends Scene {
         D.text(c, `🎉🎉 ${t('detective.tipWin')} 🎉🎉`, cx, cy - 26, { size: 18, weight: 'bold', color: T.win, align: 'center' });
         const labels = [t('detective.replayLevel'), t('detective.nextLevel')];
         const gap = 10;
-        const bw = 100;
-        const bx = cx - (bw * 2 + gap) / 2;
-        this.button(c, bx, cy + 16, bw, 32, labels[0], 'outline', () => this.retryLevel());
-        this.button(c, bx + bw + gap, cy + 16, bw, 32, labels[1], 'primary', () => this.nextLevel());
+        const w1 = resultButton.width(c, labels[0]);
+        const w2 = resultButton.width(c, labels[1]);
+        const bx = cx - (w1 + w2 + gap) / 2;
+        resultButton.draw(c, this, labels[0], 'replay', bx, cy + 16, { id: 'result-replay', onTap: () => this.retryLevel() });
+        resultButton.draw(c, this, labels[1], 'next', bx + w1 + gap, cy + 16, { id: 'result-next', onTap: () => this.nextLevel() });
       } else {
         D.text(c, `👻👻 ${t('detective.tipLost')} 👻👻`, cx, cy - 20, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
-        this.button(c, cx - 55, cy + 18, 110, 32, t('detective.replayLevel'), 'outline', () => this.retryLevel());
+        const label = t('detective.replayLevel');
+        const bw = resultButton.width(c, label);
+        resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 18, { id: 'result-replay', onTap: () => this.retryLevel() });
       }
       // 分享入口：结算面板自己的右上角（屏幕右上角被微信胶囊盖着，不能放那儿）
       share.drawResultChip(c, this, { x: r.x + r.w - 10 - 96, y: r.y + 10, w: 96, h: 28 },
