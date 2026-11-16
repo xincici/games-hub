@@ -925,9 +925,16 @@ class SlideScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const win = this.phase === WON;
-    share.resultPanel(c, this, this.boardY, this.boardH);
     const cx = W / 2;
     const cy = this.boardY + this.boardH / 2;
+    // 棋盘很窄时（320 宽）两个按钮会超出棋盘：只在放不下时按最小宽度撑开
+    const l1 = t('slide.replayLevel');
+    const l2 = t('slide.nextLevel');
+    const w1 = resultButton.width(c, l1);
+    const w2 = resultButton.width(c, l2);
+    const gap = 12;
+    const minW = Math.min(W - 32, Math.max(w1 + w2 + gap + 28, 96 + 32));
+    share.resultPanel(c, this, this.boardY, this.boardH, { w: this.boardW, minW });
     if (win) {
       D.text(c, `🎉 ${t('slide.tipWin')} 🎉`, cx, cy - 30, {
         size: Math.min(18, this.boardW / 14), weight: 'bold', color: T.win, align: 'center',
@@ -935,11 +942,6 @@ class SlideScene extends Scene {
       D.text(c, `${t('slide.timeUsed')} ${fmt(this.elapsed)}`, cx, cy + 2, {
         size: 15, color: T.win, align: 'center',
       });
-      const l1 = t('slide.replayLevel');
-      const l2 = t('slide.nextLevel');
-      const w1 = resultButton.width(c, l1);
-      const w2 = resultButton.width(c, l2);
-      const gap = 12;
       const by = cy + 34;
       const bx = cx - (w1 + w2 + gap) / 2;
       resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'result-replay', onTap: () => this.replayLevel() });

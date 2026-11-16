@@ -1183,7 +1183,7 @@ class CrushScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const overlay = theme.dark ? 'rgba(38,38,38,0.92)' : 'rgba(250,248,239,0.92)';
-    share.resultPanel(c, this, this.boardY, this.boardH, { radius: 14, color: overlay });
+    share.resultPanel(c, this, this.boardY, this.boardH, { radius: 14, color: overlay, w: this.boardW });
     const cx = this.boardX + this.boardW / 2;
     const cy = this.boardY + this.boardH / 2;
     if (this.phase === WON) {

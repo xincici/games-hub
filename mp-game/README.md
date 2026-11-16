@@ -226,7 +226,7 @@ python3 mp-game/scripts/build-icons.py
 - `fonts/games-hub-icons.ttf`
 - `js/core/icon-glyphs.js`
 
-`game.js` 启动时 `icons.init()` 调 `wx.loadFont()`；场景用 `icons.draw(ctx, name, x, y, size, color)` 绘制。首页 25 个游戏图标也全部来自这套 Iconify 字体：关灯 `idea`、对对碰 `bulb`、24 点 `calculator`、1A2B `counter`、侦探 `incognito`、猎手 `target`、消除大师 `layers`、2048 `calculator`、Threes `numeric-3`、贪吃蛇 `snake`、连连看 `link`、数字迷宫 `puzzle`、镜像 `mirror`、下坠 `down`、消消乐 `crush`、数独 `sudoku`、排序 `sort`、滑行 `slide`、井字棋 `ttt`、麻将英雄/单人麻将 `mode-mahjong`、炼金 `alchemy`、雀圣 `quesheng`、传奇 `legend`、赌神 `gambler`。没加载成功时保留文字 / emoji 兜底。彩色牌面（麻将）仍走图片雪碧图，因为 icon font 只能单色。
+`game.js` 启动时 `icons.init()` 调 `wx.loadFont()`；场景用 `icons.draw(ctx, name, x, y, size, color)` 绘制。首页 25 个游戏图标也全部来自这套 Iconify 字体：关灯 `idea`、对对碰 `bulb`、24 点 `calculator`、1A2B `counter`、侦探 `incognito`、猎手 `target`、消除大师 `layers`、2048 `numeric`、Threes `numeric-3`、贪吃蛇 `snake`、连连看 `link`、数字迷宫 `puzzle`、镜像 `mirror`、下坠 `down`、消消乐 `crush`、数独 `sudoku`、排序 `sort`、滑行 `slide`、井字棋 `ttt`、麻将英雄/单人麻将 `mode-mahjong`、炼金 `alchemy`、雀圣 `quesheng`、传奇 `legend`、赌神 `gambler`。没加载成功时保留文字 / emoji 兜底。彩色牌面（麻将）仍走图片雪碧图，因为 icon font 只能单色。
 
 ## 后续移植约定
 

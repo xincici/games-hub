@@ -547,7 +547,7 @@ class LinkScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    share.resultPanel(c, this, this.boardY, this.boardH);
+    share.resultPanel(c, this, this.boardY, this.boardH, { w: this.boardW });
     const cx = W / 2, cy = this.boardY + this.boardH / 2;
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('link.levelDone').replace('{n}', this.level)} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });

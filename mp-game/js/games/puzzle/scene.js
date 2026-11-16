@@ -329,7 +329,7 @@ class PuzzleScene extends Scene {
     if (this.winAt && Date.now() < this.winAt) return;
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    share.resultPanel(c, this, this.boardY, this.boardSize, { radius: 14, color: theme.dark ? 'rgba(38,38,38,0.92)' : 'rgba(250,248,239,0.9)' });
+    share.resultPanel(c, this, this.boardY, this.boardSize, { radius: 14, color: theme.dark ? 'rgba(38,38,38,0.92)' : 'rgba(250,248,239,0.9)', w: this.boardSize });
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     D.text(c, `🎉🎉 ${t('puzzle.tipWin')} 🎉🎉`, cx, cy - 22, { size: 20, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, t('puzzle.movesDone').replace('{n}', String(this.clicks)), cx, cy + 8, { size: 15, color: T.muted, align: 'center' });

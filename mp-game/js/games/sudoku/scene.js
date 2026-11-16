@@ -705,15 +705,18 @@ class SudokuScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const x = this.boardX, y = this.boardY, size = this.boardSize;
-    share.resultPanel(c, this, y, size, { radius: this.boardR });
     const cx = W / 2, cy = y + size / 2;
     const won = this.phase === WON;
+    // 棋盘很窄时（320 宽）按钮会超出棋盘：只在放不下时按最小宽度撑开
+    const label = t('sudoku.replayLevel');
+    const bw = resultButton.width(c, label);
+    const minW = Math.min(W - 32, Math.max(bw + 28, 96 + 32));
+    // 棋盘是正方形：320 宽时只有 150px，时间 + 按钮放不下，最小高度撑到 184
+    share.resultPanel(c, this, y, size, { radius: this.boardR, w: size, minW, minH: 184 });
     if (won) {
       D.text(c, `🎉🎉 ${t('sudoku.tipWin')} 🎉🎉`, cx, cy - 32, { size: 20, weight: 'bold', color: T.win, align: 'center' });
       D.text(c, fmt(this.time), cx, cy + 2, { size: 28, weight: 'bold', color: T.win, align: 'center' });
       if (this.newBest) D.text(c, t('sudoku.newBest'), cx, cy + 30, { size: 13, color: T.muted, align: 'center' });
-      const label = t('sudoku.replayLevel');
-      const bw = resultButton.width(c, label);
       resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 52, {
         id: 'result-replay', onTap: () => this.newGame(),
       });

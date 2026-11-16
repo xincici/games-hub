@@ -1998,13 +1998,19 @@ i18n.setLang('cn');
       c3.fillText = (v) => { rec2.push(String(v)); };
       dsc.buttons = [];
       dsc.render(c3);
-      const rr = dsc.resultRect();
+      const rr = dsc.resultRect(c3);
       // 同一个位置再画一次，拿返回值确认「画了图标 + 标签」
       const rectShare = shareMod.drawResultChip(makeCtx(), dsc,
         { x: rr.x + rr.w - 82, y: rr.y + 10, w: 72, h: 26 },
-        { filled: true, label: i18n.t('app.shareCta') });
-      check(Math.abs(rr.w - dsc.cw) < 0.5,
-        `侦探第 ${lv + 1} 关：结算面板宽度应等于卡片宽（${rr.w} / ${dsc.cw}）`);
+          { filled: true, label: i18n.t('app.shareCta') });
+      // 面板宽度跟棋盘走；棋盘太窄放不下两个按钮时才按最小宽度撑开
+      const rbMod = require(path.join(ROOT, 'js/core/result-button'));
+      const needW = Math.min(W - 32, Math.max(
+        rbMod.width(c3, i18n.t('detective.replayLevel')) + rbMod.width(c3, i18n.t('detective.nextLevel')) + 38,
+        96 + 32));
+      const expectW = Math.min(W - 16, Math.max(dsc.boardW, needW));
+      check(Math.abs(rr.w - expectW) < 0.6,
+        `侦探第 ${lv + 1} 关：结算面板宽 ${rr.w}，应为 ${expectW}（棋盘 ${dsc.boardW}）`);
       check(rr.y >= dsc.boardY - 0.5,
         `侦探第 ${lv + 1} 关：结算面板往上盖住了选项卡（${rr.y} < ${dsc.boardY}）`);
       const sbtn = dsc.buttons.find((b) => b.id === 'share-result');
@@ -2257,9 +2263,9 @@ i18n.setLang('cn');
   const shareMod2 = require(path.join(ROOT, 'js/core/share'));
   const panels = [];
   const origPanel = shareMod2.resultPanel;
-  shareMod2.resultPanel = function (...args) {
-    const rect = origPanel.apply(shareMod2, args);
-    panels.push(rect);
+  shareMod2.resultPanel = function (c, scene, top, height, opts) {
+    const rect = origPanel.call(shareMod2, c, scene, top, height, opts);
+    panels.push({ rect, opts: opts || {} });
     return rect;
   };
   const realNow = Date.now;
@@ -2298,7 +2304,7 @@ i18n.setLang('cn');
       } else if (id === 'poker') {
         sc.stage = 'guess';
         sc.drawTableOverlay(makeCtx());
-        panels.push({ x: sc.cx, y: sc.cardsY, w: sc.cw, h: sc.cardsH });
+        panels.push({ rect: { x: sc.cx, y: sc.cardsY, w: sc.cw, h: sc.cardsH }, opts: { w: sc.cw } });
       } else if (id === 'quesheng') {
         sc.phase = 'won';
         sc.resultSerial = 1;
@@ -2308,7 +2314,7 @@ i18n.setLang('cn');
         sc.phase = 'won';
         sc.render(makeCtx());
         if (!sc.buttons.some((b) => b.id === 'share-result')) advance(600);
-        panels.push(sc.resultRect());
+        panels.push({ rect: sc.resultRect(makeCtx()), opts: { skipWidth: true } });
       } else {
         let ok = false;
         for (const ph of ['won', 'over', 'lost', 'lose', 'win']) {
@@ -2327,12 +2333,27 @@ i18n.setLang('cn');
       problems.push(`${id}: 渲染抛错 ${e.message}`);
       return;
     }
-    const p = panels[panels.length - 1];
+    const entry = panels[panels.length - 1];
+    const p = entry.rect;
     const btn = sc.buttons.find((b) => b.id === 'share-result');
     if (!btn) { problems.push(`${id}: 没有「炫耀一下」按钮`); return; }
     if (!p) { problems.push(`${id}: 没有画出结算面板`); return; }
     const cw = typeof sc.cw === 'number' && sc.cw > 0 ? sc.cw : Math.min(W - 32, 440);
-    if (Math.abs(p.w - cw) > 0.6) problems.push(`${id}: 面板宽 ${p.w.toFixed(0)} ≠ 卡片宽 ${cw.toFixed(0)}`);
+    // 面板宽度必须等于「这个游戏真实的游戏区宽度」（从场景字段独立算，不能只看 opts.w，
+    // 否则漏传 opts.w 时等于卡片宽也会蒙混过关）；只有传了 minW 才允许更宽。
+    let areaW = cw;
+    if (typeof sc.boardW === 'number' && sc.boardW > 0) areaW = sc.boardW;
+    else if (typeof sc.boardSize === 'number' && sc.boardSize > 0) areaW = sc.boardSize;
+    if (id === 'hunter') areaW = sc.candFrameW;
+    if (id === 'mirror') {
+      const mc = Math.max(...sc.rows);
+      areaW = mc * sc.card + (mc - 1) * sc.gap;
+    }
+    const widenedTooMuch = p.w > Math.min(W - 16, Math.max(areaW, entry.opts.minW || 0)) + 0.6;
+    const narrowerThanArea = p.w < Math.min(W - 16, areaW) - 0.6;
+    if (!entry.opts.skipWidth && (widenedTooMuch || narrowerThanArea)) {
+      problems.push(`${id}: 面板宽 ${p.w.toFixed(0)} ≠ 游戏区 ${areaW.toFixed(0)}`);
+    }
     let inside = false;
     if (id === 'poker') {
       // 扑克的分享入口画在「牌桌结果遮罩」上，遮罩本身就是整宽
@@ -2342,6 +2363,11 @@ i18n.setLang('cn');
         && btn.y >= p.y - 1 && btn.y + btn.h <= p.y + p.h + 1;
     }
     if (!inside) problems.push(`${id}: 「炫耀一下」不在结算面板内`);
+    // 结算按钮（result-*）也必须整个落在面板里：面板按游戏区画，窄棋盘要按内容撑开
+    const spill = sc.buttons.filter((b) => b && /^result-/.test(b.id)
+      && !(b.x >= p.x - 1 && b.x + b.w <= p.x + p.w + 1
+        && b.y >= p.y - 1 && b.y + b.h <= p.y + p.h + 1));
+    if (spill.length) problems.push(`${id}: ${spill.map((b) => b.id).join(',')} 超出结算面板`);
     // 不能压住面板里别的按钮（棋盘格子 / 遮罩不算）
     const others = sc.buttons.filter((b) => b.id !== 'share-result'
       && !/mask|cell|col-|board|pad-|key-|num-|tile|resume/.test(b.id));
@@ -2355,6 +2381,74 @@ i18n.setLang('cn');
   shareMod2.resultPanel = origPanel;
   Date.now = realNow;
   check(problems.length === 0, `结算面板：${problems.join('；')}`);
+}
+
+// ---------- 井字棋：胜利用「胶囊框」圈住三格（X 绿 / O 红），不再画连线 ----------
+{
+  const Cls = require(path.join(ROOT, 'js/games/ttt/scene'));
+  const themeMod = require(path.join(ROOT, 'js/core/theme'));
+  const DMod = require(path.join(ROOT, 'js/core/draw'));
+  fakeApp.sceneId = 'ttt';
+  const problems = [];
+  const cases = [
+    [[0, 1, 2], 'X'], [[3, 4, 5], 'O'], [[0, 3, 6], 'X'],
+    [[0, 4, 8], 'O'], [[2, 4, 6], 'X'],
+  ];
+  cases.forEach(([line, winner]) => {
+    const sc = new Cls(fakeApp);
+    sc.winner = winner;
+    sc.winLine = line;
+    sc.winLineStartAt = Date.now() - 2000;
+    const f = sc.winFrame();
+    if (!f) { problems.push(`线 ${line.join(',')}：没有胜利框`); return; }
+    const want = winner === 'O' ? themeMod.tokens.god : themeMod.tokens.primary;
+    if (f.color !== want) problems.push(`线 ${line.join(',')}：框色 ${f.color} 应为 ${want}`);
+    // 三格中心都要在「旋转后的胶囊」里
+    const cos = Math.cos(-f.angle);
+    const sin = Math.sin(-f.angle);
+    line.forEach((i) => {
+      const r = sc.cellRect(i);
+      const dx = r.x + r.w / 2 - f.cx;
+      const dy = r.y + r.h / 2 - f.cy;
+      const lx = dx * cos - dy * sin;
+      const ly = dx * sin + dy * cos;
+      if (Math.abs(lx) > f.len / 2 + 0.5 || Math.abs(ly) > f.thick / 2 + 0.5) {
+        problems.push(`线 ${line.join(',')}：${i} 号格没被圈住`);
+      }
+    });
+    const cell = Math.min(sc.cellRect(0).w, sc.cellRect(0).h);
+    // 起笔 → 绕一圈 → 首尾接上（不要一上来就整圈出现）
+    // 用模块里的 capsuleLoop 逻辑复核：先量「满圈」和「刚起笔」
+    const countLineTos = (ageMs) => {
+      const c = makeCtx();
+      let n = 0;
+      c.lineTo = () => { n += 1; };
+      sc.winLineStartAt = Date.now() - ageMs;
+      sc.drawWinFrame(c);
+      return n;
+    };
+    const early = countLineTos(20);
+    const full = countLineTos(1200);
+    if (early <= 0) problems.push(`线 ${line.join(',')}：起笔时没有描边`);
+    if (full <= early) problems.push(`线 ${line.join(',')}：没有绕圈生长（早期 ${early} 段，满圈 ${full} 段）`);
+    // 满圈时首尾要在同一点（一笔闭合）
+    const c2 = makeCtx();
+    const pts = [];
+    c2.moveTo = (x, y) => pts.push({ x, y, first: pts.length === 0 });
+    c2.lineTo = (x, y) => pts.push({ x, y });
+    sc.winLineStartAt = Date.now() - 1200;
+    sc.drawWinFrame(c2);
+    const firstPt = pts.find((q) => q.first);
+    const lastPt = pts[pts.length - 1];
+    if (!firstPt || !lastPt) problems.push(`线 ${line.join(',')}：没有描边点`);
+    else if (Math.hypot(lastPt.x - firstPt.x, lastPt.y - firstPt.y) > 0.6) {
+      problems.push(`线 ${line.join(',')}：绕完没闭合（缺口 ${Math.hypot(lastPt.x - firstPt.x, lastPt.y - firstPt.y).toFixed(1)}px）`);
+    }
+  });
+  // 旧的连线实现必须删掉，别两套同时留着
+  const tttSrc = require('fs').readFileSync(path.join(ROOT, 'js/games/ttt/scene.js'), 'utf8');
+  if (/drawWinLine/.test(tttSrc)) problems.push('井字棋：还留着旧的连线实现');
+  check(problems.length === 0, `井字棋胜利框：${problems.slice(0, 5).join('；')}`);
 }
 
 // ---------- 25 个游戏都能生成分享海报（标题带游戏名） ----------
@@ -3153,6 +3247,15 @@ i18n.setLang('cn');
       return m;
     });
     IDS.forEach((id) => { if (seen.indexOf(id) < 0) problems.push(`${id}: INTRO 表里没有它`); });
+    // 隐藏入口（扑克）也要能被分享链接打开，不能悄悄回退首页
+    const dl = shareMod.getQueryGame({ query: 'game=poker' });
+    if (dl !== 'poker') problems.push(`分享深链：game=poker 解析成 ${dl}`);
+    if (shareMod.getQueryGame({ query: 'game=ttt' }) !== 'ttt') problems.push('分享深链：game=ttt 解析失败');
+    if (shareMod.getQueryGame({ query: 'game=home' }) !== null) problems.push('分享深链：未知 id 应该回退首页');
+    // README 的图标清单必须和代码一致（踩过：2048 写成 calculator）
+    const readme = require('fs').readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+    if (readme.indexOf('2048 `numeric`') < 0) problems.push('README：2048 图标没写成 numeric');
+    if (readme.indexOf('2048 `calculator`') >= 0) problems.push('README：2048 还写着 calculator');
   }
   check(problems.length === 0, `分享文案：${problems.slice(0, 6).join('；')}`);
 }

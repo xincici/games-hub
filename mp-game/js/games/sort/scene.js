@@ -954,7 +954,7 @@ class SortScene extends Scene {
     const h = this.boardH;
     // 遮罩先加：面板按钮后加才不会被吞掉
     this.addButton('result-mask', x, y, w, h, () => {});
-    share.resultPanel(c, this, y, h);
+    share.resultPanel(c, this, y, h, { x, w });
     const cx = W / 2;
     const cy = y + h / 2;
     const gap = 12;

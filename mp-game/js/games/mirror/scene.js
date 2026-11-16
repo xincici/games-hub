@@ -451,7 +451,10 @@ class MirrorScene extends Scene {
     const T = theme.tokens;
     const y0 = this.boardY;
     const y1 = this.gameY + this.displayH;
-    share.resultPanel(c, this, y0, y1 - y0);
+    // 面板宽度 = 最宽那一行卡片的总宽（各行列数不同，取最大）
+    const maxCols = Math.max(...this.rows);
+    const w = maxCols * this.card + (maxCols - 1) * this.gap;
+    share.resultPanel(c, this, y0, y1 - y0, { w });
     const cx = W / 2, cy = y0 + (y1 - y0) / 2;
     D.text(c, `🎉🎉 ${t('mirror.tipWin')} 🎉🎉`, cx, cy - 22, { size: 19, weight: 'bold', color: T.win, align: 'center' });
     D.text(c, fmt(this.elapsed), cx, cy + 6, { size: 18, weight: 'bold', color: T.text, align: 'center' });

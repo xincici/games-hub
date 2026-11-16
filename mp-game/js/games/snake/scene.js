@@ -346,7 +346,7 @@ class SnakeScene extends Scene {
       this.addButton('resume-board', x0, y0, this.boardSize, this.boardSize, () => this.togglePause());
     }
     if (this.phase === LOSE && this.resultVisible()) {
-      share.resultPanel(c, this, y0, this.boardSize);
+      share.resultPanel(c, this, y0, this.boardSize, { w: this.boardSize });
       const cy = y0 + this.boardSize / 2;
       D.text(c, `👻👻 ${t('snake.tipLost')} 👻👻`, W / 2, cy - 28, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
       if (this.newBest) D.text(c, t('snake.newBest'), W / 2, cy + 2, { size: 13, color: T.muted, align: 'center' });

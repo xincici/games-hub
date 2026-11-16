@@ -696,19 +696,21 @@ class MatchScene extends Scene {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     const win = this.phase === WON;
-    share.resultPanel(c, this, this.boardY, this.boardH);
+    // 低等级（2×2）棋盘很小，装不下标题 + 时间 + 两个按钮 + 分享入口 → 给面板设最小宽高
+    const l1 = t('match.replayLevel');
+    const l2 = t('match.nextLevel');
+    const w1 = resultButton.width(c, l1);
+    const w2 = resultButton.width(c, l2);
+    const gap = 12;
+    const minW = Math.min(W - 32, Math.max(w1 + w2 + gap + 28, 96 + 32));
+    const panel = share.resultPanel(c, this, this.boardY, this.boardH, { w: this.boardW, minW, minH: 186 });
     const cx = W / 2;
-    const cy = this.boardY + this.boardH / 2;
+    const cy = panel.y + panel.h / 2;
     if (win) {
       D.text(c, `🎉🎉 ${t('match.levelDone').replace('{n}', this.level)} 🎉🎉`, cx, cy - 28, {
         size: Math.min(18, this.boardW / 18), weight: 'bold', color: T.win, align: 'center',
       });
       D.text(c, fmt(this.usedTime), cx, cy + 4, { size: 28, weight: 'bold', color: T.win, align: 'center' });
-      const l1 = t('match.replayLevel');
-      const l2 = t('match.nextLevel');
-      const w1 = resultButton.width(c, l1);
-      const w2 = resultButton.width(c, l2);
-      const gap = 12;
       const bx = cx - (w1 + w2 + gap) / 2;
       const by = cy + 38;
       resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'result-replay', onTap: () => this.replayLevel() });
@@ -720,7 +722,7 @@ class MatchScene extends Scene {
       D.text(c, `${this.leftPairs()} ${t('match.leftPairsShort')}`, cx, cy + 10, {
         size: 15, color: T.lose, align: 'center',
       });
-      const label = t('match.replayLevel');
+      const label = l1;
       const bw = resultButton.width(c, label);
       resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 40, { id: 'result-replay', onTap: () => this.replayLevel() });
     }

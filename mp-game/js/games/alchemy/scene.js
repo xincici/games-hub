@@ -858,10 +858,17 @@ class AlchemyScene extends Scene {
     if (this.phase !== WON && this.phase !== OVER) return;
     if (!this.resultVisible(420)) return;
     const T = theme.tokens;
-    share.resultPanel(c, this, this.boardY, this.boardH);
     const cx = W / 2;
     const cy = this.boardY + this.boardH / 2;
     const titleSize = Math.min(20, Math.max(15, this.boardW / 15));
+    const labelA = t('alchemy.replayLevel');
+    const labelB = t('alchemy.nextLevel');
+    const wA = resultButton.width(c, labelA);
+    const wB = resultButton.width(c, labelB);
+    const gap = 10;
+    // 棋盘很窄时（320 宽）两个按钮会超出棋盘：只在放不下时按最小宽度撑开
+    const minW = Math.min(W - 32, Math.max(wA + wB + gap + 28, 96 + 32));
+    share.resultPanel(c, this, this.boardY, this.boardH, { w: this.boardW, minW });
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('alchemy.tipWin')} 🎉🎉`, cx, cy - 46, {
         size: titleSize, weight: 'bold', color: T.win, align: 'center',
@@ -869,11 +876,6 @@ class AlchemyScene extends Scene {
       D.text(c, t('alchemy.levelDone').replace('{n}', this.level), cx, cy - 16, {
         size: 14, color: T.text, align: 'center',
       });
-      const labelA = t('alchemy.replayLevel');
-      const labelB = t('alchemy.nextLevel');
-      const wA = resultButton.width(c, labelA);
-      const wB = resultButton.width(c, labelB);
-      const gap = 10;
       const bx = cx - (wA + wB + gap) / 2;
       const by = cy + 18;
       resultButton.draw(c, this, labelA, 'replay', bx, by, { id: 'result-replay', onTap: () => this.retryLevel() });

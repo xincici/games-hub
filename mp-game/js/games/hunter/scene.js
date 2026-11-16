@@ -426,22 +426,24 @@ class HunterScene extends Scene {
     const x = (W - this.candFrameW) / 2;
     const top = this.candY;
     const h = this.candFrameH;
-    share.resultPanel(c, this, top, h);
+    // 低等级候选区很小（2×2），装不下标题 + 两个按钮 + 分享入口 → 给面板设最小宽高
+    const labels = [t('hunter.replayLevel'), t('hunter.nextLevel')];
+    const gap = 10;
+    const w1 = resultButton.width(c, labels[0]);
+    const w2 = resultButton.width(c, labels[1]);
+    const minW = Math.min(W - 32, Math.max(w1 + w2 + gap + 28, 96 + 32));
+    const panel = share.resultPanel(c, this, top, h, { w: this.candFrameW, minW, minH: 176 });
     const cx = W / 2;
-    const cy = top + h / 2;
+    const cy = panel.y + panel.h / 2;
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('hunter.tipWin')} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });
-      const labels = [t('hunter.replayLevel'), t('hunter.nextLevel')];
-      const gap = 10;
-      const w1 = resultButton.width(c, labels[0]);
-      const w2 = resultButton.width(c, labels[1]);
       const bx = cx - (w1 + w2 + gap) / 2;
       resultButton.draw(c, this, labels[0], 'replay', bx, cy + 18, { id: 'result-replay', onTap: () => this.retryLevel() });
       resultButton.draw(c, this, labels[1], 'next', bx + w1 + gap, cy + 18, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
       D.text(c, `👻👻 ${t('hunter.tipLost')} 👻👻`, cx, cy - 18, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
-      const label = t('hunter.replayLevel');
-      const bw = resultButton.width(c, label);
+      const label = labels[0];
+      const bw = w1;
       resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 20, { id: 'result-replay', onTap: () => this.retryLevel() });
     }
     this.lock = true;

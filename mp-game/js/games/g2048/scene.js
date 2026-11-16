@@ -352,7 +352,7 @@ class Game2048Scene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    share.resultPanel(c, this, this.boardY, this.boardSize);
+    share.resultPanel(c, this, this.boardY, this.boardSize, { w: this.boardSize });
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     if (this.phase === WON) {
       D.text(c, `🎉🎉 ${t('g2048.tipWin')} 🎉🎉`, cx, cy - 38, { size: 20, weight: 'bold', color: T.win, align: 'center' });

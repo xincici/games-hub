@@ -7,7 +7,7 @@ const i18nCore = require('./i18n');
 const theme = require('./theme');
 const D = require('./draw');
 const icons = require('./icons');
-const { W, H, SAFE_TOP } = require('./canvas');
+const { W, H, SAFE_TOP, SAFE_BOTTOM } = require('./canvas');
 
 if (!i18nCore.__shareHomeRegistered) {
   i18nCore.register('home', homeI18n);
@@ -26,9 +26,12 @@ const GAME_IDS = [
 
 let latestSceneId = 'home';
 
+// 隐藏入口（不在首页网格里，但场景仍然注册着）也要能被分享链接打开
+const DEEP_LINK_IDS = GAME_IDS.concat(['poker']);
+
 function normalizeGameId(value) {
   const id = typeof value === 'string' ? value : '';
-  return GAME_IDS.includes(id) ? id : null;
+  return DEEP_LINK_IDS.includes(id) ? id : null;
 }
 
 function getQueryGame(options) {
@@ -594,19 +597,39 @@ function drawPreview(c, scene) {
 }
 
 
-// 结算面板：**宽度跟游戏卡片一致**的遮罩 + 右上角分享入口。
-// 场景只要把原来那块「棋盘大小」的遮罩换成它，内容照旧按 cx / cy 居中画即可。
+// 结算面板的几何：**默认严格等于游戏区域**（宽 = 场景卡片宽，高 = 传进来的棋盘 / 牌桌高度）。
+// 只有侦探 / 对对碰 / 猎手这种「低关卡棋盘很小、装不下标题 + 按钮 + 分享入口」的场景才传
+// minW / minH；撑开时优先往下长，下方空间不够再整体上移，并且始终让开底部 FAB 行。
+function panelRect(scene, top, height, opts) {
+  const o = opts || {};
+  const areaW = o.w != null ? o.w
+    : (typeof scene.cw === 'number' && scene.cw > 0) ? scene.cw : Math.min(W - 32, 440);
+  const areaX = o.x != null ? o.x : (W - areaW) / 2;
+  const panelW = Math.min(W - 16, Math.max(areaW, o.minW || 0));
+  // 只因为 minW 变宽时才重新居中，否则严格贴着游戏区域的左边
+  const x = areaX - (panelW - areaW) / 2;
+  let y = top;
+  let h = height;
+  if (o.minH && h < o.minH) {
+    const bottomLimit = H - SAFE_BOTTOM - 16 - 44 - 8;   // 让开底部 FAB 行
+    h = Math.min(o.minH, bottomLimit - y);
+    if (h < o.minH) {
+      y = Math.max(SAFE_TOP + 40, bottomLimit - o.minH);
+      h = Math.min(o.minH, bottomLimit - y);
+    }
+  }
+  return { x, y, w: panelW, h };
+}
+
+// 结算面板：遮罩 + 右上角分享入口（不带最小尺寸；需要时由调用方传 minW / minH）。
 function resultPanel(c, scene, top, height, opts) {
   const o = opts || {};
-  const panelW = (typeof scene.cw === 'number' && scene.cw > 0) ? scene.cw : Math.min(W - 32, 440);
-  const x = (W - panelW) / 2;
   const radius = o.radius != null ? o.radius : 14;
-  const h = Math.max(height, o.minH || 0);
-  D.fillRoundRect(c, x, top, panelW, h, radius, o.color || theme.tokens.overlay);
-  if (o.stroke) D.strokeRoundRect(c, x, top, panelW, h, radius, theme.tokens.border, 1);
-  const rect = { x, y: top, w: panelW, h };
+  const rect = panelRect(scene, top, height, o);
+  D.fillRoundRect(c, rect.x, rect.y, rect.w, rect.h, radius, o.color || theme.tokens.overlay);
+  if (o.stroke) D.strokeRoundRect(c, rect.x, rect.y, rect.w, rect.h, radius, theme.tokens.border, 1);
   if (o.share !== false) {
-    drawResultChip(c, scene, { x: x + panelW - 10 - 96, y: top + 10, w: 96, h: 28 },
+    drawResultChip(c, scene, { x: rect.x + rect.w - 10 - 96, y: rect.y + 10, w: 96, h: 28 },
       { filled: true, label: t('app.shareCta') });
   }
   return rect;
@@ -687,6 +710,7 @@ module.exports = {
     drawPreview,
     previewRect,
     setSource,
+  panelRect,
     resultPanel,
     posterInfo,
     rose: ROSE,

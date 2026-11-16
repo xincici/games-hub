@@ -38,6 +38,62 @@ function stateKey(mode) { return `__ttt__state_${mode}`; }
 const BOT_DELAY = 420;
 const LINE_MS = 650;
 
+// 胶囊（圆头长条）的外轮廓：从左侧半圆「最左一点」出发，顺时针绕一整圈再回到起点。
+// 返回按顺序排列的点列 + 总周长，供「一点出发 → 绕一圈 → 首尾接上」的描边动画使用。
+const CAP_STEPS = 14;   // 每个半圆采样段数（28 段 ≈ 整圆，误差 < 0.2px）
+function capsuleLoop(len, thick) {
+  const r = thick / 2;
+  const half = Math.max(0, len / 2 - r);
+  const pts = [{ x: -half - r, y: 0 }];                       // 起点：左端最左点
+  for (let s = 1; s <= CAP_STEPS; s += 1) {                   // 左半圆上半：180° → 270°
+    const t = Math.PI + (Math.PI / 2) * (s / CAP_STEPS);
+    pts.push({ x: -half + r * Math.cos(t), y: r * Math.sin(t) });
+  }
+  pts.push({ x: half, y: -r });                               // 上直边
+  for (let s = 1; s <= CAP_STEPS * 2; s += 1) {               // 右半圆：270° → 450°
+    const t = -Math.PI / 2 + Math.PI * (s / (CAP_STEPS * 2));
+    pts.push({ x: half + r * Math.cos(t), y: r * Math.sin(t) });
+  }
+  pts.push({ x: -half, y: r });                               // 下直边
+  for (let s = 1; s <= CAP_STEPS; s += 1) {                   // 左半圆下半：90° → 180°
+    const t = Math.PI / 2 + (Math.PI / 2) * (s / CAP_STEPS);
+    pts.push({ x: -half + r * Math.cos(t), y: r * Math.sin(t) });
+  }
+  let total = 0;
+  for (let s = 1; s < pts.length; s += 1) {
+    total += Math.hypot(pts[s].x - pts[s - 1].x, pts[s].y - pts[s - 1].y);
+  }
+  return { pts, total };
+}
+
+// 只描到 frac（0..1）的轮廓，返回笔尖位置；画满后就是闭合的一圈。
+function strokeCapsule(c, loop, frac) {
+  const pts = loop.pts;
+  const target = loop.total * Math.max(0, Math.min(1, frac));
+  c.beginPath();
+  c.moveTo(pts[0].x, pts[0].y);
+  let acc = 0;
+  let tip = pts[0];
+  for (let s = 1; s < pts.length; s += 1) {
+    const a = pts[s - 1];
+    const b = pts[s];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (acc + seg <= target) {
+      c.lineTo(b.x, b.y);
+      acc += seg;
+      tip = b;
+      continue;
+    }
+    const t = seg > 0 ? (target - acc) / seg : 0;
+    tip = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    c.lineTo(tip.x, tip.y);
+    break;
+  }
+  c.stroke();
+  return tip;
+}
+
+
 class TttScene extends Scene {
   constructor(app) {
     super(app);
@@ -333,7 +389,7 @@ class TttScene extends Scene {
     this.drawScore(c, T);
     this.drawOptions(c, T);
     this.drawBoard(c, T);
-    if (this.phase === WON || this.phase === LOST) this.drawWinLine(c);
+    if (this.phase === WON || this.phase === LOST) this.drawWinFrame(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c, T);
     if (this.phase === WON || this.phase === LOST) this.drawResult(c, T);
     confetti.draw(c, this.confetti);
@@ -502,75 +558,74 @@ class TttScene extends Scene {
   }
 
   // 胜利连线：只播一次生长动画，随后停成一条静态线。
-  drawWinLine(c) {
-    if (!this.winLine || !this.winLineStartAt) return;
-    const a = this.cellRect(this.winLine[0]);
-    const b = this.cellRect(this.winLine[2]);
-    const x0 = a.x + a.w / 2;
-    const y0 = a.y + a.h / 2;
-    const x1 = b.x + b.w / 2;
-    const y1 = b.y + b.h / 2;
-    const now = Date.now();
-    const age = Math.max(0, now - this.winLineStartAt);
-    const growP = Math.min(1, age / 360);
-    const grow = 1 - Math.pow(1 - growP, 3);
-    const ex = x0 + (x1 - x0) * grow;
-    const ey = y0 + (y1 - y0) * grow;
-    // 只在开头短暂收光，约 650ms 后完全静止。
-    const flash = Math.max(0, 1 - age / 650);
-    const T = theme.tokens;
-    const color = this.phase === LOST ? T.lose : T.win;
-    c.save();
-    c.lineCap = 'round';
-    c.lineJoin = 'round';
-    c.strokeStyle = color;
-    // 柔光底：比之前更窄、更淡，并且不再随时间循环呼吸。
-    c.globalAlpha = 0.14 + 0.10 * flash;
-    c.shadowColor = color;
-    c.shadowBlur = 8 + 5 * flash;
-    c.lineWidth = Math.max(7, this.cell * 0.15);
-    c.beginPath();
-    c.moveTo(x0, y0);
-    c.lineTo(ex, ey);
-    c.stroke();
-    // 亮芯。
-    c.globalAlpha = 0.88;
-    c.shadowBlur = 4 + 3 * flash;
-    c.lineWidth = Math.max(2.5, this.cell * 0.055);
-    c.beginPath();
-    c.moveTo(x0, y0);
-    c.lineTo(ex, ey);
-    c.stroke();
-    // 生长过程中的一个前导光点，线画完就消失。
-    if (growP < 1) {
-      c.globalAlpha = 0.85 * (1 - growP);
-      c.fillStyle = '#ffffff';
-      c.shadowBlur = 8;
-      c.beginPath();
-      c.arc(ex, ey, Math.max(2, this.cell * 0.038), 0, Math.PI * 2);
-      c.fill();
+    // 胜利框：用一枚胶囊（两端半圆的长条）把连成一线的三格圈起来，颜色跟赢家棋子一致
+    // （X 绿 / O 红橙）。横向、纵向、斜线都走同一套：按首尾两格中心连线的方向旋转再画。
+    winFrame() {
+      if (!this.winLine || !this.winLineStartAt) return null;
+      const a = this.cellRect(this.winLine[0]);
+      const b = this.cellRect(this.winLine[2]);
+      const c0 = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+      const c1 = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+      const cell = Math.min(a.w, a.h);
+      return {
+        cx: (c0.x + c1.x) / 2,
+        cy: (c0.y + c1.y) / 2,
+        // 两端各多出「半个格子 + 一点」：胶囊刚好把三枚棋子圈在里面，
+        // 又不会比棋盘还宽（斜线时胶囊外接框最多超出棋盘约 3px）
+        len: Math.hypot(c1.x - c0.x, c1.y - c0.y) + cell * 0.94,
+        thick: cell * 0.94,
+        angle: Math.atan2(c1.y - c0.y, c1.x - c0.x),
+        color: this.winner === 'O' ? theme.tokens.god : theme.tokens.primary,
+      };
     }
-    // 两端只扩散一次，不循环。
-    if (age < 520) {
-      const ring = Math.min(1, age / 520);
-      c.globalAlpha = (1 - ring) * 0.30;
-      c.strokeStyle = color;
+
+    drawWinFrame(c) {
+      const f = this.winFrame();
+      if (!f) return;
+      const now = Date.now();
+      const age = Math.max(0, now - this.winLineStartAt);
+      const REVEAL = 460;                                  // 绕完一圈的时长
+      const p = Math.min(1, age / REVEAL);
+      const frac = 1 - Math.pow(1 - p, 3);                 // 起笔快、收笔稳
+      const flash = Math.max(0, 1 - age / 760);            // 光晕只在前 760ms
+      const lw = Math.max(2.5, this.cell * 0.07);
+      const loop = capsuleLoop(f.len, f.thick);
+      c.save();
+      c.translate(f.cx, f.cy);
+      c.rotate(f.angle);
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      // 外层柔光
+      c.globalAlpha = 0.26 + 0.24 * flash;
+      c.strokeStyle = f.color;
+      c.shadowColor = f.color;
+      c.shadowBlur = 9 + 9 * flash;
+      c.lineWidth = lw * 2.1;
+      strokeCapsule(c, loop, frac);
+      // 内芯实线
+      c.globalAlpha = 1;
       c.shadowBlur = 0;
-      c.lineWidth = 1.5;
-      [[x0, y0], [x1, y1]].forEach(([x, y]) => {
+      c.shadowColor = 'rgba(0,0,0,0)';
+      c.lineWidth = lw;
+      const tip = strokeCapsule(c, loop, frac);
+      // 笔尖光点：跟着起笔走，闭合后消失
+      if (frac < 0.999) {
+        c.globalAlpha = 0.9;
+        c.fillStyle = '#ffffff';
+        c.shadowColor = f.color;
+        c.shadowBlur = 6;
         c.beginPath();
-        c.arc(x, y, 4 + ring * this.cell * 0.12, 0, Math.PI * 2);
-        c.stroke();
-      });
+        c.arc(tip.x, tip.y, Math.max(1.6, this.cell * 0.03), 0, Math.PI * 2);
+        c.fill();
+      }
+      c.restore();
     }
-    c.restore();
-  }
 
   drawResult(c, T) {
     if (this.phase !== WON && this.phase !== LOST) return;
     if (Date.now() < this.resultShownAt) return;
     if (!this.resultVisible(200, 'ttt:' + this.resultSerial)) return;
-    share.resultPanel(c, this, this.boardY, this.boardSize);
+    share.resultPanel(c, this, this.boardY, this.boardSize, { w: this.boardSize });
     const cx = W / 2;
     const cy = this.boardY + this.boardSize / 2;
     let title;

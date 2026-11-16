@@ -526,7 +526,7 @@ class DownScene extends Scene {
       this.addButton('resume', this.boardX, this.boardY, this.boardW, this.boardH, () => this.togglePause());
     }
     if (this.phase === OVER && this.resultVisible()) {
-      share.resultPanel(c, this, this.boardY, this.boardH);
+      share.resultPanel(c, this, this.boardY, this.boardH, { w: this.boardW });
       const cy = this.boardY + this.boardH / 2;
       D.text(c, `🏁 ${t('down.tipOver')} 🏁`, W / 2, cy - 20, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
       D.text(c, String(D.countUp(this.score, this._resultGateAt, 260)), W / 2, cy + 12, { size: 30, weight: 'bold', color: T.text, align: 'center' });

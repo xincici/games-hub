@@ -408,7 +408,7 @@ class MasterScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    share.resultPanel(c, this, this.boardY, this.boardSize);
+    share.resultPanel(c, this, this.boardY, this.boardSize, { w: this.boardSize });
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     if (this.phase === 'won') {
       D.text(c, `🎉🎉 ${t('master.tipWin')} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });

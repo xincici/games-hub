@@ -581,21 +581,25 @@ class DetectiveScene extends Scene {
   }
     // 结算面板：**宽度和上面那张卡片一致**（不是只有棋盘那么宽 —— 第 1、2 关棋盘很窄，
     // 以前遮罩只有小小一块）。高度取「棋盘高度」和内容所需高度里的大者，垂直居中于棋盘。
-    resultRect() {
-      const w = this.cw;
-      const needH = 196;
-      // 从棋盘顶开始，只往下长：往上会盖住上面的选项卡（那里还有「新游戏」按钮）
-      const bottom = H - SAFE_BOTTOM - 16 - 48 - 8;   // 让开底部 FAB 那一行
-      const room = Math.max(150, bottom - this.boardY);
-      const h = Math.min(Math.max(this.boardH, needH), room);
-      return { x: this.cx, y: this.boardY, w, h };
-    }
+  // measureCtx 只用来量按钮宽度；不传（例如冒烟 / 离屏）时按字数估算，够撑开面板即可
+  resultRect(measureCtx) {
+    const l1 = t('detective.replayLevel');
+    const l2 = t('detective.nextLevel');
+    const gap = 10;
+    const est = (label) => String(label).length * 13 + 48;
+    const w1 = measureCtx ? resultButton.width(measureCtx, l1) : est(l1);
+    const w2 = measureCtx ? resultButton.width(measureCtx, l2) : est(l2);
+    const minW = Math.min(W - 32, Math.max(w1 + w2 + gap + 28, 96 + 32));
+    // 低关卡棋盘很小：用最小宽高保证「标题 + 两个按钮 + 分享入口」都放得下；
+    // 面板默认等于棋盘区域，只有放不下时才往下长（下方不够再整体上移）。
+    return share.panelRect(this, this.boardY, this.boardH, { w: this.boardW, minW, minH: 196 });
+  }
 
     drawResult(c) {
       // 失败遮罩的延时已经在 settleAt 里算过（盖章动画 + 300ms），这里不再叠一层 200ms 通用门槛
       if (this.phase !== LOST && !this.resultVisible()) return;
       const T = theme.tokens;
-      const r = this.resultRect();
+      const r = this.resultRect(c);
       // 面板：整宽遮罩 + 细描边，看起来是一张「结算卡」，不再像棋盘上的一块补丁
       D.fillRoundRect(c, r.x, r.y, r.w, r.h, 16, T.overlay);
       D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 16, T.border, 1);

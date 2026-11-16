@@ -411,7 +411,7 @@ class ThreeScene extends Scene {
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
-    share.resultPanel(c, this, this.boardY, this.boardSize);
+    share.resultPanel(c, this, this.boardY, this.boardSize, { w: this.boardSize });
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     D.text(c, `👻👻 ${t('three.tipLost')} 👻👻`, cx, cy - 22, { size: 19, weight: 'bold', color: T.lose, align: 'center' });
     D.text(c, `${t('three.score')} ${this.score}`, cx, cy + 8, { size: 14, color: T.muted, align: 'center' });

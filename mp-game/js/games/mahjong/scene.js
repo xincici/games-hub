@@ -963,7 +963,7 @@ class MahjongScene extends Scene {
     const T = theme.tokens;
     const win = this.phase === WON;
     const overlay = theme.dark ? 'rgba(38,38,38,0.94)' : 'rgba(250,248,239,0.94)';
-    share.resultPanel(c, this, this.boardY, this.boardH, { radius: 14, color: overlay });
+    share.resultPanel(c, this, this.boardY, this.boardH, { radius: 14, color: overlay, w: this.boardW });
     const cx = this.boardX + this.boardW / 2;
     const cy = this.boardY + this.boardH / 2;
     if (win) {
