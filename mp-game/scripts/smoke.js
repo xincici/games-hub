@@ -601,7 +601,7 @@ i18n.setLang('cn');
     });
   });
   check(!bad, `成就：数据异常 ${bad || ''}`);
-  check(data.summary.total === data.games.reduce((n, g) => n + g.achv.length, 0) + data.daily.achv.length, '成就：总览总数对不上');
+  check(data.summary.total === data.games.reduce((n, g) => n + g.achv.filter((r) => !r.stat).length, 0) + data.daily.achv.length, '成就：总览总数对不上（指标行不该计入分母）');
   check(achv.totalCount() === data.summary.total, '成就：totalCount 与页面数据不一致');
 
   // 计数：开局 / 胜利都要落盘并能读回
@@ -2454,6 +2454,239 @@ i18n.setLang('cn');
   if (times(2, 11) !== 108) problems.push(`扑克 Lv11 限时应为 108s（88+20），实际 ${times(2, 11)}`);
   if (times(2, 10) !== 98) problems.push(`扑克 Lv10 限时应为 98s（78+20），实际 ${times(2, 10)}`);
   check(problems.length === 0, `对对碰 3/4/3：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 首页三个弹窗（设置 / 每日 / 成就）展开动画必须完全一致 ----------
+{
+  const HomeSceneCls = require(path.join(ROOT, 'js/games/home/scene'));
+  fakeApp.sceneId = 'home';
+  const probePanel = (kind, anim) => {
+    const home = new HomeSceneCls(fakeApp);
+    home.achvOpen = false; home.dailyOpen = false; home.settingsOpen = false;
+    home.achvAnim = 0; home.dailyAnim = 0; home.settingsAnim = 0;
+    if (kind === 'settings') { home.settingsOpen = true; home.settingsAnim = anim; }
+    else if (kind === 'achv') { home.achvOpen = true; home.achvAnim = anim; }
+    else { home.dailyOpen = true; home.dailyAnim = anim; }
+    const events = [];
+    const probeCtx = makeCtx();
+    const origFillRect = probeCtx.fillRect;
+    const origFillText = probeCtx.fillText;
+    probeCtx.currentAlpha = 1;
+    Object.defineProperty(probeCtx, 'globalAlpha', {
+      get: () => probeCtx.currentAlpha,
+      set: (v) => { probeCtx.currentAlpha = v; },
+    });
+    probeCtx.fillRect = (x, y, w, h) => {
+      if (w >= W * 0.8 && h >= H * 0.8) events.push({ op: 'bg', alpha: probeCtx.currentAlpha });
+      return origFillRect(x, y, w, h);
+    };
+    probeCtx.fillText = (...args) => {
+      events.push({ op: 'text', alpha: probeCtx.currentAlpha });
+      return origFillText(...args);
+    };
+    // 设置面板把内容画在离屏画布上，最后用 drawImage 合成 —— 合成 alpha 才是「内容淡入」
+    const origDrawImage = probeCtx.drawImage;
+    probeCtx.drawImage = (...args) => {
+      events.push({ op: 'image', alpha: probeCtx.currentAlpha });
+      return origDrawImage(...args);
+    };
+    if (kind === 'settings') home.drawSettings(probeCtx);
+    else if (kind === 'achv') home.drawAchv(probeCtx);
+    else home.drawDaily(probeCtx);
+    const bg = events.find((e) => e.op === 'bg');
+    const content = events.find((e) => e.op === 'text' || e.op === 'image');
+    return { bg: bg ? bg.alpha : null, first: content ? content.alpha : null };
+  };
+  const problems = [];
+  [0.3, 0.5, 0.75].forEach((anim) => {
+    const rows = ['settings', 'achv', 'daily'].map((k) => ({ k, ...probePanel(k, anim) }));
+    const ref = rows[0];
+    rows.forEach((r) => {
+      if (r.bg !== 1) problems.push(`${r.k}(${anim}) 底色不是不透明（${r.bg}）`);
+      if (r.first == null) { problems.push(`${r.k}(${anim}) 没画出内容`); return; }
+      if (Math.abs(r.first - ref.first) > 0.02) problems.push(`${r.k}(${anim}) 内容淡入 ${r.first.toFixed(2)}，设置是 ${ref.first.toFixed(2)}`);
+    });
+  });
+  check(problems.length === 0, `首页弹窗展开动画一致性：${problems.slice(0, 4).join('；')}`);
+
+  // 展开完成后必须真的用 achvScroll 画（曾经误把 scroll: 0 打到展开完成的分支，整个成就页滚不动）
+  {
+    const home = new HomeSceneCls(fakeApp);
+    const seen = [];
+    const origDraw = home.achvPage.draw.bind(home.achvPage);
+    home.achvPage.draw = (c, opts) => { seen.push(opts && opts.scroll); return origDraw(c, opts); };
+    home.openAchv();
+    const maxS = home.achvPage.maxScroll();
+    const probeScroll = Math.min(120, maxS);
+    home.achvScroll = probeScroll;
+    home.achvAnim = 1;
+    home.drawAchv(makeCtx());
+    home.achvAnim = 0.5;
+    home.drawAchv(makeCtx());
+    const scrollProblems = [];
+    if (!(maxS > 0)) scrollProblems.push(`成就页内容不足以滚动（maxScroll ${maxS}）`);
+    if (seen[0] !== probeScroll) scrollProblems.push(`展开完成时传给页面的 scroll 是 ${seen[0]}，应为 ${probeScroll}`);
+    if (seen[1] !== 0) scrollProblems.push(`展开动画中应固定 scroll 0，实际 ${seen[1]}`);
+    check(scrollProblems.length === 0, `成就页滚动：${scrollProblems.join('；')}`);
+  }
+}
+
+// ---------- 成就：贪吃蛇 / Emoji 下坠 的「最高得分」指标行 + 总览分母 ----------
+{
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const problems = [];
+  wx.setStorageSync('__snake_game__best', '777');
+  wx.setStorageSync('__emoji_down__best_1', '321');
+  wx.setStorageSync('__games_hub__achv', JSON.stringify({
+    v: 2, plays: { snake: 3, down: 2 }, wins: {}, bestLevel: {}, perfect: {}, fast: {},
+    modes: {}, reach: { snake: { 100: 1 }, down: { 50: 1 } }, peak: {}, counters: {},
+    help: {}, timeMs: 0, fails: 0, seen: {},
+  }));
+  const data = achvMod.pageData();
+  const findGame = (id) => data.games.find((g) => g.id === id);
+  [['snake', 777], ['down', 321]].forEach(([id, best]) => {
+    const game = findGame(id);
+    const row = game && game.achv[0];
+    if (!row) { problems.push(`${id} 没有成就行`); return; }
+    if (!row.stat || row.unit !== 'achvScore') problems.push(`${id} 首行不是「最高得分」指标行（stat=${row.stat} unit=${row.unit}）`);
+    if (row.value !== best) problems.push(`${id} 最高得分显示 ${row.value}，应为 ${best}`);
+  });
+  // 总览分母只数「能解锁」的行（指标行不算），否则 x/y 永远刷不满
+  const unlockable = data.games.reduce((n, g) => n + g.achv.filter((r) => !r.stat).length, 0) + data.daily.achv.length;
+  if (data.summary.total !== unlockable) problems.push(`总览分母 ${data.summary.total}，可解锁行 ${unlockable}`);
+  // 「已入门」不能只看第 0 行（贪吃蛇 / 下坠 / 2048 / Threes 的首行是指标行）：
+  // 独立按「有任意一条非指标成就解锁」重算，必须和 summary.cleared 完全一致
+  const expectCleared = data.games.filter((g) => g.achv.some((a) => !a.stat && a.unlocked)).length;
+  if (data.summary.cleared !== expectCleared) {
+    problems.push(`已入门 ${data.summary.cleared} 个，按「任一真成就解锁」应为 ${expectCleared} 个`);
+  }
+  // 「成就达人」阈值 = 可达成总数 × 60%（不写死数字，加成就后自动跟）
+  const need = achvMod.achvMasterNeed();
+  if (need !== Math.ceil(achvMod.totalCount() * 0.6)) problems.push(`成就达人阈值 ${need}，应为可达成总数 ${achvMod.totalCount()} × 60%`);
+  const master = data.hidden.find((h) => h.key === 'achv100');
+  if (!master) problems.push('找不到「成就达人」隐藏成就');
+  else {
+    const denom = Number(String(master.hint).split('/')[1]);
+    if (denom !== need) problems.push(`成就达人进度写成 ${master.hint}，分母应为 ${need}`);
+    if (master.unlocked !== (achvMod.unlockedCount() >= need)) problems.push('成就达人解锁状态与阈值不一致');
+  }
+  const blockSrc = require('fs').readFileSync(path.join(ROOT, 'js/core/achv.js'), 'utf8');
+  if (/unlocked: unlockedCount\(\) >= \d+/.test(blockSrc)) problems.push('成就达人阈值被写回了固定数字');
+  check(problems.length === 0, `成就「最高得分」/总览：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 每日挑战：39 条任务逐条走生产路径，必须能推进 / 完成 ----------
+{
+  const dailyMod = require(path.join(ROOT, 'js/core/daily'));
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const dateKey = dailyMod.dateKey();
+  const setTask = (id) => {
+    wx.setStorageSync('__games_hub__daily', JSON.stringify({
+      v: 1, total: 0,
+      cur: { date: dateKey, id, prog: 0, done: false, doneAt: 0, retired: false, runs: {} },
+      days: {}, recent: [],
+    }));
+  };
+  const problems = [];
+  const tasks = dailyMod.taskList();
+  if (tasks.length !== 39) problems.push(`任务池应为 39 条，实际 ${tasks.length}`);
+  tasks.forEach((task) => {
+    const gid = task.game === '*' ? 'click' : task.game;
+    setTask(task.id);
+    const emit = () => {
+      switch (task.kind) {
+        case 'win': achvMod.win(gid, { level: 1, mode: 1 }); return;
+        case 'perfect': achvMod.win(gid, { perfect: true }); return;
+        case 'fast': achvMod.win(gid, { fast: true }); return;
+        case 'peak': {
+          // peak() 只在刷新纪录时才上报，测试里先取当前纪录再加 need
+          const cur = achvMod.peakOf(gid, task.field) || 0;
+          achvMod.peak(gid, task.field, cur + task.need);
+          return;
+        }
+        case 'run': dailyMod.markNewRun(gid); return;
+        case 'reach':
+          dailyMod.markNewRun(gid);
+          achvMod.reach(gid, task.need, [task.need]);
+          return;
+        case 'play': achvMod.beginRound(gid); return;
+        default: break;
+      }
+    };
+    const times = (task.kind === 'win' || task.kind === 'play') ? task.need : 1;
+    for (let i = 0; i < times; i += 1) emit();
+    const now = dailyMod.todayTask();
+    if (!now.done) {
+      problems.push(`${task.id}（${task.game}/${task.kind}）走生产路径后仍未完成（prog ${now.prog}/${task.need}）`);
+    }
+  });
+  check(problems.length === 0, `每日任务判定：${problems.slice(0, 5).join('；')}`);
+
+  // 麻将英雄：重复打「已通关的关卡」也必须算赢（以前 achv.win 写在 level > best 里面）
+  const MahjongCls = require(path.join(ROOT, 'js/games/mahjong/scene'));
+  fakeApp.sceneId = 'mahjong';
+  const mj = new MahjongCls(fakeApp);
+  mj.mode = 1;                       // MODE_LEVEL
+  mj.level = 1;
+  mj.best = 9;                       // 已经通关过更高关：不该影响本局计数
+  mj.conf = { target: 100 };
+  mj.score = 200;
+  mj.phase = 'play';
+  const winsBefore = achvMod.winsOf('mahjong');
+  setTask('mahjong_win1');
+  mj.checkEnd(true);
+  const winsAfter1 = achvMod.winsOf('mahjong');
+  mj.phase = 'play';
+  mj.score = 300;
+  mj.checkEnd(true);
+  const winsAfter2 = achvMod.winsOf('mahjong');
+  const mjProblems = [];
+  if (winsAfter1 !== winsBefore + 1) mjProblems.push(`第一次胜利没计数（${winsBefore} → ${winsAfter1}）`);
+  if (winsAfter2 !== winsBefore + 2) mjProblems.push(`重复打已通关关卡没计数（${winsAfter1} → ${winsAfter2}）`);
+  if (!dailyMod.todayTask().done) mjProblems.push('「赢一局麻将英雄」没有完成');
+  check(mjProblems.length === 0, `麻将英雄胜利计数：${mjProblems.join('；')}`);
+
+  // 静态兜底：achv.win 不能写在 level > best / 新纪录判断里（这类门把「每一局胜利」变成「第一次」
+  const scenes = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  const gated = [];
+  scenes.forEach((id) => {
+    const src = require('fs').readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
+    const lines = src.split('\n');
+    lines.forEach((line, i) => {
+      if (!line.includes('achv.win(')) return;
+      // 只看代码（去掉 // 注释），避免注释里引用的旧写法误报
+      const before = lines.slice(Math.max(0, i - 4), i)
+        .filter((l2) => !l2.trim().startsWith('//')).join('\n');
+      if (/>\s*this\.best\b|>=\s*this\.best\b|!.*bestLevel/.test(before)) gated.push(`${id}:${i + 1}`);
+    });
+  });
+  check(gated.length === 0, `achv.win 被新纪录条件包住了：${gated.slice(0, 5).join(', ')}`);
+
+  // 静态兜底 2：每条具名任务的场景里必须真的有对应上报调用（漏接 / 拼错 id 都能抓到）
+  const missing = [];
+  tasks.forEach((task) => {
+    if (task.game === '*') return;
+    let src = '';
+    try { src = require('fs').readFileSync(path.join(ROOT, `js/games/${task.game}/scene.js`), 'utf8'); } catch (e) {
+      missing.push(`${task.id}: 场景文件不存在`);
+      return;
+    }
+    let ok = false;
+    switch (task.kind) {
+      case 'win': ok = src.includes(`achv.win('${task.game}'`); break;
+      case 'perfect': ok = /achv\.win\('[^']+'[^)]*perfect:/.test(src); break;
+      case 'fast': ok = /achv\.win\('[^']+'[^)]*fast:/.test(src); break;
+      case 'peak': ok = src.includes(`achv.peak('${task.game}'`) && src.includes(`'${task.field}'`); break;
+      case 'run': ok = src.includes(`daily.markNewRun('${task.game}'`); break;
+      case 'reach': ok = src.includes(`daily.report('${task.game}', 'reach'`) || src.includes(`achv.reach('${task.game}'`); break;
+      case 'play': ok = src.includes('achv.beginRound('); break;
+      default: ok = true;
+    }
+    if (!ok) missing.push(`${task.id}（${task.game}/${task.kind}）`);
+  });
+  check(missing.length === 0, `每日任务缺少上报：${missing.slice(0, 6).join('、')}`);
 }
 
 // ---------- 每日挑战「任意游戏开 5 局」= 开新局，不是进场景 ----------

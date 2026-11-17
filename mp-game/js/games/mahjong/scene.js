@@ -441,8 +441,10 @@ class MahjongScene extends Scene {
     if (this.mode !== MODE_LEVEL) return;   // 无尽模式牌墙无限、又能替换，没有判负条件
     if (this.score >= this.conf.target) {
       this.phase = WON;
-      if (this.level > this.best) {
+      // 每赢一局都要上报（每日挑战「赢一局麻将英雄」/ 成就胜场），不能只在新纪录时记：
+      // 以前这一行写在 `if (this.level > this.best)` 里面，重复打已通关的关卡就永远不计数。
       achv.win('mahjong', { mode: this.mode, level: this.level });
+      if (this.level > this.best) {
         this.best = this.level;
         setRaw(BEST_KEY + 1, String(this.best));
       }

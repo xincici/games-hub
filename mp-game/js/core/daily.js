@@ -418,6 +418,7 @@ module.exports = {
   setOnComplete,
   descOf,
   taskOf,
+  taskList: () => POOL.slice(),
   streakDays,
   completedTotal,
   bestStreak,

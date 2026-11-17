@@ -704,6 +704,7 @@ const SPEC = {
     icon: 'snake', accent: '#23804e',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__snake_game__best'))}${playsOf('snake') ? ` · ${playsOf('snake')} ${i18n.t('achvPlaysUnit')}` : ''}`,
     achv: [
+      A('最高得分', 'Top score', () => ({ value: read('__snake_game__best'), target: 1 }), { stat: true, unit: 'achvScore' }),
       A('达成 100 分', 'Score 100', () => ({ value: reachCount('snake', 100, '__snake_game__best'), target: 1 }), { counter: true }),
       A('达成 500 分', 'Score 500', () => ({ value: reachCount('snake', 500, '__snake_game__best'), target: 1 }), { counter: true }),
       A('达成 1000 分', 'Score 1000', () => ({ value: reachCount('snake', 1000, '__snake_game__best'), target: 1 }), { counter: true }),
@@ -812,6 +813,7 @@ const SPEC = {
     icon: 'down', accent: '#bd5420',
     stats: () => `${i18n.t('achvTopScore')} ${V(read('__emoji_down__best_1'))}`,
     achv: [
+      A('最高得分', 'Top score', () => ({ value: read('__emoji_down__best_1'), target: 1 }), { stat: true, unit: 'achvScore' }),
       A('达成 50 分', 'Score 50', () => ({ value: reachCount('down', 50, '__emoji_down__best_1'), target: 1 }), { counter: true }),
       A('达成 100 分', 'Score 100', () => ({ value: reachCount('down', 100, '__emoji_down__best_1'), target: 1 }), { counter: true }),
       A('达成 1000 分', 'Score 1000', () => ({ value: reachCount('down', 1000, '__emoji_down__best_1'), target: 1 }), { counter: true }),
@@ -1047,9 +1049,10 @@ function hiddenList() {
       key: 'achv100',
       // unlockedCount() = 25 张游戏卡 + 每日挑战 5 条（不含隐藏成就自己，避免自指）
       name: T('achvHiddenAchv'),
-      desc: `${T('achvHiddenAchvDesc')} ${unlockedCount()}`,
-      unlocked: unlockedCount() >= 100,
-      hint: `${Math.min(unlockedCount(), 100)}/100`,
+      desc: `${T('achvHiddenAchvDesc').replace('{n}', achvMasterNeed())} ${unlockedCount()}`,
+      // 阈值 = 可达成总数（不含指标行）× 60%，加成就后自动跟着变，不再写死 90 / 100
+      unlocked: unlockedCount() >= achvMasterNeed(),
+      hint: `${Math.min(unlockedCount(), achvMasterNeed())}/${achvMasterNeed()}`,
     },
   ];
 }
@@ -1162,10 +1165,13 @@ function summaryOf(games) {
   let cleared = 0;
   games.forEach((g) => {
     g.achv.forEach((a) => {
+      // 指标行（stat）永远 ratio 0、不会解锁，不能计入分母，否则「成就 x/y」永远刷不满
+      if (a.stat) return;
       total += 1;
       if (a.unlocked) unlocked += 1;
     });
-    if (g.achv[0] && g.achv[0].unlocked) cleared += 1;
+    // 「已入门」= 这张卡有任意一条真成就解锁；不能只看第 0 行（首行可能是指标行）
+    if (g.achv.some((a) => !a.stat && a.unlocked)) cleared += 1;
   });
   // 每日挑战的 5 条也算进总览（「已入门」还是只统计 25 个游戏）
   dailyCard().achv.forEach((a) => {
@@ -1186,10 +1192,19 @@ function unlockedCount() {
   return gameCount + dailyCard().achv.filter((a) => a.unlocked).length;
 }
 
+// 「成就达人」的达标线：可达成总成就数（指标行不算）的 60%
+// 加 / 删成就后阈值自动跟着变，别写死 90 / 100 这种数字
+const ACHV_MASTER_RATIO = 0.6;
+
+function achvMasterNeed() {
+  return Math.max(1, Math.ceil(totalCount() * ACHV_MASTER_RATIO));
+}
+
 function totalCount() {
+  // 只数「能解锁」的条数：指标行（stat）永远不解锁，不能算进总数
   // 每日挑战卡的条数跟着 dailyCard 走，别写死
-  return ORDER.reduce((sum, id) => sum + (SPEC[id] ? SPEC[id].achv.length : 0), 0)
-    + dailyCard().achv.length;
+  const games = ORDER.reduce((sum, id) => sum + (SPEC[id] ? SPEC[id].achv.filter((a) => !a.stat).length : 0), 0);
+  return games + dailyCard().achv.length;
 }
 
 module.exports = {
@@ -1236,6 +1251,7 @@ module.exports = {
   pageData,
   unlockedCount,
   totalCount,
+  achvMasterNeed,
   SPEC,
   ORDER,
   loadOrder,

@@ -894,7 +894,7 @@ class HomeScene extends Scene {
       this.addButton('achv-mask', 0, 0, W, H, () => { this.achvOpen = false; });
       page.draw(c, {
         ease,
-        scroll,
+          scroll,
         interactive: true,
         scrolling: !!this.achvDrag || !!this.achvCard || Math.abs(this.achvVel) > 0.2,
         drag: this.achvCard
@@ -906,8 +906,14 @@ class HomeScene extends Scene {
       c.beginPath();
       c.arc(cx, cy, Math.max(0.1, maxR * ease), 0, Math.PI * 2);
       c.clip();
-      c.globalAlpha = Math.min(1, Math.max(0, (ease - 0.14) / 0.5));
-      page.draw(c, { ease, scroll, interactive: false });
+      // 底色跟着圆形一起长（不透明），只有内容晚一点淡入 —— 和设置面板完全同一套
+      page.draw(c, {
+        ease,
+          scroll: 0,   // 展开过程中不跟滚动偏移，落定后才用真实 scroll
+        interactive: false,
+        bgAlpha: 1,
+        contentAlpha: Math.min(1, Math.max(0, (ease - 0.18) / 0.5)),
+      });
       c.restore();
     }
 
@@ -1054,8 +1060,13 @@ class HomeScene extends Scene {
       c.beginPath();
       c.arc(cx, cy, Math.max(0.1, maxR * ease), 0, Math.PI * 2);
       c.clip();
-      c.globalAlpha = Math.min(1, Math.max(0, (ease - 0.14) / 0.5));
-      page.draw(c, { ease, interactive: false });
+      // 与设置 / 成就同一套：圆形里先铺不透明底色，内容再淡入
+      page.draw(c, {
+        ease,
+        interactive: false,
+        bgAlpha: 1,
+        contentAlpha: Math.min(1, Math.max(0, (ease - 0.18) / 0.5)),
+      });
       c.restore();
     }
 

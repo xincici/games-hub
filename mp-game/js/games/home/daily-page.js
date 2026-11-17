@@ -86,7 +86,9 @@ class DailyPage {
     const month = (data.month && data.month.cells) ? data.month : { cells: [], title: '', doneCount: 0, canNext: false, canPrev: true };
 
     c.save();
-    c.globalAlpha = Math.min(1, Math.max(0, (ease - 0.2) / 0.6));
+    // 底色**不透明**、跟着圆形一起长出来，只有内容晚一点淡入 ——
+    // 和设置面板同一套节奏（0.18 / 0.5），否则整个面板会半透明地飘出来
+    c.globalAlpha = o.bgAlpha == null ? 1 : o.bgAlpha;
 
     // 底：页面底色（不透明，否则首页蜂窝会透上来，字看不清）+ 顶部一层淡淡暖色
     c.fillStyle = T.bg;
@@ -99,6 +101,8 @@ class DailyPage {
     }
     c.fillStyle = this.topGrad;
     c.fillRect(0, 0, W, H * 0.55);
+
+    c.globalAlpha = o.contentAlpha == null ? Math.min(1, Math.max(0, (ease - 0.2) / 0.6)) : o.contentAlpha;
 
     // ---- 标题 ----
     D.text(c, t('dailyTitle'), W / 2, L.top + 16, {
@@ -249,7 +253,7 @@ class DailyPage {
     const off = dx || 0;
     if (alpha != null && alpha < 1) {
       c.save();
-      c.globalAlpha = Math.max(0, Math.min(1, alpha));
+      c.globalAlpha = c.globalAlpha * Math.max(0, Math.min(1, alpha));   // 乘在 contentAlpha 上，别覆盖
     }
 
     // 月份标题（两侧箭头由 drawMonthArrows 画，保证在按钮后）
@@ -314,7 +318,7 @@ class DailyPage {
       const enabled = dir < 0 ? month.canPrev !== false : !!month.canNext;
       const color = enabled ? T.text : (dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)');
       c.save();
-      c.globalAlpha = interactive ? 1 : 0.6;
+      c.globalAlpha = c.globalAlpha * (interactive ? 1 : 0.6);
       if (enabled) {
         D.fillRoundRect(c, rect.x, rect.y, rect.w, rect.h, 9,
           dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.045)');

@@ -430,6 +430,10 @@ class AchvPage {
     const T = theme.tokens;
     const dark = !!theme.dark;
 
+    c.save();
+    // 底色不透明、跟圆形一起长；内容晚一点淡入（和设置 / 每日挑战同一套节奏）
+    c.globalAlpha = o.bgAlpha == null ? 1 : o.bgAlpha;
+
     // 底：页面底色 + 一点点主色渐变，让喜庆感从背景透出来（渐变对象缓存，别每帧新建）
     c.fillStyle = T.bg;
     c.fillRect(0, 0, W, H);
@@ -441,6 +445,8 @@ class AchvPage {
     }
     c.fillStyle = this.topGrad;
     c.fillRect(0, 0, W, H * 0.6);
+
+    c.globalAlpha = o.contentAlpha == null ? 1 : o.contentAlpha;
 
     this.drawHeader(c, ease);
 
@@ -502,14 +508,15 @@ class AchvPage {
     if (interactive && ease > 0.75) {
       // 关闭按钮画在「成就」FAB 那一格（由 scene 提供矩形）
     }
+    c.restore();
   }
 
   drawHeader(c, ease) {
     const T = theme.tokens;
     const s = this.data.summary;
-    const alpha = Math.min(1, Math.max(0, (ease - 0.2) / 0.5));
+    // alpha 由 draw() 的 contentAlpha 统一控制（和设置面板同一条 0.18 / 0.5 曲线），
+    // 这里不要再自己算一份，否则头部和卡片淡入速度不一致
     c.save();
-    c.globalAlpha = alpha;
 
     const top = this.safeTop + 18;
     D.text(c, t('achvTitle'), W / 2, top, {
@@ -545,9 +552,9 @@ class AchvPage {
   drawCard(c, game, y, h, ease, lifted, flat) {
     const T = theme.tokens;
     const dark = !!theme.dark;
-    const alpha = Math.min(1, Math.max(0, (ease - 0.25) / 0.5));
     c.save();
-    c.globalAlpha = lifted ? 1 : alpha;
+    // 抬起（拖动）时强制不透明；其余继承 contentAlpha，别自己算一份
+    if (lifted) c.globalAlpha = 1;
     if (lifted) {
       // 抬起来：略放大，阴影由 glassCard 加重
       c.translate(W / 2, y + h / 2);
