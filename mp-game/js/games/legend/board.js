@@ -99,55 +99,49 @@ function replaceTile(grid, row, col, value) {
 // 只在**相邻**的牌之间找：一行/一列里被空格隔开就当两段。
 // 每段用一个小 DP 求「分数最高的拆法」，避免贪心漏掉更好的组合
 // （例如 1,2,3,3,3：先拿顺子只剩 100，先拿刻子能拿 200）。
-function bestInSegment(values) {
+// 一段（行 / 列里被空格隔开的连续牌）里**所有成立**的牌组。
+//
+// 规则（2026-11 玩家要求，取代原来「不重叠的最高分拆法」）：
+// - 花牌是万能牌，可当**任意**一张牌；同一张花牌能同时被多个组借去当不同点数
+//   （例：南 南 梅 4 4 → 「南南梅」刻子 + 「梅 4 4」刻子都成立 → 五张一起消）；
+// - 组与组之间**允许重叠**：只要窗口能组成牌组就算，最后取所有组成员的并集一起消
+//   （例：2 3 4 4 4 → 顺子 234 + 刻子 444 → 五张一起消，而不是只消刻子）；
+// - 顺子只能是条牌（1~9），非花牌互不相同、跨度 ≤ 2；字牌只能刻子 / 杠。
+// 返回 [{ kind, from, len }]（from / len 是段内下标，棋盘坐标由 findGroups 换算）。
+function groupsInSegment(values) {
   const n = values.length;
-  const memo = new Array(n + 1).fill(null);
-  const go = (i) => {
-    if (i >= n) return { score: 0, picks: [] };
-    if (memo[i]) return memo[i];
-    let best = { score: go(i + 1).score, picks: go(i + 1).picks };
-    // 连着 k 张**全都**相同 —— 花牌是万能牌：窗口里的非花牌必须全部相同，
-    // 窗口全是花牌也算（可当任意三张相同）。
-    const same = (k) => {
-      let base = 0;
-      for (let j = 0; j < k; j++) {
-        if (i + j >= n) return false;
-        const v = values[i + j];
-        if (isFlower(v)) continue;
-        if (!base) base = v;
-        else if (v !== base) return false;
+  const found = [];
+  const push = (kind, from, len) => {
+    if (!found.some(g => g.kind === kind && g.from === from && g.len === len)) found.push({ kind, from, len });
+  };
+  for (let i = 0; i < n; i++) {
+    for (const len of [3, 4]) {
+      if (i + len > n) continue;
+      const win = values.slice(i, i + len);
+      const real = win.filter(v => !isFlower(v));
+      // 刻子 / 杠：非花牌必须全同（全花牌也算，可当任意 len 张相同）
+      if (real.length === 0 || real.every(v => v === real[0])) {
+        push(len === 4 ? 'kong' : 'triplet', i, len);
       }
-      return true;
-    };
-    if (same(4)) {                       // 杠
-      const rest = go(i + 4);
-      const cand = { score: SCORE.kong + rest.score, picks: [{ kind: 'kong', from: i, len: 4 }, ...rest.picks] };
-      if (cand.score > best.score) best = cand;
-    }
-    if (same(3)) {                       // 刻子（含「花 + 同点 + 同点」「花 + 花 + 任意」）
-      const rest = go(i + 3);
-      const cand = { score: SCORE.triplet + rest.score, picks: [{ kind: 'triplet', from: i, len: 3 }, ...rest.picks] };
-      if (cand.score > best.score) best = cand;
-    }
-    {
-      // 顺子：三张里的**非花牌**必须互不相同、跨距 ≤ 2（花牌补空缺），且只能是条牌（≤ 9）。
-      // 字牌 / 花牌不能当顺子的主体 —— 这是加字牌时最容易漏的一处（9条+東+南 = 9,10,11 会被骗过去）。
-      const real = [];
-      let ok = i + 2 < n;
-      for (let j = 0; ok && j < 3; j++) if (!isFlower(values[i + j])) real.push(values[i + j]);
+      if (len !== 3) continue;
+      // 顺子：非花牌只能是条牌、互不相同、跨度 ≤ 2（花牌补空缺）
       const suitOk = real.every(v => v <= HONOR_BASE);
       const distinct = new Set(real).size === real.length;
       const spanOk = real.length === 0 || Math.max.apply(null, real) - Math.min.apply(null, real) <= 2;
-      if (ok && suitOk && distinct && spanOk) {
-        const rest = go(i + 3);
-        const cand = { score: SCORE.run + rest.score, picks: [{ kind: 'run', from: i, len: 3 }, ...rest.picks] };
-        if (cand.score > best.score) best = cand;
-      }
+      if (suitOk && distinct && spanOk) push('run', i, 3);
     }
-    memo[i] = best;
-    return best;
-  };
-  return go(0).picks;
+  }
+  // 同一段牌只能算一次最大分：同一窗口既是顺子又是刻子（例如「花 花 5」）时保留分高的那个
+  const bestByRange = new Map();
+  found.forEach((g) => {
+    const key = `${g.from}:${g.len}`;
+    const prev = bestByRange.get(key);
+    if (!prev || SCORE[g.kind] > SCORE[prev.kind]) bestByRange.set(key, g);
+  });
+  const uniq = Array.from(bestByRange.values());
+  // 去掉被其它组**完全包含**的组：四张同点只算一个杠，不再额外算两个刻子
+  return uniq.filter(g => !uniq.some(h => h !== g && h.from <= g.from
+    && h.from + h.len >= g.from + g.len && h.len > g.len));
 }
 
 // 找出棋盘上所有能消的组（同时扫 8 行 + 7 列）
@@ -162,9 +156,9 @@ function findGroups(grid) {
     }
     if (seg.length) segs.push(seg);
     for (const s of segs) {
-      for (const pick of bestInSegment(s.map(x => x.v))) {
-        const part = s.slice(pick.from, pick.from + pick.len);
-        groups.push({ kind: pick.kind, score: SCORE[pick.kind], cells: part.map(x => [x.r, x.c]) });
+      for (const g of groupsInSegment(s.map(x => x.v))) {
+        const part = s.slice(g.from, g.from + g.len);
+        groups.push({ kind: g.kind, score: SCORE[g.kind], cells: part.map(x => [x.r, x.c]) });
       }
     }
   };
@@ -242,7 +236,7 @@ module.exports = {
   dropRow,
   placeTile,
   replaceTile,
-  bestInSegment,
+  groupsInSegment,
   findGroups,
   clearGroups,
   initialGrid,

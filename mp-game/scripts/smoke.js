@@ -2810,6 +2810,61 @@ i18n.setLang('cn');
   check(problems.length === 0, `麻将传奇字牌成就：${problems.slice(0, 5).join('；')}`);
 }
 
+// ---------- 麻将传奇：花牌万能 + 重叠组全部消除 ----------
+{
+  const logic = require(path.join(ROOT, 'js/games/legend/board'));
+  const FLOWER_V = 18;   // 花牌：v > FLOWER_BASE(16)
+  const problems = [];
+  const rowGroups = (values) => {
+    const grid = logic.emptyGrid();
+    values.forEach((v, i) => { if (v) grid[7][i] = { id: 100 + i, v }; });
+    const groups = logic.findGroups(grid);
+    const cells = new Set();
+    groups.forEach((g) => g.cells.forEach(([r, c]) => cells.add(c)));
+    return { groups, cells: [...cells].sort((a, b) => a - b) };
+  };
+  // 1) 2 3 4 4 4：顺子 234 + 刻子 444 重叠 → 五张全消
+  const a = rowGroups([2, 3, 4, 4, 4]);
+  if (a.groups.length !== 2) problems.push(`23444 应判 2 组，实际 ${a.groups.length}`);
+  if (a.cells.join(',') !== '0,1,2,3,4') problems.push(`23444 只消了 ${a.cells.join(',')}`);
+  if (!a.groups.some((g) => g.kind === 'run') || !a.groups.some((g) => g.kind === 'triplet')) problems.push('23444 缺少顺子或刻子');
+  // 2) 南 南 花 4 4：两个刻子共用同一张花牌 → 五张全消
+  const b = rowGroups([11, 11, FLOWER_V, 4, 4]);
+  if (b.groups.length !== 2) problems.push(`南南花44 应判 2 组，实际 ${b.groups.length}`);
+  if (b.cells.join(',') !== '0,1,2,3,4') problems.push(`南南花44 只消了 ${b.cells.join(',')}`);
+  // 3) 字牌不能凑顺子
+  if (rowGroups([10, 11, 12]).groups.length) problems.push('字牌被判成顺子');
+  // 4) 四张同点只算一个杠（300 分），不叠加两个刻子
+  const k = rowGroups([4, 4, 4, 4]);
+  if (k.groups.length !== 1 || k.groups[0].kind !== 'kong' || k.groups[0].score !== 300) {
+    problems.push(`4444 应只有一个杠，实际 ${k.groups.map((g) => g.kind).join('+')}`);
+  }
+  // 5) 同一窗口既像顺子又像刻子时只算一次（花 花 5）
+  const w = rowGroups([FLOWER_V, FLOWER_V, 5]);
+  if (w.groups.length !== 1) problems.push(`花花5 应只算 1 组，实际 ${w.groups.length}`);
+  // 6) 竖列同理（上下方向）
+  {
+    const grid = logic.emptyGrid();
+    [2, 3, 4, 4, 4].forEach((v, r) => { grid[r][0] = { id: 200 + r, v }; });
+    const groups = logic.findGroups(grid);
+    const cells = new Set();
+    groups.forEach((g) => g.cells.forEach(([r]) => cells.add(r)));
+    if (cells.size !== 5) problems.push(`竖列 23444 只消了 ${cells.size} 张`);
+  }
+  // 7) 空格会把一段切断，不会跨空拼接
+  if (rowGroups([2, 3, 0, 4, 4]).groups.length) problems.push('跨空格的牌被连成一组');
+  // 8) 并把并集真的从盘面抹掉
+  {
+    const grid = logic.emptyGrid();
+    [2, 3, 4, 4, 4].forEach((v, i) => { grid[7][i] = { id: 300 + i, v }; });
+    const groups = logic.findGroups(grid);
+    const next = logic.clearGroups(grid, groups);
+    const left = next[7].slice(0, 5).filter(Boolean).length;
+    if (left !== 0) problems.push(`消完之后还剩 ${left} 张`);
+  }
+  check(problems.length === 0, `麻将传奇找组：${problems.slice(0, 4).join('；')}`);
+}
+
 // ---------- 井字棋：胜利用「胶囊框」圈住三格（X 绿 / O 红），不再画连线 ----------
 {
   const Cls = require(path.join(ROOT, 'js/games/ttt/scene'));

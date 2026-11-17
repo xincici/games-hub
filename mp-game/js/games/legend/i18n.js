@@ -22,7 +22,7 @@ module.exports = {
     hintText: 'Tap a cell to drop your tile, or tap a tile already on the board to swap it out',
     confirmText: 'OK, I See',
     rotateTip: 'Please rotate your device to portrait',
-    helpMsg: '## How to play\n- 8 rows by 7 columns: tap an empty cell to drop your tile there; tap an existing tile to swap it out\n- A run pays 100, a triplet 200, a kong 300; tiles must touch in a row or column\n## Rules\n- No clear this turn? A new row rises; a tile pushed off the top ends the run\n- Flower tiles are wild',
+    helpMsg: '## How to play\n- 8 rows by 7 columns: tap an empty cell to drop your tile there; tap an existing tile to swap it out\n- A run pays 100, a triplet 200, a kong 300; tiles must touch in a row or column\n## Rules\n- No clear this turn? A new row rises; a tile pushed off the top ends the run\n- Flowers count as any tile; every set they complete clears together',
     playHint: 'Tap an empty cell to drop a tile; tap a tile to swap.',
   },
   cn: {
@@ -45,7 +45,7 @@ module.exports = {
     hintText: '点空格落子，点已有的牌把它替换成手上这张',
     confirmText: '知道了',
     rotateTip: '请旋转设备至竖屏',
-    helpMsg: '## 怎么玩\n- 8 行 × 7 列：点空格把候选牌落到那一列（会往下掉），点已有牌则替换掉它\n- 顺子 100、刻子 200、杠 300 分，牌必须紧挨着（同行或同列）\n## 规则\n- 没有消除时底部升起一行新牌；牌被顶出最上面一行就结束\n- 花牌是万能牌',
+    helpMsg: '## 怎么玩\n- 8 行 × 7 列：点空格把候选牌落到那一列（会往下掉），点已有牌则替换掉它\n- 顺子 100、刻子 200、杠 300 分，牌必须紧挨着（同行或同列）\n## 规则\n- 没有消除时底部升起一行新牌；牌被顶出最上面一行就结束\n- 花牌当任意一张牌用；能凑成几组就一起消（顺子、刻子重叠也算）',
     playHint: '点空格落牌、点牌替换；三张连着或三张同款即消除',
   },
 };
