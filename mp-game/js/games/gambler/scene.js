@@ -280,6 +280,7 @@ class GamblerScene extends Scene {
   // ---------- 开局 / 换关 ----------
 
   deal(level) {
+    achv.beginRound('gambler');
     this.flushTimers();
     this.resetFx();
     const round = logic.newRound(level);

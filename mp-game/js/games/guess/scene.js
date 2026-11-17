@@ -154,6 +154,7 @@ class GuessScene extends Scene {
     this.confirming = true;
   }
   startNewGame() {
+    achv.beginRound('guess');
     this.confirming = false;
     this.streak = 0;
     this.saveRecords();

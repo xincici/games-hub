@@ -2383,6 +2383,160 @@ i18n.setLang('cn');
   check(problems.length === 0, `结算面板：${problems.join('；')}`);
 }
 
+// ---------- 对对碰：10 张（5 对）排成 3 / 4 / 3，每行居中 ----------
+{
+  const board = require(path.join(ROOT, 'js/games/match/board'));
+  const MatchCls = require(path.join(ROOT, 'js/games/match/scene'));
+  fakeApp.sceneId = 'match';
+  const problems = [];
+  const conf = board.levelConfig(3, 1);
+  if (JSON.stringify(conf.pattern) !== JSON.stringify([3, 4, 3])) problems.push(`Lv3 pattern = ${JSON.stringify(conf.pattern)}`);
+  if (conf.cards !== 10 || conf.pairs !== 5) problems.push(`Lv3 张数/对数不对（${conf.cards} 张 ${conf.pairs} 对）`);
+  if (!Number.isFinite(conf.preview) || !Number.isFinite(conf.time)) problems.push('Lv3 preview/time 不是有限数');
+  [1, 2, 3].forEach((mode) => {
+    const sc = new MatchCls(fakeApp);
+    sc.mode = mode;
+    sc.level = 3;
+    sc.initLevel(3);
+    if (JSON.stringify(sc.rowCounts) !== JSON.stringify([3, 4, 3])) {
+      problems.push(`mode${mode}: rowCounts = ${JSON.stringify(sc.rowCounts)}`);
+      return;
+    }
+    const rects = sc.cards.map((_, i) => sc.cardRect(i));
+    if (rects.length !== 10) problems.push(`mode${mode}: 只有 ${rects.length} 张`);
+    const center = sc.boardX + sc.boardW / 2;
+    let at = 0;
+    sc.rowCounts.forEach((n) => {
+      const row = rects.slice(at, at + n);
+      const left = Math.min(...row.map((r) => r.x));
+      const right = Math.max(...row.map((r) => r.x + r.w));
+      if (Math.abs((left + right) / 2 - center) > 0.6) {
+        problems.push(`mode${mode}: ${n} 张那行没居中（中心 ${((left + right) / 2).toFixed(1)} vs ${center.toFixed(1)}）`);
+      }
+      at += n;
+    });
+    for (let a = 0; a < rects.length; a += 1) {
+      const A = rects[a];
+      if (A.x < sc.boardX - 0.5 || A.x + A.w > sc.boardX + sc.boardW + 0.5
+        || A.y < sc.boardY - 0.5 || A.y + A.h > sc.boardY + sc.boardH + 0.5) {
+        problems.push(`mode${mode}: 第 ${a} 张出了棋盘`);
+      }
+      for (let b = a + 1; b < rects.length; b += 1) {
+        const B = rects[b];
+        if (A.x < B.x + B.w - 0.5 && A.x + A.w > B.x + 0.5
+          && A.y < B.y + B.h - 0.5 && A.y + A.h > B.y + 0.5) {
+          problems.push(`mode${mode}: 第 ${a} / ${b} 张重叠`);
+        }
+      }
+    }
+    if (sc.gridLabel() !== '3·4·3') problems.push(`mode${mode}: 顶部规格写成 ${sc.gridLabel()}`);
+  });
+  // 其余关卡保持矩形矩阵
+  const sc4 = new MatchCls(fakeApp);
+  sc4.mode = 1;
+  sc4.level = 4;
+  sc4.initLevel(4);
+  if (JSON.stringify(sc4.rowCounts) !== JSON.stringify([4, 4, 4])) problems.push(`Lv4 rowCounts = ${JSON.stringify(sc4.rowCounts)}`);
+  if (sc4.gridLabel() !== '3×4') problems.push(`Lv4 顶部规格写成 ${sc4.gridLabel()}`);
+  const y0 = sc4.cardRect(0).y;
+  for (let i = 1; i < 4; i += 1) {
+    const r = sc4.cardRect(i);
+    if (Math.abs(r.y - y0) > 0.5) problems.push(`Lv4 第 ${i} 张没在同一行`);
+  }
+  // 最高难度（Lv11 起）限时 +20s：Lv11 120s、之后每关 −2s、最低 90%（108s）
+  const times = (mode, lv) => board.levelConfig(lv, mode).time;
+  // 最后两档盘面（6×7 = 42 张、6×8 = 48 张）各 +20s，再往前不变
+  if (times(1, 9) !== 80) problems.push(`Lv9 限时应保持 80s，实际 ${times(1, 9)}`);
+  if (times(1, 10) !== 111) problems.push(`Lv10（6×7）限时应为 111s（91+20），实际 ${times(1, 10)}`);
+  if (times(1, 11) !== 120) problems.push(`Lv11（6×8）限时应为 120s（100+20），实际 ${times(1, 11)}`);
+  if (times(1, 12) !== 118) problems.push(`Lv12 限时应为 118s，实际 ${times(1, 12)}`);
+  if (times(1, 20) !== 108) problems.push(`Lv20 限时应封底 108s，实际 ${times(1, 20)}`);
+  if (times(2, 11) !== 108) problems.push(`扑克 Lv11 限时应为 108s（88+20），实际 ${times(2, 11)}`);
+  if (times(2, 10) !== 98) problems.push(`扑克 Lv10 限时应为 98s（78+20），实际 ${times(2, 10)}`);
+  check(problems.length === 0, `对对碰 3/4/3：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 每日挑战「任意游戏开 5 局」= 开新局，不是进场景 ----------
+{
+  const dailyMod = require(path.join(ROOT, 'js/core/daily'));
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const problems = [];
+  const dateKey = dailyMod.dateKey();
+  const setTask = (id) => {
+    wx.setStorageSync('__games_hub__daily', JSON.stringify({
+      v: 1, total: 0,
+      cur: { date: dateKey, id, prog: 0, done: false, doneAt: 0, retired: false, runs: {} },
+      days: {}, recent: [],
+    }));
+  };
+  setTask('any_play5');
+  // 只是「进入场景」（trackPlay）不该算开一局
+  achvMod.trackPlay('g2048');
+  if (dailyMod.todayTask().prog !== 0) {
+    problems.push(`只是进入游戏就记了 ${dailyMod.todayTask().prog} 局（应该 0）`);
+  }
+  // 没有存档时，进场景 = 开第 1 局；之后每点一次「新游戏」再 +1
+  setTask('any_play5');
+  wx.removeStorageSync('__game_2048__state');
+  const GCls = require(path.join(ROOT, 'js/games/g2048/scene'));
+  fakeApp.sceneId = 'g2048';
+  const gs = new GCls(fakeApp);
+  if (dailyMod.todayTask().prog !== 1) problems.push(`进游戏后应是 1 局，实际 ${dailyMod.todayTask().prog}`);
+  for (let i = 0; i < 4; i += 1) gs.startGame();
+  const task = dailyMod.todayTask();
+  if (task.prog !== 5 || !task.done) problems.push(`连开 5 局后应是 5/5 已完成，实际 ${task.prog}/5 完成=${task.done}`);
+  // 过一关也算新的一局（连连看进入 + 两次下一关 = 3）
+  setTask('any_play5');
+  wx.removeStorageSync('__emoji_link__state');
+  const LCls = require(path.join(ROOT, 'js/games/link/scene'));
+  fakeApp.sceneId = 'link';
+  const ls = new LCls(fakeApp);
+  ls.nextLevel();
+  ls.nextLevel();
+  if (dailyMod.todayTask().prog !== 3) problems.push(`连连看进 1 局 + 下一关 2 次应是 3，实际 ${dailyMod.todayTask().prog}`);
+  // 每个游戏都要在自己的「开新局」入口上报，防止以后新增游戏漏接
+  const ids = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
+  ids.forEach((id) => {
+    const src = require('fs').readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
+    if (src.indexOf(`achv.beginRound('${id}')`) < 0) problems.push(`${id}: 开新局没有上报 beginRound`);
+  });
+  check(problems.length === 0, `每日挑战开新局：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 麻将传奇「字牌消除」成就 ----------
+{
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const logic = require(path.join(ROOT, 'js/games/legend/board'));
+  const LegCls = require(path.join(ROOT, 'js/games/legend/scene'));
+  fakeApp.sceneId = 'legend';
+  const problems = [];
+  const runClear = (values) => {
+    const sc = new LegCls(fakeApp);
+    sc.phase = 'play';
+    sc.grid = logic.emptyGrid();
+    values.forEach((v, i) => { sc.grid[7][i] = { id: 9000 + i, v }; });
+    const groups = logic.findGroups(sc.grid);
+    const before = achvMod.countOf('legend', 'honor');
+    sc.startClear({ chain: 1, clearSeqAtApply: 0 }, groups);
+    return { groups, before, after: achvMod.countOf('legend', 'honor') };
+  };
+  // 字牌刻子（東 v=10）：必须 +1
+  const honor = runClear([10, 10, 10]);
+  if (honor.groups.length !== 1) problems.push(`字牌刻子没被判成一组（${honor.groups.length}）`);
+  if (honor.after !== honor.before + 1) problems.push(`字牌刻子消除没有计入（${honor.before} → ${honor.after}）`);
+  // 条牌刻子（3条 v=3）：不该计入
+  const suited = runClear([3, 3, 3]);
+  if (suited.after !== suited.before) problems.push(`条牌刻子被误算成字牌（${suited.before} → ${suited.after}）`);
+  // 成就本身要解锁
+  const legendAchv = (achvMod.pageData().games.find((x) => x.id === 'legend') || {}).achv || [];
+  const honorRow = legendAchv.find((a) => /字牌|Honor/.test(a.name));
+  if (!honorRow) problems.push('麻将传奇里找不到「字牌消除」成就');
+  else if (honorRow.value < 1) problems.push(`字牌消除计数还是 ${honorRow.value}`);
+  check(problems.length === 0, `麻将传奇字牌成就：${problems.slice(0, 5).join('；')}`);
+}
+
 // ---------- 井字棋：胜利用「胶囊框」圈住三格（X 绿 / O 红），不再画连线 ----------
 {
   const Cls = require(path.join(ROOT, 'js/games/ttt/scene'));

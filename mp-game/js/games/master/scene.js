@@ -111,6 +111,7 @@ class MasterScene extends Scene {
     } catch (e) { return false; }
   }
   startLevel(level) {
+    achv.beginRound('master');
     this.level = Math.max(1, level || 1);
     setRaw(this.levelKey(), String(this.level));
     const pool = cards.poolFor(this.modeNum);

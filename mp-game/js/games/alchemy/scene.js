@@ -194,6 +194,7 @@ class AlchemyScene extends Scene {
   // ---------- level lifecycle ----------
 
   startLevel(lv) {
+    achv.beginRound('alchemy');
     this.level = Math.max(1, Math.floor(lv) || 1);
     this.cfg = this.configFor(this.level);
     this.score = 0;

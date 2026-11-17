@@ -83,6 +83,7 @@ class LinkScene extends Scene {
     if (!this.restore()) this.startLevel(this.level);
   }
   startLevel(level) {
+    achv.beginRound('link');
     this.level = Math.max(1, Math.floor(level) || 1);
     setRaw(LEVEL_KEY, String(this.level));
     if (this.level > this.best) { this.best = this.level; setRaw(BEST_KEY, String(this.best)); }

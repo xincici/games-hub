@@ -150,6 +150,7 @@ class MatchScene extends Scene {
 
   // ---------- level lifecycle ----------
   initLevel(lv, restored) {
+    if (!restored) achv.beginRound('match');
     this.mistakes = 0;   // 本关配对失败次数（完美操作判定）
     this.clearTransient();
     this.confirming = false;
@@ -253,13 +254,17 @@ class MatchScene extends Scene {
     this.gap = c.pairs <= 6 ? 6 : c.pairs <= 12 ? 4 : 3;
     this.pad = 6;
     this.ratio = this.mode === MODE_POKER ? 1.5 : this.mode === MODE_MAHJONG ? tiles.TILE_RATIO : 1;
+    // 每行张数：默认等高矩阵；10 张时 conf.pattern = [3,4,3]，每行单独居中
+    this.rowCounts = c.pattern ? c.pattern.slice() : Array(c.rows).fill(c.cols);
+    const rows = this.rowCounts.length;
+    const maxCols = Math.max(...this.rowCounts);
     const cap = this.mode === MODE_POKER ? 64 : 96;
-    const byW = Math.floor((this.cw - this.pad * 2 - (c.cols - 1) * this.gap) / c.cols);
-    const byH = Math.floor(((this.availH - this.pad * 2 - (c.rows - 1) * this.gap) / c.rows) / this.ratio);
+    const byW = Math.floor((this.cw - this.pad * 2 - (maxCols - 1) * this.gap) / maxCols);
+    const byH = Math.floor(((this.availH - this.pad * 2 - (rows - 1) * this.gap) / rows) / this.ratio);
     this.cellW = Math.max(12, Math.min(cap, byW, byH));
     this.cellH = Math.round(this.cellW * this.ratio);
-    this.boardW = c.cols * this.cellW + (c.cols - 1) * this.gap + this.pad * 2;
-    this.boardH = c.rows * this.cellH + (c.rows - 1) * this.gap + this.pad * 2;
+    this.boardW = maxCols * this.cellW + (maxCols - 1) * this.gap + this.pad * 2;
+    this.boardH = rows * this.cellH + (rows - 1) * this.gap + this.pad * 2;
     this.boardX = (W - this.boardW) / 2;
     this.fabSize = fabKit.SIZE;
     this.helpX = W - 16 - this.fabSize;
@@ -504,16 +509,30 @@ class MatchScene extends Scene {
 
   // ---------- layout helpers ----------
   cardRect(index) {
-    const c = this.conf;
-    const row = Math.floor(index / c.cols);
-    const col = index % c.cols;
+    // 列数不固定（10 张是 3/4/3）：先按每行张数定位行，再把这一行整体水平居中
+    let row = 0;
+    let col = index;
+    while (row < this.rowCounts.length - 1 && col >= this.rowCounts[row]) {
+      col -= this.rowCounts[row];
+      row += 1;
+    }
+    const n = this.rowCounts[row] || 1;
+    const rowW = n * this.cellW + (n - 1) * this.gap;
+    const x0 = this.boardX + (this.boardW - rowW) / 2;
     return {
-      x: this.boardX + this.pad + col * (this.cellW + this.gap),
+      x: x0 + col * (this.cellW + this.gap),
       y: this.boardY + this.pad + row * (this.cellH + this.gap),
       w: this.cellW,
       h: this.cellH,
     };
   }
+  // 顶部规格文字：10 张的 3/4/3 不是矩形，就按行张数写（3·4·3），免得显示成 3×4 让人以为 12 张
+  gridLabel() {
+    if (this.conf.pattern) return this.rowCounts.join('·');
+    return `${this.conf.rows}×${this.conf.cols}`;
+  }
+
+
   leftPairs() {
     return this.cards.filter(c => !c.matched).length / 2;
   }
@@ -581,7 +600,7 @@ class MatchScene extends Scene {
     const x2 = this.cx + s2;
     D.divider(c, x1, this.optY + this.optH / 2, 24, T.border, 1);
     D.divider(c, x2, this.optY + this.optH / 2, 24, T.border, 1);
-    D.text(c, `${this.conf.rows}×${this.conf.cols} · ${t('match.pairsLabel').replace('{n}', this.conf.pairs)}`,
+    D.text(c, `${this.gridLabel()} · ${t('match.pairsLabel').replace('{n}', this.conf.pairs)}`,
       this.cx + s1 / 2, this.optY + this.optH / 2, { size: 14, color: T.muted, align: 'center' });
     const urgent = this.phase === PLAY && this.clock() <= 15;
     drawTimer(c, 'hourglass', (x1 + x2) / 2, this.optY + this.optH / 2, fmt(this.clock()), {

@@ -66,6 +66,7 @@ class SnakeScene extends Scene {
     if (!this.restore()) this.startGame();
   }
   startGame() {
+    achv.beginRound('snake');
     // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
     daily.markNewRun('snake');
     this.snake = [[10, 10], [10, 9], [10, 8]];

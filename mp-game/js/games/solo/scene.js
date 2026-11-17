@@ -221,6 +221,7 @@ class SoloScene extends Scene {
   }
 
   startNewGame() {
+    achv.beginRound('solo');
     this.confirming = false;
     this.streak = 0;
     setRaw(STREAK_KEY, '0');

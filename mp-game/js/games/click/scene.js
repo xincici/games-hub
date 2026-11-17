@@ -75,6 +75,7 @@ class ClickScene extends Scene {
   }
 
   newGame() {
+    achv.beginRound('click');
     this.usedUndo = false;   // 本局是否用过撤销 / 重做（完美操作的判定）
     this.usedGod = false;    // 本局是否开过上帝模式（开了不计入成就）
 

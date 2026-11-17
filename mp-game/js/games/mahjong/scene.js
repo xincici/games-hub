@@ -179,6 +179,7 @@ class MahjongScene extends Scene {
   }
 
   startLevel(level) {
+    achv.beginRound('mahjong');
     this.flushTimers();
     this.level = Math.max(1, Math.floor(level) || 1);
     this.conf = logic.levelConfig(this.level);

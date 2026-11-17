@@ -105,6 +105,7 @@ class DownScene extends Scene {
     while (this.top + this.stack.length < logic.ROWS) this.stack.push(this.newRow());
   }
   startGame() {
+    achv.beginRound('down');
     // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
     daily.markNewRun('down');
     this.phase = PLAY;

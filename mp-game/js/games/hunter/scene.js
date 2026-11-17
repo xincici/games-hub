@@ -136,6 +136,7 @@ class HunterScene extends Scene {
   }
   boot() { this.loadRecords(); if (!this.restore()) this.startLevel(); }
   startLevel() {
+    achv.beginRound('hunter');
     this.level = Math.max(0, Math.min(this.levels.length - 1, this.level));
     this.found = new Set();
     this.wrong = new Set();

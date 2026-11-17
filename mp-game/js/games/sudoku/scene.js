@@ -131,6 +131,7 @@ class SudokuScene extends Scene {
 
   // ---------- 新游戏 ----------
   newGame() {
+    achv.beginRound('sudoku');
     const puzzle = logic.generatePuzzle(DIFFICULTIES[this.difficulty - 1].empties);
     this.cells = puzzle.puzzle.map(v => ({ v, fixed: v > 0, notes: 0 }));
     this.solution = puzzle.solution;

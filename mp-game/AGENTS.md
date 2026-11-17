@@ -3,7 +3,7 @@
 ## 先读
 
 - 玩法 / 视觉基准永远是 web：`src/games/<id>/ClickGame.vue` 等；
-- 小程序版 `mp/` 只能作为「已经验证过的平台降级实现」参考，**不要把 uni-app 组件搬进来**；
+- 小程序版 `mp/` **已废弃**（2026-11-17 起）：不要读、不要引用、不要去改，除非用户明确要求；需要微信端参考就看 `mp-game/` 自己；
 - 小游戏没有 WXML / WXSS / 页面栈，所有 UI 由 canvas 2D 绘制。
 
 ## 踩坑记录（迁移前先读）
@@ -365,6 +365,12 @@ game.js
   星期行用 `dailyWeek`（`一二三四五六日` / `MTWTFSS`）。其余标签全走 `t('daily*')`。
 - **任务池 40 条**，覆盖 25 个游戏（`POOL`）。任务字段：`{ id, game, kind, need, field?, cn, en }`，
   `game: '*'` 表示任意游戏；`kind` 有 `play / win / perfect / fast / level / reach / bump / peak`。
+- **「开一局」的口径 = 开始一局新游戏，不是进入场景**：`achv.beginRound(id)` → `daily.report(id, 'play')`。
+  每个游戏都插在**最底层的开新局方法**里（`startLevel / startGame / newGame / initLevel / deal / startRound`，
+  随「新游戏 / 重玩本关 / 下一关 / 切模式」一起走）；进场景时构造函数调同一个方法，所以「进游戏」天然算第 1 局。
+  ⚠️ `trackPlay()`（`openGame` 里调）**只统计成就用的 `plays`，不再上报每日 `play`** ——
+  以前挂在它上面，玩家在同一个游戏里连开 5 局永远只算 1 局。新增游戏记得在开新局入口补一行
+  `achv.beginRound('<id>')`（冒烟会扫 25 个场景源码检查）。
 - **判定挂成就埋点**（不碰 25 个场景）：`core/achv.js` 在 `trackPlay / win / reach / peak / bump`
   里调 `daily.report(gameId, kind, payload)`；`level` 用 `payload.value` 比较，计数类每次 +1。
 - **完成反馈**：`daily.setOnComplete()` 由 `App` 注入 → `App.notifyDaily(task)`（提示条与成就解锁共用
@@ -622,11 +628,32 @@ game.js
   首页三枚 FAB 的环也统一 `r - 1`：每日挑战蓝、设置橙、奖杯「先画淡色轨道再叠进度弧」——**0 进度也要有边**。
 
 
+## 对对碰排布
+
+- 列数**不一定是矩形矩阵**：`levelConfig()` 给 10 张（5 对，Lv3）返回 `pattern: [3,4,3]`，
+  场景里 `layout()` 先算出 `rowCounts`（默认 `Array(rows).fill(cols)`），格宽按 `max(rowCounts)`、行数按 `rowCounts.length` 定；
+  `cardRect(index)` 逐行定位后**把这一行整体水平居中**（`x0 = boardX + (boardW - rowW) / 2`）。
+- 顶部规格文字走 `gridLabel()`：有 pattern 时写 `3·4·3`，否则写 `rows×cols` —— 别写成 `3×4`（那会让人以为 12 张）。
+- 徽章 / 关卡数不变：`pairs` 仍按总张数算，`conf.rows/cols` 只是外接框（3 行 4 列）。
+  冒烟断言：三种牌面模式下 Lv3 的 `rowCounts` 都是 `[3,4,3]`、每行中心 = 棋盘中心、10 张不重叠不出界；Lv4 仍是 `[4,4,4]`。
+
+## 对对碰限时
+
+- **盘面有两档「最高难度」**（关数无限，但盘面到 `CAP_LEVEL = 11` 封顶）：
+  emoji / 麻将 **Lv10 = 6×7（42 张）**、**Lv11 = 6×8（48 张）**；扑克 Lv10 = 6×6（36 张）、Lv11 = 6×7（42 张）。
+  这两档现在各 **+20s**：`board.js` 的 `TOP_TIME_BONUS = 20`、`TOP_BONUS_FROM = CAP_LEVEL - 1 (=10)`，
+  之后再按「封顶后每关 −2s、最低基准 90%」衰减。
+- 当前数值（emoji / 麻将）：Lv9 80s、Lv10 **111s**（原 91s）、Lv11 **120s**（原 100s）、
+  Lv12 118s … Lv20 封底 108s；扑克 Lv10 78→**98s**、Lv11 88→**108s**。
+- 这是**只在小游戏版**做的调参（web `src/games/match/board.js` 与小程序 `mp/src/pages/match/board.js`
+  仍是 91 / 100 / 78 / 88）。要三端一致就同步改另外两份的同一处常量。
+- 冒烟断言：Lv9 80s、Lv10 111s、Lv11 120s、Lv12 118s、Lv20 封底 108s、扑克 Lv10 98s / Lv11 108s。
+
 ## 井字棋胜利框
 
 - 胜利不再画连线，改成**胶囊（两端半圆的长条）描边**把连成一线的三格圈起来：
   `winFrame()` 算出 `{ cx, cy, len, thick, angle, color }`，`drawWinFrame()` 按 `angle` 旋转上下文后
-  用 `D.strokeRoundRect(..., r = thick / 2)` 画两遍（外层柔光 + 内芯实线）。
+  描两遍轮廓（外层柔光 + 内芯实线）；轮廓本身由 `capsuleLoop()` 采样、`strokeCapsule()` 按弧长描。
 - **颜色跟赢家棋子一致**：X → `T.primary`（绿 `#23804e`）、O → `T.god`（红 `#c2410c`）。
   不要用 `T.win` / `T.lose`（那是结算文字色，暗色主题下会变浅，和棋子对不上）。
 - 尺寸：`thick = cell * 0.94`、`len = 首尾两格中心距 + cell * 0.94`（横向 / 纵向 / 斜线同一套，靠旋转换向）。

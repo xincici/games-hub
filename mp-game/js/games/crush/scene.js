@@ -116,6 +116,7 @@ class CrushScene extends Scene {
   }
 
   initLevel(lv) {
+    achv.beginRound('crush');
     this.flushTimers();
     this.level = Math.max(1, Math.floor(lv) || 1);
     this.conf = logic.levelConfig(this.level);

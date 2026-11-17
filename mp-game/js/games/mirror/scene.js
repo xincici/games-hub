@@ -95,6 +95,7 @@ class MirrorScene extends Scene {
     this.startRound(this.difficulty);
   }
   startRound(difficulty) {
+    achv.beginRound('mirror');
     this.difficulty = Math.max(1, Math.min(5, difficulty || 1));
     setRaw(DIFFICULTY_KEY, String(this.difficulty));
     const round = logic.newRound(this.difficulty);

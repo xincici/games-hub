@@ -60,6 +60,7 @@ class PuzzleScene extends Scene {
     this.best = raw === '' ? null : +raw || null;
   }
   newGame() {
+    achv.beginRound('puzzle');
     this.n = this.difficulty;
     this.cells = Array.from({ length: this.n * this.n }, (_, i) => i + 1);
     this.cells[this.cells.length - 1] = 0;

@@ -121,6 +121,7 @@ class Point24Scene extends Scene {
   }
 
   deal(level) {
+    achv.beginRound('point24');
     this.level = Math.max(1, level || 1);
     const p = newPuzzle(this.level, Math.random, this.recent);
     this.nums = p.nums;

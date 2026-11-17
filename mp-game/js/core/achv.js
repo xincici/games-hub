@@ -222,8 +222,14 @@ function trackPlay(id) {
   data.plays[id] = (data.plays[id] || 0) + 1;
   save();
   fireUnlocks();
-  // 每日挑战埋点：开一局
-  daily.report(id, 'play', {});
+}
+
+// 每日挑战埋点：**开始一局新的游戏**（进场景算一次，之后每次「新游戏 / 重玩 / 下一关」再各算一次）。
+// 各游戏在自己最底层的开新局方法里调它（startLevel / startGame / newGame / deal …），
+// 不要挂在 trackPlay 上 —— 那是「进入场景」，玩家在同一个游戏里连开 5 局会一直只算 1 局。
+function beginRound(id) {
+  if (!id) return false;
+  return daily.report(id, 'play', {});
 }
 
 // level：本局所在关卡（可选）。很多游戏把「当前关」写回自己的 key，开新游戏会重置，
@@ -1188,6 +1194,7 @@ function totalCount() {
 
 module.exports = {
   trackPlay,
+  beginRound,
   setUnlockHook,
   sweepUnlocks,
   hasNew,

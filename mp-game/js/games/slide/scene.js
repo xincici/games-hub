@@ -174,6 +174,7 @@ class SlideScene extends Scene {
   }
 
   startLevel(level, restored) {
+    if (!restored) achv.beginRound('slide');
     this.level = Math.max(1, Math.floor(level) || 1);
     this.usedShuffle = false;   // 本关是否用过死局重排（成就「无重排获胜」判定）
     this.conf = logic.levelConfig(this.level);

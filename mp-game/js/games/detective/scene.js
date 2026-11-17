@@ -241,6 +241,7 @@ class DetectiveScene extends Scene {
     if (!this.restore()) this.startLevel();
   }
   startLevel() {
+    achv.beginRound('detective');
     this.level = Math.max(0, Math.min(this.sizes.length - 1, this.level));
     this.swapped = -1;
     this.wrong = [];

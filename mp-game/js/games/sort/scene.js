@@ -147,6 +147,7 @@ class SortScene extends Scene {
 
   // ---------- 新局 / 恢复 ----------
   initLevel(level) {
+    achv.beginRound('sort');
     this.clearTransient();
     this.confirming = false;
     this.level = Math.max(1, Math.floor(level) || 1);

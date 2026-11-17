@@ -65,6 +65,7 @@ class Game2048Scene extends Scene {
     if (!this.restore()) this.startGame();
   }
   startGame() {
+    achv.beginRound('g2048');
     // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
     daily.markNewRun('g2048');
     this.tiles = [];

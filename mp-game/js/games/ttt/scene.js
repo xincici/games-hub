@@ -233,6 +233,7 @@ class TttScene extends Scene {
   }
 
   startRound(randomFirst) {
+    achv.beginRound('ttt');
     this.board = logic.emptyBoard();
     this.history = logic.emptyHistory();
     this.winner = null;

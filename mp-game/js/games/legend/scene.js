@@ -144,6 +144,7 @@ class LegendScene extends Scene {
 
   // ---------- 新局 ----------
   startNewRun() {
+    achv.beginRound('legend');
     // 每日挑战：这是一局新的游戏（分数类任务从这一局开始才计数）
     daily.markNewRun('legend');
     this.phase = PLAY;
@@ -384,10 +385,14 @@ class LegendScene extends Scene {
     // 每日挑战：本局分数当场上报（不必等一局结束）
     daily.report('legend', 'reach', { value: this.score });
     this.cleared += groups.length;
-    // 字牌（z）消除单独计数
-    if (groups.some((g) => (g.tiles || g.cells || []).some((t) => t && t.suit === 'z'))) {
-      achv.bump('legend', 'honor');
-    }
+    // 字牌（z）消除单独计数：findGroups 返回的是 cells: [[r,c],…]（不是牌对象），
+    // 必须回到 grid 里取牌、再用 logic.suitOf(t.v) 判定字牌；
+    // 曾经写成 `t.suit === 'z'`（牌是 { id, v }，根本没有 suit 字段），成就永远不解锁。
+    const hadHonor = groups.some((g) => (g.cells || []).some(([r, c]) => {
+      const tile = this.grid[r] && this.grid[r][c];
+      return !!tile && logic.suitOf(tile.v) === 'z';
+    }));
+    if (hadHonor) achv.bump('legend', 'honor');
     const prevLevel = this.level;
     this.level = logic.levelOf(this.score);
     if (this.level > prevLevel) this.levelFlashAt = this.clock;

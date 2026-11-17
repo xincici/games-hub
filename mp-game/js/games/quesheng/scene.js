@@ -235,6 +235,7 @@ class QueshengScene extends Scene {
   // ---------- 开局 / 结算 ----------
 
   startLevel(lv) {
+    achv.beginRound('quesheng');
     this.stopGod();
     this.level = Math.max(1, Math.floor(Number(lv)) || 1);
     const gen = board.newGame(this.level, Math.random, this.mode);
