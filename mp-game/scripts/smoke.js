@@ -2456,6 +2456,46 @@ i18n.setLang('cn');
   check(problems.length === 0, `对对碰 3/4/3：${problems.slice(0, 5).join('；')}`);
 }
 
+// ---------- 成就：五个闯关游戏多了「完成第 10 关」，炼金术去掉两条得分指标行 ----------
+{
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const problems = [];
+  const BEST_TO_CLEAR10 = {
+    sort: ['__emoji_sort__best_1', '11'],
+    slide: ['__emoji_slide__state', JSON.stringify({ level: 11 })],
+    mahjong: ['__mahjong_hero__best_1', '11'],
+    quesheng: ['__quesheng__level', '11'],
+    alchemy: ['__poker_alchemy__best_1', '11'],
+  };
+  // 先清掉这些游戏的旧存档 / 成就记录，保证「已通 10 关」是唯一证据
+  [
+    '__emoji_sort__best_1', '__emoji_sort__best_2', '__emoji_sort__level', '__emoji_sort__level_2',
+    '__emoji_slide__state', '__mahjong_hero__best_1', '__mahjong_hero__best_2',
+    '__quesheng__level', '__quesheng__level_2',
+    '__poker_alchemy__best_1', '__poker_alchemy__best_2', '__poker_alchemy__level', '__poker_alchemy__level_2',
+    '__games_hub__achv',
+  ].forEach((k) => wx.removeStorageSync(k));
+  Object.values(BEST_TO_CLEAR10).forEach(([k, v]) => wx.setStorageSync(k, v));
+  const data = achvMod.pageData();
+  Object.keys(BEST_TO_CLEAR10).forEach((id) => {
+    const game = data.games.find((g) => g.id === id);
+    if (!game) { problems.push(`${id} 不在成就页里`); return; }
+    const r10 = game.achv.find((r) => !r.stat && r.target === 10 && /第 10 关/.test(r.name));
+    const r50 = game.achv.find((r) => !r.stat && r.target === 50);
+    if (!r10) { problems.push(`${id} 缺少「完成第 10 关」`); return; }
+    if (!r50) { problems.push(`${id} 缺少「完成第 50 关」`); return; }
+    if (game.achv.indexOf(r10) > game.achv.indexOf(r50)) problems.push(`${id} 的「完成第 10 关」排在 50 关之后`);
+    if (r10.value !== 10 || !r10.unlocked) problems.push(`${id} 第 10 关：value ${r10.value} unlocked ${r10.unlocked}（存档已通 10 关）`);
+    if (r50.unlocked) problems.push(`${id} 第 50 关不该解锁`);
+  });
+  const alchemy = data.games.find((g) => g.id === 'alchemy');
+  if (alchemy.achv.some((r) => /最大单次得分/.test(r.name))) problems.push('炼金术还留着「最大单次得分」行');
+  ['普通模式最高关卡', '炸金花最高关卡'].forEach((name) => {
+    if (!alchemy.achv.some((r) => r.name === name)) problems.push(`炼金术缺少「${name}」`);
+  });
+  check(problems.length === 0, `第 10 关 / 炼金术成就：${problems.slice(0, 4).join('；')}`);
+}
+
 // ---------- 首页三个弹窗（设置 / 每日 / 成就）展开动画必须完全一致 ----------
 {
   const HomeSceneCls = require(path.join(ROOT, 'js/games/home/scene'));
