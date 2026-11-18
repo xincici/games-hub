@@ -2456,6 +2456,76 @@ i18n.setLang('cn');
   check(problems.length === 0, `对对碰 3/4/3：${problems.slice(0, 5).join('；')}`);
 }
 
+// ---------- 成就：消除大师「三模式达成 50 关」 ----------
+{
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const problems = [];
+  const rowOf = () => achvMod.pageData().games.find((g) => g.id === 'master')
+    .achv.find((r) => /达成 50 关/.test(r.name));
+  const before = rowOf();
+  if (!before) problems.push('消除大师缺少「三模式达成 50 关」');
+  else {
+    if (before.target !== 3) problems.push(`target 是 ${before.target}（应 3）`);
+    if (before.unlocked) problems.push('还没通关就解锁了');
+  }
+  const masterRows = achvMod.pageData().games.find((g) => g.id === 'master').achv.map((r) => r.name);
+  if (masterRows.some((n) => /100 关/.test(n))) problems.push('消除大师还留着「达成 100 关」');
+  if (!masterRows.some((n) => /达成 10 关/.test(n))) problems.push('消除大师丢了「达成 10 关」');
+  // 三种模式各通 50 关（走生产写法 achv.win 的 level）→ 必须达成
+  [1, 2, 3].forEach((mode) => achvMod.win('master', { mode, level: 50 }));
+  const after = rowOf();
+  if (!after || !after.unlocked || after.value !== 3) problems.push(`三模式各通 50 关后是 ${after && after.value}/3（unlocked ${after && after.unlocked}）`);
+  check(problems.length === 0, `消除大师 50 关：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 成就：对对碰「三模式第 10 关通关」+ 贪吃蛇 1000 → 300 ----------
+{
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const problems = [];
+  const matchRow = () => {
+    const g = achvMod.pageData().games.find((x) => x.id === 'match');
+    return { g, row: g.achv.find((r) => /第 10 关/.test(r.name)) };
+  };
+  // 先把对对碰的旧成绩（best / level / 成就里的 modes.max）清干净，只留下面构造的「各通 10 关」
+  ['__emoji_match__best_1', '__emoji_match__best_1_2', '__emoji_match__best_1_3',
+    '__emoji_match__level', '__emoji_match__level_2', '__emoji_match__level_3',
+    '__games_hub__achv'].forEach((k) => wx.removeStorageSync(k));
+  achvMod.resetCache();   // core/achv 有内存缓存，清掉才能读到刚删干净的存档
+  wx.setStorageSync('__emoji_match__best_1', '11');
+  wx.setStorageSync('__emoji_match__best_1_2', '11');
+  wx.setStorageSync('__emoji_match__best_1_3', '11');
+  const m1 = matchRow();
+  if (!m1.row) problems.push('对对碰缺少「三模式第 10 关通关」');
+  else {
+    if (m1.row.target !== 3) problems.push(`对对碰第 10 关成就 target 是 ${m1.row.target}（应 3）`);
+    if (!m1.row.unlocked || m1.row.value !== 3) problems.push(`三模式各通 10 关却没达成（${m1.row.value}/${m1.row.target}）`);
+  }
+  if (m1.g.achv.some((r) => /最高关/.test(r.name))) problems.push('对对碰还留着「三模式最高关通关」');
+  wx.setStorageSync('__emoji_match__best_1', '10');   // 其中一个模式只通 9 关
+  const m2 = matchRow();
+  if (m2.row && (m2.row.unlocked || m2.row.value !== 2)) problems.push(`只通 9 关时记成 ${m2.row.value}/3（应 2/3 未达成）`);
+  ['__emoji_match__best_1', '__emoji_match__best_1_2', '__emoji_match__best_1_3'].forEach((k) => wx.removeStorageSync(k));
+
+  // 贪吃蛇：去掉 1000、换成 300，顺序 100 → 300 → 500
+  wx.setStorageSync('__snake_game__best', '300');
+  const snake = achvMod.pageData().games.find((x) => x.id === 'snake');
+  const names = snake.achv.map((r) => r.name);
+  if (names.some((n) => /1000/.test(n))) problems.push('贪吃蛇还留着「达成 1000 分」');
+  const i100 = names.findIndex((n) => /100 分/.test(n));
+  const i300 = names.findIndex((n) => /300 分/.test(n));
+  const i500 = names.findIndex((n) => /500 分/.test(n));
+  if (i300 < 0) problems.push('贪吃蛇缺少「达成 300 分」');
+  else if (!(i100 < i300 && i300 < i500)) problems.push(`贪吃蛇顺序不对：100@${i100} 300@${i300} 500@${i500}`);
+  const row300 = snake.achv[i300];
+  if (row300 && (!row300.unlocked || row300.target !== 1)) problems.push('best=300 时「达成 300 分」没解锁');
+  const row500 = snake.achv[i500];
+  if (row500 && row500.unlocked) problems.push('best=300 时「达成 500 分」不该解锁');
+  // 场景上报阈值也要同步，别再往 1000 记
+  const snakeSrc = require('fs').readFileSync(path.join(ROOT, 'js/games/snake/scene.js'), 'utf8');
+  if (snakeSrc.includes('[100, 500, 1000]')) problems.push('贪吃蛇场景还在按 100/500/1000 上报');
+  check(problems.length === 0, `对对碰第 10 关 / 贪吃蛇 300 分：${problems.slice(0, 4).join('；')}`);
+}
+
 // ---------- 成就：五个闯关游戏多了「完成第 10 关」，炼金术去掉两条得分指标行 ----------
 {
   const achvMod = require(path.join(ROOT, 'js/core/achv'));
@@ -2494,6 +2564,44 @@ i18n.setLang('cn');
     if (!alchemy.achv.some((r) => r.name === name)) problems.push(`炼金术缺少「${name}」`);
   });
   check(problems.length === 0, `第 10 关 / 炼金术成就：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 首页标题 / 已玩·连续 统计不受「全局文字大小」影响 ----------
+{
+  const HomeSceneCls = require(path.join(ROOT, 'js/games/home/scene'));
+  const textsizeMod = require(path.join(ROOT, 'js/core/textsize'));
+  const i18nMod = require(path.join(ROOT, 'js/core/i18n'));
+  fakeApp.sceneId = 'home';
+  const prevMode = textsizeMod.mode;
+  const pxOf = (font) => Number((String(font).match(/([\d.]+)px/) || [])[1]);
+  const capture = (mode) => {
+    textsizeMod.setMode(mode);
+    const home = new HomeSceneCls(fakeApp);
+    const events = [];
+    const c = makeCtx();
+    let font = '';
+    Object.defineProperty(c, 'font', { get: () => font, set: (v) => { font = v; }, configurable: true });
+    const origFill = c.fillText;
+    c.fillText = (value, x, y) => { events.push({ text: String(value), font }); return origFill(value, x, y); };
+    home.render(c);
+    const title = events.find((e) => e.text === i18nMod.t('home.homeTitle'));
+    const stat = events.find((e) => /已玩|连续/.test(e.text));
+    const others = events.filter((e) => e !== title && e !== stat && /px/.test(e.font) && pxOf(e.font) > 9);
+    return { title: title && pxOf(title.font), stat: stat && pxOf(stat.font), other: others.length ? pxOf(others[0].font) : null };
+  };
+  const problems = [];
+  const small = capture('small');
+  const medium = capture('medium');
+  const large = capture('large');
+  textsizeMod.setMode(prevMode || 'medium');   // 还原，别影响后面的块
+  [['small', small], ['medium', medium], ['large', large]].forEach(([name, r]) => {
+    if (r.title !== 17) problems.push(`${name}: 标题字号 ${r.title}（应固定 17）`);
+    if (r.stat !== 9.5) problems.push(`${name}: 统计字号 ${r.stat}（应固定 9.5）`);
+  });
+  if (!(small.other < medium.other && medium.other < large.other)) {
+    problems.push(`其它文字没跟着全局设置变（${small.other} / ${medium.other} / ${large.other}）`);
+  }
+  check(problems.length === 0, `首页标题固定字号：${problems.slice(0, 4).join('；')}`);
 }
 
 // ---------- 首页三个弹窗（设置 / 每日 / 成就）展开动画必须完全一致 ----------
@@ -2808,6 +2916,88 @@ i18n.setLang('cn');
   if (!honorRow) problems.push('麻将传奇里找不到「字牌消除」成就');
   else if (honorRow.value < 1) problems.push(`字牌消除计数还是 ${honorRow.value}`);
   check(problems.length === 0, `麻将传奇字牌成就：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- Threes：盘面 1 / 2 的张数差永远 ≤ 3 ----------
+{
+  const ThreeCls = require(path.join(ROOT, 'js/games/three/scene'));
+  fakeApp.sceneId = 'three';
+  const problems = [];
+  // 1) 反复开局（9 张初始牌也是靠同一套发牌规则）
+  let worstStart = 0;
+  for (let i = 0; i < 120; i++) {
+    const sc = new ThreeCls(fakeApp);
+    sc.startGame();
+    worstStart = Math.max(worstStart, Math.abs(sc.count(1) - sc.count(2)));
+  }
+  if (worstStart > 3) problems.push(`开局最大差值 ${worstStart}（应 ≤ 3）`);
+  // 2) 极端牌堆：全是 1 再全是 2，连发 300 张也必须守住
+  const sc = new ThreeCls(fakeApp);
+  sc.tiles = [];
+  sc.deck = Array(300).fill(1).concat(Array(300).fill(2));
+  let worstDraw = 0;
+  for (let i = 0; i < 300; i++) {
+    const v = sc.draw(sc.tiles);
+    sc.tiles.push({ id: i, value: v, row: 0, col: 0 });
+    worstDraw = Math.max(worstDraw, Math.abs(sc.count(1) - sc.count(2)));
+  }
+  if (worstDraw > 3) problems.push(`连发时最大差值 ${worstDraw}（应 ≤ 3）`);
+  // 3) balanced 边界：差 3 再发同类要改成另一类；差 2 不改
+  const b = new ThreeCls(fakeApp);
+  const fill = (ones, twos) => {
+    b.tiles = [];
+    for (let i = 0; i < ones; i++) b.tiles.push({ id: i, value: 1 });
+    for (let i = 0; i < twos; i++) b.tiles.push({ id: 100 + i, value: 2 });
+  };
+  fill(10, 7);
+  if (b.balanced(1, b.tiles) !== 2) problems.push('差 3 时又发 1 没有改成 2');
+  fill(7, 10);
+  if (b.balanced(2, b.tiles) !== 1) problems.push('差 3 时又发 2 没有改成 1');
+  fill(10, 8);
+  if (b.balanced(1, b.tiles) !== 1) problems.push('差 2 时不该改牌');
+  // 4) 老存档（改规则前留下的差 4+）恢复时要被归一化
+  wx.setStorageSync('__threes_game__state', JSON.stringify({
+    tiles: [
+      { row: 0, col: 0, value: 1 }, { row: 0, col: 1, value: 1 }, { row: 0, col: 2, value: 1 },
+      { row: 0, col: 3, value: 1 }, { row: 0, col: 4, value: 1 }, { row: 1, col: 0, value: 2 },
+    ],
+    next: 1, deck: [], score: 0, time: 0, phase: 'play',
+  }));
+  const restored = new ThreeCls(fakeApp);
+  const gap = Math.abs(restored.count(1) - restored.count(2));
+  if (gap > 3) problems.push(`老存档恢复后差值 ${gap}（应 ≤ 3）`);
+  if (restored.tiles.length !== 6) problems.push(`归一化改变了牌数（${restored.tiles.length}）`);
+  wx.removeStorageSync('__threes_game__state');
+  // 5) 静态：发牌 / 改牌里不许再出现写死的 4
+  const threeSrc = require('fs').readFileSync(path.join(ROOT, 'js/games/three/scene.js'), 'utf8');
+  if (/(ones - twos|twos - ones) >= 4/.test(threeSrc)) problems.push('还有写死的差值阈值 4');
+  check(problems.length === 0, `Threes 1/2 平衡：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 麻将传奇：分数卡下方不要等级进度条 ----------
+{
+  const D = require(path.join(ROOT, 'js/core/draw'));
+  const LegCls = require(path.join(ROOT, 'js/games/legend/scene'));
+  const LinkCls = require(path.join(ROOT, 'js/games/link/scene'));
+  const countBars = (Cls) => {
+    const orig = D.progressBar;
+    let calls = 0;
+    D.progressBar = (...args) => { calls += 1; return orig(...args); };
+    try {
+      fakeApp.sceneId = 'probe';
+      const sc = new Cls(fakeApp);
+      sc.render(makeCtx());
+    } finally {
+      D.progressBar = orig;
+    }
+    return calls;
+  };
+  const problems = [];
+  const legendBars = countBars(LegCls);
+  if (legendBars !== 0) problems.push(`麻将传奇分数卡下方还有进度条（${legendBars} 次）`);
+  // 对照组：连连看本来就该有这条进度条，确认探针真的能看到调用
+  if (countBars(LinkCls) === 0) problems.push('探针失效（连连看也没抓到进度条）');
+  check(problems.length === 0, `麻将传奇分数区：${problems.join('；')}`);
 }
 
 // ---------- 麻将传奇：花牌万能 + 重叠组全部消除 ----------

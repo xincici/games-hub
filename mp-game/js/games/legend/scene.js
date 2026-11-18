@@ -734,10 +734,6 @@ class LegendScene extends Scene {
       D.text(c, label, x, this.scoreY + 20, { size: 9.5, color: T.muted, align: 'center' });
       D.text(c, value, x, this.scoreY + 43, { size: 18, weight: 'bold', color, align: 'center' });
     });
-    // 等级进度：本轮得分在「当前等级 → 下一等级」之间的位置
-    const progress = (this.score % logic.LEVEL_STEP) / logic.LEVEL_STEP;
-    D.progressBar(c, this.cx, this.scoreY, this.cw, this.scoreH,
-      clamp(progress, 0, 1), T.border, T.primary);
   }
 
   drawHandCard(c) {

@@ -706,8 +706,8 @@ const SPEC = {
     achv: [
       A('最高得分', 'Top score', () => ({ value: read('__snake_game__best'), target: 1 }), { stat: true, unit: 'achvScore' }),
       A('达成 100 分', 'Score 100', () => ({ value: reachCount('snake', 100, '__snake_game__best'), target: 1 }), { counter: true }),
+      A('达成 300 分', 'Score 300', () => ({ value: reachCount('snake', 300, '__snake_game__best'), target: 1 }), { counter: true }),
       A('达成 500 分', 'Score 500', () => ({ value: reachCount('snake', 500, '__snake_game__best'), target: 1 }), { counter: true }),
-      A('达成 1000 分', 'Score 1000', () => ({ value: reachCount('snake', 1000, '__snake_game__best'), target: 1 }), { counter: true }),
     ],
   },
   match: {
@@ -715,7 +715,7 @@ const SPEC = {
     stats: () => `${i18n.t('achvHigh')} ${lvOf(Math.max(maxOf(MATCH_BEST), bestLevelOf('match')))}${winTag('match')}`,
     achv: [
       A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('match'), target: 3 })),
-      A('三模式最高关通关', 'Top level · all modes', () => ({ value: modeTopCount('match'), target: 3 })),
+      A('三模式第 10 关通关', 'Clear stage 10 · all modes', () => ({ value: modeLevelCount('match', 10), target: 3 })),
       A('累计 100 胜', '100 wins', () => ({ value: totalWins('match'), target: 100 })),
       A('累计 500 胜', '500 wins', () => ({ value: totalWins('match'), target: 500 })),
       A('完美操作胜利', 'Flawless wins', () => ({ value: perfectOf('match'), target: 1 }), { counter: true }),
@@ -793,7 +793,7 @@ const SPEC = {
     achv: [
       A('三模式首关通关', 'First level · all modes', () => ({ value: modeFirstCount('master'), target: 3 })),
       A('三模式达成 10 关', 'Reach level 10 · all modes', () => ({ value: modeLevelCount('master', 10), target: 3 })),
-      A('三模式达成 100 关', 'Reach level 100 · all modes', () => ({ value: modeLevelCount('master', 100), target: 3 })),
+      A('三模式达成 50 关', 'Reach level 50 · all modes', () => ({ value: modeLevelCount('master', 50), target: 3 })),
       A('累计 100 胜', '100 wins', () => ({ value: totalWins('master'), target: 100 })),
       A('累计 500 胜', '500 wins', () => ({ value: totalWins('master'), target: 500 })),
     ],
@@ -1199,6 +1199,13 @@ function unlockedCount() {
 // 加 / 删成就后阈值自动跟着变，别写死 90 / 100 这种数字
 const ACHV_MASTER_RATIO = 0.6;
 
+// 只给冒烟用：清掉内存缓存，让下一次读取真的按当前存档重算
+// （production 代码不需要它 —— 所有写入口都会自己 save() 更新缓存）
+function resetCache() {
+  cache = null;
+  knownUnlocks = null;
+}
+
 function achvMasterNeed() {
   return Math.max(1, Math.ceil(totalCount() * ACHV_MASTER_RATIO));
 }
@@ -1255,6 +1262,7 @@ module.exports = {
   unlockedCount,
   totalCount,
   achvMasterNeed,
+  resetCache,
   SPEC,
   ORDER,
   loadOrder,

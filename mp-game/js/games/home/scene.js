@@ -232,11 +232,13 @@ class HomeScene extends Scene {
     // 首页本体始终先画：面板圆形展开时要能逐渐盖住它，而不是先整屏清空。
     if (!this.panelCovered()) {
       const pad = 16;
+      // 标题与右侧统计不受「全局文字大小」影响：字号固定 17 / 9.5，
+      // 否则调大字号会把两者挤在一起（fixed 跳过 textsize.scale）
       D.text(c, t('home.homeTitle'), pad, this.mastheadY, {
-        size: 17, weight: 'bold', color: T.text,
+        size: 17, weight: 'bold', color: T.text, fixed: true,
       });
       if (!this.panelActive()) {
-        const titleW = D.measure(c, t('home.homeTitle'), 17, 'bold');
+        const titleW = D.measure(c, t('home.homeTitle'), 17, 'bold', undefined, true);
         this.addButton('home-title-egg', pad - 6, this.mastheadY - 14, Math.min(titleW + 12, W * 0.56), 28,
           () => this.tapSecretTitle());
       }
@@ -247,7 +249,7 @@ class HomeScene extends Scene {
         + (streak > 0 ? '  ·  ' + t('home.heroStat').replace('{a}', String(streak))
           .replace('{b}', String(daily.completedTotal())) : '');
       D.text(c, stat, W - pad, this.mastheadY, {
-        size: 9.5, weight: 'bold', color: T.muted, align: 'right',
+        size: 9.5, weight: 'bold', color: T.muted, align: 'right', fixed: true,
       });
       c.save();
       c.strokeStyle = theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(44,62,80,0.12)';

@@ -26,14 +26,17 @@ function strokeRoundRect(c, x, y, w, h, r, stroke, width) {
   c.stroke();
 }
 
-function font(size, weight, family) {
-  return `${weight || 'normal'} ${textsize.scale(size)}px ${family || '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif'}`;
+// fixed = true 时跳过「全局文字大小」的缩放：首页标题 / 统计这类版式固定的文字用它，
+// 免得调大字号把标题栏和右侧统计挤在一起。
+function font(size, weight, family, fixed) {
+  const px = fixed ? Math.max(1, size || 0) : textsize.scale(size);
+  return `${weight || 'normal'} ${px}px ${family || '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif'}`;
 }
 
 function text(c, value, x, y, opts) {
   const o = opts || {};
   c.save();
-  c.font = font(o.size || 14, o.weight || 'normal', o.family);
+  c.font = font(o.size || 14, o.weight || 'normal', o.family, o.fixed);
   c.fillStyle = o.color || '#2c3e50';
   c.textAlign = o.align || 'left';
   c.textBaseline = o.baseline || 'middle';
@@ -47,9 +50,9 @@ function hintLine(c, value, y, color) {
   text(c, value, require('./canvas').W / 2, y, { size: 10, color: color || '#5f6b7a', align: 'center' });
 }
 
-function measure(c, value, size, weight, family) {
+function measure(c, value, size, weight, family, fixed) {
   c.save();
-  c.font = font(size, weight, family);
+  c.font = font(size, weight, family, fixed);
   const w = c.measureText(String(value)).width;
   c.restore();
   return w;

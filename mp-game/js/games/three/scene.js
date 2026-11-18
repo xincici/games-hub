@@ -40,6 +40,9 @@ const COLORS = {
 function shuffle(a) { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; }
 function compat(a, b) { return (a === 1 && b === 2) || (a === 2 && b === 1) || (a === b && a >= 3); }
 function mergeValue(a) { return a >= 3 ? a * 2 : 3; }
+// 盘面上 1 与 2 的张数差最多 3（玩家要求）。1/2 只会因为发牌变化（1+2 合并时各减一、差值不变），
+// 所以「发牌前差值已经到 3 就改发另一张」就能保证任何时刻都不超过 3。
+const ONE_TWO_MAX_GAP = 3;
 function tileScore(v) { return v < 3 ? 0 : 3 ** (Math.log2(v / 3) + 1); }
 
 class ThreeScene extends Scene {
@@ -67,11 +70,31 @@ class ThreeScene extends Scene {
   boot() { if (!this.restore()) this.startGame(); }
   newDeck() { return shuffle([...Array(12).fill(1), ...Array(12).fill(2), ...Array(4).fill(3)]); }
   count(value, board = this.tiles) { return board.reduce((n, t) => n + (t.value === value ? 1 : 0), 0); }
+  // 老存档可能已经差到 4（改规则之前留下的）：把多出来的那张 1/2 改成另一张，
+  // 只动 1/2 的内部值，牌数 / 位置 / 分数都不变，之后靠发牌规则就能一直守住 ≤ 3。
+  normalizeBalance() {
+    let ones = this.count(1), twos = this.count(2);
+    while (ones - twos > ONE_TWO_MAX_GAP) {
+      const tile = this.tiles.find(t => t.value === 1);
+      if (!tile) break;
+      tile.value = 2;
+      ones -= 1;
+      twos += 1;
+    }
+    while (twos - ones > ONE_TWO_MAX_GAP) {
+      const tile = this.tiles.find(t => t.value === 2);
+      if (!tile) break;
+      tile.value = 1;
+      twos -= 1;
+      ones += 1;
+    }
+  }
   draw(board = this.tiles) {
     if (!this.deck.length) this.deck = this.newDeck();
     let want = 0;
     const ones = this.count(1, board), twos = this.count(2, board);
-    if (ones - twos >= 4) want = 2; else if (twos - ones >= 4) want = 1;
+    if (ones - twos >= ONE_TWO_MAX_GAP) want = 2;
+    else if (twos - ones >= ONE_TWO_MAX_GAP) want = 1;
     if (!want) return this.deck.pop();
     let idx = this.deck.lastIndexOf(want);
     if (idx < 0) { this.deck.push(want); idx = this.deck.length - 1; }
@@ -80,8 +103,8 @@ class ThreeScene extends Scene {
   balanced(value, board) {
     if (value !== 1 && value !== 2) return value;
     const ones = this.count(1, board), twos = this.count(2, board);
-    if (value === 1 && ones - twos >= 4) { this.deck.push(1); return 2; }
-    if (value === 2 && twos - ones >= 4) { this.deck.push(2); return 1; }
+    if (value === 1 && ones - twos >= ONE_TWO_MAX_GAP) { this.deck.push(1); return 2; }
+    if (value === 2 && twos - ones >= ONE_TWO_MAX_GAP) { this.deck.push(2); return 1; }
     return value;
   }
   startGame() {
@@ -134,6 +157,7 @@ class ThreeScene extends Scene {
       this.score = +s.score || 0;
       this.seconds = +s.time || 0;
       this.phase = s.phase === LOSE ? LOSE : PLAY;
+        this.normalizeBalance();
       this.dealTiles();
       this.dealing = true;
       this.dealEnd = Date.now() + SIZE * SIZE * 40 + 350;

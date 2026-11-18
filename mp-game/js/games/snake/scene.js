@@ -148,7 +148,7 @@ class SnakeScene extends Scene {
       || this.snake.some(([r, c]) => r === head[0] && c === head[1])) {
       this.phase = LOSE;
       // 一局结束：本局得分上报给成就系统（100/500/1000 各计一次）
-      achv.reach('snake', this.score, [100, 500, 1000]);
+      achv.reach('snake', this.score, [100, 300, 500]);
       this.app.audio.playLose();
       this.save();
       return;
