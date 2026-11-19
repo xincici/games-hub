@@ -1,35 +1,15 @@
 # AGENTS.md
 
-## ⛔ 已废弃目录：`mp/`（默认不要读）
+## ✅ 唯一活跃目录：`mp-game/`（2026-11-19 起）
 
-`mp/` 是早期的**微信小程序版（uni-app）历史工程**，从 2026-11-17 起**标记为废弃**：
-
-- **不要**读、**不要**改、**不要**在方案/回答里引用 `mp/` 下的任何文件（`src/`、`docs`、脚本、脚本产物都算）；
-- 也**不要**把它的做法当成「微信端参考」—— 现行微信端是 [`mp-game/`](mp-game/AGENTS.md)（微信小游戏，canvas 版）；
-- **唯一例外**：用户在当前对话里**明确要求**看/改 `mp/`。这时先确认一句再动，改完在回复里说明动了它。
-
-现行三个平台：**web `src/`（玩法与视觉基准）**、**微信小游戏 `mp-game/`**、以及本文档描述的合集层（路由 / 共享组件 / 约定）。
-
-## 先读什么（**顺序很重要**）
-
-| 你要做的事 | 必读 |
-| --- | --- |
-| **任何改动之前** | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) —— 跨游戏硬约定（含「开工前逐条核对」清单）<br>其中 **「交互与结算的统一规范」**（按钮文案/配色/位置、统计条顺序、结算层内容、二次确认、清记录）是 25 个游戏普查后的**唯一标准**，改交互前必须先看，别照抄隔壁游戏 |
-| 了解某个游戏怎么玩 | `src/games/<id>/README.md` —— **面向玩家**的玩法简介（根 README 只留一句话 + 链接） |
-| 改某个游戏 | 上表里那个游戏的**分册** `src/games/<id>/AGENTS.md` |
-| 新增游戏 | [`docs/NEW-GAME.md`](docs/NEW-GAME.md) —— 分步清单 + 骨架；同时过一遍约定 |
-| 改共享组件 / 路由 / 注册表 / 主题 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| 验证改动 | [`docs/VERIFY.md`](docs/VERIFY.md) + `node scripts/smoke.mjs` |
-| 遇到「看着像 bug」的怪现象 | [`docs/PITFALLS.md`](docs/PITFALLS.md) —— 按症状查原因与定位手段 |
-| 想知道某游戏的存档 key / 有哪些开关 | [`docs/GAMES.md`](docs/GAMES.md)（**由 `scripts/check-conventions.mjs` 自动生成，别手改**） |
-| 动彩蛋、或新增帮助条目 | [`docs/EASTER-EGGS.md`](docs/EASTER-EGGS.md) —— 哪些东西**不许写进帮助** |
-
-开工前跑一次 `node scripts/check-conventions.mjs`：它会检查注册表 ↔ safelist ↔ README ↔ 分册 ↔ 存档 key
-是否对得上（改动完成后**再跑一次**，仍要全绿）。
-
-**改到按钮 / 统计条 / 结算层 / 二次确认 / 清记录**时，另外跑一次 `node scripts/check-ui.mjs`：
-它按上面那份「交互与结算的统一规范」检查 25 个游戏（历史别名的 i18n key、`.game-icon` 空类、
-按钮文案的 emoji 前缀、连点清记录是否真的接上并清扫了存档前缀），必须全绿。
+- **以后所有改动都只在 [`mp-game/`](mp-game/AGENTS.md) 里做**：架构、约定、踩坑、验证方式全看
+  [`mp-game/AGENTS.md`](mp-game/AGENTS.md) 和 [`mp-game/PITFALLS.md`](mp-game/PITFALLS.md)。
+- **其它目录默认不读、不参考、也不改**：`src/`（web 版）、`docs/`、根 `scripts/`、各 `src/games/<id>/` 分册、
+  根 `README.md`，以及已废弃的 `mp/`。不要去「照抄 web 的实现」或「对照 web 分册」。
+- **唯一例外**：用户在当前对话里**明确要求**看 web / 某个其它目录。这时先说一句「我去看 xxx」，
+  改完在回复里说明动了哪些文件。
+- 本文件从「项目概述」往下的内容（web 合集的技术栈 / 命令 / 分册表 / 全局设置等）**只作为历史记录**，
+  只在用户明确要求 web 改动时才参考；日常开发请直接看 `mp-game/AGENTS.md`。
 
 ## 项目概述
 
