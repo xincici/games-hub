@@ -13,6 +13,12 @@ const FLY_HOLD = [110, 200];
 const FLY_TRAVEL = [330, 460];
 const SCORE_ANIM_MS = 420;
 
+// 圆点数量：每颗被消除的牌至少 DOTS_PER_POINT 颗、总数不低于 DOTS_MIN（少了玩家看不见），
+// 上限 DOTS_MAX 防止大盘面一次刷出几百颗。
+const DOTS_PER_POINT = 3;
+const DOTS_MIN = 10;
+const DOTS_MAX = 42;
+
 // 二次贝塞尔的取点：控制点贴近起点、只往上抬一点，
 // 这样「悬停 → 加速」和 p^2.1 的缓动对得上（控制点放在中点正上方会变成「先快后慢」）。
 function flyPoint(d, e) {
@@ -50,7 +56,7 @@ function flyState(d, now) {
     x: head.x,
     y: head.y,
     r: Math.max(1.4, d.size * (1 - 0.32 * e)),
-    alpha: p > 0.85 ? Math.max(0, (1 - p) / 0.15) : 1,
+    alpha: p > 0.9 ? Math.max(0, (1 - p) / 0.1) : 1,
     tail: back,
   };
 }
@@ -60,19 +66,24 @@ function spawn(list, o) {
   const points = (o.points || []).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
   if (!points.length) return;
   const size = o.size || 3;
-  const count = Math.min(18, Math.max(5, points.length));
+  const count = Math.min(DOTS_MAX, Math.max(DOTS_MIN, points.length * DOTS_PER_POINT));
   for (let k = 0; k < count; k++) {
-    const p = points[Math.floor(Math.random() * points.length)];
+    // 轮转取点：保证每一颗被消除的牌都至少吐出 1 颗（随机取点会漏掉大半，看着就稀疏）
+    const p = points[k % points.length];
+    // 飞得越远、圆点画得越大（麻将传奇那种「底行 → 顶部得分卡」的长距离，
+    // 用跟消消乐一样的尺寸会显得很小、像没出现过）
+    const dist = Math.hypot(o.tx - p.x, o.ty - p.y);
+    const far = 1 + Math.min(0.7, dist / 700);
     list.push({
       x0: p.x + (Math.random() - 0.5) * size * 3,
       y0: p.y + (Math.random() - 0.5) * size * 3,
       tx: o.tx,
       ty: o.ty,
       at: o.at,
-      delay: Math.random() * 90,
+      delay: Math.random() * 130,
       hold: FLY_HOLD[0] + Math.random() * (FLY_HOLD[1] - FLY_HOLD[0]),
       dur: FLY_TRAVEL[0] + Math.random() * (FLY_TRAVEL[1] - FLY_TRAVEL[0]),
-      size: size * (0.9 + Math.random() * 0.9),
+      size: size * far * (1.0 + Math.random() * 1.0),
       color: DOT_COLORS[k % DOT_COLORS.length],
     });
   }
@@ -141,6 +152,7 @@ function reset(r, value) {
 
 module.exports = {
   DOT_COLORS, FLY_HOLD, FLY_TRAVEL, SCORE_ANIM_MS,
+  DOTS_PER_POINT, DOTS_MIN, DOTS_MAX,
   flyPoint, flyState, spawn, draw, prune,
   roller, shown, roll, reset,
 };

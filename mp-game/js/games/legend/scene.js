@@ -447,7 +447,7 @@ class LegendScene extends Scene {
     const q = this.cw / 3;
     scorefly.spawn(this.fly, {
       points: ghostList.map(g => ({ x: g.x + g.w / 2, y: g.y + g.h / 2 })),
-      tx: this.cx + q * 1.5, ty: this.scoreY + 43, at: this.clock, size: this.cellW * 0.10,
+      tx: this.cx + q * 1.5, ty: this.scoreY + 43, at: this.clock, size: this.cellW * 0.12,
     });
     // 多消 / 连击 / 大分：震屏 + 外圈闪光 + 统一 confetti（PITFALLS #46）
     if (groups.length > 1 || turn.chain > 1 || gain >= 300) {

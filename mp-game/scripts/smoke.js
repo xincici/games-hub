@@ -3038,7 +3038,7 @@ i18n.setLang('cn');
       if (i % 9 === 0) sc2.render(makeCtx());
       if (!sc2.busy && !sc2.scoreAnim && !sc2.clearFx && i > 40) break;
     }
-    if (flyCount <= 0) problems.push('消除后没有飞向得分区的圆点');
+    if (flyCount < 10) problems.push(`消除后圆点太少（${flyCount} 颗）`);
     // 圆点必须从棋盘里出发、目标是「得分」那一格的数值位置
     const flyX = sc2.cx + (sc2.cw / 4) * 2.5;
     const flyY = sc2.scoreY + 48;
@@ -3172,7 +3172,7 @@ i18n.setLang('cn');
   const checkFly = (tag, sc, expectX, expectY) => {
     if (!sc.cheer || !sc.cheer.text) problems.push(`${tag}: 没有出现上方提示`);
     else if (!/\+\d/.test(sc.cheer.text)) problems.push(`${tag}: 提示里没有得分（${sc.cheer.text}）`);
-    if (!sc.fly.length) problems.push(`${tag}: 没有生成圆点`);
+    if (sc.fly.length < 10) problems.push(`${tag}: 圆点太少（${sc.fly.length} 颗）`);
     else if (Math.abs(sc.fly[0].tx - expectX) > 0.6 || Math.abs(sc.fly[0].ty - expectY) > 0.6) {
       problems.push(`${tag}: 圆点目标不是得分格`);
     }
@@ -3193,6 +3193,28 @@ i18n.setLang('cn');
   const legGroups = legLogic.findGroups(leg.grid);
   leg.startClear({ chain: 2, clearSeqAtApply: 0 }, legGroups);
   checkFly('传奇', leg, leg.cx + (leg.cw / 3) * 1.5, leg.scoreY + 43);
+  // 真实输入路径也要有圆点：模拟「手上 4 落进底行 2/3 之间」凑成顺子
+  {
+    const sc2 = new LegCls(fakeApp);
+    sc2.phase = 'play';
+    sc2.clock = 2000;
+    sc2.now = 2000;
+    sc2.grid = legLogic.emptyGrid();
+    // 底行第 2、3 列放 3/4，手上的 2 落到第 1 列 → 底行 2/3/4 成顺子（确定性场景）
+    sc2.grid[7][1] = { id: 9701, v: 3 };
+    sc2.grid[7][2] = { id: 9702, v: 4 };
+    sc2.queue = [2, 9, 9, 9];
+    sc2.onCell(0);
+    let dotFrames = 0;
+    for (let i = 0; i < 120; i++) {
+      sc2.update(16);
+      if (sc2.fly.length) dotFrames++;
+      sc2.render(makeCtx());
+    }
+    if (sc2.score <= 0) problems.push('传奇：落子没有消掉（测试场景失效）');
+    if (dotFrames < 10) problems.push(`传奇：真实落子后圆点只在 ${dotFrames} 帧出现`);
+  }
+
   // 提示条要真的画出来
   {
     const ctx = makeCtx();
@@ -3225,6 +3247,28 @@ i18n.setLang('cn');
   checkFly('炼金术', alc, alc.cx + (alc.cw / 4) * 2.5, alc.scoreY + 44);
 
   check(problems.length === 0, `飞圆点 / 上方提示：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 得分圆点：数量要够（玩家反馈「不明显」） ----------
+{
+  const sf = require(path.join(ROOT, 'js/core/scorefly'));
+  const problems = [];
+  const make = (n) => {
+    const list = [];
+    const pts = Array.from({ length: n }, (_, i) => ({ x: i * 10, y: i * 5 }));
+    sf.spawn(list, { points: pts, tx: 300, ty: 50, at: 0, size: 4 });
+    return { list, pts };
+  };
+  [1, 3, 6, 12, 30].forEach((n) => {
+    const { list, pts } = make(n);
+    const want = Math.min(sf.DOTS_MAX, Math.max(sf.DOTS_MIN, n * sf.DOTS_PER_POINT));
+    if (list.length !== want) problems.push(`n=${n} 圆点数 ${list.length}（应 ${want}）`);
+    if (list.length < 10) problems.push(`n=${n} 圆点太少（${list.length}）`);
+    const covered = pts.filter(p => list.some(d => Math.abs(d.x0 - p.x) <= 6 && Math.abs(d.y0 - p.y) <= 6)).length;
+    if (covered !== n) problems.push(`n=${n} 有被消除的牌没吐圆点（${covered}/${n}）`);
+    if (new Set(list.map(d => d.color)).size < 3) problems.push(`n=${n} 圆点颜色太少`);
+  });
+  check(problems.length === 0, `得分圆点数量：${problems.slice(0, 4).join('；')}`);
 }
 
 // ---------- 鼓励条配色：文字随机彩色（暗色 / 浅色两套） ----------
