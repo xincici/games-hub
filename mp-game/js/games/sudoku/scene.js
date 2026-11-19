@@ -54,7 +54,6 @@ const MAX_DIFFICULTY = 3;
 const REVEAL_STEP = 9;
 const REVEAL_MS = 240;
 const WIN_DELAY = 450;
-const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji",sans-serif';
 
 // 数独专属色（对齐 web App.vue 的 --sudoku-*）：三档高亮 同行列宫 < 同数字 < 选中格
 const SUDOKU = {
@@ -455,14 +454,7 @@ class SudokuScene extends Scene {
     // 生命永远排最后一项
     const hx0 = this.cx + half + half / 2;
     D.text(c, t('sudoku.hearts'), hx0, this.scoreY + 24, { size: 12, color: T.muted, align: 'center' });
-    const max = Math.max(1, this.difficulty);
-    const step = 20;
-    const start = hx0 - ((max - 1) * step) / 2;
-    for (let i = 0; i < max; i++) {
-      D.text(c, i < this.hearts ? '❤️' : '🤍', start + i * step, this.scoreY + 48, {
-        size: 17, color: T.text, align: 'center', family: EMOJI_FONT,
-      });
-    }
+    D.hearts(c, hx0, this.scoreY + 48, this.hearts, Math.max(1, this.difficulty));
   }
 
   drawOptions(c) {

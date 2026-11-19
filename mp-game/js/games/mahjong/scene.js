@@ -18,6 +18,8 @@ const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const scorefly = require('../../core/scorefly');
+const cheer = require('../../core/cheer');
 const achv = require('../../core/achv');
 const logic = require('./board');
 const i18nDict = require('./i18n');
@@ -56,7 +58,6 @@ const CONFETTI_MS = 1200;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const easeOut = p => 1 - Math.pow(1 - p, 3);
-const scoreTier = gained => (gained >= 1000 ? 3 : gained >= 500 ? 2 : 1);
 
 // 成牌闪烁：两次「亮 → 暗」再淡出（采样自 web 的 blink-clear 关键帧，最多两次明暗循环）
 function blinkAlpha(p) {
@@ -93,7 +94,10 @@ class MahjongScene extends Scene {
     this.drop = null;          // 正在掉落的那张牌
     this.landing = null;       // 刚落地的格子（弹一下）
     this.clearing = null;      // 成牌浮影（board 已经置空）
-    this.celebrate = null;     // 中央得分浮字
+    this.cheer = null;         // 游戏区上方提示（得分 + 多消 / 连击）
+    this.cheerColor = -1;
+    this.fly = [];
+    this.scoreAnim = scorefly.roller(0);
     this.dealStart = 0;
     this.dealDur = 0;
     this.dealOrder = new Map();
@@ -167,7 +171,7 @@ class MahjongScene extends Scene {
     this.drop = null;
     this.landing = null;
     this.clearing = null;
-    this.celebrate = null;
+    this.cheer = null;
     this.shakeAt = -SHAKE_MS - 1;
     this.glowAt = -GLOW_MS - 1;
     this.flashCell = -1;
@@ -312,7 +316,9 @@ class MahjongScene extends Scene {
       this.drop = null;
       this.landing = null;
       this.clearing = null;
-      this.celebrate = null;
+      this.cheer = null;
+      this.fly = [];
+      this.scoreAnim = scorefly.roller(this.score || 0);
       this.busy = false;
       this.helpOpen = false;
       this.confirming = false;
@@ -387,6 +393,7 @@ class MahjongScene extends Scene {
         + logic.chainBonus(this.combo);
       const top = hits.reduce((a, b) => (b.trio.score > a.trio.score ? b : a));
       this.score += gained;
+      scorefly.roll(this.scoreAnim, this.score, this.clock);
       achv.peak('mahjong', 'gained', gained);   // 最大单次得分
       const special = hits.length > 1 || this.combo > 1;
       if (gained >= FX_MIN || special) this.app.audio.playFirework();
@@ -400,37 +407,36 @@ class MahjongScene extends Scene {
       this.board = this.board.map((cell, i) => (cleared.has(i) ? null : cell));
       this.clearing = { tiles: ghost, at: this.clock };
       this.announce(top.trio.id, gained, hits.length, this.combo);
+      scorefly.spawn(this.fly, {
+        points: ghost.map(g => {
+          const r = this.cellTileRect(g.idx);
+          return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+        }),
+        tx: this.cx + (this.cw / (this.mode === MODE_LEVEL ? 4 : 3)) * 2.5,
+        ty: this.scoreY + 48, at: this.clock, size: this.tileW * 0.11,
+      });
     } else if (this.combo) {
       this.combo = 0;   // 这一手没消掉，连击断
     }
     this.save();
     // 结算层等得分浮字露一下脸再出现；没有浮字立即结算
-    const delay = this.celebrate ? RESULT_DELAY_MS : 0;
+    const delay = this.cheer ? RESULT_DELAY_MS : 0;
     this.schedule(delay, () => this.checkEnd(false));
   }
 
   announce(trioId, gained, groups, chain) {
-    const tier = scoreTier(gained);
-    this.celebrate = {
-      name: groups > 1
-        ? t('mahjong.comboName').replace('{n}', groups)
-        : t(trioId === 'triplet' ? 'mahjong.tripletName' : 'mahjong.runName'),
-      chain,
-      gained,
-      tier,
-      at: this.clock,
-      dur: 1100 + tier * 220,
-    };
+    const name = groups > 1
+      ? t('mahjong.comboName').replace('{n}', groups)
+      : t(trioId === 'triplet' ? 'mahjong.tripletName' : 'mahjong.runName');
+    const chainText = chain > 1 ? t('mahjong.chainName').replace('{n}', chain) : '';
+    this.showBanner([name, chainText, `+${gained}`].filter(Boolean).join('   '));
     // 连击 / 多消不看分数门槛；普通单次消除要到 300 分才有震屏 + 闪光 + 撒花
     const special = groups > 1 || chain > 1;
     if (gained < FX_MIN && !special) return;
     this.shakeAt = this.clock;
     this.glowAt = this.clock;
-    // 小庆祝复用统一 confetti，不另写一套粒子模板（PITFALLS #46）
     confetti.spawn(this.confetti, {
-      W,
-      H,
-      count: Math.min(14, 6 + tier * 3),
+      W, H, count: Math.min(14, 6 + (gained >= 1000 ? 9 : gained >= 500 ? 6 : 3)),
       startY: this.boardY + this.boardH * 0.5,
     });
   }
@@ -536,7 +542,8 @@ class MahjongScene extends Scene {
       this.settle();
     }
     if (this.clearing && now - this.clearing.at > CLEAR_MS) this.clearing = null;
-    if (this.celebrate && now - this.celebrate.at > this.celebrate.dur) this.celebrate = null;
+    if (this.cheer && now - this.cheer.at > cheer.LIFE) this.cheer = null;
+    this.fly = scorefly.prune(this.fly, now);
     if (this.landing && now - this.landing.at > LAND_MS) this.landing = null;
     if (this.flashCell >= 0 && now - this.flashAt > FLASH_MS) this.flashCell = -1;
     if (this.dealStart && now - this.dealStart > this.dealDur) {
@@ -659,7 +666,8 @@ class MahjongScene extends Scene {
     // 浮字必须压在结算层上面（与 web 的 .celebrate z-index:3 一致）。
     if (this.phase === WON || this.phase === OVER) this.drawResult(c);
     this.drawDrop(c);
-    this.drawCelebration(c);
+    this.drawFly(c);
+    this.drawCheer(c);
     this.drawConfetti(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     this.drawDragGhost(c);
@@ -681,6 +689,28 @@ class MahjongScene extends Scene {
     this.addButton('home', h.x, h.y, h.w, h.h, () => this.app.goHome());
   }
 
+  // 游戏区上方的提示条（core/cheer）：只写这手是什么 + 得分（+ 多消 / 连击）
+  showBanner(text) {
+    if (!text) return;
+    let color = Math.floor(Math.random() * 6);
+    if (color === this.cheerColor) color = (color + 1) % 6;
+    this.cheerColor = color;
+    this.cheer = { text, at: this.clock, color };
+  }
+
+  drawCheer(c) {
+    if (!this.cheer) return;
+    const age = this.now - this.cheer.at;
+    if (age > cheer.LIFE) { this.cheer = null; return; }
+    this.cheerRect = cheer.draw(c, {
+      text: this.cheer.text, age, topY: this.top, boardY: this.boardY, colorIndex: this.cheer.color,
+    });
+  }
+
+  drawFly(c) {
+    scorefly.draw(c, this.fly, this.now);
+  }
+
   drawScore(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
@@ -689,7 +719,7 @@ class MahjongScene extends Scene {
       ? [
         [t('mahjong.level'), String(this.level), T.text],
         [t('mahjong.left'), String(this.cardsLeft), T.text],
-        [t('mahjong.score'), String(this.score), T.primary],
+        [t('mahjong.score'), String(Math.round(scorefly.shown(this.scoreAnim, this.now))), T.primary],
         [t('mahjong.target'), String(this.conf ? this.conf.target : 0), T.text],
       ]
       : [
@@ -915,50 +945,6 @@ class MahjongScene extends Scene {
     c.restore();
   }
 
-  drawCelebration(c) {
-    const e = this.celebrate;
-    if (!e) return;
-    const T = theme.tokens;
-    const p = clamp((this.now - e.at) / e.dur, 0, 1);
-    const scale = p < 0.28 ? 0.4 + 0.76 * (p / 0.28)
-      : p < 0.44 ? 1.16 - 0.16 * ((p - 0.28) / 0.16) : 1;
-    const alpha = p > 0.78 ? 1 - (p - 0.78) / 0.22 : 1;
-    const rise = p > 0.44 ? ((p - 0.44) / 0.56) * 26 : 0;
-    const size = e.tier === 3 ? 24 : e.tier === 2 ? 21 : 18;
-    const chainSize = 13;
-    const scoreSize = 14;
-    const chainText = e.chain > 1 ? t('mahjong.chainName').replace('{n}', e.chain) : '';
-    const cx = this.boardX + this.boardW / 2;
-    const cy = this.boardY + this.boardH * 0.5 - rise;
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(cx, cy);
-    c.scale(scale, scale);
-    const widest = Math.max(
-      D.measure(c, e.name, size, 'bold'),
-      chainText ? D.measure(c, chainText, chainSize, 'bold') : 0,
-      D.measure(c, `+${e.gained}`, scoreSize, 'bold'),
-    );
-    const w = Math.min(this.boardW - 8, widest + 36);
-    const h = (chainText ? size * 1.22 + chainSize * 1.3 : size * 1.22) + scoreSize * 1.5 + 16;
-    c.save();
-    c.shadowColor = 'rgba(35,128,78,0.5)';
-    c.shadowBlur = e.tier * 8;
-    D.fillRoundRect(c, -w / 2, -h / 2, w, h, 8, T.primary);
-    c.restore();
-    let ly = -h / 2 + 8 + size * 0.6;
-    D.text(c, e.name, 0, ly, { size, weight: 'bold', color: '#ffffff', align: 'center' });
-    if (chainText) {
-      ly += size * 0.6 + chainSize * 0.6 + 2;
-      D.text(c, chainText, 0, ly, {
-        size: chainSize, weight: 'bold', color: 'rgba(255,255,255,0.95)', align: 'center',
-      });
-    }
-    D.text(c, `+${e.gained}`, 0, h / 2 - 6 - scoreSize * 0.65, {
-      size: scoreSize, weight: 'bold', color: 'rgba(255,255,255,0.92)', align: 'center',
-    });
-    c.restore();
-  }
 
   // 结算层只盖棋盘（不挡上方分数卡）；帮助 / 模式 FAB 仍然显示（PITFALLS #10）
   drawResult(c) {

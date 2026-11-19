@@ -37,7 +37,7 @@
 | 数字迷宫 | ✅ 已移植 | `PuzzleScene` |
 | Emoji 镜像 | ✅ 已移植 | `MirrorScene` |
 | Emoji 下坠 | ✅ 已移植 | `DownScene` |
-| Emoji 消消乐 | ✅ 已移植 | `CrushScene` |
+| Emoji 消消乐 | ✅ 已移植（4 连合成大 emoji / 得分飞行反馈） | `CrushScene` |
 | 数独 | ✅ 已移植 | `SudokuScene` |
 | Emoji 排序 | ✅ 已移植 | `SortScene` |
 | Emoji 滑行 | ✅ 已移植 | `SlideScene` |

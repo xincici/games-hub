@@ -7,6 +7,8 @@
 //   WALL        不可消除的墙：不参与消除、不参与交换、不下落，但 emoji 下落时可以穿过
 //   BOMB        炸弹：可下落/可交换但自身不参与连线；相邻格被消除时引爆，炸掉自己周围的格子
 //   WILD        万能元素：可当作任意一种 emoji 参与连线判定
+//   BIG-kind    大 emoji（4 连以上合并而成，编码 BIG_BASE-kind）：可交换 / 可下落、
+//               按自己的种类参与连线；被消除（连线或炸弹波及）时清掉整行 / 整列
 //   FROZEN-kind 冰块：冻住的某种 emoji（kind = FROZEN - v）。
 //               不参与连线、不能交换、不随重力下落（和墙一样会被穿过），
 //               相邻格（含斜角）被消除时解冻变回普通 emoji。
@@ -17,10 +19,16 @@ const BOMB = -2;
 const WILD = -3;
 const FROZEN = -100;
 
+// 4 连以上合并出来的「大 emoji」：把种类编码进负值（-10 - kind），
+// 和普通 emoji 一样可交换 / 可下落 / 参与连线，但被消除时会清掉整行或整列。
+const BIG_BASE = -10;
 const isWall = v => v === WALL;
 const isEmoji = v => typeof v === 'number' && v >= 0;
 const isSpecial = v => v === BOMB || v === WILD;
 const isFrozen = v => typeof v === 'number' && v <= FROZEN;
+const isBig = v => typeof v === 'number' && v <= BIG_BASE && v > FROZEN;
+const big = kind => BIG_BASE - kind;
+const bigKind = v => BIG_BASE - v;
 const frozenKind = v => FROZEN - v;
 const freeze = kind => FROZEN - kind;
 // 会随重力下落、可被交换的实体（墙、冰块与空格除外）
@@ -200,30 +208,32 @@ function generateBoard(cols, rows, kinds, opts = {}, rand = Math.random) {
   return board;
 }
 
-// ---------- 连线判定（万能元素可充当任意种类） ----------
-// 一条线（行 / 列）上，某个种类的连续块 = 连续的「该种 emoji 或钻石」，
+// ---------- 连线判定（万能元素可充当任意种类；大 emoji 按自己的种类参与） ----------
+// 一条线（行 / 列）上，某个种类的连续块 = 连续的「该种 emoji / 该种大 emoji / 钻石」，
 // 块长度 ≥ 3 且块里真的有该种 emoji，整块（含钻石）一起消。
-// 按种类分别扩展，钻石就能跟着它旁边真正成组的那一边走；
+// 大 emoji 算「真的该种」：它自己能凑成三连，也会在触发时清整行 / 整列。
 // 整块全是钻石时不消（钻石不能自己凑一组把自己消掉）。
-function scanLine(board, line, matched) {
+
+function scanLineRuns(board, line, dir, out) {
   const kinds = new Set();
   for (const idx of line) {
     const v = board[idx];
     if (isEmoji(v)) kinds.add(v);
+    else if (isBig(v)) kinds.add(bigKind(v));
   }
   for (const kind of kinds) {
     let run = [];
     let real = 0;
     const flush = () => {
-      if (run.length >= 3 && real) run.forEach(i => matched.add(i));
+      if (run.length >= 3 && real) out.push({ cells: run.slice(), kind, dir });
       run = [];
       real = 0;
     };
     for (const idx of line) {
       const v = board[idx];
-      if (v === kind) {
+      if (v === kind || (isBig(v) && bigKind(v) === kind)) {
         run.push(idx);
-        real++;
+        real += 1;
       } else if (v === WILD) {
         run.push(idx);
       } else {
@@ -234,19 +244,54 @@ function scanLine(board, line, matched) {
   }
 }
 
-function findMatches(board, cols, rows) {
-  const matched = new Set();
+function findRuns(board, cols, rows) {
+  const out = [];
   for (let r = 0; r < rows; r++) {
     const line = [];
     for (let c = 0; c < cols; c++) line.push(r * cols + c);
-    scanLine(board, line, matched);
+    scanLineRuns(board, line, 'row', out);
   }
   for (let c = 0; c < cols; c++) {
     const line = [];
     for (let r = 0; r < rows; r++) line.push(r * cols + c);
-    scanLine(board, line, matched);
+    scanLineRuns(board, line, 'col', out);
   }
+  return out;
+}
+
+function findMatches(board, cols, rows) {
+  const matched = new Set();
+  for (const run of findRuns(board, cols, rows)) for (const idx of run.cells) matched.add(idx);
   return matched;
+}
+
+// ---------- 4 连以上合并成大 emoji ----------
+// 一段 4+ 的连线合并成 1 个大 emoji，落在这一段的中间格（不被清掉，留下来继续玩）。
+// 已经含大 emoji 的连线不再合并（否则会滚雪球）。
+const MERGE_MIN = 4;
+
+function pickSpawnCell(run, board) {
+  const n = run.cells.length;
+  const mid = Math.floor((n - 1) / 2);
+  const order = [mid, mid - 1, mid + 1, 0, n - 1];
+  for (const k of order) {
+    const idx = run.cells[k];
+    if (idx !== undefined && board[idx] !== WILD) return idx;
+  }
+  return run.cells[mid];
+}
+
+// 一轮结算最多只给 1 个大 emoji（取最长的那条连线）：不设上限的话连锁里到处是 4 连，
+// 盘面会被整行清除刷爆，难度直接塌掉（实测每局会合出 15 个）。
+function mergeSpawns(runs, board) {
+  const spawns = new Map();
+  const sorted = runs
+    .filter(run => run.cells.length >= MERGE_MIN && !run.cells.some(i => isBig(board[i])))
+    .sort((a, b) => b.cells.length - a.cells.length);
+  if (!sorted.length) return spawns;
+  const run = sorted[0];
+  spawns.set(pickSpawnCell(run, board), { kind: run.kind, dir: run.dir, len: run.cells.length });
+  return spawns;
 }
 
 // ---------- 爆炸 ----------
@@ -295,6 +340,99 @@ function thawTargets(board, cols, rows, cleared) {
 function applyThaw(board, thawed) {
   if (!thawed.size) return board;
   return board.map((v, i) => (thawed.has(i) && isFrozen(v) ? frozenKind(v) : v));
+}
+
+// ---------- 大 emoji 的整行 / 整列清除 ----------
+// 触发条件：大 emoji 自己进了某条连线（按连线方向清该行 / 该列），
+// 或者被炸弹波及（行 + 列一起清）。墙与冰块不清（冰块会被邻近消除化掉）。
+function bigLineCells(board, cols, rows, runs, blast) {
+  const dirs = new Map();
+  for (const run of runs) {
+    for (const idx of run.cells) {
+      if (!isBig(board[idx])) continue;
+      if (!dirs.has(idx)) dirs.set(idx, new Set());
+      dirs.get(idx).add(run.dir);
+    }
+  }
+  const cells = new Set();
+  const sweeps = [];
+  const triggered = new Set();
+  for (let i = 0; i < board.length; i++) {
+    if (!isBig(board[i])) continue;
+    const byMatch = dirs.has(i);
+    const byBlast = blast.has(i);
+    if (!byMatch && !byBlast) continue;
+    triggered.add(i);
+    const lines = byMatch ? [...dirs.get(i)] : ['row', 'col'];
+    for (const dir of lines) {
+      if (dir === 'row') {
+        const r = ~~(i / cols);
+        sweeps.push({ dir, index: r });
+        for (let c = 0; c < cols; c++) cells.add(r * cols + c);
+      } else {
+        const c = i % cols;
+        sweeps.push({ dir, index: c });
+        for (let r = 0; r < rows; r++) cells.add(r * cols + c);
+      }
+    }
+  }
+  for (const idx of [...cells]) {
+    const v = board[idx];
+    if (v === WALL || isFrozen(v)) cells.delete(idx);
+  }
+  return { cells, sweeps, triggered };
+}
+
+// 一轮结算的统一入口（在线 / 离线共用）：
+//   1) 找连线 → 2) 4+ 合并成大 emoji → 3) 炸弹连锁炸 → 4) 大 emoji 清整行 / 整列
+//   5) 新清掉的格子可能再波及炸弹 / 大 emoji，循环到稳定
+// 返回 { runs, matched, blast, bigLines, bigSweeps, bigTriggered, cleared, spawns }
+// opts.spawn === false：这一轮不合成大 emoji（场景里只在玩家自己那一步允许），
+// opts.maxBig：盘面上同时最多几个大 emoji（默认 2，防止整盘都是大 emoji）
+// 注意：spawns 里的格子不会进 cleared（它们要留下来变成大 emoji）。
+function resolveClear(board, cols, rows, opts = {}) {
+  const runs = findRuns(board, cols, rows);
+  const matched = new Set();
+  for (const run of runs) for (const idx of run.cells) matched.add(idx);
+  if (!matched.size) {
+    return {
+      runs: [], matched: new Set(), blast: new Set(), bigLines: new Set(),
+      bigSweeps: [], bigTriggered: new Set(), cleared: new Set(), spawns: new Map(),
+    };
+  }
+  // 4 连在这套 emoji 种类下很常见：盘面同时最多留 2 个大 emoji，
+  // 否则整盘都是大 emoji、每两步清一次整行，观感和难度都会失控
+  const bigOnBoard = board.reduce((n, v) => n + (isBig(v) ? 1 : 0), 0);
+  const maxBig = opts.maxBig == null ? 2 : opts.maxBig;
+  const spawns = opts.spawn === false || bigOnBoard >= maxBig ? new Map() : mergeSpawns(runs, board);
+  const blast = new Set();
+  const bigLines = new Set();
+  const bigSweeps = [];
+  const bigTriggered = new Set();
+  let frontier = new Set(matched);
+  for (let guard = 0; guard < 8; guard++) {
+    const ex = explode(board, cols, rows, frontier);
+    let grew = false;
+    ex.blast.forEach((idx) => {
+      if (!blast.has(idx)) { blast.add(idx); grew = true; }
+    });
+    const big = bigLineCells(board, cols, rows, runs, blast);
+    big.cells.forEach((idx) => {
+      if (!matched.has(idx) && !bigLines.has(idx)) { bigLines.add(idx); grew = true; }
+    });
+    big.sweeps.forEach((sw) => {
+      if (!bigSweeps.some(o => o.dir === sw.dir && o.index === sw.index)) bigSweeps.push(sw);
+    });
+    big.triggered.forEach(idx => bigTriggered.add(idx));
+    if (!grew) break;
+    frontier = new Set([...blast, ...bigLines]);
+  }
+  const cleared = new Set();
+  const add = (idx) => { if (!spawns.has(idx)) cleared.add(idx); };
+  matched.forEach(add);
+  blast.forEach(add);
+  bigLines.forEach(add);
+  return { runs, matched, blast, bigLines, bigSweeps, bigTriggered, cleared, spawns };
 }
 
 // ---------- 交换校验 ----------
@@ -347,6 +485,8 @@ const MATCH_EXTRA = 35;
 const CHAIN_STEP = 0.3;
 const CHAIN_MAX = 2;
 const SCORE_PER_BLAST = 12;
+const SCORE_PER_LINE = 12;      // 整行 / 整列清掉的格子（整行本身格数多，单价要低）
+const BIG_TRIGGER_BONUS = 80;   // 每触发一次大 emoji
 
 // 连锁倍率：1 → 1.3 → 1.6 → 1.9 → 2（第 5 层起封顶）
 function chainMultiplier(cascade) {
@@ -362,10 +502,15 @@ function scoreForBlast(count, cascade) {
   return Math.round(count * SCORE_PER_BLAST * chainMultiplier(cascade));
 }
 
+function scoreForBigLines(count, cascade, triggers = 1) {
+  if (!count && !triggers) return 0;
+  return Math.round((count * SCORE_PER_LINE + triggers * BIG_TRIGGER_BONUS) * chainMultiplier(cascade));
+}
+
 // 无解时重洗：保持墙与特殊元素 / 冰块位置，只重排普通 emoji
 function reshuffle(board, cols, rows, kinds, rand = Math.random) {
   for (let t = 0; t < 100; t++) {
-    const next = board.map(v => (isSpecial(v) || isWall(v) || isFrozen(v) ? v : ~~(rand() * kinds)));
+    const next = board.map(v => (isSpecial(v) || isBig(v) || isWall(v) || isFrozen(v) ? v : ~~(rand() * kinds)));
     if (!findMatches(next, cols, rows).size && hasAnyMove(next, cols, rows, kinds)) return next;
   }
   return board;
@@ -392,36 +537,45 @@ function findBestSwap(board, cols, rows) {
   return best;
 }
 
-// 模拟一次完整回合（交换 → 连锁结算），返回 { board, gained, cascades }
+// 模拟一次完整回合（交换 → 连锁结算），返回 { board, gained, cascades, merges, lineClears }
+// 用 resolveClear 保证「4 连合并 / 大 emoji 清行清列」在离线校准里也算得分毫不差
 function resolveTurn(board, cols, rows, kinds, a, b, opts = {}, rand = Math.random) {
   let cur = [...board];
   [cur[a], cur[b]] = [cur[b], cur[a]];
   let gained = 0;
   let cascade = 0;
-  for (;;) {
-    const matched = findMatches(cur, cols, rows);
-    if (!matched.size) break;
+  let merges = 0;
+  let lineClears = 0;
+  for (let guard = 0; guard < 40; guard++) {
+    const res = resolveClear(cur, cols, rows, { spawn: cascade === 0 });
+    if (!res.cleared.size && !res.spawns.size) break;
     cascade++;
-    const { blast } = explode(cur, cols, rows, matched);
-    const all = new Set([...matched, ...blast]);
+    merges += res.spawns.size;
+    lineClears += res.bigSweeps.length;
     // 先记下这轮被消除的格子四邻有哪些冰块要化
-    const thawed = thawTargets(cur, cols, rows, all);
-    gained += scoreForMatches(matched.size, cascade) + scoreForBlast(blast.size, cascade);
-    cur = cur.map((v, i) => (all.has(i) ? null : v));
+    const thawed = thawTargets(cur, cols, rows, res.cleared);
+    gained += scoreForMatches(res.matched.size, cascade)
+      + scoreForBlast(res.blast.size, cascade)
+      + scoreForBigLines(res.bigLines.size, cascade, res.bigTriggered.size);
+    cur = cur.map((v, i) => (res.cleared.has(i) ? null : v));
+    res.spawns.forEach((info, idx) => { cur[idx] = big(info.kind); });
     cur = applyThaw(cur, thawed);
     cur = applyGravity(cur, cols, rows, kinds, opts, rand);
   }
-  return { board: cur, gained, cascades: cascade };
+  return { board: cur, gained, cascades: cascade, merges, lineClears };
 }
 
 module.exports = {
-  WALL, BOMB, WILD, FROZEN,
+  WALL, BOMB, WILD, FROZEN, BIG_BASE,
   isWall, isEmoji, isSpecial, isFrozen, frozenKind, freeze, isTile,
+  isBig, big, bigKind,
   CAP_LEVEL, levelConfig,
   neighbors4, neighbors8, adjacent,
-  generateBoard, findMatches, explode, thawTargets, applyThaw,
+  generateBoard, findMatches, findRuns, explode, thawTargets, applyThaw,
+  bigLineCells, resolveClear, MERGE_MIN,
   hasMatchAfterSwap, hasAnyMove, applyGravity,
   MATCH_BASE, MATCH_EXTRA, CHAIN_STEP, CHAIN_MAX, SCORE_PER_BLAST,
-  chainMultiplier, scoreForMatches, scoreForBlast, reshuffle,
+  SCORE_PER_LINE, BIG_TRIGGER_BONUS,
+  chainMultiplier, scoreForMatches, scoreForBlast, scoreForBigLines, reshuffle,
   findBestSwap, resolveTurn,
 };

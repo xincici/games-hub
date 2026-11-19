@@ -21,6 +21,8 @@ const cards = require('../../core/cards');
 const tiles = require('../../core/tiles');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const scorefly = require('../../core/scorefly');
+const cheer = require('../../core/cheer');
 const fx = require('../../core/fx');
 const logic = require('./board');
 const i18nDict = require('./i18n');
@@ -103,7 +105,10 @@ class LegendScene extends Scene {
     this.falls = [];               // 消除后下落的位移 { id, dy, at }
     this.landing = null;           // 刚落地的牌（pop 一下）
     this.rise = null;              // 升行动画 { at, dur, overflow, pushed }
-    this.celebrate = null;         // 得分浮字
+    this.cheer = null;              // 游戏区上方提示（得分 + 多消 / 连击）
+    this.cheerColor = -1;
+    this.fly = [];
+    this.scoreAnim = scorefly.roller(0);
     this.flashCell = -1;           // 刚点过的格子
     this.flashAt = -1e9;
     this.shakeAt = -SHAKE_MS - 1;
@@ -162,7 +167,10 @@ class LegendScene extends Scene {
     this.falls = [];
     this.landing = null;
     this.rise = null;
-    this.celebrate = null;
+    this.cheer = null;
+    this.cheerColor = -1;
+    this.fly = [];
+    this.scoreAnim = scorefly.roller(this.score || 0);
     this.flashCell = -1;
     this.flashAt = -1e9;
     this.shakeAt = -SHAKE_MS - 1;
@@ -246,7 +254,9 @@ class LegendScene extends Scene {
       this.falls = [];
       this.landing = null;
       this.rise = null;
-      this.celebrate = null;
+      this.cheer = null;
+      this.fly = [];
+      this.scoreAnim = scorefly.roller(this.score || 0);
       this.flashCell = -1;
       this.flashAt = -1e9;
       this.shakeAt = -SHAKE_MS - 1;
@@ -311,7 +321,8 @@ class LegendScene extends Scene {
     this.falls = this.falls.filter(f => now < f.at + FALL_MS);
     if (this.rise && now >= this.rise.at + this.rise.dur) this.rise = null;
     if (this.landing && now >= this.landing.at + LAND_MS) this.landing = null;
-    if (this.celebrate && now >= this.celebrate.at + this.celebrate.dur) this.celebrate = null;
+    if (this.cheer && now >= this.cheer.at + cheer.LIFE) this.cheer = null;
+    this.fly = scorefly.prune(this.fly, now);
     if (this.flashCell >= 0 && now >= this.flashAt + LAND_MS) this.flashCell = -1;
     if (this.dealStart && now >= this.dealStart + this.dealDur) {
       this.dealStart = 0;
@@ -382,6 +393,7 @@ class LegendScene extends Scene {
     const base = groups.reduce((sum, g) => sum + g.score, 0);
     const gain = base + logic.multiBonus(groups.length) + logic.chainBonus(turn.chain);
     this.score += gain;
+    scorefly.roll(this.scoreAnim, this.score, this.clock);
     // 每日挑战：本局分数当场上报（不必等一局结束）
     daily.report('legend', 'reach', { value: this.score });
     this.cleared += groups.length;
@@ -424,16 +436,19 @@ class LegendScene extends Scene {
     const special = groups.length > 1 || turn.chain > 1;
     if (special) this.app.audio.playFirework();
     else this.app.audio.playElimination();
-    this.celebrate = {
-      title: groups.length > 1
-        ? t('legend.multiName').replace('{n}', groups.length)
-        : t(groups[0].kind === 'kong' ? 'legend.kongName'
-          : groups[0].kind === 'triplet' ? 'legend.tripletName' : 'legend.runName'),
-      gain,
-      chain: turn.chain,
-      at: this.clock,
-      dur: POP_MS,
-    };
+    // 游戏区上方的提示：只写「这手是什么 + 得分（+ 多消 / 连击）」，不再弹中央绿卡
+    const title = groups.length > 1
+      ? t('legend.multiName').replace('{n}', groups.length)
+      : t(groups[0].kind === 'kong' ? 'legend.kongName'
+        : groups[0].kind === 'triplet' ? 'legend.tripletName' : 'legend.runName');
+    const chainText = turn.chain > 1 ? t('legend.chainName').replace('{n}', turn.chain) : '';
+    this.showBanner([title, chainText, `+${gain}`].filter(Boolean).join('   '));
+    // 彩色圆点从被消掉的牌飞进「得分」格
+    const q = this.cw / 3;
+    scorefly.spawn(this.fly, {
+      points: ghostList.map(g => ({ x: g.x + g.w / 2, y: g.y + g.h / 2 })),
+      tx: this.cx + q * 1.5, ty: this.scoreY + 43, at: this.clock, size: this.cellW * 0.10,
+    });
     // 多消 / 连击 / 大分：震屏 + 外圈闪光 + 统一 confetti（PITFALLS #46）
     if (groups.length > 1 || turn.chain > 1 || gain >= 300) {
       this.shakeAt = this.clock;
@@ -684,7 +699,8 @@ class LegendScene extends Scene {
     this.drawBoard(c);
     this.drawPlayHint(c);
     this.drawDrops(c);
-    this.drawCelebrate(c);
+    this.drawFly(c);
+    this.drawCheer(c);
     if (this.phase === OVER) this.drawResult(c);
     this.drawConfetti(c);
     if (!this.helpOpen) this.drawFabs(c);
@@ -718,12 +734,34 @@ class LegendScene extends Scene {
     this.addButton('home', h.x, h.y, h.w, h.h, () => this.app.goHome());
   }
 
+  // 游戏区上方的提示条（复用 core/cheer 的「砸下来 + 压扁回弹 + 放大淡出」）
+  showBanner(text) {
+    if (!text) return;
+    let color = Math.floor(Math.random() * 6);
+    if (color === this.cheerColor) color = (color + 1) % 6;
+    this.cheerColor = color;
+    this.cheer = { text, at: this.clock, color };
+  }
+
+  drawCheer(c) {
+    if (!this.cheer) return;
+    const age = this.now - this.cheer.at;
+    if (age > cheer.LIFE) { this.cheer = null; return; }
+    this.cheerRect = cheer.draw(c, {
+      text: this.cheer.text, age, topY: this.top, boardY: this.boardY, colorIndex: this.cheer.color,
+    });
+  }
+
+  drawFly(c) {
+    scorefly.draw(c, this.fly, this.now);
+  }
+
   drawStats(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
     const cells = [
       [t('legend.best'), String(this.best), T.text],
-      [t('legend.score'), String(this.score), T.primary],
+      [t('legend.score'), String(Math.round(scorefly.shown(this.scoreAnim, this.now))), T.primary],
       [t('legend.cleared'), String(this.cleared), T.text],
     ];
     const q = this.cw / cells.length;
@@ -944,51 +982,6 @@ class LegendScene extends Scene {
     return drop.to || { cx: W / 2, cy: this.boardY + this.boardH / 2, w: this.cellW };
   }
 
-  drawCelebrate(c) {
-    const e = this.celebrate;
-    if (!e) return;
-    const T = theme.tokens;
-    const p = clamp((this.now - e.at) / e.dur, 0, 1);
-    const scale = p < 0.28 ? 0.4 + 0.76 * (p / 0.28)
-      : p < 0.44 ? 1.16 - 0.16 * ((p - 0.28) / 0.16) : 1;
-    const alpha = p > 0.78 ? 1 - (p - 0.78) / 0.22 : 1;
-    const rise = p > 0.44 ? ((p - 0.44) / 0.56) * 26 : 0;
-    const titleSize = 16;
-    const scoreSize = 19;
-    const chainSize = 12;
-    const chainText = e.chain > 1 ? t('legend.chainName').replace('{n}', e.chain) : '';
-    const cx = this.boardX + this.boardW / 2;
-    const cy = this.boardY + this.boardH / 2 - rise;
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(cx, cy);
-    c.scale(scale, scale);
-    const widest = Math.max(
-      D.measure(c, e.title, titleSize, 'bold'),
-      chainText ? D.measure(c, chainText, chainSize, 'bold') : 0,
-      D.measure(c, `+${e.gain}`, scoreSize, 'bold'),
-    );
-    const w = Math.min(this.boardW - 8, widest + 36);
-    const h = (chainText ? titleSize * 1.1 + chainSize * 1.35 : titleSize * 1.1)
-      + scoreSize * 1.55 + 14;
-    c.save();
-    c.shadowColor = 'rgba(35,128,78,0.5)';
-    c.shadowBlur = 10;
-    D.fillRoundRect(c, -w / 2, -h / 2, w, h, 8, T.primary);
-    c.restore();
-    let ly = -h / 2 + 7 + titleSize * 0.62;
-    D.text(c, e.title, 0, ly, { size: titleSize, weight: 'bold', color: '#ffffff', align: 'center' });
-    if (chainText) {
-      ly += titleSize * 0.55 + chainSize * 0.7;
-      D.text(c, chainText, 0, ly, {
-        size: chainSize, weight: 'bold', color: 'rgba(255,255,255,0.95)', align: 'center',
-      });
-    }
-    D.text(c, `+${e.gain}`, 0, h / 2 - 6 - scoreSize * 0.62, {
-      size: scoreSize, weight: 'bold', color: 'rgba(255,255,255,0.92)', align: 'center',
-    });
-    c.restore();
-  }
 
   // 结算层只盖棋盘（不挡上方统计卡 / 候选区）；帮助 FAB 仍然显示（PITFALLS #10）
   drawResult(c) {

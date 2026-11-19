@@ -44,6 +44,36 @@ function text(c, value, x, y, opts) {
   c.restore();
 }
 
+// 生命（爱心）：统一用数独那套样式 —— 实心 / 空心 emoji、17px、间距 20、整组按中心对齐。
+// 颜色交给 emoji 自己，不要再画矢量心（各游戏各一套只会越走越歪）。
+// opts: { size, step, pop: { index, at, now, ms } } —— pop 是「刚失去的那颗放大淡出」。
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+
+function hearts(c, cx, y, alive, max, opts) {
+  const o = opts || {};
+  const n = Math.max(1, Math.floor(max || 1));
+  const size = o.size == null ? 17 : o.size;
+  const step = o.step == null ? 20 : o.step;
+  const on = Math.max(0, Math.min(n, Math.floor(alive || 0)));
+  const start = cx - ((n - 1) * step) / 2;
+  const pop = o.pop || null;
+  for (let i = 0; i < n; i++) {
+    const x = start + i * step;
+    text(c, i < on ? '❤️' : '🤍', x, y, { size, align: 'center', family: EMOJI_FONT });
+    if (i < on || !pop || i !== pop.index || !(pop.at >= 0)) continue;
+    const age = (pop.now == null ? Date.now() : pop.now) - pop.at;
+    if (!(age >= 0 && age < pop.ms)) continue;
+    const p = age / pop.ms;
+    const scale = p < 0.4 ? 1 + 0.55 * (p / 0.4) : 1.55 + 0.55 * ((p - 0.4) / 0.6);
+    c.save();
+    c.globalAlpha = p < 0.4 ? 1 : Math.max(0, 1 - (p - 0.4) / 0.6);
+    c.translate(x, y);
+    c.scale(scale, scale);
+    text(c, '❤️', 0, 0, { size, align: 'center', family: EMOJI_FONT });
+    c.restore();
+  }
+}
+
 // 游戏区下方的一句玩法提示：10px、弱色、水平居中 —— 2048 / Threes / 消除大师 / 贪吃蛇 / Emoji 下坠共用。
 function hintLine(c, value, y, color) {
   if (!value) return;
@@ -151,6 +181,7 @@ function countUp(value, at, dur) {
 
 module.exports = {
   countUp,
+  hearts,
   hintLine,
   divider,
   progressBar,

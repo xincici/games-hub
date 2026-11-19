@@ -13,6 +13,8 @@ const ParticleField = require('../../core/particles');
 const icons = require('../../core/icons');
 const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
+const scorefly = require('../../core/scorefly');
+const cheer = require('../../core/cheer');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
 const achv = require('../../core/achv');
@@ -46,6 +48,19 @@ const IDLE_HINT_MS = 6000;
 const HINT_MS = 2600;
 const SHAKE_MS = 340;
 const GLOW_MS = 900;
+const MERGE_MS = 420;        // 4 连合并成大 emoji 的弹出
+const SCORE_ANIM_MS = 420;   // 得分数字滚动
+const SWEEP_MS = 460;        // 大 emoji 清整行 / 整列的扫光
+const BIG_GLOW_MS = 1800;    // 大 emoji 常驻呼吸光
+// 飞向得分区的圆点颜色（纯庆祝色，不跟主题走）
+
+// 消除 / 连击的鼓励话：按「得分多少 + 连击层数」分三档，随机挑一条且不与上一条重复
+// 原来那张绿色得分卡玩家反馈太碍眼，改成下坠那套「游戏区上方砸下来」的提示条
+const CHEER_TIERS = [
+  ['cheerS1', 'cheerS2', 'cheerS3', 'cheerS4'],
+  ['cheerM1', 'cheerM2', 'cheerM3', 'cheerM4'],
+  ['cheerB1', 'cheerB2', 'cheerB3', 'cheerB4'],
+];
 
 // 解冻碎屑：[横向, 纵向, 自转角度, 缩放]，位移单位是「格」
 const ICE_SHARDS = [
@@ -87,7 +102,8 @@ class CrushScene extends Scene {
     this.spring = null;
     this.shakeAt = -SHAKE_MS - 1;
     this.glowAt = -GLOW_MS - 1;
-    this.celebrate = null;
+    this.cheer = null;
+    this.cheerIdx = -1;   // 上一条用过的下标，避免连着两次同一句
     this.confetti = [];
     this.confettiUntil = 0;
     this.lastConfettiAt = 0;
@@ -100,6 +116,12 @@ class CrushScene extends Scene {
     this.helpScrollMax = 0;
     this.helpDrag = null;
     this.dealUntil = 0;
+    this.scoreAnim = null;      // { from, to, at, dur }
+    this.scorePulseAt = -1;
+    this.scoreGain = null;      // { n, at } —— 得分区旁的 +N
+    this.fly = [];              // 飞向得分区的彩色圆点
+    this.mergeFx = null;        // { idxs, at } —— 刚合成的大 emoji
+    this.sweepFx = null;        // { sweeps, at } —— 整行 / 整列扫光
     this.layout();
     this.boot();
   }
@@ -141,7 +163,7 @@ class CrushScene extends Scene {
     this.clearFx = null;
     this.thawFx = null;
     this.spring = null;
-    this.celebrate = null;
+    this.cheer = null;
     this.confetti = [];
     this.confettiUntil = 0;
     this.hint = null;
@@ -149,6 +171,12 @@ class CrushScene extends Scene {
     this.touch = null;
     this.shakeAt = -SHAKE_MS - 1;
     this.glowAt = -GLOW_MS - 1;
+    this.scoreAnim = null;
+    this.scorePulseAt = -1;
+    this.scoreGain = null;
+    this.fly = [];
+    this.mergeFx = null;
+    this.sweepFx = null;
     this.layout();
     this.tiles = this.buildTiles();
     this.playDeal();
@@ -232,6 +260,12 @@ class CrushScene extends Scene {
       this.conf = c;
       this.cells = saved.cells.slice();
       this.score = Math.max(0, Math.floor(+saved.score) || 0);
+    this.scoreAnim = null;
+    this.scorePulseAt = -1;
+    this.scoreGain = null;
+    this.fly = [];
+    this.mergeFx = null;
+    this.sweepFx = null;
       this.moves = clamp(Math.floor(+saved.moves) || 0, 0, c.moves);
       this.phase = saved.phase;
       if (this.level > this.best) this.best = this.level;
@@ -246,7 +280,7 @@ class CrushScene extends Scene {
       this.clearFx = null;
       this.thawFx = null;
       this.spring = null;
-      this.celebrate = null;
+      this.cheer = null;
       this.hint = null;
       this.tiles = this.buildTiles();
       // 玩到一半才逐张发牌；恢复的是结算层就静默落定，不再播入场 / 烟花
@@ -310,9 +344,14 @@ class CrushScene extends Scene {
       if (tile.dealAt && now >= tile.dealAt + DEAL_MS) tile.dealAt = 0;
     });
     if (this.clearFx && now - this.clearFx.at > CLEAR_MS) this.clearFx = null;
+    if (this.scoreAnim && now - this.scoreAnim.at > this.scoreAnim.dur) this.scoreAnim = null;
+    if (this.scoreGain && now - this.scoreGain.at > 760) this.scoreGain = null;
+    if (this.mergeFx && now - this.mergeFx.at > MERGE_MS) this.mergeFx = null;
+    if (this.sweepFx && now - this.sweepFx.at > SWEEP_MS) this.sweepFx = null;
+    if (this.fly.length) this.fly = this.fly.filter(d => now - d.at - d.delay <= d.hold + d.dur);
     if (this.thawFx && now - this.thawFx.at > 560) this.thawFx = null;
     if (this.spring && now - this.spring.at > this.spring.dur) this.spring = null;
-    if (this.celebrate && now - this.celebrate.at > this.celebrate.dur) this.celebrate = null;
+    if (this.cheer && now - this.cheer.at > cheer.LIFE) this.cheer = null;
   }
 
   // ---------- 空闲提示 ----------
@@ -378,7 +417,9 @@ class CrushScene extends Scene {
 
   isClearing(idx) {
     const fx = this.clearFx;
-    return !!fx && (fx.matched.has(idx) || fx.blast.has(idx));
+    if (!fx) return false;
+    if (fx.matched.has(idx) || fx.blast.has(idx) || fx.bigLines.has(idx)) return true;
+    return !!fx.spawns && fx.spawns.has(idx);
   }
 
   tileAt(idx) {
@@ -505,40 +546,91 @@ class CrushScene extends Scene {
     });
   }
 
+
+  // 当前显示用的得分（滚动中的中间值）
+  scoreValue() {
+    const a = this.scoreAnim;
+    if (!a) return this.score;
+    const p = clamp((this.now - a.at) / a.dur, 0, 1);
+    return a.from + (a.to - a.from) * easeOut(p);
+  }
+
+  // 加分的统一入口：数字滚动 + 弹一下 + 得分区旁冒 +N
+  addScore(gained) {
+    if (!gained) return;
+    const from = this.scoreValue();
+    this.score += gained;
+    this.scoreAnim = { from, to: this.score, at: this.clock, dur: SCORE_ANIM_MS };
+    this.scorePulseAt = this.clock;
+    this.scoreGain = { n: gained, at: this.clock };
+  }
+
+  // 被消掉的每一格都朝得分区扔几颗彩色小圆点（同市面的「飞金币」反馈）
+  spawnScoreFly(cells) {
+    if (!cells || !cells.size) return;
+    const { cols } = this.conf;
+    const q = this.cw / 4;
+    const points = [];
+    cells.forEach((idx) => {
+      const v = this.cells[idx];
+      if (logic.isWall(v) || logic.isFrozen(v)) return;
+      const r = ~~(idx / cols);
+      const c = idx % cols;
+      points.push({
+        x: this.innerX + c * this.pitch + this.cell / 2,
+        y: this.innerY + r * this.pitch + this.cell / 2,
+      });
+    });
+    // 起点 / 终点 / 运动曲线都在 core/scorefly（和麻将英雄 / 炼金术 / 传奇共用）
+    scorefly.spawn(this.fly, {
+      points, tx: this.cx + q * 2.5, ty: this.scoreY + 48, at: this.clock, size: this.cell * 0.13,
+    });
+  }
+
   // ---------- 连锁结算 ----------
 
   resolve(chain) {
     if (this.phase !== PLAY) { this.busy = false; return; }
     const { cols, rows, kinds } = this.conf;
-    const matched = logic.findMatches(this.cells, cols, rows);
-    if (!matched.size) {
+    // 一轮结算：连线 → 4 连合并成大 emoji → 炸弹连锁 → 大 emoji 清整行 / 整列
+    // 只有玩家自己那一步（chain 1）才合成大 emoji：连锁里再合会滚雪球
+    const res = logic.resolveClear(this.cells, cols, rows, { spawn: chain === 1 });
+    if (!res.cleared.size && !res.spawns.size) {
       this.settleBoard();
       this.finishTurn();
       return;
     }
-    const { blast } = logic.explode(this.cells, cols, rows, matched);
-    const all = new Set([...matched, ...blast]);
-    const thawed = logic.thawTargets(this.cells, cols, rows, all);
+    const { matched, blast, bigLines, spawns, bigTriggered, bigSweeps } = res;
+    const thawed = logic.thawTargets(this.cells, cols, rows, res.cleared);
     if (thawed.size) this.thawFx = { set: thawed, at: this.clock };
-    const gained = logic.scoreForMatches(matched.size, chain) + logic.scoreForBlast(blast.size, chain);
-    this.score += gained;
-    if (blast.size) this.shakeAt = this.clock;
-    const bombBlast = blast.size > 0;
-    this.clearFx = { matched, blast, at: this.clock, huge: matched.size > 3 };
-    const celebrated = this.announce(matched.size, chain, gained);
-    // 炸弹触发的那次消除即使不足 3 个、没有连击，也播连击（烟花）音。
-    if (bombBlast || celebrated) this.app.audio.playFirework();
+    const gained = logic.scoreForMatches(matched.size, chain)
+      + logic.scoreForBlast(blast.size, chain)
+      + logic.scoreForBigLines(bigLines.size, chain, bigTriggered.size);
+    this.addScore(gained);
+    if (blast.size || bigSweeps.length) this.shakeAt = this.clock;
+    this.clearFx = {
+      matched, blast, bigLines, spawns, sweeps: bigSweeps, at: this.clock, huge: matched.size > 3,
+    };
+    if (bigSweeps.length) this.sweepFx = { sweeps: bigSweeps, at: this.clock };
+    this.spawnScoreFly(res.cleared);
+    const cheered = this.cheerFor(gained, chain, matched.size, spawns.size, bigSweeps.length);
+    // 炸弹 / 大 emoji 触发的那次消除即使不足 3 个，也播连击（烟花）音。
+    if (blast.size || bigSweeps.length || cheered) this.app.audio.playFirework();
     else this.app.audio.playElimination();
     this.schedule(CLEAR_MS, () => {
       if (this.phase !== PLAY) { this.clearFx = null; this.busy = false; return; }
-      let cleared = this.cells.map((v, i) => (all.has(i) ? null : v));
+      let next = this.cells.map((v, i) => (res.cleared.has(i) ? null : v));
+      // 合并出来的大 emoji 留在原地，之后继续参与连线
+      spawns.forEach((info, idx) => { next[idx] = logic.big(info.kind); });
       this.clearFx = null;
       // 先化冰（原地变回普通 emoji），再让重力穿过墙 / 冰回填
-      this.cells = logic.applyThaw(cleared, thawed);
+      this.cells = logic.applyThaw(next, thawed);
       this.cells = logic.applyGravity(this.cells, cols, rows, kinds, this.spawnOpts());
-      // 已消除的牌不能参与配对，否则会被「搬」到底部格再消失（web 同款 survivors）
-      const survivors = this.tiles.filter(t => !all.has(t.r * cols + t.c));
+      // 已消除的牌不能参与配对；合成位置上的旧牌也要丢掉，让新的大 emoji 从零入场
+      const gone = new Set([...res.cleared, ...spawns.keys()]);
+      const survivors = this.tiles.filter(t => !gone.has(t.r * cols + t.c));
       this.syncTiles(survivors, true);
+      if (spawns.size) this.mergeFx = { idxs: new Set(spawns.keys()), at: this.clock };
       this.clearStaleSelection();
       this.schedule(FALL_MS, () => this.resolve(chain + 1));
     });
@@ -723,22 +815,37 @@ class CrushScene extends Scene {
 
   // ---------- 庆祝 / 撒花 ----------
 
-  announce(count, chain, gained) {
-    const big = count > 3;
-    const combo = chain > 1;
-    if (!big && !combo) return false;
-    const tier = big && combo ? 3 : combo ? 2 : 1;
-    const lines = [];
-    if (combo) lines.push(t('crush.niceCombo').replace('{n}', String(chain)));
-    if (big) lines.push(t('crush.niceBig').replace('{n}', String(count)));
-    // 与 web 的 celebrate-pop 动画时长对齐：0.95s 内完成弹出 → 上飘 → 淡出。
-    this.celebrate = { lines, gained, tier, at: this.clock, dur: 950 };
-    this.glowAt = this.clock;
-    // 小庆祝复用统一 confetti，不另写一套粒子模板（PITFALLS #46）
+  // 挑一档鼓励话（只提示、不显示分数）；返回是否真的提示了
+  cheerFor(gained, chain, count, superCount, lineCount) {
+    let tier = -1;
+    if (chain >= 4 || lineCount >= 2 || gained >= 600) tier = 2;
+    else if (chain >= 3 || lineCount >= 1 || superCount > 0 || gained >= 300) tier = 1;
+    else if (chain === 2 || count >= 6) tier = 0;
+    if (tier < 0) return false;
+    const keys = CHEER_TIERS[tier];
+    let i = Math.floor(Math.random() * keys.length);
+    if (keys.length > 1 && i === this.cheerIdx) i = (i + 1) % keys.length;
+    this.cheerIdx = i;
+    // 颜色也随机，且不和上一条重复；暗色 / 浅色两套调色板在 core/cheer.js 里
+    let color = Math.floor(Math.random() * 6);
+    if (color === this.cheerColor) color = (color + 1) % 6;
+    this.cheerColor = color;
+    this.cheer = { text: t(`crush.${keys[i]}`), at: this.clock, tier, color };
+    // 小庆祝复用统一 confetti（不另写粒子模板）；普通三连不提示，免得每一手都在喊
     confetti.spawn(this.confetti, {
-      W, H, count: Math.min(14, 6 + tier * 3), startY: this.boardY + this.boardH * 0.55,
+      W, H, count: Math.min(14, 6 + tier * 4), startY: this.boardY + this.boardH * 0.55,
     });
     return true;
+  }
+
+  // 鼓励条：和 Emoji 下坠同一套「砸下来 → 压扁回弹 → 放大淡出」
+  drawCheer(c) {
+    if (!this.cheer) return;
+    const age = this.now - this.cheer.at;
+    if (age > cheer.LIFE) { this.cheer = null; return; }
+    this.cheerRect = cheer.draw(c, {
+      text: this.cheer.text, age, topY: this.headerY, boardY: this.boardY, colorIndex: this.cheer.color,
+    });
   }
 
   startConfetti() {
@@ -795,6 +902,7 @@ class CrushScene extends Scene {
     if (value === logic.BOMB) return BOMB_FACE;
     if (value === logic.WILD) return WILD_FACE;
     if (logic.isFrozen(value)) return cards.EMOJIS[logic.frozenKind(value)] || cards.EMOJIS[0];
+    if (logic.isBig(value)) return cards.EMOJIS[logic.bigKind(value)] || cards.EMOJIS[0];
     return cards.EMOJIS[value] || cards.EMOJIS[0];
   }
 
@@ -809,7 +917,9 @@ class CrushScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
-    this.drawCelebration(c);
+    this.drawSweep(c);
+    this.drawScoreFly(c);
+    this.drawCheer(c);
     if (this.phase !== PLAY) this.drawResult(c);
     this.drawConfetti(c);
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
@@ -833,22 +943,208 @@ class CrushScene extends Scene {
 
   drawScore(c) {
     const T = theme.tokens;
-    D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
+    const now = this.now;
     const q = this.cw / 4;
+    D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
+    const shown = Math.round(this.scoreValue());
+    const lowMoves = this.phase === PLAY && this.moves <= 3;
     const stats = [
       [t('crush.levelLabel'), String(this.level), T.text],
-      [t('crush.movesLabel'), String(this.moves), this.moves <= 0 ? T.lose : T.text],
-      [t('crush.score'), String(this.score), T.primary],
+      [t('crush.movesLabel'), String(this.moves), lowMoves ? T.lose : T.text],
+      [t('crush.score'), String(shown), T.primary],
       [t('crush.targetLabel'), String(this.conf.target), T.text],
     ];
     stats.forEach(([label, value, color], i) => {
       if (i) D.divider(c, this.cx + q * i, this.scoreY + this.scoreH / 2, 24, T.border, 1);
-      D.text(c, label, this.cx + q * (i + 0.5), this.scoreY + 23, { size: 10.5, color: T.muted, align: 'center' });
-      D.text(c, value, this.cx + q * (i + 0.5), this.scoreY + 48, { size: 20, weight: 'bold', color, align: 'center' });
+      const x = this.cx + q * (i + 0.5);
+      D.text(c, label, x, this.scoreY + 23, { size: 10.5, color: T.muted, align: 'center' });
+      let scale = 1;
+      // 加分时数字弹一下；步数 ≤ 3 时慢慢呼吸，提醒快没了
+      if (i === 2 && now - this.scorePulseAt < 280) scale = 1 + 0.16 * (1 - (now - this.scorePulseAt) / 280);
+      else if (i === 1 && lowMoves) scale = 1 + 0.07 * Math.abs(Math.sin(now / 300 * Math.PI * 2));
+      if (scale === 1) {
+        D.text(c, value, x, this.scoreY + 48, { size: 20, weight: 'bold', color, align: 'center' });
+      } else {
+        c.save();
+        c.translate(x, this.scoreY + 48);
+        c.scale(scale, scale);
+        D.text(c, value, 0, 0, { size: 20, weight: 'bold', color, align: 'center' });
+        c.restore();
+      }
     });
-    const progress = this.conf.target ? this.score / this.conf.target : 0;
+    const progress = this.conf.target ? this.scoreValue() / this.conf.target : 0;
     D.progressBar(c, this.cx, this.scoreY, this.cw, this.scoreH, Math.min(1, progress), T.border, T.primary);
+    // 得分区旁的 +N：从下往上飘一点再淡出
+    if (this.scoreGain) {
+      const g = this.scoreGain;
+      const p = clamp((now - g.at) / 760, 0, 1);
+      const x = this.cx + q * 2.5;
+      c.save();
+      c.globalAlpha = 0.9 * (1 - p);
+      D.text(c, `+${g.n}`, x + q * 0.42, this.scoreY + 44 - 18 * easeOut(p), {
+        size: 10, weight: 'bold', color: T.primary, align: 'right',
+      });
+      c.restore();
+    }
   }
+
+  // 大 emoji 的呼吸系数：±5%、周期 760ms（抽出来方便冒烟断言「真的在动」）
+  bigBreath(now) {
+    return 1 + 0.05 * Math.sin((now / 760) * Math.PI * 2);
+  }
+
+  // 大 emoji 背后的光晕：径向渐变铺到格子外一圈，让它在盘面里「浮」起来
+  drawBigGlow(c, dx, dy, w, now) {
+    const T = theme.tokens;
+    const pulse = 0.5 + 0.5 * Math.sin((now / BIG_GLOW_MS) * Math.PI * 2);
+    const cx = dx + w / 2;
+    const cy = dy + w / 2;
+    const r = w * (0.72 + 0.14 * pulse);
+    const g = c.createRadialGradient(cx, cy, w * 0.2, cx, cy, r);
+    g.addColorStop(0, theme.dark ? "rgba(120,230,180,0.55)" : "rgba(35,150,100,0.42)");
+    g.addColorStop(0.55, theme.dark ? "rgba(80,200,150,0.26)" : "rgba(35,150,100,0.18)");
+    g.addColorStop(1, "rgba(35,150,100,0)");
+    c.save();
+    c.globalAlpha = c.globalAlpha * (0.7 + 0.3 * pulse);
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
+  // 大 emoji 的常驻光效：呼吸描边 + 缓慢自转的小菱形，emoji 本身也画大一号
+  drawBigAura(c, dx, dy, w, now, value) {
+    const T = theme.tokens;
+    const pulse = 0.5 + 0.5 * Math.sin((now / BIG_GLOW_MS) * Math.PI * 2);
+    // 牌面本身压一层淡主色，和普通牌的白底区分开（emoji 再盖上去，不会被糊住）
+    D.fillRoundRect(c, dx + 0.5, dy + 0.5, w - 1, w - 1, 7,
+      theme.dark ? "rgba(78,201,138,0.18)" : "rgba(35,128,78,0.12)");
+    cards.drawEmoji(c, this.faceOf(value), dx + w / 2, dy + w / 2, Math.max(12, Math.round(w * 0.74)));
+    // 双层描边：外层主色 + 内层淡白，呼吸越强越亮
+    c.save();
+    c.globalAlpha = c.globalAlpha * (0.55 + 0.4 * pulse);
+    D.strokeRoundRect(c, dx + 1, dy + 1, w - 2, w - 2, 8, T.primary, 2.5);
+    c.globalAlpha = c.globalAlpha * 0.6;
+    D.strokeRoundRect(c, dx + 3, dy + 3, w - 6, w - 6, 6, "#ffffff", 1);
+    c.restore();
+    // 四角括号：像「特殊块」的标记，比单纯描边更好认
+    c.save();
+    c.strokeStyle = T.primary;
+    c.lineWidth = 2;
+    c.globalAlpha = c.globalAlpha * (0.5 + 0.45 * pulse);
+    const L = w * 0.22;
+    const corners = [[dx, dy, 1, 1], [dx + w, dy, -1, 1], [dx, dy + w, 1, -1], [dx + w, dy + w, -1, -1]];
+    corners.forEach(([x, y, sx, sy]) => {
+      c.beginPath();
+      c.moveTo(x + sx * L, y);
+      c.lineTo(x, y);
+      c.lineTo(x, y + sy * L);
+      c.stroke();
+    });
+    c.restore();
+    // 缓慢自转的小菱形（保留原有的「钻石」感）
+    c.save();
+    c.translate(dx + w / 2, dy + w / 2);
+    c.rotate(now / 900);
+    const s = Math.max(2, w * 0.09);
+    const r = w * 0.47;
+    c.fillStyle = T.primary;
+    for (let i = 0; i < 2; i++) {
+      const a = i * Math.PI;
+      c.globalAlpha = (0.4 + 0.5 * pulse) * (i ? 0.7 : 1);
+      c.save();
+      c.translate(Math.cos(a) * r, Math.sin(a) * r);
+      c.rotate(Math.PI / 4);
+      c.fillRect(-s / 2, -s / 2, s, s);
+      c.restore();
+    }
+    c.restore();
+  }
+
+
+  // 合成大 emoji 的瞬间：一圈小菱形向外炸开（和常驻光效区分，只播一次）
+  drawMergeBurst(c, dx, dy, w, now) {
+    const p = clamp((now - this.mergeFx.at) / MERGE_MS, 0, 1);
+    if (p >= 1) return;
+    const T = theme.tokens;
+    const cx = dx + w / 2;
+    const cy = dy + w / 2;
+    const dist = w * (0.18 + 0.62 * easeOut(p));
+    const s = Math.max(2, w * 0.09 * (1 - p * 0.6));
+    c.save();
+    c.globalAlpha = c.globalAlpha * (1 - p);
+    c.fillStyle = T.primary;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      c.save();
+      c.translate(cx + Math.cos(a) * dist, cy + Math.sin(a) * dist);
+      c.rotate(Math.PI / 4 + a);
+      c.fillRect(-s / 2, -s / 2, s, s);
+      c.restore();
+    }
+    c.globalAlpha = c.globalAlpha * 0.7;
+    c.strokeStyle = "#ffffff";
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(cx, cy, w * (0.3 + 0.5 * easeOut(p)), 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+
+  // 大 emoji 清整行 / 整列：先铺一层会扩散的亮带，前缘一条更亮的线
+  drawSweep(c) {
+    const fx = this.sweepFx;
+    if (!fx) return;
+    const p = clamp((this.now - fx.at) / SWEEP_MS, 0, 1);
+    if (p >= 1) return;
+    const T = theme.tokens;
+    const grow = easeOut(p);
+    const fade = 1 - p;
+    c.save();
+    D.roundRect(c, this.innerX, this.innerY, this.innerW, this.innerH, 8);
+    c.clip();
+    fx.sweeps.forEach((sw) => {
+      c.save();
+      if (sw.dir === 'row') {
+        const y = this.innerY + sw.index * this.pitch;
+        const full = this.conf.cols * this.pitch - this.gap;
+        c.globalAlpha = 0.30 * fade;
+        c.fillStyle = T.primary;
+        c.fillRect(this.innerX, y, full * grow, this.cell);
+        c.globalAlpha = 0.75 * fade;
+        c.fillStyle = '#ffffff';
+        c.fillRect(this.innerX + full * grow - 3, y, 3, this.cell);
+      } else {
+        const x = this.innerX + sw.index * this.pitch;
+        const full = this.conf.rows * this.pitch - this.gap;
+        c.globalAlpha = 0.30 * fade;
+        c.fillStyle = T.primary;
+        c.fillRect(x, this.innerY, this.cell, full * grow);
+        c.globalAlpha = 0.75 * fade;
+        c.fillStyle = '#ffffff';
+        c.fillRect(x, this.innerY + full * grow - 3, this.cell, 3);
+      }
+      c.restore();
+    });
+    c.restore();
+  }
+
+  // 消除的圆点：每格随机几颗，沿一条抛过去的弧线飞进得分区
+  // 二次贝塞尔的取点（控制点抬高，形成「抛过去」的弧线）
+  flyPoint(d, e) {
+    return scorefly.flyPoint(d, e);
+  }
+
+  // 圆点状态：先冒出来、短暂悬停（110~200ms），再按 p^2.1 加速飞向得分格
+  flyState(d, now) {
+    return scorefly.flyState(d, now);
+  }
+
+  drawScoreFly(c) {
+    scorefly.draw(c, this.fly, this.now);
+  }
+
 
   drawOptions(c) {
     const T = theme.tokens;
@@ -1021,7 +1317,20 @@ class CrushScene extends Scene {
     let blasting = false;
     if (this.clearFx) {
       const age = now - this.clearFx.at;
-      if (this.clearFx.matched.has(idx)) {
+      const spawn = this.clearFx.spawns && this.clearFx.spawns.get(idx);
+      if (spawn) {
+        // 4 连合并：这几张先缩没（下一帧同一格变成新的大 emoji）
+        const p = clamp(age / CLEAR_MS, 0, 1);
+        scale *= 1 - 0.55 * p;
+        alpha *= 1 - p;
+      } else if (this.clearFx.bigLines && this.clearFx.bigLines.has(idx)) {
+        // 整行 / 整列：整片同时炸开，比普通消除更亮更狠
+        const p = clamp(age / CLEAR_MS, 0, 1);
+        scale *= 1 + 0.55 * p;
+        alpha *= 1 - p * p;
+        blasting = true;
+        clearP = Math.min(1, p * 1.15);
+      } else if (this.clearFx.matched.has(idx)) {
         const p = clamp(age / CLEAR_MS, 0, 1);
         // 先放大再缩小 + 两次闪烁
         const grow = p < 0.38 ? 1 + 0.25 * (p / 0.38) : 1.25 * (1 - (p - 0.38) / 0.62);
@@ -1035,6 +1344,11 @@ class CrushScene extends Scene {
         clearP = p;
       }
     }
+    // 刚合成的大 emoji：弹一下（0.55 → 1.07 → 1），和普通牌的入场区分开
+    if (this.mergeFx && this.mergeFx.idxs.has(idx)) {
+      const mp = clamp((now - this.mergeFx.at) / MERGE_MS, 0, 1);
+      scale *= 0.55 + 0.45 * easeOut(mp) + 0.12 * Math.sin(mp * Math.PI);
+    }
     if (value === logic.BOMB || value === logic.WILD) {
       scale *= 0.95 + 0.05 * Math.sin(now / 1600 * Math.PI * 2);
     }
@@ -1043,6 +1357,9 @@ class CrushScene extends Scene {
       scale *= 1 + 0.14 * Math.abs(Math.sin((now - this.hint.at) / 800 * Math.PI * 2));
     }
     if (isSelected) scale *= 1.06;
+    // 大 emoji：整张牌轻微呼吸，配合背后光晕，一眼就能和普通牌区分
+    const bigTile = logic.isBig(value);
+    if (bigTile) scale *= this.bigBreath(now);
     if (scale <= 0 || alpha <= 0) return;
     const face = this.faceOf(value);
     const frozen = logic.isFrozen(value);
@@ -1063,6 +1380,7 @@ class CrushScene extends Scene {
       D.fillRoundRect(c, dx - 2.5, dy - 2.5, w + 5, w + 5, 10, theme.dark ? 'rgba(242,208,145,0.5)' : '#fff1c2');
       c.restore();
     }
+    if (bigTile) this.drawBigGlow(c, dx, dy, w, now);
     cards.draw(c, face, cards.MODE_EMOJI, dx, dy, w, w, true);
     // 炸弹 / 万能元素：统一牌面上叠一层淡色 + 重画 emoji，再补一圈语义色描边
     if (value === logic.BOMB || value === logic.WILD) {
@@ -1073,6 +1391,10 @@ class CrushScene extends Scene {
       cards.drawEmoji(c, face, 0, 0, Math.max(10, Math.round(w * 0.58)));
       D.strokeRoundRect(c, dx + 1, dy + 1, w - 2, w - 2, 8,
         value === logic.BOMB ? T.del : T.primary, 1.5);
+    }
+    if (logic.isBig(value)) {
+      this.drawBigAura(c, dx, dy, w, now, value);
+      if (this.mergeFx && this.mergeFx.idxs.has(idx)) this.drawMergeBurst(c, dx, dy, w, now);
     }
     if (frozen) {
       const iceAlpha = thawing ? Math.max(0, 1 - (now - this.thawFx.at) / 260) : 1;
@@ -1141,44 +1463,6 @@ class CrushScene extends Scene {
     c.restore();
   }
 
-  drawCelebration(c) {
-    const e = this.celebrate;
-    if (!e) return;
-    const T = theme.tokens;
-    const p = clamp((this.now - e.at) / e.dur, 0, 1);
-    const scale = p < 0.28 ? 0.4 + 0.76 * (p / 0.28)
-      : p < 0.44 ? 1.16 - 0.16 * ((p - 0.28) / 0.16) : 1;
-    const alpha = p > 0.78 ? 1 - (p - 0.78) / 0.22 : 1;
-    const rise = p > 0.44 ? ((p - 0.44) / 0.56) * 26 : 0;
-    const size = e.tier === 3 ? 24 : e.tier === 2 ? 21 : 18;
-    const scoreSize = 14;
-    const cx = W / 2;
-    const cy = this.boardY + this.boardH / 2 - rise;
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(cx, cy);
-    c.scale(scale, scale);
-    const widest = Math.max(
-      ...e.lines.map(line => D.measure(c, line, size, 'bold')),
-      D.measure(c, `+${e.gained}`, scoreSize, 'bold'),
-    );
-    const w = Math.min(this.boardW - 8, widest + 36);
-    const h = e.lines.length * size * 1.22 + scoreSize * 1.5 + 16;
-    c.save();
-    c.shadowColor = 'rgba(35,128,78,0.5)';
-    c.shadowBlur = e.tier * 8;
-    D.fillRoundRect(c, -w / 2, -h / 2, w, h, 8, T.primary);
-    c.restore();
-    e.lines.forEach((line, i) => {
-      D.text(c, line, 0, -h / 2 + 8 + size * 0.62 + i * size * 1.22, {
-        size, weight: 'bold', color: '#ffffff', align: 'center',
-      });
-    });
-    D.text(c, `+${e.gained}`, 0, h / 2 - 6 - scoreSize * 0.65, {
-      size: scoreSize, weight: 'bold', color: 'rgba(255,255,255,0.92)', align: 'center',
-    });
-    c.restore();
-  }
 
   drawResult(c) {
     if (!this.resultVisible()) return;

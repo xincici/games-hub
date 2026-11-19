@@ -460,13 +460,8 @@ class DetectiveScene extends Scene {
       D.text(c, label, this.cx + third * (i + 0.5), this.scoreY + 24, { size: 12, color: T.muted, align: 'center' });
       D.text(c, String(value), this.cx + third * (i + 0.5), this.scoreY + 48, { size: 22, weight: 'bold', color: T.text, align: 'center' });
     });
-    let hx = this.cx + third * 2 + 12;
-    for (let i = 0; i < HEARTS_MAX; i++) {
-      D.text(c, i < this.hearts ? '❤️' : '🤍', hx + 12, this.scoreY + 48, {
-        size: 17, align: 'center', family: '"Apple Color Emoji","Segoe UI Emoji",sans-serif',
-      });
-      hx += 25;
-    }
+      // 生命：和数独同一套（D.hearts 整组居中），不再左侧起排
+      D.hearts(c, this.cx + third * 2.5, this.scoreY + 48, this.hearts, HEARTS_MAX);
   }
   drawOptions(c) {
     const T = theme.tokens;

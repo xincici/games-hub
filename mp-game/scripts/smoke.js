@@ -2974,6 +2974,380 @@ i18n.setLang('cn');
   check(problems.length === 0, `Threes 1/2 平衡：${problems.slice(0, 4).join('；')}`);
 }
 
+// ---------- 消消乐：4 连合成大 emoji / 大 emoji 清整行整列 / 得分飞行与滚动 ----------
+{
+  const L = require(path.join(ROOT, 'js/games/crush/board'));
+  const CrushCls = require(path.join(ROOT, 'js/games/crush/scene'));
+  const problems = [];
+  const playScene = (cells) => {
+    fakeApp.sceneId = 'crush';
+    const sc = new CrushCls(fakeApp);
+    sc.initLevel(1);
+    if (cells) { sc.cells = cells; sc.tiles = sc.buildTiles(); }
+    sc.phase = 'play';
+    return sc;
+  };
+  const run = (sc, frames = 90) => { for (let i = 0; i < frames; i++) sc.update(16); };
+
+  // 1) 纯逻辑：4 连 → 1 个大 emoji，且合成格不被清掉
+  {
+    const cols = 6;
+    const board = [2, 2, 2, 2, 5, 4];
+    const res = L.resolveClear(board, cols, 1);
+    if (res.spawns.size !== 1) problems.push(`4 连合成了 ${res.spawns.size} 个大 emoji（应 1）`);
+    const spawnIdx = [...res.spawns.keys()][0];
+    if (res.cleared.has(spawnIdx)) problems.push('合成格被一起清掉了');
+    if (res.spawns.size && res.spawns.get(spawnIdx).kind !== 2) problems.push('合成的大 emoji 种类不对');
+    const three = L.resolveClear([2, 2, 2, 5, 4, 4], cols, 1);
+    if (three.spawns.size !== 0) problems.push('3 连不该合成大 emoji');
+  }
+
+  // 2) 纯逻辑：大 emoji 参与横向三连 → 清整行；被炸弹波及 → 行 + 列
+  {
+    const cols = 6;
+    const board = [7, 7, 7, 7, 7, 7];
+    board[2] = L.big(7);
+    const res = L.resolveClear(board, cols, 1);
+    if (!res.bigSweeps.some(sw => sw.dir === 'row' && sw.index === 0)) problems.push('大 emoji 横向三连没有清整行');
+    if (!res.bigTriggered.size) problems.push('大 emoji 没被标记为触发');
+
+    const c3 = 3;
+    const bombBoard = [L.BOMB, L.big(1), 4, 2, 2, 2, 5, 4, 6];
+    const r3 = L.resolveClear(bombBoard, c3, 3);
+    const dirs = r3.bigSweeps.map(sw => sw.dir).sort().join(',');
+    if (dirs !== 'col,row') problems.push(`炸弹波及大 emoji 的清线是 [${dirs}]（应 col,row）`);
+  }
+
+  // 3) 场景：4 连后真的生成了大 emoji、有飞行圆点、分数会滚动到位
+  {
+    const { cols, rows, kinds } = playScene(null).conf;
+    const cells = new Array(cols * rows).fill(0).map((_, i) => (i % cols) % kinds);
+    cells[0] = 4; cells[1] = 4; cells[2] = 4; cells[3] = 4;
+    const sc2 = playScene(cells);
+    sc2.resolve(1);
+    const flyCount = sc2.fly.length;
+    const scoreAfter = sc2.score;
+    const shownNow = sc2.scoreValue();
+    let sawBig = false;
+    let sawCheer = false;
+    sc2.render(makeCtx());
+    for (let i = 0; i < 600; i++) {
+      sc2.update(16);
+      if (sc2.cells.some(v => L.isBig(v))) sawBig = true;
+      if (sc2.cheer && sc2.cheer.text) sawCheer = true;
+      if (i % 9 === 0) sc2.render(makeCtx());
+      if (!sc2.busy && !sc2.scoreAnim && !sc2.clearFx && i > 40) break;
+    }
+    if (flyCount <= 0) problems.push('消除后没有飞向得分区的圆点');
+    // 圆点必须从棋盘里出发、目标是「得分」那一格的数值位置
+    const flyX = sc2.cx + (sc2.cw / 4) * 2.5;
+    const flyY = sc2.scoreY + 48;
+    if (sc2.fly.some(d => Math.abs(d.tx - flyX) > 0.5 || Math.abs(d.ty - flyY) > 0.5)) problems.push('圆点的目标不是得分区');
+    if (sc2.fly.some(d => d.y0 < sc2.innerY - 1 || d.y0 > sc2.innerY + sc2.innerH + 1)) problems.push('圆点不是从被消除的格子里飞出来的');
+    // 运动曲线：先短暂悬停（几乎不动），再加速飞过去
+    const fly = sc2.fly[0];
+    if (fly) {
+      const at = (age) => sc2.flyState(fly, fly.at + fly.delay + age);
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      const hover = dist(at(30), at(fly.hold - 12));
+      if (!(hover < 4.5)) problems.push(`圆点悬停阶段位移 ${hover.toFixed(2)}px（应几乎不动）`);
+      const early = dist(at(fly.hold + fly.dur * 0.10), at(fly.hold + fly.dur * 0.20));
+      const late = dist(at(fly.hold + fly.dur * 0.85), at(fly.hold + fly.dur * 0.95));
+      if (!(late > early * 1.2)) problems.push(`圆点没有加速（前段 ${early.toFixed(2)} / 末段 ${late.toFixed(2)}）`);
+    }
+    if (!(shownNow < scoreAfter)) problems.push('得分是直接跳上去的，没有滚动');
+    if (!sawBig) problems.push('4 连后盘面上没有出现过大 emoji');
+    if (!sawCheer) problems.push('结算过程中没有弹过鼓励条');
+    if (Math.round(sc2.scoreValue()) !== sc2.score) problems.push(`得分滚动没收敛（${sc2.scoreValue()} vs ${sc2.score}）`);
+    sc2.render(makeCtx());
+  }
+
+  // 4) 场景：大 emoji 参与三连 → 出现扫光，且整行确实被清掉（用扫光记录判定）
+  {
+    const { cols, rows } = playScene(null).conf;
+    const cells = new Array(cols * rows).fill(1).map((_, i) => i % 4);
+    cells[2] = L.big(5);
+    cells[3] = 5; cells[4] = 5;
+    const sc2 = playScene(cells);
+    sc2.resolve(1);
+    const sweeps = sc2.sweepFx ? sc2.sweepFx.sweeps.slice() : [];
+    sc2.render(makeCtx());
+    run(sc2, 100);
+    sc2.render(makeCtx());
+    if (!sweeps.some(sw => sw.dir === 'row')) problems.push(`大 emoji 触发时没有整行扫光（${JSON.stringify(sweeps)}）`);
+  }
+
+  // 5) 大 emoji 的辨识度：背后光晕 + 常驻呼吸光效都要真的画出来
+  {
+    const { cols, rows } = playScene(null).conf;
+    const cells = new Array(cols * rows).fill(3).map((_, i) => i % 4);
+    cells[0] = L.big(1);
+    cells[1] = 3; cells[2] = 3;           // 远处放一组三连，确保不是空的
+    const sc = playScene(cells);
+    let glow = 0;
+    let aura = 0;
+    const origGlow = sc.drawBigGlow.bind(sc);
+    const origAura = sc.drawBigAura.bind(sc);
+    sc.drawBigGlow = (...args) => { glow += 1; return origGlow(...args); };
+    sc.drawBigAura = (...args) => { aura += 1; return origAura(...args); };
+    sc.render(makeCtx());
+    if (!glow) problems.push('大 emoji 背后没有光晕');
+    if (!aura) problems.push('大 emoji 没有常驻呼吸光效');
+    const b0 = sc.bigBreath(0);
+    const b1 = sc.bigBreath(190);
+    if (Math.abs(b0 - b1) < 0.02) problems.push('大 emoji 的呼吸幅度太小（看不出在动）');
+    if (b0 > 1.051 || b0 < 0.949) problems.push(`大 emoji 呼吸幅度 ${b0} 超出 ±5%`);
+  }
+
+  check(problems.length === 0, `消消乐大 emoji：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 消消乐：鼓励条（替代原来的绿色得分卡） ----------
+{
+  const CrushCls = require(path.join(ROOT, 'js/games/crush/scene'));
+  const i18nMod = require(path.join(ROOT, 'js/core/i18n'));
+  const fs = require('fs');
+  fakeApp.sceneId = 'crush';
+  const problems = [];
+  // 1) 旧的绿色卡片必须彻底消失
+  const src = fs.readFileSync(path.join(ROOT, 'js/games/crush/scene.js'), 'utf8');
+  if (src.includes('drawCelebration')) problems.push('绿色得分卡还在');
+  if (!src.includes('cheerFor')) problems.push('没有鼓励条逻辑');
+  const sc = new CrushCls(fakeApp);
+  sc.initLevel(1);
+  sc.clock = 5000;
+  sc.now = 5000;
+  const names = (tier) => ({
+    small: ['cheerS1', 'cheerS2', 'cheerS3', 'cheerS4'].map(k => i18nMod.t('crush.' + k)),
+    mid: ['cheerM1', 'cheerM2', 'cheerM3', 'cheerM4'].map(k => i18nMod.t('crush.' + k)),
+    big: ['cheerB1', 'cheerB2', 'cheerB3', 'cheerB4'].map(k => i18nMod.t('crush.' + k)),
+  }[tier] || []);
+  // 2) 档位：连击 2 / 分数大 / 普通三连
+  if (!sc.cheerFor(120, 2, 3, 0, 0)) problems.push('2 连击没有鼓励');
+  const smallText = sc.cheer && sc.cheer.text;
+  if (!names('small').includes(smallText)) problems.push(`2 连击的文案档位不对（${smallText}）`);
+  if (!sc.cheerFor(700, 1, 3, 0, 0)) problems.push('大额消除没有鼓励');
+  const bigText = sc.cheer && sc.cheer.text;
+  if (!names('big').includes(bigText)) problems.push(`大额消除的文案档位不对（${bigText}）`);
+  if (sc.cheerFor(90, 1, 3, 0, 0)) problems.push('普通三连也弹了鼓励（会刷屏）');
+  if (/\d/.test(bigText || '')) problems.push('鼓励语里出现了分数数字');
+  if (bigText === smallText) problems.push('两档用了同一句文案');
+  // 3) 画出来 + 落点在游戏区上方（和下坠同一套「砸下来」）
+  const text = i18nMod.t('crush.cheerB2');
+  sc.cheer = { text, at: sc.clock };
+  sc.clock += 520;
+  sc.now = sc.clock;
+  const ctx = makeCtx();
+  const drawn = [];
+  const origFill = ctx.fillText;
+  ctx.fillText = (v) => { drawn.push(String(v)); return origFill(v); };
+  sc.render(ctx);
+  if (!drawn.includes(text)) problems.push('鼓励条没有画到屏幕上');
+  if (!sc.cheerRect || sc.cheerRect.y + sc.cheerRect.h > sc.boardY + 4) {
+    problems.push('鼓励条没有落在游戏区上方');
+  }
+  check(problems.length === 0, `消消乐鼓励条：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 麻将英雄 / 扑克炼金术 / 麻将传奇：飞圆点 + 上方提示 ----------
+{
+  const scoreflyMod = require(path.join(ROOT, 'js/core/scorefly'));
+  const fs = require('fs');
+  const LegCls = require(path.join(ROOT, 'js/games/legend/scene'));
+  const MahCls = require(path.join(ROOT, 'js/games/mahjong/scene'));
+  const AlcCls = require(path.join(ROOT, 'js/games/alchemy/scene'));
+  const legLogic = require(path.join(ROOT, 'js/games/legend/board'));
+  const mahLogic = require(path.join(ROOT, 'js/games/mahjong/board'));
+  const alcLogic = require(path.join(ROOT, 'js/games/alchemy/board'));
+  const problems = [];
+
+  // 三个游戏的中央绿卡都必须删掉，改成游戏区上方的提示条
+  ['legend', 'mahjong', 'alchemy'].forEach((id) => {
+    const src = fs.readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
+    if (src.includes('drawCelebration')) problems.push(`${id}: 中央得分浮字还在`);
+    if (!src.includes('scorefly.spawn')) problems.push(`${id}: 没有飞向得分区的圆点`);
+    if (!src.includes('scorefly.roll')) problems.push(`${id}: 得分没有滚动动画`);
+  });
+
+  const checkFly = (tag, sc, expectX, expectY) => {
+    if (!sc.cheer || !sc.cheer.text) problems.push(`${tag}: 没有出现上方提示`);
+    else if (!/\+\d/.test(sc.cheer.text)) problems.push(`${tag}: 提示里没有得分（${sc.cheer.text}）`);
+    if (!sc.fly.length) problems.push(`${tag}: 没有生成圆点`);
+    else if (Math.abs(sc.fly[0].tx - expectX) > 0.6 || Math.abs(sc.fly[0].ty - expectY) > 0.6) {
+      problems.push(`${tag}: 圆点目标不是得分格`);
+    }
+    const shown = scoreflyMod.shown(sc.scoreAnim, sc.now);
+    if (!(shown < sc.score)) problems.push(`${tag}: 得分没有滚动（直接跳到 ${sc.score}）`);
+    sc.now += 600;
+    if (Math.round(scoreflyMod.shown(sc.scoreAnim, sc.now)) !== sc.score) problems.push(`${tag}: 得分滚动没收敛`);
+  };
+
+  // 1) 麻将传奇：三连消
+  fakeApp.sceneId = 'legend';
+  const leg = new LegCls(fakeApp);
+  leg.phase = 'play';
+  leg.clock = 2000;
+  leg.now = 2000;
+  leg.grid = legLogic.emptyGrid();
+  [2, 3, 4].forEach((v, i) => { leg.grid[7][i] = { id: 9100 + i, v }; });
+  const legGroups = legLogic.findGroups(leg.grid);
+  leg.startClear({ chain: 2, clearSeqAtApply: 0 }, legGroups);
+  checkFly('传奇', leg, leg.cx + (leg.cw / 3) * 1.5, leg.scoreY + 43);
+  // 提示条要真的画出来
+  {
+    const ctx = makeCtx();
+    const drawn = [];
+    const origFill = ctx.fillText;
+    ctx.fillText = (v) => { drawn.push(String(v)); return origFill(v); };
+    leg.render(ctx);
+    if (!drawn.some(v => v === leg.cheer.text)) problems.push('传奇：提示条没有画到屏幕上');
+  }
+
+  // 2) 麻将英雄：三张同点成刻子
+  fakeApp.sceneId = 'mahjong';
+  const mah = new MahCls(fakeApp);
+  mah.clock = 2000;
+  mah.now = 2000;
+  mah.board = new Array(mahLogic.CELLS).fill(null);
+  [0, 1, 2].forEach((i) => { mah.board[i] = { value: 5 }; });
+  mah.settle();
+  const mahQ = mah.cw / (mah.mode === 1 ? 4 : 3);
+  checkFly('麻将英雄', mah, mah.cx + mahQ * 2.5, mah.scoreY + 48);
+
+  // 3) 扑克炼金术：同点四条
+  fakeApp.sceneId = 'alchemy';
+  const alc = new AlcCls(fakeApp);
+  alc.now = Date.now();
+  alc.grid = new Array(alcLogic.CELLS).fill(null);
+  const fourLine = alcLogic.LINES[0];
+  fourLine.forEach((i) => { alc.grid[i] = { kind: 'card', rank: 7, suit: 'heart' }; });
+  alc.settle(false);
+  checkFly('炼金术', alc, alc.cx + (alc.cw / 4) * 2.5, alc.scoreY + 44);
+
+  check(problems.length === 0, `飞圆点 / 上方提示：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 鼓励条配色：文字随机彩色（暗色 / 浅色两套） ----------
+{
+  const cheerMod = require(path.join(ROOT, 'js/core/cheer'));
+  const themeMod = require(path.join(ROOT, 'js/core/theme'));
+  const CrushCls = require(path.join(ROOT, 'js/games/crush/scene'));
+  const DownCls = require(path.join(ROOT, 'js/games/down/scene'));
+  const problems = [];
+  const lum = (hex) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return -1;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  };
+  const prevMode = themeMod.mode;
+  const darkPal = cheerMod.PALETTE.dark;
+  const lightPal = cheerMod.PALETTE.light;
+  if (new Set(darkPal).size !== darkPal.length) problems.push('暗色调色板有重复色');
+  if (new Set(lightPal).size !== lightPal.length) problems.push('浅色调色板有重复色');
+  if (darkPal.some(c => lightPal.includes(c))) problems.push('暗色 / 浅色调色板混用了同一批颜色');
+  // 暗色要亮字（压在深胶囊上）、浅色要深字（压在白胶囊上）
+  if (darkPal.some(c => lum(c) < 0.55)) problems.push(`暗色调色板有偏暗的颜色：${darkPal.filter(c => lum(c) < 0.55).join(',')}`);
+  if (lightPal.some(c => lum(c) > 0.55)) problems.push(`浅色调色板有偏亮的颜色：${lightPal.filter(c => lum(c) > 0.55).join(',')}`);
+
+  // 画一帧、抓文字颜色与胶囊底色
+  const paint = (dark, colorIndex) => {
+    themeMod.setMode(dark ? 'dark' : 'light');
+    fakeApp.sceneId = 'crush';
+    const sc = new CrushCls(fakeApp);
+    sc.initLevel(1);
+    const text = '测试鼓励文案';
+    sc.cheer = { text, at: sc.clock, color: colorIndex };
+    sc.clock += 520;
+    sc.now = sc.clock;
+    const ctx = makeCtx();
+    const seen = [];
+    const fills = [];
+    const origFill = ctx.fillText;
+    ctx.fillText = (v) => {
+      if (String(v) === text) seen.push(ctx.fillStyle);
+      return origFill(v);
+    };
+    const origFillPath = ctx.fill;
+    ctx.fill = () => { fills.push(String(ctx.fillStyle)); return origFillPath(); };
+    sc.render(ctx);
+    return { colors: seen, fills, text };
+  };
+  const darkPaint = paint(true, 2);
+  const lightPaint = paint(false, 2);
+  if (!darkPaint.colors.length) problems.push('暗色下鼓励条文字没画出来');
+  if (darkPaint.colors[0] === '#ffffff' || darkPaint.colors[0] === 'rgba(255,255,255,0.92)') {
+    problems.push('暗色下鼓励条还是纯白字（玩家反馈的「灰白」）');
+  }
+  if (darkPaint.colors[0] !== cheerMod.paletteColor(2, true)) problems.push('暗色文字颜色和调色板不一致');
+  if (lightPaint.colors[0] !== cheerMod.paletteColor(2, false)) problems.push('浅色文字颜色和调色板不一致');
+  if (darkPaint.colors[0] === lightPaint.colors[0]) problems.push('暗色 / 浅色用了同一种文字色');
+  // 胶囊底色：暗色必须是深底（否则亮字压在白半透明上就是一片灰白），浅色是白底
+  if (!darkPaint.fills.some(v => v.startsWith('rgba(22,24,26'))) problems.push('暗色胶囊底色不是深底');
+  if (!lightPaint.fills.some(v => v.startsWith('rgba(255,255,255'))) problems.push('浅色胶囊底色不是白底');
+
+  // 两个场景每次弹都换一种颜色（不和上一条重复）
+  themeMod.setMode('dark');
+  fakeApp.sceneId = 'crush';
+  const sc = new CrushCls(fakeApp);
+  sc.initLevel(1);
+  sc.clock = 3000;
+  const colors = [];
+  for (let i = 0; i < 6; i++) { sc.cheerFor(700, 1, 3, 0, 0); colors.push(sc.cheer.color); }
+  if (colors.some(c => !(c >= 0 && c < 6))) problems.push(`鼓励条颜色越界：${colors.join(',')}`);
+  if (colors.some((c, i) => i > 0 && c === colors[i - 1])) problems.push('连续两次用了同一种颜色');
+  fakeApp.sceneId = 'down';
+  const dn = new DownCls(fakeApp);
+  dn.celebrateScore();
+  const c1 = dn.cheer.color;
+  dn.celebrateScore();
+  if (!(c1 >= 0 && c1 < 6)) problems.push('下坠鼓励条没有分配颜色');
+  if (dn.cheer.color === c1) problems.push('下坠连续两次用了同一种颜色');
+  themeMod.setMode(prevMode || 'system');
+
+  check(problems.length === 0, `鼓励条配色：${problems.slice(0, 4).join('；')}`);
+}
+
+// ---------- 生命（爱心）：四个带生命的游戏统一数独样式 ----------
+{
+  const D = require(path.join(ROOT, 'js/core/draw'));
+  const cases = [
+    { id: 'sudoku', setup: (sc) => { sc.difficulty = 3; sc.hearts = 2; }, max: 3, center: (sc) => sc.cx + sc.cw * 0.75 },
+    { id: 'hunter', setup: (sc) => { sc.hearts = 2; }, max: 3, center: (sc) => sc.cx + sc.cw * (2.5 / 3) },
+    { id: 'detective', setup: (sc) => { sc.hearts = 2; }, max: 3, center: (sc) => sc.cx + sc.cw * (2.5 / 3) },
+    { id: 'gambler', setup: (sc) => { sc.hearts = 1; }, max: 2, center: (sc) => sc.cx + sc.cw * (3.5 / 4) },
+  ];
+  const problems = [];
+  cases.forEach(({ id, setup, max, center }) => {
+    const Cls = require(path.join(ROOT, `js/games/${id}/scene`));
+    fakeApp.sceneId = id;
+    const sc = new Cls(fakeApp);
+    setup(sc);
+    // D.hearts 内部调的是模块内的 text()，拦 D.text 拦不到 —— 直接从 ctx 上抓 fillText
+    const marks = [];
+    const c0 = makeCtx();
+    const origFill = c0.fillText;
+    c0.fillText = (value, x) => {
+      if (value === '❤️' || value === '🤍') {
+        const m = String(c0.font || '').match(/([\d.]+)px/);
+        marks.push({ value, x, size: m ? Number(m[1]) : 0 });
+      }
+      return origFill(value, x);
+    };
+    sc.drawScore(c0);
+    if (marks.length !== max) { problems.push(`${id}: 画了 ${marks.length} 颗（应 ${max}）`); return; }
+    const step = marks.length > 1 ? marks[1].x - marks[0].x : 20;
+    if (marks.length > 1 && Math.abs(step - 20) > 0.01) problems.push(`${id}: 爱心间距 ${step}（应 20）`);
+    const mid = (marks[0].x + marks[marks.length - 1].x) / 2;
+    if (Math.abs(mid - center(sc)) > 0.6) problems.push(`${id}: 爱心没在格子居中（${mid.toFixed(1)} vs ${center(sc).toFixed(1)}）`);
+    const filled = marks.filter((m) => m.value === '❤️').length;
+    if (filled !== sc.hearts) problems.push(`${id}: 实心 ${filled} 颗（应 ${sc.hearts}）`);
+    if (marks[0].size !== 17) problems.push(`${id}: 爱心字号 ${marks[0].size}（应 17）`);
+  });
+  check(problems.length === 0, `生命爱心样式：${problems.slice(0, 4).join('；')}`);
+}
+
 // ---------- 麻将传奇：分数卡下方不要等级进度条 ----------
 {
   const D = require(path.join(ROOT, 'js/core/draw'));

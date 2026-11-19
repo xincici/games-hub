@@ -24,6 +24,8 @@ const fabKit = require('../../core/fab');
 const cards = require('../../core/cards');
 const HEADER = require('../../core/header');
 const confetti = require('../../core/confetti');
+const scorefly = require('../../core/scorefly');
+const cheer = require('../../core/cheer');
 const { matchedMotion, TOTAL_MS: CLEAR_TOTAL_MS } = require('../../core/motion');
 const achv = require('../../core/achv');
 const board = require('./board');
@@ -57,7 +59,6 @@ const BACK_FALLBACK = '⚗';
 const FX_MIN = 300;
 // 得分浮字先露一下脸，再铺结算层（web 共用 RESULT_DELAY_MS）。
 const RESULT_DELAY_MS = 500;
-const CELEBRATE_MS = 950;
 const FLIGHT_MS = 210;
 const LAND_MS = 220;
 const FLASH_MS = 450;
@@ -87,7 +88,10 @@ class AlchemyScene extends Scene {
     this.cfg = this.configFor(1);
 
     this.clears = [];
-    this.celebrate = null;
+    this.cheer = null;
+    this.cheerColor = -1;
+    this.fly = [];
+    this.scoreAnim = scorefly.roller(0);
     this.confetti = [];
     this.bursts = [];
     this.confettiUntil = 0;
@@ -228,7 +232,9 @@ class AlchemyScene extends Scene {
 
   clearTransient() {
     this.clears = [];
-    this.celebrate = null;
+    this.cheer = null;
+    this.fly = [];
+    this.scoreAnim = scorefly.roller(this.score || 0);
     this.confetti = [];
     this.bursts = [];
     this.confettiUntil = 0;
@@ -377,6 +383,7 @@ class AlchemyScene extends Scene {
         gained = taken.reduce((sum, h) => sum + h.combo.score, 0);
       }
       this.score += gained;
+      scorefly.roll(this.scoreAnim, this.score, now);
       achv.peak('alchemy', this.mode === 2 ? 'gain2' : 'gain1', gained);
       if (!silent) {
         if (gained >= FX_MIN) this.app.audio.playFirework();
@@ -393,14 +400,21 @@ class AlchemyScene extends Scene {
       this.clears = ghosts;
       this.grid = this.grid.map((c, i) => (cleared.has(i) ? null : c));
 
-      this.celebrate = {
-        start: now,
-        gained,
-        tier: gained >= 1000 ? 3 : gained >= 500 ? 2 : 1,
-        name: t(`alchemy.combo${bestCombo.id.charAt(0).toUpperCase()}${bestCombo.id.slice(1)}`),
-        groups: zjh ? taken.length : 0,
-        chain: zjh ? this.chain : 0,
-      };
+      // 游戏区上方提示：牌型 + 得分（炸金花再带多消 / 连击）
+      const chainText = zjh && this.chain > 1 ? t('alchemy.comboChain').replace('{n}', this.chain) : '';
+      const groupsText = zjh && taken.length > 1 ? t('alchemy.comboGroups').replace('{n}', taken.length) : '';
+      this.showBanner([
+        t(`alchemy.combo${bestCombo.id.charAt(0).toUpperCase()}${bestCombo.id.slice(1)}`),
+        groupsText, chainText, `+${gained}`,
+      ].filter(Boolean).join('   '), now);
+      // 彩色圆点从被消掉的牌飞进「得分」格
+      scorefly.spawn(this.fly, {
+        points: ghosts.map(g => {
+          const r = this.cellRect(g.idx);
+          return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+        }),
+        tx: this.cx + (this.cw / 4) * 2.5, ty: this.scoreY + 44, at: now, size: this.cellW * 0.10,
+      });
       if (!silent && gained >= FX_MIN) {
         this.shakeAt = now;
         this.glowAt = now;
@@ -608,7 +622,8 @@ class AlchemyScene extends Scene {
       this.checkEnd();
     }
     if (this.clears.length) this.clears = this.clears.filter(g => this.now - g.start < CLEAR_TOTAL_MS);
-    if (this.celebrate && this.now - this.celebrate.start >= CELEBRATE_MS) this.celebrate = null;
+    if (this.cheer && this.now - this.cheer.at >= cheer.LIFE) this.cheer = null;
+    this.fly = scorefly.prune(this.fly, this.now);
     if (this.dealStart && this.now - this.dealStart > this.cellCount * DEAL_STEP + DEAL_MS) this.dealStart = 0;
 
     if (this.now < this.confettiUntil && this.now - this.lastConfettiAt >= 40) {
@@ -659,13 +674,35 @@ class AlchemyScene extends Scene {
     this.addButton('home', h.x, h.y, h.w, h.h, () => this.app.goHome());
   }
 
+  // 游戏区上方的提示条（core/cheer）：牌型 + 得分（+ 多消 / 连击），不再弹中央绿卡
+  showBanner(text, now) {
+    if (!text) return;
+    let color = Math.floor(Math.random() * 6);
+    if (color === this.cheerColor) color = (color + 1) % 6;
+    this.cheerColor = color;
+    this.cheer = { text, at: now || Date.now(), color };
+  }
+
+  drawCheer(c) {
+    if (!this.cheer) return;
+    const age = this.now - this.cheer.at;
+    if (age > cheer.LIFE) { this.cheer = null; return; }
+    this.cheerRect = cheer.draw(c, {
+      text: this.cheer.text, age, topY: this.top, boardY: this.boardY, colorIndex: this.cheer.color,
+    });
+  }
+
+  drawFly(c) {
+    scorefly.draw(c, this.fly, this.now);
+  }
+
   drawScore(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
     const cols = 4;
     const colW = this.cw / cols;
     const labels = [t('alchemy.level'), t('alchemy.left'), t('alchemy.score'), t('alchemy.target')];
-    const values = [String(this.level), String(this.cardsLeft()), String(this.score), String(this.cfg ? this.cfg.target : 0)];
+    const values = [String(this.level), String(this.cardsLeft()), String(this.scoreAnim ? Math.round(scorefly.shown(this.scoreAnim, this.now)) : this.score), String(this.cfg ? this.cfg.target : 0)];
     for (let i = 0; i < cols; i++) {
       const ccx = this.cx + colW * (i + 0.5);
       D.text(c, labels[i], ccx, this.scoreY + 21, { size: 11, color: T.muted, align: 'center' });
@@ -773,7 +810,8 @@ class AlchemyScene extends Scene {
     }
     c.restore();
 
-    this.drawCelebrate(c);
+    this.drawFly(c);
+    this.drawCheer(c);
     this.drawResult(c);
   }
 
@@ -801,59 +839,6 @@ class AlchemyScene extends Scene {
   }
 
   // 中央得分浮字：牌型名 + 本次得分（炸金花再带连消 / 连击两行）。
-  drawCelebrate(c) {
-    const cel = this.celebrate;
-    if (!cel) return;
-    const age = this.now - cel.start;
-    if (age < 0 || age > CELEBRATE_MS) return;
-    const T = theme.tokens;
-    const p = age / CELEBRATE_MS;
-    const pop = p < 0.28 ? 0.4 + 0.76 * (p / 0.28)
-      : p < 0.44 ? 1.16 - 0.16 * ((p - 0.28) / 0.16) : 1;
-    const alpha = p < 0.78 ? 1 : Math.max(0, 1 - (p - 0.78) / 0.22);
-    const rise = p < 0.78 ? 0 : ((p - 0.78) / 0.22) * 48;
-
-    const lines = [{ text: cel.name, size: cel.tier === 3 ? 24 : cel.tier === 2 ? 21 : 18, weight: 'bold' }];
-    if (cel.groups > 1) {
-      lines.push({ text: t('alchemy.comboGroups').replace('{n}', cel.groups), size: 13, weight: 'normal' });
-    }
-    if (cel.chain > 1) {
-      lines.push({ text: t('alchemy.comboChain').replace('{n}', cel.chain), size: 13, weight: 'normal' });
-    }
-    lines.push({ text: `+${cel.gained}`, size: 14, weight: 'bold' });
-
-    const padX = 14;
-    const padY = 10;
-    const gap = 3;
-    let textW = 0;
-    let textH = 0;
-    lines.forEach((l) => {
-      textW = Math.max(textW, D.measure(c, l.text, l.size, l.weight));
-      textH += l.size + 2;
-    });
-    const boxW = Math.min(this.boardW - 12, textW + padX * 2);
-    const boxH = textH + padY * 2 + gap * (lines.length - 1);
-    const cx = W / 2;
-    const cy = this.boardY + this.boardH / 2 - 24 - rise;
-
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(cx, cy);
-    c.scale(pop, pop);
-    D.fillRoundRect(c, -boxW / 2, -boxH / 2, boxW, boxH, 10, T.primary);
-    if (cel.tier > 1) {
-      D.strokeRoundRect(c, -boxW / 2 - 2, -boxH / 2 - 2, boxW + 4, boxH + 4, 12, 'rgba(255,255,255,0.55)', 2);
-    }
-    let ly = -boxH / 2 + padY;
-    lines.forEach((l, i) => {
-      ly += l.size / 2;
-      D.text(c, l.text, 0, ly, {
-        size: l.size, weight: l.weight, color: '#fff', align: 'center',
-      });
-      ly += l.size / 2 + 2 + (i < lines.length - 1 ? gap : 0);
-    });
-    c.restore();
-  }
 
   drawResult(c) {
     if (this.phase !== WON && this.phase !== OVER) return;

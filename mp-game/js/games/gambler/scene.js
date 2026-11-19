@@ -91,17 +91,6 @@ function heartPath(c, cx, cy, s) {
   c.bezierCurveTo(cx + s * 0.45, cy - s * 0.57, cx + s * 0.63, cy + s * 0.02, cx, cy + s * 0.36);
   c.closePath();
 }
-function drawHeart(c, cx, cy, s, color, filled) {
-  heartPath(c, cx, cy, s);
-  if (filled) {
-    c.fillStyle = color;
-    c.fill();
-  } else {
-    c.strokeStyle = color;
-    c.lineWidth = 1.2;
-    c.stroke();
-  }
-}
 
 // 文案放不下时逐 0.5px 缩字号（中文 / 英文都按字符测量）
 function fitFont(c, value, maxW, size, weight, min) {
@@ -826,30 +815,10 @@ class GamblerScene extends Scene {
   }
 
   drawHearts(c, cx, cy) {
-    const T = theme.tokens;
-    const s = 13;
-    const gap = 5;
-    const total = HEARTS_MAX * s + (HEARTS_MAX - 1) * gap;
-    let x = cx - total / 2 + s / 2;
-    for (let i = 0; i < HEARTS_MAX; i++) {
-      const alive = i < this.hearts;
-      drawHeart(c, x, cy, s, alive ? '#e2555a' : T.border, alive);
-      // 刚失去的那颗：放大淡出，播完才只剩描边（同 web 的 heart-pop）
-      if (!alive && this.heartLostAt >= 0 && i === this.heartLostIndex) {
-        const age = this.now - this.heartLostAt;
-        if (age >= 0 && age < HEART_POP_MS) {
-          const p = age / HEART_POP_MS;
-          const scale = p < 0.4 ? 1 + 0.55 * (p / 0.4) : 1.55 + 0.55 * ((p - 0.4) / 0.6);
-          c.save();
-          c.globalAlpha = p < 0.4 ? 1 : Math.max(0, 1 - (p - 0.4) / 0.6);
-          c.translate(x, cy);
-          c.scale(scale, scale);
-          drawHeart(c, 0, 0, s, '#e2555a', true);
-          c.restore();
-        }
-      }
-      x += s + gap;
-    }
+    // 生命：和数独同一套 emoji 样式；失去的那颗仍保留「放大淡出」的小动画
+    D.hearts(c, cx, cy, this.hearts, HEARTS_MAX, {
+      pop: { index: this.heartLostIndex, at: this.heartLostAt, now: this.now, ms: HEART_POP_MS },
+    });
   }
 
   drawOptions(c) {

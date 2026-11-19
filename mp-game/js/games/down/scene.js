@@ -14,6 +14,7 @@ const daily = require('../../core/daily');
 const fabKit = require('../../core/fab');
 const confetti = require('../../core/confetti');
 const cards = require('../../core/cards');
+const cheer = require('../../core/cheer');
 const HEADER = require('../../core/header');
 const { drawTimer } = require('../../core/timer');
 const logic = require('./board');
@@ -30,36 +31,7 @@ const STATE_KEY = '__emoji_down__state';
 const PLAY = 'play', OVER = 'over';
 // 每 50 分：游戏区上方放烟花 + 一条夸张鼓励（随机、不与上一条重复）
 const CHEER_KEYS = ['cheer1', 'cheer2', 'cheer3', 'cheer4', 'cheer5', 'cheer6', 'cheer7', 'cheer8'];
-const CHEER_LIFE = 1500;      // 整条提示的存在时间
-const CHEER_DROP_MS = 460;    // 从屏幕顶部砸下来（越过落点 → 压扁 → 回弹）
-const CHEER_EXIT_MS = 360;    // 最后这段放大 + 淡出
 const MILESTONE = 50;         // 分数每逢 50 的倍数就庆祝一次
-
-// 鼓励条「砸下来」的位移曲线：像有重量的东西 —— 先慢慢出动，后段重力加速，
-// 越过落点 4.5%（咚一下压进牌面一点），再弹回来 0.985 抖一下才停。
-function dropProgress(t) {
-  const k = Math.max(0, Math.min(1, t));
-  const IMPACT = 0.66;
-  if (k < IMPACT) {
-    const u = k / IMPACT;
-    return 1.045 * u * u;                    // 重力加速（ease-in）
-  }
-  if (k < 0.8) return 1.045 + (0.985 - 1.045) * ((k - IMPACT) / (0.8 - IMPACT));
-  if (k < 0.92) return 0.985 + (1.008 - 0.985) * ((k - 0.8) / (0.92 - 0.8));
-  return 1.008 + (1 - 1.008) * ((k - 0.92) / (1 - 0.92));
-}
-
-// 砸下来的挤压 / 拉伸：下落时纵向拉长，触底瞬间压扁，然后阻尼回正
-function dropSquash(age) {
-  const IMPACT_MS = CHEER_DROP_MS * 0.66;
-  if (age < IMPACT_MS) {
-    const u = Math.max(0, Math.min(1, age / IMPACT_MS));
-    return { x: 1 - 0.05 * u, y: 1 + 0.1 * u };
-  }
-  const d = (age - IMPACT_MS) / 300;
-  const damp = Math.exp(-3.2 * d) * Math.cos(d * Math.PI * 2.6);
-  return { x: 1 + 0.12 * damp, y: 1 - 0.17 * damp };
-}
 
 function fmt(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -167,7 +139,7 @@ class DownScene extends Scene {
     if (this.bg) this.bg.update(dt || 16);
     // 庆祝动画不受暂停 / 结算影响，先推进
     if (this.bursts.length) this.bursts = confetti.update(this.bursts, dt || 16, H);
-    if (this.cheer && Date.now() - this.cheer.at > CHEER_LIFE) this.cheer = null;
+    if (this.cheer && Date.now() - this.cheer.at > cheer.LIFE) this.cheer = null;
     if (this.phase !== PLAY || this.helpOpen) return;
     if (this.paused) {
       if (this.resumeCount && Date.now() >= this.resumeAt) {
@@ -293,7 +265,11 @@ class DownScene extends Scene {
     let i = Math.floor(Math.random() * CHEER_KEYS.length);
     if (CHEER_KEYS.length > 1 && i === this.cheerIdx) i = (i + 1) % CHEER_KEYS.length;
     this.cheerIdx = i;
-    this.cheer = { text: t('down.' + CHEER_KEYS[i]), at: Date.now() };
+    // 颜色随机且不和上一条重复（暗色 / 浅色两套调色板见 core/cheer.js）
+    let color = Math.floor(Math.random() * 6);
+    if (color === this.cheerColor) color = (color + 1) % 6;
+    this.cheerColor = color;
+    this.cheer = { text: t('down.' + CHEER_KEYS[i]), at: Date.now(), color };
     this.spawnCheerBursts();
     try {
       this.app.audio.playFirework();
@@ -331,51 +307,11 @@ class DownScene extends Scene {
   // 游戏区上方那条夸张鼓励：弹出 1.34 → 1、最后淡出；不拦操作
   drawCheer(c) {
     if (!this.cheer) return;
-    const T = theme.tokens;
-    const dark = theme.dark;
     const age = Date.now() - this.cheer.at;
-    if (age > CHEER_LIFE) { this.cheer = null; return; }
-    const fadeIn = Math.min(1, age / 100);
-    // 最后一段：一边放大一边淡出（像被"吹"散掉）
-    const outT = age > CHEER_LIFE - CHEER_EXIT_MS
-      ? Math.max(0, Math.min(1, (age - (CHEER_LIFE - CHEER_EXIT_MS)) / CHEER_EXIT_MS))
-      : 0;
-    const alpha = fadeIn * (1 - outT) * (1 - outT);   // 先慢后快地消失
-    const label = this.cheer.text;
-    const maxTextW = W - 72;
-    let size = 17;
-    while (size > 10 && D.measure(c, label, size, 'bold') > maxTextW) size -= 1;
-    const textW = D.measure(c, label, size, 'bold');
-    const bw = Math.min(W - 40, textW + 30);
-    const bh = Math.round(size + 17);
-    // 从屏幕顶部（header 之上）掉下来，落点是「底边正好贴着游戏区顶部」
-    const yStart = this.topY - bh;
-    const yTarget = this.boardY - bh / 2;
-    const k = age >= CHEER_DROP_MS ? 1 : dropProgress(age / CHEER_DROP_MS);
-    const y = yStart + (yTarget - yStart) * k;
-    const squash = dropSquash(age);
-    const grow = 1 + 0.45 * outT * outT;           // 消失时往上顶大一圈
-    const sx = squash.x * grow;
-    const sy = squash.y * grow;
-    this.cheerRect = { x: (W - bw) / 2, y: y - bh / 2, w: bw, h: bh };
-    // 只有浅色半透明底，不描边：底下的画面透得出来，不会糊成一块实心色
-    const fill = dark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.8)';
-    const fg = dark ? '#ffffff' : T.primary;
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(W / 2, y);
-    c.scale(sx, sy);
-    c.shadowColor = dark ? 'rgba(0,0,0,0.42)' : 'rgba(0,0,0,0.18)';
-    c.shadowBlur = 14;
-    c.shadowOffsetY = 4;
-    D.fillRoundRect(c, -bw / 2, -bh / 2, bw, bh, bh / 2, fill);
-    c.restore();
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(W / 2, y);
-    c.scale(sx, sy);
-    D.text(c, label, 0, 0, { size, weight: 'bold', color: fg, align: 'center' });
-    c.restore();
+    if (age > cheer.LIFE) { this.cheer = null; return; }
+    this.cheerRect = cheer.draw(c, {
+      text: this.cheer.text, age, topY: this.topY, boardY: this.boardY, colorIndex: this.cheer.color,
+    });
   }
 
   layout() {
