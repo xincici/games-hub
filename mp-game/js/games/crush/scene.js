@@ -50,7 +50,10 @@ const SHAKE_MS = 340;
 const GLOW_MS = 900;
 const MERGE_MS = 420;        // 4 连合并成大 emoji 的弹出
 const SCORE_ANIM_MS = 420;   // 得分数字滚动
-const SWEEP_MS = 460;        // 大 emoji 清整行 / 整列的扫光
+const MERGE_TRAVEL_MS = 320;  // 4 连合并：其余 emoji 分身飞向目标的时长
+const BLAST_STEP = 46;        // 大 emoji 清整行 / 整列：逐格爆破的间隔
+const BLAST_MS = 260;         // 单格爆破的时长
+const DEGRADE_MS = 460;      // 大 emoji 退化成普通 emoji 的闪光
 const BIG_GLOW_MS = 1800;    // 大 emoji 常驻呼吸光
 // 飞向得分区的圆点颜色（纯庆祝色，不跟主题走）
 
@@ -121,7 +124,10 @@ class CrushScene extends Scene {
     this.scoreGain = null;      // { n, at } —— 得分区旁的 +N
     this.fly = [];              // 飞向得分区的彩色圆点
     this.mergeFx = null;        // { idxs, at } —— 刚合成的大 emoji
-    this.sweepFx = null;        // { sweeps, at } —— 整行 / 整列扫光
+    this.merges = null;         // 4 连合并：{ idx, kind, from, at, dur }
+    this.mergeHide = null;      // 合并期间由自绘动画代替的原牌
+    this.lineFx = null;         // 大 emoji 清线：{ at, blasts, total }
+    this.lineAt = null;         // idx → 爆破时刻
     this.layout();
     this.boot();
   }
@@ -176,9 +182,17 @@ class CrushScene extends Scene {
     this.scoreGain = null;
     this.fly = [];
     this.mergeFx = null;
-    this.sweepFx = null;
+    this.merges = null;
+    this.mergeHide = null;
+    this.lineFx = null;
+    this.lineAt = null;
+    this.bigIds = [];          // 大 emoji 的出现先后（tile id）
+    this.degradeFx = [];        // 刚退化成普通 emoji 的位置
     this.layout();
     this.tiles = this.buildTiles();
+    this.bigIds = [];
+    this.degradeFx = [];
+    this.pruneBigIds();
     this.playDeal();
     this.touchIdle();
     this.save();
@@ -265,7 +279,12 @@ class CrushScene extends Scene {
     this.scoreGain = null;
     this.fly = [];
     this.mergeFx = null;
-    this.sweepFx = null;
+    this.merges = null;
+    this.mergeHide = null;
+    this.lineFx = null;
+    this.lineAt = null;
+    this.bigIds = [];          // 大 emoji 的出现先后（tile id）
+    this.degradeFx = [];        // 刚退化成普通 emoji 的位置
       this.moves = clamp(Math.floor(+saved.moves) || 0, 0, c.moves);
       this.phase = saved.phase;
       if (this.level > this.best) this.best = this.level;
@@ -343,11 +362,15 @@ class CrushScene extends Scene {
       }
       if (tile.dealAt && now >= tile.dealAt + DEAL_MS) tile.dealAt = 0;
     });
-    if (this.clearFx && now - this.clearFx.at > CLEAR_MS) this.clearFx = null;
+    const clearDur = (this.clearFx && this.clearFx.dur) || CLEAR_MS;
+    if (this.clearFx && now - this.clearFx.at > clearDur) this.clearFx = null;
     if (this.scoreAnim && now - this.scoreAnim.at > this.scoreAnim.dur) this.scoreAnim = null;
     if (this.scoreGain && now - this.scoreGain.at > 760) this.scoreGain = null;
     if (this.mergeFx && now - this.mergeFx.at > MERGE_MS) this.mergeFx = null;
-    if (this.sweepFx && now - this.sweepFx.at > SWEEP_MS) this.sweepFx = null;
+    if (this.lineFx && now - this.lineFx.at > this.lineFx.total + 80) {
+      this.lineFx = null;
+      this.lineAt = null;
+    }
     if (this.fly.length) this.fly = this.fly.filter(d => now - d.at - d.delay <= d.hold + d.dur);
     if (this.thawFx && now - this.thawFx.at > 560) this.thawFx = null;
     if (this.spring && now - this.spring.at > this.spring.dur) this.spring = null;
@@ -609,20 +632,60 @@ class CrushScene extends Scene {
     this.addScore(gained);
     if (blast.size || bigSweeps.length) this.shakeAt = this.clock;
     this.clearFx = {
-      matched, blast, bigLines, spawns, sweeps: bigSweeps, at: this.clock, huge: matched.size > 3,
+      matched, blast, bigLines, spawns, sweeps: bigSweeps, at: this.clock, huge: matched.size > 3, dur: CLEAR_MS,
     };
-    if (bigSweeps.length) this.sweepFx = { sweeps: bigSweeps, at: this.clock };
+    // 4 连合并：其余 emoji 变成「分身」飞向留下的那一格，那一格原地变大 + 呼吸
+    this.merges = [];
+    this.mergeHide = new Set();
+    spawns.forEach((info, idx) => {
+      const from = (info.cells || [idx]).filter(i => i !== idx);
+      this.merges.push({ idx, kind: info.kind, from, at: this.clock, dur: MERGE_TRAVEL_MS });
+      this.mergeHide.add(idx);
+      from.forEach(i => this.mergeHide.add(i));
+    });
+    // 大 emoji 清整行 / 整列：从它自己那一格出发、向两边逐格爆破
+    this.lineFx = null;
+    this.lineAt = null;
+    if (bigSweeps.length) {
+      const blasts = [];
+      let total = 0;
+      bigSweeps.forEach((sw) => {
+        (sw.cells || []).forEach((idx, k) => {
+          if (!bigLines.has(idx) && !matched.has(idx)) return;
+          total = Math.max(total, k * BLAST_STEP + BLAST_MS);
+          blasts.push({ idx, at: k * BLAST_STEP, dir: sw.dir });
+        });
+      });
+      if (blasts.length) {
+        this.lineFx = { at: this.clock, blasts, total, step: BLAST_STEP };
+        this.lineAt = new Map(blasts.map(b => [b.idx, this.clock + b.at]));
+      }
+    }
+    const wait = Math.max(CLEAR_MS, this.lineFx ? this.lineFx.total : 0);
+    if (this.clearFx) this.clearFx.dur = wait;
     this.spawnScoreFly(res.cleared);
     const cheered = this.cheerFor(gained, chain, matched.size, spawns.size, bigSweeps.length);
     // 炸弹 / 大 emoji 触发的那次消除即使不足 3 个，也播连击（烟花）音。
     if (blast.size || bigSweeps.length || cheered) this.app.audio.playFirework();
     else this.app.audio.playElimination();
-    this.schedule(CLEAR_MS, () => {
-      if (this.phase !== PLAY) { this.clearFx = null; this.busy = false; return; }
+    this.schedule(wait, () => {
+      if (this.phase !== PLAY) {
+        this.clearFx = null;
+        this.merges = null;
+        this.mergeHide = null;
+        this.lineFx = null;
+        this.lineAt = null;
+        this.busy = false;
+        return;
+      }
       let next = this.cells.map((v, i) => (res.cleared.has(i) ? null : v));
       // 合并出来的大 emoji 留在原地，之后继续参与连线
       spawns.forEach((info, idx) => { next[idx] = logic.big(info.kind); });
       this.clearFx = null;
+      this.merges = null;
+      this.mergeHide = null;
+      this.lineFx = null;
+      this.lineAt = null;
       // 先化冰（原地变回普通 emoji），再让重力穿过墙 / 冰回填
       this.cells = logic.applyThaw(next, thawed);
       this.cells = logic.applyGravity(this.cells, cols, rows, kinds, this.spawnOpts());
@@ -630,6 +693,15 @@ class CrushScene extends Scene {
       const gone = new Set([...res.cleared, ...spawns.keys()]);
       const survivors = this.tiles.filter(t => !gone.has(t.r * cols + t.c));
       this.syncTiles(survivors, true);
+      // 大 emoji 按出现先后记 tile id（下落 / 交换后位置会变，不能用格子下标）
+      // 先登记这一轮新生成的大 emoji，再 prune（prune 会把漏登记的按行优先补上，不能重复 push）
+      spawns.forEach((info, idx) => {
+        const t = this.tiles.find(tile => tile.r * cols + tile.c === idx);
+        if (t && this.bigIds.indexOf(t.id) < 0) this.bigIds.push(t.id);
+      });
+      this.pruneBigIds();
+      this.degradeExtraBigs(cols);
+      this.save();
       if (spawns.size) this.mergeFx = { idxs: new Set(spawns.keys()), at: this.clock };
       this.clearStaleSelection();
       this.schedule(FALL_MS, () => this.resolve(chain + 1));
@@ -637,6 +709,57 @@ class CrushScene extends Scene {
   }
 
   // cells → tiles 同步：下落只沿列发生，按列内顺序从下往上配对，不能按值配对
+  // 大 emoji 的新旧顺序用 tile id 维护：下落、交换、消除都不会弄错
+  pruneBigIds() {
+    const alive = new Set(this.tiles.filter(t => logic.isBig(t.value)).map(t => t.id));
+    this.bigIds = this.bigIds.filter(id => alive.has(id));
+    // 存档恢复 / 直接改盘面的路径：没登记过的大 emoji 按行优先补在后面（当作较新）
+    this.tiles
+      .filter(t => logic.isBig(t.value) && this.bigIds.indexOf(t.id) < 0)
+      .sort((a, b) => (a.r - b.r) || (a.c - b.c))
+      .forEach(t => this.bigIds.push(t.id));
+  }
+
+  // 盘面最多 3 个大 emoji：出现第 4 个时，最早那个原地退化回普通 emoji（带一圈闪光）
+  degradeExtraBigs(cols) {
+    let guard = 0;
+    while (this.bigIds.length > logic.MAX_BIG && guard++ < 8) {
+      const id = this.bigIds.shift();
+      const tile = this.tiles.find(t => t.id === id);
+      if (!tile) continue;
+      const idx = tile.r * cols + tile.c;
+      const kind = logic.bigKind(tile.value);
+      this.cells[idx] = kind;
+      tile.value = kind;
+      this.degradeFx.push({ idx, at: this.clock });
+    }
+  }
+
+  // 退化时的闪光（画在牌之上，只播一次）
+  drawDegrades(c) {
+    if (!this.degradeFx.length) return;
+    const now = this.now;
+    this.degradeFx = this.degradeFx.filter(f => now - f.at < DEGRADE_MS);
+    const T = theme.tokens;
+    this.degradeFx.forEach((f) => {
+      const p = clamp((now - f.at) / DEGRADE_MS, 0, 1);
+      const { x, y } = this.cellCenter(f.idx);
+      c.save();
+      c.globalAlpha = (1 - p) * 0.85;
+      c.strokeStyle = "#ffffff";
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(x, y, this.cell * (0.2 + 0.5 * easeOut(p)), 0, Math.PI * 2);
+      c.stroke();
+      c.globalAlpha = (1 - p) * 0.5;
+      c.fillStyle = T.primary;
+      c.beginPath();
+      c.arc(x, y, this.cell * 0.34 * (1 - p), 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    });
+  }
+
   syncTiles(prev, spawn) {
     const cols = this.conf.cols;
     const rows = this.conf.rows;
@@ -917,7 +1040,7 @@ class CrushScene extends Scene {
     this.drawScore(c);
     this.drawOptions(c);
     this.drawBoard(c);
-    this.drawSweep(c);
+    this.drawLineBlasts(c);
     this.drawScoreFly(c);
     this.drawCheer(c);
     if (this.phase !== PLAY) this.drawResult(c);
@@ -1093,37 +1216,90 @@ class CrushScene extends Scene {
   }
 
   // 大 emoji 清整行 / 整列：先铺一层会扩散的亮带，前缘一条更亮的线
-  drawSweep(c) {
-    const fx = this.sweepFx;
+  // 4 连合并：其余 emoji 缩成小分身飞向目标格；目标格原地变大、呼吸 + 光晕
+  drawMerges(c) {
+    if (!this.merges || !this.merges.length) return;
+    const now = this.now;
+    const w = this.cell;
+    this.merges.forEach((m) => {
+      const p = clamp((now - m.at) / m.dur, 0, 1);
+      const target = this.cellCenter(m.idx);
+      const face = cards.EMOJIS[m.kind] || cards.EMOJIS[0];
+      // 分身：先鼓一下，再加速吸进目标
+      m.from.forEach((from, k) => {
+        const delay = Math.min(0.45, k * 0.07);
+        const q = clamp((p - delay) / (1 - delay), 0, 1);
+        const e = q * q;      // 越接近目标越快（「被吸过去」）
+        const s = this.cellCenter(from);
+        const x = s.x + (target.x - s.x) * e;
+        const y = s.y + (target.y - s.y) * e - Math.sin(q * Math.PI) * w * 0.16;
+        const scale = (1 - 0.72 * q) * (q < 0.12 ? 1 + 0.18 * (q / 0.12) : 1);
+        c.save();
+        c.globalAlpha = clamp(1 - 0.35 * q, 0, 1);
+        c.translate(x, y);
+        c.scale(scale, scale);
+        cards.draw(c, face, cards.MODE_EMOJI, -w / 2, -w / 2, w, w, true);
+        c.restore();
+      });
+      // 目标：0.55 → 1.06 → 1，后半段开始呼吸（和常驻大 emoji 衔接）
+      const grow = p < 0.6 ? 0.55 + 0.51 * (p / 0.6) : 1.06 - 0.06 * ((p - 0.6) / 0.4);
+      const scale = grow * (p > 0.6 ? this.bigBreath(now) : 1);
+      c.save();
+      c.translate(target.x, target.y);
+      c.scale(scale, scale);
+      this.drawBigGlow(c, -w / 2, -w / 2, w, now);
+      cards.draw(c, face, cards.MODE_EMOJI, -w / 2, -w / 2, w, w, true);
+      this.drawBigAura(c, -w / 2, -w / 2, w, now, logic.big(m.kind));
+      c.restore();
+    });
+  }
+
+  cellCenter(idx) {
+    const r = ~~(idx / this.conf.cols);
+    const col = idx % this.conf.cols;
+    return {
+      x: this.innerX + col * this.pitch + this.cell / 2,
+      y: this.innerY + r * this.pitch + this.cell / 2,
+    };
+  }
+
+  // 大 emoji 清整行 / 整列：从它自己那一格出发，向左右 / 上下逐格爆破
+  drawLineBlasts(c) {
+    const fx = this.lineFx;
     if (!fx) return;
-    const p = clamp((this.now - fx.at) / SWEEP_MS, 0, 1);
-    if (p >= 1) return;
+    const now = this.now;
     const T = theme.tokens;
-    const grow = easeOut(p);
-    const fade = 1 - p;
+    const w = this.cell;
     c.save();
     D.roundRect(c, this.innerX, this.innerY, this.innerW, this.innerH, 8);
     c.clip();
-    fx.sweeps.forEach((sw) => {
+    fx.blasts.forEach((b) => {
+      const p = clamp((now - fx.at - b.at) / BLAST_MS, 0, 1);
+      if (p <= 0 || p >= 1) return;
+      const { x, y } = this.cellCenter(b.idx);
+      const e = easeOut(p);
       c.save();
-      if (sw.dir === 'row') {
-        const y = this.innerY + sw.index * this.pitch;
-        const full = this.conf.cols * this.pitch - this.gap;
-        c.globalAlpha = 0.30 * fade;
-        c.fillStyle = T.primary;
-        c.fillRect(this.innerX, y, full * grow, this.cell);
-        c.globalAlpha = 0.75 * fade;
-        c.fillStyle = '#ffffff';
-        c.fillRect(this.innerX + full * grow - 3, y, 3, this.cell);
-      } else {
-        const x = this.innerX + sw.index * this.pitch;
-        const full = this.conf.rows * this.pitch - this.gap;
-        c.globalAlpha = 0.30 * fade;
-        c.fillStyle = T.primary;
-        c.fillRect(x, this.innerY, this.cell, full * grow);
-        c.globalAlpha = 0.75 * fade;
-        c.fillStyle = '#ffffff';
-        c.fillRect(x, this.innerY + full * grow - 3, this.cell, 3);
+      // 亮核
+      c.globalAlpha = (1 - p) * 0.9;
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.arc(x, y, Math.max(1.5, w * 0.10 * (1 - p) + 2), 0, Math.PI * 2);
+      c.fill();
+      // 扩散环
+      c.globalAlpha = (1 - p) * 0.55;
+      c.strokeStyle = T.primary;
+      c.lineWidth = 2 + 2 * (1 - p);
+      c.beginPath();
+      c.arc(x, y, w * (0.12 + 0.55 * e), 0, Math.PI * 2);
+      c.stroke();
+      // 四散的碎屑
+      c.globalAlpha = (1 - p) * 0.8;
+      c.fillStyle = T.primary;
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + b.idx * 0.7;
+        const d = w * (0.15 + 0.5 * e);
+        const s = Math.max(1.5, w * 0.07 * (1 - p));
+        c.fillRect(x + Math.cos(a) * d - s / 2, y + Math.sin(a) * d - s / 2, s, s);
       }
       c.restore();
     });
@@ -1218,6 +1394,8 @@ class CrushScene extends Scene {
     c.clip();
     const ordered = this.tiles.slice().sort((a, b) => this.drawRank(a) - this.drawRank(b));
     ordered.forEach(tile => this.drawTile(c, tile));
+    this.drawMerges(c);
+    this.drawDegrades(c);
     c.restore();
     // 大消 / 连锁时棋盘外圈闪光
     if (now - this.glowAt < GLOW_MS) {
@@ -1291,6 +1469,11 @@ class CrushScene extends Scene {
     if (tile.dealAt && now < tile.dealAt) return;
     const pos = this.tilePos(tile);
     const idx = tile.r * this.conf.cols + tile.c;
+    // 4 连合并：这几张由 drawMerges 的分身代替，原牌先不画
+    if (this.mergeHide && this.mergeHide.has(idx)) return;
+    // 大 emoji 清线：这一格交给逐格爆破（时刻没到就照常画牌）
+    const lineBlastAt = this.lineAt ? this.lineAt.get(idx) : null;
+    if (lineBlastAt != null && this.now >= lineBlastAt) return;
     const cols = this.conf.cols;
     let scale = 1;
     let alpha = 1;
@@ -1315,7 +1498,7 @@ class CrushScene extends Scene {
     const value = tile.value;
     let clearP = 0;
     let blasting = false;
-    if (this.clearFx) {
+    if (this.clearFx && lineBlastAt == null) {
       const age = now - this.clearFx.at;
       const spawn = this.clearFx.spawns && this.clearFx.spawns.get(idx);
       if (spawn) {
@@ -1323,13 +1506,6 @@ class CrushScene extends Scene {
         const p = clamp(age / CLEAR_MS, 0, 1);
         scale *= 1 - 0.55 * p;
         alpha *= 1 - p;
-      } else if (this.clearFx.bigLines && this.clearFx.bigLines.has(idx)) {
-        // 整行 / 整列：整片同时炸开，比普通消除更亮更狠
-        const p = clamp(age / CLEAR_MS, 0, 1);
-        scale *= 1 + 0.55 * p;
-        alpha *= 1 - p * p;
-        blasting = true;
-        clearP = Math.min(1, p * 1.15);
       } else if (this.clearFx.matched.has(idx)) {
         const p = clamp(age / CLEAR_MS, 0, 1);
         // 先放大再缩小 + 两次闪烁
@@ -1344,10 +1520,12 @@ class CrushScene extends Scene {
         clearP = p;
       }
     }
-    // 刚合成的大 emoji：弹一下（0.55 → 1.07 → 1），和普通牌的入场区分开
+  // 刚合成的大 emoji：自绘合并动画已经长到 1，这里只轻轻一顿 + 爆散一圈
     if (this.mergeFx && this.mergeFx.idxs.has(idx)) {
+    const dg = this.degradeFx && this.degradeFx.find(f => f.idx === idx);
+    if (dg) scale *= 0.72 + 0.28 * easeOut(clamp((this.now - dg.at) / DEGRADE_MS, 0, 1));
       const mp = clamp((now - this.mergeFx.at) / MERGE_MS, 0, 1);
-      scale *= 0.55 + 0.45 * easeOut(mp) + 0.12 * Math.sin(mp * Math.PI);
+        scale *= 1 + 0.12 * Math.sin(mp * Math.PI);
     }
     if (value === logic.BOMB || value === logic.WILD) {
       scale *= 0.95 + 0.05 * Math.sin(now / 1600 * Math.PI * 2);

@@ -1598,15 +1598,6 @@ i18n.setLang('cn');
   daily.report('g2048', 'reach', { value: 2048 });
   check(daily.todayTask().done === true, '每日挑战：开了新局、分数够了却没完成');
 
-  // 「开一局」类任务：markNewRun 当场完成
-  wx.setStorageSync(daily.KEY, JSON.stringify({
-    v: 1,
-    cur: { date: todayKey, id: 'g2048_run', prog: 0, done: false, runs: {} },
-    days: {},
-    recent: ['g2048_run'],
-  }));
-  check(daily.markNewRun('g2048') === true, '每日挑战：开一局类任务没有当场完成');
-
   // 面板：展开后有关闭 / 上个月 / 下个月，且不能切到未来
   const homeDaily = new HomeScene(fakeApp);
   homeDaily.openDaily();
@@ -2723,7 +2714,7 @@ i18n.setLang('cn');
   check(problems.length === 0, `成就「最高得分」/总览：${problems.slice(0, 5).join('；')}`);
 }
 
-// ---------- 每日挑战：39 条任务逐条走生产路径，必须能推进 / 完成 ----------
+// ---------- 每日挑战：36 条任务逐条走生产路径，必须能推进 / 完成 ----------
 {
   const dailyMod = require(path.join(ROOT, 'js/core/daily'));
   const achvMod = require(path.join(ROOT, 'js/core/achv'));
@@ -2737,7 +2728,7 @@ i18n.setLang('cn');
   };
   const problems = [];
   const tasks = dailyMod.taskList();
-  if (tasks.length !== 39) problems.push(`任务池应为 39 条，实际 ${tasks.length}`);
+  if (tasks.length !== 36) problems.push(`任务池应为 39 条，实际 ${tasks.length}`);
   tasks.forEach((task) => {
     const gid = task.game === '*' ? 'click' : task.game;
     setTask(task.id);
@@ -2837,7 +2828,7 @@ i18n.setLang('cn');
   check(missing.length === 0, `每日任务缺少上报：${missing.slice(0, 6).join('、')}`);
 }
 
-// ---------- 每日挑战「任意游戏开 5 局」= 开新局，不是进场景 ----------
+// ---------- 每日挑战「任意游戏累计赢 4 局」= 每赢一局都计数 ----------
 {
   const dailyMod = require(path.join(ROOT, 'js/core/daily'));
   const achvMod = require(path.join(ROOT, 'js/core/achv'));
@@ -2850,32 +2841,16 @@ i18n.setLang('cn');
       days: {}, recent: [],
     }));
   };
-  setTask('any_play5');
-  // 只是「进入场景」（trackPlay）不该算开一局
-  achvMod.trackPlay('g2048');
-  if (dailyMod.todayTask().prog !== 0) {
-    problems.push(`只是进入游戏就记了 ${dailyMod.todayTask().prog} 局（应该 0）`);
-  }
-  // 没有存档时，进场景 = 开第 1 局；之后每点一次「新游戏」再 +1
-  setTask('any_play5');
-  wx.removeStorageSync('__game_2048__state');
-  const GCls = require(path.join(ROOT, 'js/games/g2048/scene'));
-  fakeApp.sceneId = 'g2048';
-  const gs = new GCls(fakeApp);
-  if (dailyMod.todayTask().prog !== 1) problems.push(`进游戏后应是 1 局，实际 ${dailyMod.todayTask().prog}`);
-  for (let i = 0; i < 4; i += 1) gs.startGame();
+  setTask('any_win4');
+  // 只是「进入场景」不该算赢
+  achvMod.trackPlay('click');
+  if (dailyMod.todayTask().prog !== 0) problems.push(`只是进入游戏就记了 ${dailyMod.todayTask().prog} 胜（应该 0）`);
+  for (let i = 0; i < 3; i += 1) achvMod.win('click', {});
+  if (dailyMod.todayTask().done) problems.push('赢 3 局就完成了「累计赢 4 局」');
+  achvMod.win('click', {});
   const task = dailyMod.todayTask();
-  if (task.prog !== 5 || !task.done) problems.push(`连开 5 局后应是 5/5 已完成，实际 ${task.prog}/5 完成=${task.done}`);
-  // 过一关也算新的一局（连连看进入 + 两次下一关 = 3）
-  setTask('any_play5');
-  wx.removeStorageSync('__emoji_link__state');
-  const LCls = require(path.join(ROOT, 'js/games/link/scene'));
-  fakeApp.sceneId = 'link';
-  const ls = new LCls(fakeApp);
-  ls.nextLevel();
-  ls.nextLevel();
-  if (dailyMod.todayTask().prog !== 3) problems.push(`连连看进 1 局 + 下一关 2 次应是 3，实际 ${dailyMod.todayTask().prog}`);
-  // 每个游戏都要在自己的「开新局」入口上报，防止以后新增游戏漏接
+  if (task.prog !== 4 || !task.done) problems.push(`赢 4 局后应是 4/4 已完成，实际 ${task.prog}/4 完成=${task.done}`);
+  // 每个游戏都要在自己的「开新局」入口上报（机制保留，供以后加开局面板任务）
   const ids = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
     'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
@@ -2883,8 +2858,9 @@ i18n.setLang('cn');
     const src = require('fs').readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
     if (src.indexOf(`achv.beginRound('${id}')`) < 0) problems.push(`${id}: 开新局没有上报 beginRound`);
   });
-  check(problems.length === 0, `每日挑战开新局：${problems.slice(0, 5).join('；')}`);
+  check(problems.length === 0, `每日挑战累计胜场：${problems.slice(0, 5).join('；')}`);
 }
+
 
 // ---------- 麻将传奇「字牌消除」成就 ----------
 {
@@ -3025,6 +3001,12 @@ i18n.setLang('cn');
     cells[0] = 4; cells[1] = 4; cells[2] = 4; cells[3] = 4;
     const sc2 = playScene(cells);
     sc2.resolve(1);
+    const mergeInfo = sc2.merges ? sc2.merges.slice() : [];
+    const mergeTarget = mergeInfo.length ? mergeInfo[0].idx : -1;
+    const mergeFrom = mergeInfo.length ? mergeInfo[0].from.length : 0;
+    const mergeHide = sc2.mergeHide ? sc2.mergeHide.size : 0;
+    const spawnIdx0 = sc2.clearFx ? [...sc2.clearFx.spawns.keys()][0] : -1;
+    const mergeTargetHidden = !!(sc2.mergeHide && sc2.mergeHide.has(mergeTarget));
     const flyCount = sc2.fly.length;
     const scoreAfter = sc2.score;
     const shownNow = sc2.scoreValue();
@@ -3056,13 +3038,18 @@ i18n.setLang('cn');
       if (!(late > early * 1.2)) problems.push(`圆点没有加速（前段 ${early.toFixed(2)} / 末段 ${late.toFixed(2)}）`);
     }
     if (!(shownNow < scoreAfter)) problems.push('得分是直接跳上去的，没有滚动');
+    if (mergeInfo.length !== 1) problems.push(`4 连没有合并动画（${mergeInfo.length}）`);
+    if (mergeFrom < 3) problems.push(`合成分身数量 ${mergeFrom}（应至少 3）`);
+    if (mergeHide !== mergeFrom + 1) problems.push(`合并期间隐藏的原牌 ${mergeHide}（应 = 分身 + 1）`);
+    if (mergeTarget !== spawnIdx0) problems.push('合并动画的目标不是大 emoji 的落点');
+    if (mergeInfo.length && !mergeTargetHidden) problems.push('合并目标没有「原地变大」，又被当成普通消除');
     if (!sawBig) problems.push('4 连后盘面上没有出现过大 emoji');
     if (!sawCheer) problems.push('结算过程中没有弹过鼓励条');
     if (Math.round(sc2.scoreValue()) !== sc2.score) problems.push(`得分滚动没收敛（${sc2.scoreValue()} vs ${sc2.score}）`);
     sc2.render(makeCtx());
   }
 
-  // 4) 场景：大 emoji 参与三连 → 出现扫光，且整行确实被清掉（用扫光记录判定）
+  // 4) 场景：大 emoji 参与三连 → 从它自己那一格出发、向左右逐格爆破
   {
     const { cols, rows } = playScene(null).conf;
     const cells = new Array(cols * rows).fill(1).map((_, i) => i % 4);
@@ -3070,11 +3057,34 @@ i18n.setLang('cn');
     cells[3] = 5; cells[4] = 5;
     const sc2 = playScene(cells);
     sc2.resolve(1);
-    const sweeps = sc2.sweepFx ? sc2.sweepFx.sweeps.slice() : [];
+    const fx = sc2.lineFx;
+    const blasts = fx ? fx.blasts.slice() : [];
+    const origin = 2;
+    const left = blasts.filter(b => b.idx < origin).length;
+    const right = blasts.filter(b => b.idx > origin).length;
+    const startAt = blasts.length ? Math.min(...blasts.map(b => b.at)) : -1;
+    const commitDur = sc2.clearFx ? sc2.clearFx.dur : 0;
+    const rowAllCleared = sc2.clearFx
+      && Array.from({ length: cols }, (_, i) => i).every(i => sc2.clearFx.bigLines.has(i) || sc2.clearFx.matched.has(i));
+    if (!blasts.length) problems.push('大 emoji 清线没有逐格爆破');
+    if (!blasts.some(b => b.idx === origin && b.at === startAt)) problems.push('爆破不是从大 emoji 自己那一格开始');
+    if (!left || !right) problems.push(`爆破没有向左右两个方向展开（左 ${left} / 右 ${right}）`);
+    if (!(commitDur > 360)) problems.push(`逐格爆破还没走完就提交了（${commitDur}ms）`);
+    const gaps = blasts.map(b => b.at).filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b);
+    if (gaps.length < 3) problems.push('爆破没有按距离分档（间隔）');
+    // 中段渲染：真的画了爆破
+    let blastsDrawn = 0;
+    const origBlast = sc2.drawLineBlasts.bind(sc2);
+    sc2.drawLineBlasts = (...args) => { blastsDrawn += 1; return origBlast(...args); };
+    sc2.clock += 120;
+    sc2.update(0);
     sc2.render(makeCtx());
-    run(sc2, 100);
-    sc2.render(makeCtx());
-    if (!sweeps.some(sw => sw.dir === 'row')) problems.push(`大 emoji 触发时没有整行扫光（${JSON.stringify(sweeps)}）`);
+    const active = blasts.filter(b => b.at <= 120 && b.at + 260 > 120).length;
+    if (!blastsDrawn) problems.push('爆破动画没有画出来');
+    if (active < 2) problems.push(`中段只有 ${active} 个格子同时在炸`);
+    run(sc2, 80);
+    if (sc2.lineFx) problems.push('爆破结束后没有收起');
+    if (!rowAllCleared) problems.push('整行没有被清掉');
   }
 
   // 5) 大 emoji 的辨识度：背后光晕 + 常驻呼吸光效都要真的画出来
@@ -3097,6 +3107,40 @@ i18n.setLang('cn');
     const b1 = sc.bigBreath(190);
     if (Math.abs(b0 - b1) < 0.02) problems.push('大 emoji 的呼吸幅度太小（看不出在动）');
     if (b0 > 1.051 || b0 < 0.949) problems.push(`大 emoji 呼吸幅度 ${b0} 超出 ±5%`);
+  }
+
+  // 6) 盘面最多 3 个大 emoji：第 4 个出现时最早那个退化
+  {
+    // 逻辑层：已有 2 / 3 个大 emoji 时，4 连仍然会合成（不再按数量拦截）
+    const b2 = [7, 7, 7, 7, L.big(1), L.big(2), 5, 4];
+    if (L.resolveClear(b2, 8, 1).spawns.size !== 1) problems.push('盘面已有 2 个大 emoji 时 4 连没合成');
+    const b3 = [7, 7, 7, 7, L.big(1), L.big(2), L.big(3), 5];
+    if (L.resolveClear(b3, 8, 1).spawns.size !== 1) problems.push('盘面已有 3 个大 emoji 时 4 连没合成');
+
+    // 场景层：3 个「老的」+ 一次 4 连 → 最早那个退化，盘面仍是 3 个
+    const base = playScene(null);
+    const { cols, rows } = base.conf;
+    const cells = new Array(cols * rows).fill(null);
+    cells[0] = 4; cells[1] = 4; cells[2] = 4; cells[3] = 4;
+    cells[cols] = L.big(1);
+    cells[cols + 1] = L.big(2);
+    cells[cols + 2] = L.big(3);
+    const sc = playScene(cells);
+    sc.pruneBigIds();
+    if (sc.bigIds.length !== 3) problems.push(`场景里 3 个大 emoji 没登记全（${sc.bigIds.length}）`);
+    sc.resolve(1);
+    let snap = null;
+    for (let i = 0; i < 240 && !snap; i++) {
+      sc.update(16);
+      if (sc.degradeFx.length) snap = { cells: sc.cells.slice(), fx: sc.degradeFx[0] };
+    }
+    if (!snap) problems.push('第 4 个大 emoji 出现时没有退化');
+    else {
+      const bigs = snap.cells.filter(v => L.isBig(v));
+      if (bigs.length !== L.MAX_BIG) problems.push(`退化后盘面有 ${bigs.length} 个大 emoji（应 ${L.MAX_BIG}）`);
+      if (bigs.some(v => L.bigKind(v) === 1)) problems.push('最早的大 emoji 没有退化（还是大的）');
+      if (snap.cells.indexOf(1) < 0) problems.push('退化后没有变回普通 emoji');
+    }
   }
 
   check(problems.length === 0, `消消乐大 emoji：${problems.slice(0, 4).join('；')}`);

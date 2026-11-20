@@ -269,6 +269,7 @@ function findMatches(board, cols, rows) {
 // 一段 4+ 的连线合并成 1 个大 emoji，落在这一段的中间格（不被清掉，留下来继续玩）。
 // 已经含大 emoji 的连线不再合并（否则会滚雪球）。
 const MERGE_MIN = 4;
+const MAX_BIG = 3;   // 盘面最多同时 3 个大 emoji（第 4 个出现时最早那个退化）
 
 function pickSpawnCell(run, board) {
   const n = run.cells.length;
@@ -283,6 +284,24 @@ function pickSpawnCell(run, board) {
 
 // 一轮结算最多只给 1 个大 emoji（取最长的那条连线）：不设上限的话连锁里到处是 4 连，
 // 盘面会被整行清除刷爆，难度直接塌掉（实测每局会合出 15 个）。
+// 从大 emoji 所在格出发，向左右 / 上下两个方向逐格排开（同一距离的两格相邻，左右交替）
+function waveCells(origin, dir, cols, rows) {
+  const list = [origin];
+  const r0 = ~~(origin / cols);
+  const c0 = origin % cols;
+  const n = dir === 'row' ? cols : rows;
+  for (let d = 1; d < n; d++) {
+    if (dir === 'row') {
+      if (c0 - d >= 0) list.push(r0 * cols + (c0 - d));
+      if (c0 + d < cols) list.push(r0 * cols + (c0 + d));
+    } else {
+      if (r0 - d >= 0) list.push((r0 - d) * cols + c0);
+      if (r0 + d < rows) list.push((r0 + d) * cols + c0);
+    }
+  }
+  return list;
+}
+
 function mergeSpawns(runs, board) {
   const spawns = new Map();
   const sorted = runs
@@ -290,7 +309,10 @@ function mergeSpawns(runs, board) {
     .sort((a, b) => b.cells.length - a.cells.length);
   if (!sorted.length) return spawns;
   const run = sorted[0];
-  spawns.set(pickSpawnCell(run, board), { kind: run.kind, dir: run.dir, len: run.cells.length });
+  // cells 是整段连线的格子（含留下的那一格）：场景要用它播「其余 emoji 分身飞向目标」的动画
+  spawns.set(pickSpawnCell(run, board), {
+    kind: run.kind, dir: run.dir, len: run.cells.length, cells: run.cells.slice(),
+  });
   return spawns;
 }
 
@@ -367,11 +389,12 @@ function bigLineCells(board, cols, rows, runs, blast) {
     for (const dir of lines) {
       if (dir === 'row') {
         const r = ~~(i / cols);
-        sweeps.push({ dir, index: r });
+        // cells：从大 emoji 出发、由近到远的顺序，场景按这个顺序逐格爆破
+        sweeps.push({ dir, index: r, origin: i, cells: waveCells(i, 'row', cols, rows) });
         for (let c = 0; c < cols; c++) cells.add(r * cols + c);
       } else {
         const c = i % cols;
-        sweeps.push({ dir, index: c });
+        sweeps.push({ dir, index: c, origin: i, cells: waveCells(i, 'col', cols, rows) });
         for (let r = 0; r < rows; r++) cells.add(r * cols + c);
       }
     }
@@ -387,8 +410,9 @@ function bigLineCells(board, cols, rows, runs, blast) {
 //   1) 找连线 → 2) 4+ 合并成大 emoji → 3) 炸弹连锁炸 → 4) 大 emoji 清整行 / 整列
 //   5) 新清掉的格子可能再波及炸弹 / 大 emoji，循环到稳定
 // 返回 { runs, matched, blast, bigLines, bigSweeps, bigTriggered, cleared, spawns }
-// opts.spawn === false：这一轮不合成大 emoji（场景里只在玩家自己那一步允许），
-// opts.maxBig：盘面上同时最多几个大 emoji（默认 2，防止整盘都是大 emoji）
+// opts.spawn === false：这一轮不合成大 emoji（场景里只在玩家自己那一步允许）。
+// 盘面同时最多 MAX_BIG = 3 个大 emoji：第 4 个出现时由场景把**最早那个**退化回普通 emoji，
+// 所以这里不再按数量拦截合成（拦截的话第 4 个根本不会出现，也就没有「退化」这回事）。
 // 注意：spawns 里的格子不会进 cleared（它们要留下来变成大 emoji）。
 function resolveClear(board, cols, rows, opts = {}) {
   const runs = findRuns(board, cols, rows);
@@ -400,11 +424,8 @@ function resolveClear(board, cols, rows, opts = {}) {
       bigSweeps: [], bigTriggered: new Set(), cleared: new Set(), spawns: new Map(),
     };
   }
-  // 4 连在这套 emoji 种类下很常见：盘面同时最多留 2 个大 emoji，
-  // 否则整盘都是大 emoji、每两步清一次整行，观感和难度都会失控
-  const bigOnBoard = board.reduce((n, v) => n + (isBig(v) ? 1 : 0), 0);
-  const maxBig = opts.maxBig == null ? 2 : opts.maxBig;
-  const spawns = opts.spawn === false || bigOnBoard >= maxBig ? new Map() : mergeSpawns(runs, board);
+  // 合成不再按数量拦截：盘面最多 3 个的约束由场景 / 离线模拟在结算后统一处理
+  const spawns = opts.spawn === false ? new Map() : mergeSpawns(runs, board);
   const blast = new Set();
   const bigLines = new Set();
   const bigSweeps = [];
@@ -561,6 +582,13 @@ function resolveTurn(board, cols, rows, kinds, a, b, opts = {}, rand = Math.rand
     res.spawns.forEach((info, idx) => { cur[idx] = big(info.kind); });
     cur = applyThaw(cur, thawed);
     cur = applyGravity(cur, cols, rows, kinds, opts, rand);
+    // 盘面最多 3 个大 emoji：离线模拟没有 tile id，按行优先挑最靠前的退化（只用于难度校准）
+    let bigCount = cur.reduce((n, v) => n + (isBig(v) ? 1 : 0), 0);
+    for (let i = 0; i < cur.length && bigCount > MAX_BIG; i++) {
+      if (!isBig(cur[i])) continue;
+      cur[i] = bigKind(cur[i]);
+      bigCount--;
+    }
   }
   return { board: cur, gained, cascades: cascade, merges, lineClears };
 }
@@ -572,7 +600,7 @@ module.exports = {
   CAP_LEVEL, levelConfig,
   neighbors4, neighbors8, adjacent,
   generateBoard, findMatches, findRuns, explode, thawTargets, applyThaw,
-  bigLineCells, resolveClear, MERGE_MIN,
+  bigLineCells, resolveClear, MERGE_MIN, MAX_BIG, waveCells,
   hasMatchAfterSwap, hasAnyMove, applyGravity,
   MATCH_BASE, MATCH_EXTRA, CHAIN_STEP, CHAIN_MAX, SCORE_PER_BLAST,
   SCORE_PER_LINE, BIG_TRIGGER_BONUS,

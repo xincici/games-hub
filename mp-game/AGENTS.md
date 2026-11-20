@@ -376,7 +376,7 @@ game.js
 - **中英双语**：任务池每条都有 `cn` / `en`，取文案统一走 `daily.descOf(task)`（内部按 `i18n.lang` 选，
   ⚠️ 不是 `i18n.language`）；月历标题 `monthData().title` 也是 `Nov 2026` / `2026 年 11 月` 两套，
   星期行用 `dailyWeek`（`一二三四五六日` / `MTWTFSS`）。其余标签全走 `t('daily*')`。
-- **任务池 39 条**，覆盖 25 个游戏（`POOL`）。任务字段：`{ id, game, kind, need, field?, cn, en }`，
+- **任务池 36 条**（2026-11 删掉「开一局新的 2048」「任意游戏开 5 局」「任意游戏完美赢一局」），覆盖 25 个游戏（`POOL`）。任务字段：`{ id, game, kind, need, field?, cn, en }`，
   `game: '*'` 表示任意游戏；`kind` 有 `play / win / perfect / fast / level / reach / bump / peak`。
 - **「开一局」的口径 = 开始一局新游戏，不是进入场景**：`achv.beginRound(id)` → `daily.report(id, 'play')`。
   每个游戏都插在**最底层的开新局方法**里（`startLevel / startGame / newGame / initLevel / deal / startRound`，
@@ -388,7 +388,7 @@ game.js
   `if (this.level > this.best)` / 新纪录 / `if (!silent)` 这类「第一次」分支里 ——
   麻将英雄就踩过：胜利上报被包在 `level > best` 内，重复打已通关的关卡永远不计数，
   「赢一局麻将英雄」怎么打都完不成。
-- **任务池要能整体回归**：`daily.taskList()` 导出全部 39 条；冒烟会逐条把 `cur` 设成该任务、
+- **任务池要能整体回归**：`daily.taskList()` 导出全部 36 条；冒烟会逐条把 `cur` 设成该任务、
   用生产 API（`achv.win / peak / reach / beginRound`、`daily.markNewRun`）推进到完成，
   再静态对照「每条具名任务的场景里真的有对应上报调用」，并禁止 `achv.win` 出现在 best 判断附近。
   新增 / 改任务后必须让这三把尺子全绿。
@@ -423,9 +423,12 @@ game.js
   - 场景里开始**新的一局**时调 `daily.markNewRun(id)`（g2048 / three / snake / down 在 `startGame()`、
     legend 在 `startNewRun()`；`restore()` 走的恢复路径**不调**）；
   - `daily.report(id, 'reach', …)` 只有在 `cur.runs[id]` 为真时才计数；
-  - `kind: 'run'`（「开一局新的 2048」）在 `markNewRun` 时当场完成。
+  - `kind: 'run'`（开一局当场完成）与 `kind: 'play'`（开一局 +1）的机制仍然保留，
+    但 **2026-11 起池子里已经没有这两类任务**（删了「开一局新的 2048」「任意游戏开 5 局」），
+    新加这类任务时直接用 `markNewRun` / `beginRound` 即可。
   - 文案统一写成「开一局新的 X，达到 …」，别写「X：单局 50 分」这种含糊说法。
-- **太靠运气的任务不要**：已删掉「滑行：不用死局重排赢一局」「扑克：拿到四条」；池子 **39 条**。
+- **太靠运气的任务不要**：已删掉「滑行：不用死局重排赢一局」「扑克：拿到四条」；
+  2026-11 又删了 3 条参与感弱 / 太泛的：「开一局新的 2048」「任意游戏开 5 局」「任意游戏完美赢一局」；池子 **36 条**。
 - **面板背景要不透明**：先 `fillStyle = T.bg` 铺满整屏，再叠一层淡暖色渐变；
   只画渐变不铺底的话，首页蜂窝会透上来，文字看不清（踩过）。
 - **能提前判定的就在场景里直接上报**：2048（合并出新高牌）、贪吃蛇（吃一口）、下坠（消一排）
@@ -444,13 +447,21 @@ game.js
 - **一轮结算只有一个入口 `logic.resolveClear(board, cols, rows, opts)`**：连线 → 合并 → 炸弹连锁 →
   大 emoji 清线，循环到稳定；返回 `{ runs, matched, blast, bigLines, bigSweeps, bigTriggered, cleared, spawns }`。
   在线（场景）与离线（`resolveTurn` 难度校准）共用，**不要各写一套**。
-- **平衡上限（踩过的坑）**：`opts.maxBig` 默认 **2**（盘面同时最多 2 个大 emoji），
-  场景只在 `chain === 1`（玩家自己那一步）允许合成。不设限时 4 连太常见 —— 实测每局合出 15 个、
-  每两步清一次整行、得分 ×1.5~1.8，难度直接塌掉；现在实测 0.8~4.9 个/局、得分 ×1.0~1.11。
+- **盘面最多 3 个大 emoji（`logic.MAX_BIG = 3`），第 4 个出现时最早那个退化回普通 emoji**：
+  - **不要再用数量拦截合成**：`resolveClear` 里已经删掉 `bigOnBoard >= maxBig` 的判断 ——
+    拦掉的话第 4 个根本不会出现，「退化」也就无从谈起。上限由场景在提交时统一处理。
+  - 顺序用 **tile id** 维护（`this.bigIds`）：大 emoji 会下落 / 被交换，格子下标会变，不能用 idx。
+    提交时先登记这一轮新生成的大 emoji（`indexOf` 去重）→ `pruneBigIds()`（清掉已消失的、补登记存档恢复出来的）
+    → `degradeExtraBigs()`（`shift()` 最早那个 → 原地改回普通 emoji + 一圈白色闪光 `degradeFx`）。
+    ⚠️ 顺序反了（先 prune 再 push）会让 prune 把新牌当「漏登记」再补一遍，一次退化两个。
+  - 场景只在 `chain === 1`（玩家自己那一步）允许合成。
+  - 离线 `resolveTurn`（难度校准）没有 tile id，按行优先退化最靠前的一个 —— 只是近似，别拿它当顺序依据。
+  - 实测（AI 最佳交换、120 手、12 局）Lv1 每局合出 ~34 个（旧上限 2 时 ~20 个），但**得分不涨**
+    （54k vs 57k）：多出来的合成都用来替换旧的大 emoji，整行清除并没有变多。
 - 计分：`SCORE_PER_LINE = 12` / 格 + `BIG_TRIGGER_BONUS = 80`，再乘连锁倍率（整行格数多，单价要低）。
 - **得分反馈三层**：`addScore()` 做数字滚动（`scoreValue()` 按 `SCORE_ANIM_MS` 插值）+ 数字脉冲 +
   得分格旁浮 `+N`；`spawnScoreFly()` 从被消除的每一格扔彩色圆点飞进「得分」格
-  （起点在棋盘内、终点就是得分格数值的位置）；`drawSweep()` 给整行 / 整列铺一条扩散亮带 + 白色前缘。
+  （起点在棋盘内、终点就是得分格数值的位置）；`drawLineBlasts()` 给整行 / 整列做逐格爆破（亮核 + 扩散环 + 碎屑）。
 - **消除 / 连击只弹「鼓励条」，不再有绿色得分卡**（玩家反馈那张卡太碍眼）：
   复用 `core/cheer.js`（和 Emoji 下坠同一个模块）：从屏幕顶部砸下来 → 越过落点压扁 → 阻尼回弹 →
   停留 1.5s → 放大淡出；**只写鼓励话、不显示得了多少分**。
@@ -473,7 +484,21 @@ game.js
   ⚠️ 贝塞尔**控制点必须贴近起点**（`x0 + dx*0.12`、`y0 - 16~46`）：放在两点中点正上方时，
   起步那一段反而最长，曲线看起来是「先快后慢」，和 `p^2.1` 完全打架（实测末段位移只有前段的 1/3）。
   拖尾用同一颗点「早 7% 进度」的位置，飞得越快尾巴越长。
-- **合成本身要看得出来**（玩家反馈过「不够明显」，加了一层又一层，别再减）：
+- **合并 / 清线的动画是「先演完再落盘」**（2026-11 调整，和以前「先消除再蹦出一个大的」不一样）：
+  - **4 连合并**：`spawns.get(idx).cells` 带整段连线的格子（`board.js`）。场景在 `resolve()` 里建
+    `this.merges = [{ idx, kind, from, at, dur: MERGE_TRAVEL_MS }]` 与 `this.mergeHide`（目标 + 所有分身格），
+    `drawMerges()` 里：**其余 emoji 缩成小分身、加速吸进目标格**（`q^2` 缓动 + 0.16 格抬升），
+    目标格**原地从 0.55 长到 1.06 再回 1**，后半段直接接 `bigBreath()` + `drawBigGlow()` / `drawBigAura()`；
+    `drawTile()` 对 `mergeHide` 里的格子直接 return（原牌不画，避免和分身重影）。
+    `CLEAR_MS(360) > MERGE_TRAVEL_MS(320)`，提交时才换成真的大 emoji，`mergeFx` 只做 `1 → 1.12 → 1` 的一顿。
+  - **清整行 / 整列**：`bigSweeps[].cells` 是**从大 emoji 出发、由近到远**的顺序（`waveCells()`：左右 / 上下交替）。
+    场景生成 `this.lineFx = { at, blasts, total }` + `this.lineAt`（idx → 爆破时刻），
+    每格间隔 `BLAST_STEP = 46ms`、单格 `BLAST_MS = 260ms`；`drawLineBlasts()` 画亮核 + 扩散环 + 四散碎屑。
+    `drawTile()` 里 **`now >= lineAt` 的格子直接不画**（逐格消失，而不是整片同时炸），
+    并且这些格子**跳过普通消除动画**（`if (this.clearFx && lineBlastAt == null)`）。
+  - **提交时间要等动画放完**：`wait = max(CLEAR_MS, lineFx.total)`，`clearFx.dur = wait`、`schedule(wait)`。
+    否则整行刚炸到一半就重力回填，最后一格会「凭空消失又补一张」。
+- **合成本身要看得出来**（玩家反馈过「不够明显」加了一层又一层，别再减）：
   - `mergeFx` 管 0.55 → 1.07 → 1 的弹出 + 一圈菱形爆散（只播一次）；
   - 常驻：整张牌 **呼吸 ±5% / 760ms**（`bigBreath(now)`，抽成方法方便断言）、
     **背后径向光晕**（`drawBigGlow`，半径 0.72~0.86 格、能透出格子外一圈，画在 `cards.draw` **之前**）、
@@ -484,6 +509,9 @@ game.js
   场景里真的出现过 大 emoji、圆点起点 / 终点几何、得分先小于最终值再收敛、扫光出现、
   大 emoji 渲染时 `drawBigGlow` / `drawBigAura` 都真的被调用、`bigBreath` 振幅 ≥ 0.02 且不超出 ±5%、
   圆点悬停阶段位移 < 4.5px、末段速度 > 前段 1.2×（证明真的在加速）、
+  4 连有合并动画（分身数 ≥3、隐藏格 = 分身 + 1、目标就是大 emoji 落点）、
+  盘面最多 3 个大 emoji（第 4 个出现时最早那个退回普通 emoji、盘面仍 3 个）、
+  清线逐格爆破（从大 emoji 那格开始、左右都有、提交时间 > 360ms、中段至少 2 格同时在炸、结束后收起）、
   圆点数量 = `clamp(格数×3, 10, 42)`、每颗被消除的牌都至少吐 1 颗、颜色 ≥3 种、
   传奇「真实点击落子成顺子」后圆点至少出现 10 帧（`onCell` 路径，不是直接调 startClear）、
   鼓励条档位正确 / 普通三连不弹 / 文案里没有分数 / 渲染时真的画出来且落在游戏区上方、

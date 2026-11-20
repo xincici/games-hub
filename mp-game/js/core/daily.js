@@ -41,7 +41,6 @@ const POOL = [
   { id: 'quesheng_win1', game: 'quesheng', kind: 'win', need: 1, cn: '赢一局雀圣', en: 'Win a Quesheng round' },
   { id: 'gambler_win1', game: 'gambler', kind: 'win', need: 1, cn: '赢一局赌神', en: 'Win a Gambler round' },
   { id: 'gambler_streak3', game: 'gambler', kind: 'peak', field: 'streak1', need: 3, cn: '赌神：即时模式连胜 3 场', en: 'Gambler: 3 wins in a row' },
-  { id: 'g2048_run', game: 'g2048', kind: 'run', need: 1, cn: '开一局新的 2048', en: 'Start a new 2048 game' },
   { id: 'g2048_tile512', game: 'g2048', kind: 'reach', need: 512, cn: '开一局新的 2048，最高牌到 512', en: 'New 2048 run: reach the 512 tile' },
   { id: 'three_2000', game: 'three', kind: 'reach', need: 2000, cn: '开一局新的 Threes，打到 2000 分', en: 'New Threes run: score 2000' },
   { id: 'snake_100', game: 'snake', kind: 'reach', need: 100, cn: '开一局新的贪吃蛇，打到 100 分', en: 'New Snake run: score 100' },
@@ -49,8 +48,6 @@ const POOL = [
   { id: 'legend_3000', game: 'legend', kind: 'reach', need: 3000, cn: '开一局新的麻将传奇，打到 3000 分', en: 'New Legend run: score 3000' },
   { id: 'any_win3', game: '*', kind: 'win', need: 3, cn: '任意游戏累计赢 3 局', en: 'Win 3 rounds in any games' },
   { id: 'any_win4', game: '*', kind: 'win', need: 4, cn: '任意游戏累计赢 4 局', en: 'Win 4 rounds in any games' },
-  { id: 'any_play5', game: '*', kind: 'play', need: 5, cn: '任意游戏开 5 局', en: 'Start 5 rounds in any games' },
-  { id: 'any_perfect', game: '*', kind: 'perfect', need: 1, cn: '任意游戏完美赢一局', en: 'Win any game perfectly' },
 ];
 
 const byId = {};
