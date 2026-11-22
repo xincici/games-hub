@@ -54,6 +54,11 @@ class MasterScene extends Scene {
     this.lastConfettiAt = 0;
     this.now = Date.now();
     this.tileId = 0;
+    this.score = 0;
+    this.maxCombo = 0;
+    this.combo = 0;
+    this.comboUntil = 0;
+    this.scorePulseAt = -1;
     this.layout();
     this.boot();
   }
@@ -80,10 +85,14 @@ class MasterScene extends Scene {
       if (!s || !Array.isArray(s.tiles) || !Array.isArray(s.tray)) return false;
       this.level = Math.max(1, +s.level || 1);
       this.cfg = board.levelConfig(this.level, this.mode);
+      this.score = Math.max(0, Math.floor(+s.score) || 0);
+      this.maxCombo = Math.max(0, Math.floor(+s.maxCombo) || 0);
       if (s.phase === 'won') {
         this.tiles = [];
         this.tray = [];
         this.phase = 'won';
+        this.score = Math.max(0, Math.floor(+s.score) || this.score);
+        this.maxCombo = Math.max(0, Math.floor(+s.maxCombo) || this.maxCombo);
         this.flights = [];
         this.clearFx = [];
         this.layout();
@@ -98,6 +107,8 @@ class MasterScene extends Scene {
       }
       const tray = s.tray.map(t => ({ id: +t[0], emoji: String(t[1]), arrived: true }));
       if (tray.length > 7) return false;
+      // 旧版本 4 关以后也是 7 格；恢复时不要因为新版收窄到 6 格就直接判负。
+      if (tray.length > this.cfg.traySize) this.cfg.traySize = tray.length;
       this.tiles = tiles;
       this.tray = tray;
       this.tileId = Math.max(0, ...tiles.map(t => t.id), ...tray.map(t => t.id));
@@ -122,6 +133,11 @@ class MasterScene extends Scene {
     this.tray = [];
     this.flights = [];
     this.clearFx = [];
+    this.score = 0;
+    this.maxCombo = 0;
+    this.combo = 0;
+    this.comboUntil = 0;
+    this.scorePulseAt = -1;
     this.dealStart = Date.now();
     this.phase = 'play';
     this.confirming = false;
@@ -150,16 +166,24 @@ class MasterScene extends Scene {
     setRaw(this.stateKey(), JSON.stringify({
       level: this.level,
       phase: this.phase,
+      score: this.score,
+      maxCombo: this.maxCombo,
       tiles: this.tiles.map(t => [t.id, t.emoji, t.layer, t.x, t.y]),
       tray: this.tray.map(t => [t.id, t.emoji]),
     }));
   }
   saveWin() {
     setRaw(this.levelKey(), String(this.level));
-    setRaw(this.stateKey(), JSON.stringify({ level: this.level, phase: 'won', tiles: [], tray: [] }));
+    setRaw(this.stateKey(), JSON.stringify({ level: this.level, phase: 'won', score: this.score, maxCombo: this.maxCombo, tiles: [], tray: [] }));
   }
   pick(tile) {
     if (this.phase !== 'play' || !this.free.has(tile.id)) return;
+    if (this.tray.length >= this.cfg.traySize) {
+      this.phase = 'over';
+      this.saveState();
+      this.app.audio.playLose();
+      return;
+    }
     const key = cards.keyOf(tile.emoji);
     const source = this.tileRect(tile);
     this.tiles = this.tiles.filter(t => t.id !== tile.id);
@@ -173,6 +197,7 @@ class MasterScene extends Scene {
     });
     const count = board.countInTray(this.tray, key);
     if (count >= 3) {
+      this.registerTriple();
       const slots = [];
       this.tray.forEach((t, i) => { if (cards.keyOf(t.emoji) === key) slots.push({ tile: t, slot: i }); });
       this.tray = this.tray.filter(t => cards.keyOf(t.emoji) !== key);
@@ -187,12 +212,24 @@ class MasterScene extends Scene {
       achv.win('master', { mode: MASTER_MODE_NUM[this.mode], level: this.level });
       this.startConfetti();
       this.app.audio.playSuccess();
-    } else if (this.tray.length >= 7) {
+    } else if (this.tray.length >= this.cfg.traySize) {
       this.phase = 'over';
       this.saveState();
       this.app.audio.playLose();
     }
   }
+  registerTriple() {
+    const now = Date.now();
+    const chained = this.combo > 0 && now < this.comboUntil;
+    this.combo = chained ? this.combo + 1 : 1;
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
+    this.comboUntil = now + 6000;
+    this.score += 10 * Math.min(5, this.combo);
+    this.scorePulseAt = now;
+    achv.peak('master', 'combo', this.maxCombo);
+    achv.peak('master', 'score', this.score);
+  }
+
   nextLevel() { this.startLevel(this.level + 1); }
   retryLevel() { this.startLevel(this.level); }
   startNewGame() { this.confirming = false; removeRaw(this.levelKey()); this.startLevel(1); }
@@ -219,6 +256,10 @@ class MasterScene extends Scene {
       return true;
     });
     this.clearFx = this.clearFx.filter(fx => this.now - fx.start < 420);
+    if (this.combo && this.now >= this.comboUntil) {
+      this.combo = 0;
+      this.comboUntil = 0;
+    }
     if (this.now < this.confettiUntil && this.now - this.lastConfettiAt >= 40) {
       this.lastConfettiAt = this.now;
       this.emitConfetti();
@@ -238,6 +279,7 @@ class MasterScene extends Scene {
     this.boardY = this.optY + this.optH + 16;
     const trayH = 60;
     this.trayH = trayH;
+    this.traySlots = this.cfg ? (this.cfg.traySize || 7) : 7;
     // 暂存槽下方还要放一句玩法提示；提示是居中的短句，和右下 FAB 只在**横向**上分开，
     // 所以底部预留维持 90 即可（加大会把棋盘压小 30px，不值得）。
     const bottom = SAFE_BOTTOM + 96;   // 暂存槽 + 玩法提示 + 右下 FAB
@@ -293,16 +335,31 @@ class MasterScene extends Scene {
   drawScore(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
-    const half = this.cw / 2;
-    D.divider(c, this.cx + half, this.scoreY + this.scoreH / 2, 24, T.border, 1);
-    D.text(c, t('master.level'), this.cx + half / 2, this.scoreY + 24, { size: 12, color: T.muted, align: 'center' });
-    D.text(c, String(this.level), this.cx + half / 2, this.scoreY + 48, { size: 22, weight: 'bold', color: T.text, align: 'center' });
-    D.text(c, t('master.remain'), this.cx + half + half / 2, this.scoreY + 24, { size: 12, color: T.muted, align: 'center' });
-    D.text(c, String(this.tiles.length), this.cx + half + half / 2, this.scoreY + 48, { size: 22, weight: 'bold', color: T.text, align: 'center' });
+    const q = this.cw / 4;
+    const comboText = this.combo > 0 ? `×${Math.min(5, this.combo)}` : '--';
+    const stats = [
+      [t('master.level'), String(this.level), T.text],
+      [t('master.remain'), String(this.tiles.length), T.text],
+      [t('master.score'), String(this.score), T.primary],
+      [t('master.combo'), comboText, this.combo >= 2 ? T.god : T.muted],
+    ];
+    stats.forEach(([label, value, color], i) => {
+      if (i) D.divider(c, this.cx + q * i, this.scoreY + this.scoreH / 2, 20, T.border, 1);
+      const x = this.cx + q * (i + 0.5);
+      D.text(c, label, x, this.scoreY + 24, { size: 10.5, color: T.muted, align: 'center' });
+      let size = 20;
+      if (i === 2 && this.scorePulseAt > 0 && this.now - this.scorePulseAt < 260) {
+        size = 20 + 2.5 * (1 - (this.now - this.scorePulseAt) / 260);
+      }
+      D.text(c, value, x, this.scoreY + 48, {
+        size, weight: 'bold', color, align: 'center',
+      });
+    });
     const total = this.cfg ? this.cfg.tiles : 1;
     const progress = this.cfg ? (total - this.tiles.length) / total : 0;
     D.progressBar(c, this.cx, this.scoreY, this.cw, this.scoreH, progress, T.border, T.primary);
   }
+
   drawOptions(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
@@ -311,7 +368,11 @@ class MasterScene extends Scene {
     const info = this.cfg
       ? `${t('master.layersLabel').replace('{n}', this.cfg.layers)} · ${t('master.kindsLabel').replace('{n}', this.cfg.kinds)}`
       : '';
-    D.text(c, info, this.cx + half / 2, this.optY + this.optH / 2, { size: 13, color: T.muted, align: 'center' });
+    D.text(c, info, this.cx + half / 2, this.optY + 25, { size: 12, color: T.muted, align: 'center' });
+    if (this.cfg) {
+      D.text(c, t('master.slotsLabel').replace('{n}', this.cfg.traySize),
+        this.cx + half / 2, this.optY + 48, { size: 12, color: T.muted, align: 'center' });
+    }
     const label = t('master.start');
     const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
     const bx = this.cx + half + (half - bw) / 2;
@@ -329,7 +390,7 @@ class MasterScene extends Scene {
     return { x: this.boardX + 8 + tile.x * this.unit, y: this.boardY + 8 + tile.y * this.unit, w: s.w, h: s.h };
   }
   slotRect(i) {
-    const cellW = (this.trayW - 16) / 7;
+    const cellW = (this.trayW - 16) / this.traySlots;
     const x = this.trayX + 8 + i * cellW;
     const h = 36;
     // 暂存槽位跟牌面走：emoji 方牌、扑克 2:3、麻将 131:168；不再统一画正方形。
@@ -368,7 +429,7 @@ class MasterScene extends Scene {
     const T = theme.tokens;
     D.card(c, this.trayX, this.trayY, this.trayW, 52, T);
     const size = this.mode === 'emoji' ? 36 : this.mode === 'poker' ? 24 : 28;
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < this.traySlots; i++) {
       const r = this.slotRect(i);
       D.fillRoundRect(c, r.x, r.y, r.w, r.h, 6, T.enter);
     }
@@ -412,16 +473,20 @@ class MasterScene extends Scene {
     share.resultPanel(c, this, this.boardY, this.boardSize, { w: this.boardSize });
     const cx = W / 2, cy = this.boardY + this.boardSize / 2;
     if (this.phase === 'won') {
-      D.text(c, `🎉🎉 ${t('master.tipWin')} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });
+      D.text(c, `🎉🎉 ${t('master.tipWin')} 🎉🎉`, cx, cy - 28, { size: 18, weight: 'bold', color: T.win, align: 'center' });
+      D.text(c, `${t('master.score')} ${this.score} · ${t('master.combo')} ×${Math.min(5, this.maxCombo || 1)}`, cx, cy - 4, {
+        size: 13, color: T.muted, align: 'center',
+      });
       const labels = [t('master.replayLevel'), t('master.nextLevel')];
       const gap = 10;
       const w1 = resultButton.width(c, labels[0]);
       const w2 = resultButton.width(c, labels[1]);
       const bx = cx - (w1 + w2 + gap) / 2;
-      resultButton.draw(c, this, labels[0], 'replay', bx, cy + 18, { id: 'result-replay', onTap: () => this.retryLevel() });
-      resultButton.draw(c, this, labels[1], 'next', bx + w1 + gap, cy + 18, { id: 'result-next', onTap: () => this.nextLevel() });
+      resultButton.draw(c, this, labels[0], 'replay', bx, cy + 30, { id: 'result-replay', onTap: () => this.retryLevel() });
+      resultButton.draw(c, this, labels[1], 'next', bx + w1 + gap, cy + 30, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
-      D.text(c, `👻👻 ${t('master.tipLost')} 👻👻`, cx, cy - 18, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
+      D.text(c, `👻👻 ${t('master.tipLost')} 👻👻`, cx, cy - 24, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
+      D.text(c, `${t('master.score')} ${this.score}`, cx, cy, { size: 13, color: T.muted, align: 'center' });
       const label = t('master.replayLevel');
       const bw = resultButton.width(c, label);
       resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 20, { id: 'result-replay', onTap: () => this.retryLevel() });

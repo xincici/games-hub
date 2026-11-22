@@ -162,6 +162,8 @@ class GamblerScene extends Scene {
   modeIndex() { return this.mode === MODE_SUBMIT ? 1 : 0; }
   levelKey() { return KEYS.level[this.modeIndex()]; }
   bestKey() { return KEYS.best[this.modeIndex()]; }
+  // 存档里的 best 是「已解锁的下一关」；顶栏展示的是已通关的最高关。
+  bestCleared() { return this.best > 0 ? Math.max(0, this.best - 1) : 0; }
   streakKey() { return KEYS.streak[this.modeIndex()]; }
   stateKey() { return KEYS.state[this.modeIndex()]; }
 
@@ -256,7 +258,6 @@ class GamblerScene extends Scene {
       const missed = Array.isArray(st.missed) ? st.missed : [];
       this.missed = [...new Set(missed.filter(key => logic.KIND_KEYS.indexOf(key) >= 0))];
       this.pickFailed = this.phase === LOST;
-      if (this.best < this.level) this.best = this.level;
       this.resetFx();
       this.startDeal();      // 恢复局面同样播一次入场动画（行优先）
       this.layout();         // 恢复后必须重新布局（PITFALLS #9）
@@ -286,8 +287,6 @@ class GamblerScene extends Scene {
     this.reason = '';
     this.missed = [];
     this.pickFailed = false;
-    this.best = Math.max(this.best, this.level);
-    this.level = round.level;
     this.startDeal();
     this.save();
   }
@@ -511,7 +510,7 @@ class GamblerScene extends Scene {
     achv.win('gambler', { mode: this.mode, level: this.level + 1 });
     achv.peak('gambler', this.mode === 2 ? 'streak2' : 'streak1', this.streak + 1);
     this.streak += 1;
-    this.best = Math.max(this.best, this.level + 1);     // 解锁下一关
+    this.best = Math.max(this.best, this.level + 1);     // 胜利才解锁/刷新最高关
     if (!this.flights.length) this.picked = this.picks.slice();
     writeInt(this.levelKey(), this.level);
     writeInt(this.bestKey(), this.best);
@@ -795,7 +794,7 @@ class GamblerScene extends Scene {
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
     const q = this.cw / 4;
     const stats = [
-      [t('gambler.best'), this.best ? String(this.best) : '--'],
+      [t('gambler.best'), this.bestCleared() ? String(this.bestCleared()) : '--'],
       [t('gambler.level'), String(this.level)],
       [t('gambler.streak'), String(this.streak)],
       [t('gambler.lives'), ''],

@@ -37,6 +37,20 @@ const STATE_KEY = '__ttt__state';   // 旧版单存档，保留迁移
 function stateKey(mode) { return `__ttt__state_${mode}`; }
 const BOT_DELAY = 420;
 const LINE_MS = 650;
+const PIECE_ANIM_MS = 360;   // 旧子降档时尺寸 / 亮度的渐变时长
+
+// 按落子顺序给三档视觉；越旧越小越暗。
+function pieceTarget(pos, n) {
+  if (pos < 0) return { scale: 1, alpha: 1 };
+  if (n >= 3) {
+    return {
+      scale: pos === 0 ? 0.65 : pos === 1 ? 0.82 : 1,
+      alpha: pos === 0 ? 0.14 : pos === 1 ? 0.40 : 1,
+    };
+  }
+  if (n === 2) return { scale: pos === 0 ? 0.75 : 1, alpha: pos === 0 ? 0.24 : 1 };
+  return { scale: 1, alpha: 1 };
+}
 
 // 胶囊（圆头长条）的外轮廓：从左侧半圆「最左一点」出发，顺时针绕一整圈再回到起点。
 // 返回按顺序排列的点列 + 总周长，供「一点出发 → 绕一圈 → 首尾接上」的描边动画使用。
@@ -110,6 +124,7 @@ class TttScene extends Scene {
     this.winLine = null;
     this.winLineStartAt = 0;
     this.resultShownAt = 0;
+    this.pieceFx = new Map();
     this.confetti = [];
     this.confettiUntil = 0;
     this.lastConfettiAt = 0;
@@ -197,6 +212,7 @@ class TttScene extends Scene {
     board.forEach((v) => { if (v) occupied += 1; });
     if (history.X.length + history.O.length !== occupied) return false;
     this.mode = mode;
+    this.pieceFx.clear();
     this.board = board;
     this.history = history;
     this.current = s.current === 'O' ? 'O' : 'X';
@@ -240,6 +256,7 @@ class TttScene extends Scene {
     this.winLine = null;
     this.winLineStartAt = 0;
     this.resultShownAt = 0;
+    this.pieceFx = new Map();
     this.clicks = 0;
     this.phase = PLAY;
     this.current = randomFirst && Math.random() < 0.5 ? 'O' : 'X';
@@ -301,6 +318,7 @@ class TttScene extends Scene {
   move(idx, byBot) {
     if (this.phase !== PLAY || this.board[idx]) return;
     const player = this.current;
+    this.prunePieceFx();
     if (!logic.place(this.board, this.history, player, idx)) return;
     if (!byBot) this.clicks += 1;
     const line = logic.winner(this.board, player);
@@ -490,22 +508,54 @@ class TttScene extends Scene {
     // 胜利连线在 render 里、结算面板之前画，面板出现后会把它盖住。
   }
 
+  prunePieceFx() {
+    for (const key of this.pieceFx.keys()) {
+      const [player, at] = key.split(':');
+      if (this.board[+at] !== player) this.pieceFx.delete(key);
+    }
+  }
+
+  pieceVisualFor(player, idx, pos, n) {
+    const target = pieceTarget(pos, n);
+    const key = `${player}:${idx}`;
+    const now = Date.now();
+    let fx = this.pieceFx.get(key);
+    if (!fx) {
+      fx = { fs: target.scale, fa: target.alpha, ts: target.scale, ta: target.alpha, at: now };
+      this.pieceFx.set(key, fx);
+      return target;
+    }
+    if (fx.ts !== target.scale || fx.ta !== target.alpha) {
+      const p = Math.min(1, Math.max(0, (now - fx.at) / PIECE_ANIM_MS));
+      const e = 1 - Math.pow(1 - p, 3);
+      const cs = fx.fs + (fx.ts - fx.fs) * e;
+      const ca = fx.fa + (fx.ta - fx.fa) * e;
+      fx = { fs: cs, fa: ca, ts: target.scale, ta: target.alpha, at: now };
+      this.pieceFx.set(key, fx);
+    }
+    const p = Math.min(1, Math.max(0, (now - fx.at) / PIECE_ANIM_MS));
+    const e = 1 - Math.pow(1 - p, 3);
+    return {
+      scale: fx.fs + (fx.ts - fx.fs) * e,
+      alpha: fx.fa + (fx.ta - fx.fa) * e,
+    };
+  }
+
   drawPiece(c, idx, r) {
     const player = this.board[idx];
     const hist = this.history[player] || [];
     const pos = hist.indexOf(idx);
     const n = hist.length;
-    let alpha = 1;
-    // 亮度档位拉开：最旧的最暗，最新的一定是满亮度。
-    if (n >= 3) alpha = pos === 0 ? 0.16 : pos === 1 ? 0.42 : 1;
-    else if (n === 2) alpha = pos === 0 ? 0.3 : 1;
+    const visual = this.pieceVisualFor(player, idx, pos, n);
+    const alpha = visual.alpha;
+    const scale = visual.scale;
     const cx = r.x + r.w / 2;
     const cy = r.y + r.h / 2;
-    const size = r.w * 0.32;
+    const size = r.w * 0.32 * scale;
     c.save();
     c.globalAlpha = alpha;
     c.strokeStyle = player === 'X' ? theme.tokens.primary : theme.tokens.god;
-    c.lineWidth = Math.max(3, r.w * 0.09);
+    c.lineWidth = Math.max(2.4, r.w * 0.09 * scale);
     c.lineCap = 'round';
     if (player === 'X') {
       c.beginPath();

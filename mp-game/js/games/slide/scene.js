@@ -51,6 +51,9 @@ const DEAL_STEP = 20; // 入场错峰：行优先逐个出现
 const DEAL_MS = 320; // 单张入场
 const COMBO_MS = 2500; // 连击窗口
 const COMBO_TIP_MS = 1500; // 连击提示停留
+const UPGRADE_TIME = 5; // 时间升级：每层 +5s
+const UPGRADE_COMBO = 400; // 连击升级：每层 +0.4s
+const UPGRADE_POOL = ['time', 'combo', 'special'];
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -120,6 +123,9 @@ class SlideScene extends Scene {
     this.tiles = [];
     this.tileId = 0;
     this.elapsed = 0;
+    this.score = 0;
+    this.maxCombo = 0;
+    this.scorePulseAt = -1;
     this.savedSecond = 0;
     this.now = Date.now();
     this.helpOpen = false;
@@ -136,6 +142,13 @@ class SlideScene extends Scene {
     this.comboExpireAt = 0;
     this.lastClearAt = 0;
     this.comboBroken = false;
+    this.perks = { time: 0, combo: 0, special: 0 };
+    this.upgradeOpen = false;
+    this.upgradeOptions = [];
+    this.score = 0;
+    this.maxCombo = 0;
+    this.scorePulseAt = -1;
+    this.clearsSinceSpecial = 0;
     this.bursts = [];
     this.confetti = [];
     this.confettiUntil = 0;
@@ -157,11 +170,12 @@ class SlideScene extends Scene {
     else this.startLevel(1);
   }
 
-  makeTile(kind, r, c) {
+  makeTile(kind, r, c, special) {
     this.tileId += 1;
     return {
       id: this.tileId,
       kind,
+      special: special === 'clock' || special === 'bomb' || special === 'wild' ? special : '',
       r,
       c,
       popping: false,
@@ -186,6 +200,10 @@ class SlideScene extends Scene {
     this.shakeAt = 0;
     this.shuffleAt = 0;
     this.deadlockAt = 0;
+    this.score = 0;
+    this.maxCombo = 0;
+    this.scorePulseAt = -1;
+    this.clearsSinceSpecial = 0;
     this.bursts = [];
     this.confetti = [];
     this.confettiUntil = 0;
@@ -195,8 +213,11 @@ class SlideScene extends Scene {
     this.breakCombo();
     const now = Date.now();
     if (restored) {
-      this.tiles = restored.tiles.map(cell => this.makeTile(cell.kind, cell.r, cell.c));
+      this.tiles = restored.tiles.map(cell => this.makeTile(cell.kind, cell.r, cell.c, cell.special));
       this.elapsed = restored.elapsed;
+      this.score = restored.score || 0;
+      this.maxCombo = restored.maxCombo || 0;
+      this.perks = restored.perks || this.perks;
       this.phase = restored.phase;
     } else {
       const g = logic.makeBoard(this.rows, this.cols, this.conf.kinds);
@@ -208,7 +229,15 @@ class SlideScene extends Scene {
           if (g[r][c]) this.tiles.push(this.makeTile(g[r][c], r, c));
         }
       }
-      this.elapsed = 0;
+      this.elapsed = -((this.perks.time || 0) * UPGRADE_TIME);
+    }
+    if (!restored) {
+      // 关卡越深，特殊牌越多；它们仍是正常对子，只多一个效果标记。
+      if (this.level >= 2) this.seedSpecial('clock');
+      if (this.level >= 4) this.seedSpecial('bomb');
+      if (this.level >= 6) this.seedSpecial('wild');
+      if (this.level >= 8 && Math.random() < 0.6) this.seedSpecial(Math.random() < 0.3 ? 'wild' : Math.random() < 0.5 ? 'clock' : 'bomb');
+      for (let i = 0; i < (this.perks.special || 0); i += 1) this.seedSpecial(Math.random() < 0.3 ? 'wild' : Math.random() < 0.5 ? 'clock' : 'bomb');
     }
     // 入场：按行优先 row * cols + col 错峰，左上先出现、右下后出现（新建与恢复都一样）
     this.tiles.forEach((tile) => {
@@ -226,11 +255,30 @@ class SlideScene extends Scene {
   }
 
   nextLevel() {
+    if (this.upgradeOpen) return;
+    this.upgradeOptions = UPGRADE_POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+    this.upgradeOpen = true;
+  }
+
+  comboWindow() {
+    return COMBO_MS + (this.perks.combo || 0) * UPGRADE_COMBO;
+  }
+
+  applyUpgrade(id) {
+    if (!this.upgradeOpen) return;
+    if (id === 'time') this.perks.time += 1;
+    else if (id === 'combo') this.perks.combo += 1;
+    else if (id === 'special') this.perks.special += 1;
+    this.upgradeOpen = false;
+    this.upgradeOptions = [];
     this.startLevel(this.level + 1);
   }
 
   startNewGame() {
     this.confirming = false;
+    this.perks = { time: 0, combo: 0, special: 0 };
+    this.upgradeOpen = false;
+    this.upgradeOptions = [];
     this.startLevel(1);
   }
 
@@ -270,7 +318,10 @@ class SlideScene extends Scene {
         level: this.level,
         phase,
         elapsed: Math.round(this.elapsed * 10) / 10,
-        tiles: alive.map(tile => [tile.kind, tile.r, tile.c]),
+        score: this.score,
+        maxCombo: this.maxCombo,
+        perks: this.perks,
+        tiles: alive.map(tile => [tile.kind, tile.r, tile.c, tile.special || '']),
       }));
     } catch (e) { /* 存储不可用时不影响游玩 */ }
   }
@@ -297,6 +348,7 @@ class SlideScene extends Scene {
         const kind = Math.floor(+item[0]);
         const r = Math.floor(+item[1]);
         const c = Math.floor(+item[2]);
+        const special = item[3] === 'clock' || item[3] === 'bomb' || item[3] === 'wild' ? item[3] : '';
         // 种类 / 坐标 / 重复格全部要校验（老存档里混进过 kind = 0 的空位牌）
         if (!(kind >= 1 && kind <= cfg.kinds)) return null;
         if (!(r >= 0 && r < cfg.rows && c >= 0 && c < cfg.cols)) return null;
@@ -304,7 +356,7 @@ class SlideScene extends Scene {
         if (seen.has(key)) return null;
         seen.add(key);
         counts[kind] += 1;
-        tiles.push({ kind, r, c });
+        tiles.push({ kind, r, c, special });
       }
       // 每种都成对（张数恒为偶数），否则不是合法局面
       if (tiles.length % 2 !== 0) return null;
@@ -313,9 +365,12 @@ class SlideScene extends Scene {
       }
       let phase = saved.phase;
       if (phase === WON && tiles.length) phase = PLAY; // 胜利局面不该还剩牌
-      const elapsed = clamp(+saved.elapsed || 0, 0, cfg.seconds);
+      const elapsed = clamp(+saved.elapsed || 0, -UPGRADE_TIME * 20, cfg.seconds);
       if (phase === PLAY && elapsed >= cfg.seconds) phase = OVER; // 存档里的时间已经用尽
-      return { level: lv, phase, elapsed, tiles };
+      const perks = saved.perks && typeof saved.perks === 'object'
+        ? { time: Math.max(0, Math.floor(+saved.perks.time) || 0), combo: Math.max(0, Math.floor(+saved.perks.combo) || 0), special: Math.max(0, Math.floor(+saved.perks.special) || 0) }
+        : { time: 0, combo: 0, special: 0 };
+      return { level: lv, phase, elapsed, score: Math.max(0, Math.floor(+saved.score) || 0), maxCombo: Math.max(0, Math.floor(+saved.maxCombo) || 0), perks, tiles };
     } catch (e) {
       return null;
     }
@@ -387,7 +442,7 @@ class SlideScene extends Scene {
     const delta = Math.min(50, dt || 16);
     if (this.bg) this.bg.update(delta);
     this.updateParticles(delta);
-    if (this.helpOpen || this.confirming) return; // 弹层打开时冻结计时与判定
+    if (this.helpOpen || this.confirming || this.upgradeOpen) return; // 弹层打开时冻结计时与判定
     if (this.phase === PLAY) {
       // 消除动画收尾：到期才把 ghost 移出牌堆（逻辑上早就是空格了）
       const expired = this.tiles.some(tile => tile.popping && this.now - tile.popAt >= POP_MS);
@@ -448,10 +503,10 @@ class SlideScene extends Scene {
   // ---------- 消除 / 连击 / 死局 ----------
 
   tapTile(r, c) {
-    if (this.phase !== PLAY || this.helpOpen || this.confirming) return;
+    if (this.phase !== PLAY || this.helpOpen || this.confirming || this.upgradeOpen) return;
     const tile = this.tileAt(r, c);
     if (!tile) return;
-    const partner = logic.findPartner(this.grid(), r, c);
+    const partner = this.findPartnerFor(r, c);
     if (partner) {
       this.eliminate([r, c], partner);
       return;
@@ -462,31 +517,156 @@ class SlideScene extends Scene {
     this.shakeAt = Date.now();
   }
 
-  eliminate(a, b) {
-    const ta = this.tileAt(a[0], a[1]);
-    const tb = this.tileAt(b[0], b[1]);
-    if (!ta || !tb || ta === tb) return;
-    this.registerClear();
-    this.app.audio.playElimination();
+  findPartnerFor(r, c) {
+    const tile = this.tileAt(r, c);
+    if (!tile) return null;
+    for (const [dr, dc] of logic.DIRS) {
+      const nr = r + dr;
+      const nc = c + dc;
+      const other = this.tileAt(nr, nc);
+      if (!other || other.popping) continue;
+      if (tile.special === 'wild' || other.special === 'wild' || other.kind === tile.kind) {
+        return [nr, nc];
+      }
+    }
+    return null;
+  }
+
+  // 收集「与被移动的那组有关」的所有相邻对；一次滑动可以同时消多对。
+  pairsForCells(grid, cells) {
+    const used = new Set();
+    const pairs = [];
+    for (const [r, c] of cells) {
+      const key = r * this.cols + c;
+      if (used.has(key) || !grid[r] || !grid[r][c]) continue;
+      const partner = this.findPartnerFor(r, c);
+      if (!partner) continue;
+      const pkey = partner[0] * this.cols + partner[1];
+      if (used.has(pkey)) continue;
+      pairs.push([[r, c], partner]);
+      used.add(key);
+      used.add(pkey);
+    }
+    return pairs;
+  }
+
+  seedSpecial(kind) {
+    const candidates = [];
+    this.tiles.forEach((tile) => {
+      if (tile.popping || tile.special) return;
+      const partner = this.tiles.find(o => o !== tile && !o.popping && o.kind === tile.kind
+        && Math.abs(o.r - tile.r) + Math.abs(o.c - tile.c) === 1);
+      if (partner && !partner.special) candidates.push(tile);
+    });
+    if (!candidates.length) return false;
+    const tile = candidates[Math.floor(Math.random() * candidates.length)];
+    if (kind === 'wild') {
+      const partner = this.tiles.find(o => o !== tile && !o.popping && !o.special
+        && o.kind === tile.kind && Math.abs(o.r - tile.r) + Math.abs(o.c - tile.c) === 1);
+      if (!partner) return false;
+      tile.special = 'wild';
+      partner.special = 'wild';
+      return true;
+    }
+    tile.special = kind === 'clock' || kind === 'bomb' ? kind : 'clock';
+    return true;
+  }
+
+  eliminatePairs(pairs) {
+    if (!pairs || !pairs.length) return false;
     const now = Date.now();
-    // 逻辑上立刻算消掉：grid() 已跳过 popping，空格立刻成为滑行通道，
-    // 其它牌在闪烁期间仍然可以点 / 拖（只锁这两张，不锁整盘）。
-    [ta, tb].forEach((tile) => {
+    const cells = [];
+    const seen = new Set();
+    const addCell = (tile) => {
+      if (!tile || tile.popping) return;
+      const key = tile.r * this.cols + tile.c;
+      if (seen.has(key)) return;
+      seen.add(key);
+      cells.push(tile);
+    };
+    pairs.forEach(([a, b]) => {
+      addCell(this.tileAt(a[0], a[1]));
+      addCell(this.tileAt(b[0], b[1]));
+    });
+    let clockBonus = 0;
+    // 万能牌：和任意相邻牌配对；同时带走万能牌的另一半和目标牌的另一半，保持偶数可解。
+    if (cells.some(tile => tile.special === 'wild')) {
+      this.tiles.filter(tile => !tile.popping && tile.special === 'wild').forEach(addCell);
+      const normals = cells.filter(tile => tile.special !== 'wild');
+      normals.forEach((tile) => {
+        const mate = this.tiles.find(o => o !== tile && !o.popping && o.special !== 'wild'
+          && o.kind === tile.kind && !seen.has(o.r * this.cols + o.c));
+        if (mate) addCell(mate);
+      });
+    }
+    // 炸弹牌：清掉盘面上同一种 emoji 的所有完整对子；只整对移除，保证剩余局面仍可解。
+    for (let i = 0; i < cells.length; i += 1) {
+      const tile = cells[i];
+      if (tile.special === 'clock') clockBonus += 4;
+      if (tile.special === 'bomb') {
+        const same = this.tiles.filter(o => !o.popping && o.kind === tile.kind);
+        same.forEach(addCell);
+        this.spawnBombBurst(tile);
+      }
+    }
+    const pairCount = Math.max(1, Math.ceil(cells.length / 2));
+    this.registerClear(pairCount);
+    if (clockBonus) this.elapsed = Math.max(0, this.elapsed - clockBonus);
+    this.app.audio.playElimination();
+    cells.forEach((tile) => {
       tile.popping = true;
       tile.popAt = now;
       tile.shuffleAt = 0;
     });
+    // 每 8 对左右补一张特殊牌，让中后段持续有新变化。
+    this.clearsSinceSpecial = (this.clearsSinceSpecial || 0) + pairCount;
+    if (this.clearsSinceSpecial >= 8) {
+      this.clearsSinceSpecial = 0;
+      this.seedSpecial(Math.random() < 0.3 ? 'wild' : Math.random() < 0.5 ? 'clock' : 'bomb');
+    }
     this.shakeKind = 0;
     this.save();
+    return true;
   }
 
-  registerClear() {
+  spawnBombBurst(tile) {
+    const cx = this.boardX + (tile.c + 0.5) * this.pitch;
+    const cy = this.boardY + (tile.r + 0.5) * this.pitch;
+    for (let i = 0; i < 16; i += 1) {
+      const a = (i / 16) * Math.PI * 2;
+      const v = 2 + Math.random() * 4;
+      this.bursts.push({
+        x: cx, y: cy,
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1,
+        vr: (Math.random() - 0.5) * 0.4,
+        rot: Math.random() * Math.PI,
+        color: i % 2 ? '#ff9d4d' : '#ffd166',
+        w: 3 + Math.random() * 4, h: 2 + Math.random() * 3,
+        age: 0,
+      });
+    }
+  }
+
+  eliminate(a, b) {
+    return this.eliminatePairs([[a, b]]);
+  }
+
+  registerClear(pairCount) {
     const now = Date.now();
-    const chained = this.lastClearAt > 0 && !this.comboBroken && now - this.lastClearAt < COMBO_MS;
-    this.combo = chained ? this.combo + 1 : 1;
+    const n = Math.max(1, Math.floor(pairCount) || 1);
+    const chained = this.lastClearAt > 0 && !this.comboBroken && now - this.lastClearAt < this.comboWindow();
+    this.combo = chained ? this.combo + n : n;
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
     this.lastClearAt = now;
     this.comboBroken = false;
-    this.comboExpireAt = now + COMBO_MS;
+    this.comboExpireAt = now + this.comboWindow();
+    const mult = Math.min(5, this.combo);
+    this.score += 10 * n * mult;
+    this.scorePulseAt = now;
+    // 连击直接买时间；这是玩家愿意追连击的核心奖励。
+    const bonus = [0, 0, 0.5, 0.9, 1.3, 1.8][Math.min(5, this.combo)];
+    this.comboBonus = bonus;
+    if (bonus) this.elapsed = Math.max(0, this.elapsed - bonus);
     if (this.combo >= 2) {
       this.comboAt = now;
       this.comboUntil = now + COMBO_TIP_MS;
@@ -514,6 +694,8 @@ class SlideScene extends Scene {
     // 只剩还在闪的 ghost（最后一对）时不算死局，等它闪完直接判胜
     if (!this.tiles.some(tile => !tile.popping)) return;
     if (logic.hasAnyMove(this.grid())) return;
+    // 万能牌可以和任意邻居配对，棋盘逻辑不认识这个特殊规则，单独补一条。
+    if (this.tiles.some(tile => !tile.popping && tile.special === 'wild' && this.findPartnerFor(tile.r, tile.c))) return;
     this.usedShuffle = true;   // 本关用过死局重排 → 不算「无重排获胜」
     this.applyGrid(logic.reshuffleBoard(this.grid()));
     this.save();
@@ -554,7 +736,7 @@ class SlideScene extends Scene {
     if (!p) return;
     this.touch = null;
     this.drag = null;
-    if (this.phase !== PLAY || this.helpOpen || this.confirming) return;
+    if (this.phase !== PLAY || this.helpOpen || this.confirming || this.upgradeOpen) return;
     const at = this.cellAt(p.x, p.y);
     if (!at) return;
     const tile = this.tileAt(at.r, at.c);
@@ -564,7 +746,7 @@ class SlideScene extends Scene {
 
   onTouchMove(p) {
     if (!p || !this.touch) return;
-    if (this.phase !== PLAY || this.helpOpen || this.confirming) return;
+    if (this.phase !== PLAY || this.helpOpen || this.confirming || this.upgradeOpen) return;
     const dx = p.x - this.touch.x;
     const dy = p.y - this.touch.y;
     let d = this.drag;
@@ -605,7 +787,7 @@ class SlideScene extends Scene {
     this.drag = null;
     this.touch = null;
     if (!start) return;
-    if (!p || this.phase !== PLAY || this.helpOpen || this.confirming) return;
+    if (!p || this.phase !== PLAY || this.helpOpen || this.confirming || this.upgradeOpen) return;
     if (!d || !d.axis) {
       this.tapTile(start.r, start.c);
       return;
@@ -620,27 +802,29 @@ class SlideScene extends Scene {
     const nr = d.r + d.dir.r * k;
     const nc = d.c + d.dir.c * k;
     const next = logic.shiftGroup(this.grid(), d.cells, d.dir.r, d.dir.c, k);
-    const partner = logic.findPartner(next, nr, nc);
-    if (!partner) {
+    const targetCells = d.cells.map(([r, c]) => [r + d.dir.r * k, c + d.dir.c * k]);
+    // 先落位再判断：万能牌要按新位置找邻居，不能拿旧坐标算。
+    const snapshot = d.cells
+      .map(cell => this.tileAt(cell[0], cell[1]))
+      .filter(Boolean)
+      .map(tile => ({ tile, r: tile.r, c: tile.c }));
+    snapshot.forEach(({ tile }) => {
+      tile.r += d.dir.r * k;
+      tile.c += d.dir.c * k;
+    });
+    const pairs = this.pairsForCells(next, targetCells);
+    if (!pairs.length) {
+      snapshot.forEach(({ tile, r, c }) => { tile.r = r; tile.c = c; });
       this.animateBack(d, now);
       this.missCombo();
       return;
     }
-    // 提交：这一组落到滑过去的位置，其它 emoji 留在原地。
-    // 先取快照再改坐标（同一组里后面的牌不能被前面挪过去的牌顶替）。
-    const snapshot = d.cells
-      .map(cell => this.tileAt(cell[0], cell[1]))
-      .filter(Boolean);
-    snapshot.forEach((tile) => {
-      const fromR = tile.r;
-      const fromC = tile.c;
-      tile.animFrom = { r: fromR + d.dir.r * d.shift, c: fromC + d.dir.c * d.shift };
+    snapshot.forEach(({ tile, r, c }) => {
+      tile.animFrom = { r: r + d.dir.r * d.shift, c: c + d.dir.c * d.shift };
       tile.animAt = now;
-      tile.r = fromR + d.dir.r * k;
-      tile.c = fromC + d.dir.c * k;
     });
-    // 落点旁有同款才消这一对；被消的两张也会继续滑到新位置再闪烁
-    this.eliminate([nr, nc], partner);
+    // 落点所属的这组附近，所有相邻同款一起消；一次滑 3 对就是 3 连。
+    this.eliminatePairs(pairs);
   }
 
   animateBack(d, now) {
@@ -706,6 +890,7 @@ class SlideScene extends Scene {
     this.drawParticles(c);
     if (this.helpOpen) this.drawHelp(c);
     if (this.confirming) this.drawConfirm(c);
+    if (this.upgradeOpen) this.drawUpgrade(c);
   }
 
   drawHeader(c) {
@@ -730,7 +915,7 @@ class SlideScene extends Scene {
     const stats = [
       [t('slide.levelLabel'), String(this.level), false],
       [t('slide.timeLabel'), fmt(this.timeLeft), true],
-      [t('slide.leftPairs'), String(this.leftPairs), false],
+      [t('slide.score'), String(this.score), false],
     ];
     stats.forEach((stat, i) => {
       const x = this.cx + third * (i + 0.5);
@@ -742,8 +927,12 @@ class SlideScene extends Scene {
           size: 20, color: urgent ? T.del : T.text,
         });
       } else {
+        let size = 22;
+        if (i === 2 && this.scorePulseAt > 0 && this.now - this.scorePulseAt < 280) {
+          size = 22 + 3 * (1 - (this.now - this.scorePulseAt) / 280);
+        }
         D.text(c, stat[1], x, this.scoreY + 48, {
-          size: 22,
+          size,
           weight: 'bold',
           color: i === 0 ? T.text : T.primary,
           align: 'center',
@@ -777,7 +966,9 @@ class SlideScene extends Scene {
     const T = theme.tokens;
     const now = this.now || Date.now();
     if (!(this.combo >= 2 && now < this.comboUntil)) return;
-    const text = t('slide.comboTip').replace('{n}', String(this.combo));
+    const text = t('slide.comboTip')
+      .replace('{n}', String(this.combo))
+      .replace('{s}', (this.comboBonus || 0).toFixed(1));
     const size = this.combo >= 4 ? 16 : this.combo >= 3 ? 14 : 12.5;
     const tw = D.measure(c, text, size, 'bold');
     const w = tw + 24;
@@ -900,6 +1091,21 @@ class SlideScene extends Scene {
     if (scale !== 1) c.scale(scale, scale);
     // 所有牌面统一走 core/cards 的 MODE_EMOJI；空白格不画卡片
     cards.draw(c, logic.glyphFor(tile.kind), cards.MODE_EMOJI, -size / 2, -size / 2, size, size, true);
+    if (tile.special) {
+      const clock = tile.special === 'clock';
+      const wild = tile.special === 'wild';
+      const color = clock ? '#2c6aad' : wild ? '#8b5cf6' : '#d97706';
+      D.strokeRoundRect(c, -size / 2, -size / 2, size, size, 8, color, 1.5);
+      const br = size * 0.19;
+      const bx = size * 0.34;
+      const by = -size * 0.34;
+      D.circle(c, bx, by, br, color);
+      if (!icons.draw(c, clock ? 'timer' : wild ? 'wild' : 'bomb', bx, by, Math.max(8, size * 0.27), '#ffffff')) {
+        D.text(c, clock ? 'T' : wild ? 'W' : 'B', bx, by, {
+          size: Math.max(8, size * 0.24), weight: 'bold', color: '#fff', align: 'center',
+        });
+      }
+    }
     c.restore();
   }
 
@@ -922,6 +1128,50 @@ class SlideScene extends Scene {
     D.text(c, text, cx, cy, { size, weight: 'bold', color: T.text, align: 'center' });
   }
 
+  winStars() {
+    let stars = 1;
+    if (this.timeLeft >= this.conf.seconds * 0.2) stars += 1;
+    if ((this.maxCombo || 0) >= 3) stars += 1;
+    return Math.max(1, Math.min(3, stars));
+  }
+
+  drawUpgrade(c) {
+    const T = theme.tokens;
+    c.fillStyle = 'rgba(0,0,0,0.50)';
+    c.fillRect(0, 0, W, H);
+    const w = W - 40;
+    const h = 310;
+    const x = (W - w) / 2;
+    const y = (H - h) / 2;
+    D.card(c, x, y, w, h, T);
+    D.text(c, t('slide.upgradeTitle'), W / 2, y + 30, {
+      size: 17, weight: 'bold', color: T.text, align: 'center',
+    });
+    D.text(c, t('slide.upgradeHint'), W / 2, y + 52, {
+      size: 11, color: T.muted, align: 'center',
+    });
+    // 全屏遮罩必须先入按钮，三行选项后入（Input 从后往前找）
+    this.addButton('upgrade-mask', 0, 0, W, H, () => {});
+    const rows = [
+      ['time', t('slide.upgradeTime'), t('slide.upgradeTimeDesc')],
+      ['combo', t('slide.upgradeCombo'), t('slide.upgradeComboDesc')],
+      ['special', t('slide.upgradeSpecial'), t('slide.upgradeSpecialDesc')],
+    ];
+    rows.forEach(([id, title, desc], i) => {
+      const ry = y + 68 + i * 68;
+      D.fillRoundRect(c, x + 16, ry, w - 32, 56, 10, T.card);
+      D.strokeRoundRect(c, x + 16, ry, w - 32, 56, 10, T.border, 1);
+      D.text(c, title, x + 30, ry + 20, { size: 14, weight: 'bold', color: T.text });
+      D.text(c, desc, x + 30, ry + 40, { size: 11, color: T.muted });
+      const btn = { x: x + w - 58, y: ry + 12, w: 30, h: 32 };
+      D.fillRoundRect(c, btn.x, btn.y, btn.w, btn.h, 8, T.primary);
+      D.text(c, '+', btn.x + btn.w / 2, btn.y + btn.h / 2, {
+        size: 18, weight: 'bold', color: '#fff', align: 'center',
+      });
+      this.addButton(`upgrade-${id}`, x + 16, ry, w - 32, 56, () => this.applyUpgrade(id));
+    });
+  }
+
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
@@ -940,10 +1190,16 @@ class SlideScene extends Scene {
       D.text(c, `🎉 ${t('slide.tipWin')} 🎉`, cx, cy - 30, {
         size: Math.min(18, this.boardW / 14), weight: 'bold', color: T.win, align: 'center',
       });
-      D.text(c, `${t('slide.timeUsed')} ${fmt(this.elapsed)}`, cx, cy + 2, {
-        size: 15, color: T.win, align: 'center',
+      D.text(c, `★${'★'.repeat(Math.max(0, this.winStars() - 1))}${'☆'.repeat(3 - this.winStars())}`, cx, cy - 8, {
+        size: 18, color: T.god, align: 'center',
       });
-      const by = cy + 34;
+      D.text(c, `${t('slide.score')} ${this.score}  ·  ${t('slide.timeUsed')} ${fmt(this.elapsed)}`, cx, cy + 14, {
+        size: 14, color: T.win, align: 'center',
+      });
+      D.text(c, `${t('slide.maxCombo')} ×${Math.min(5, this.maxCombo || 1)}`, cx, cy + 32, {
+        size: 12, color: T.muted, align: 'center',
+      });
+      const by = cy + 52;
       const bx = cx - (w1 + w2 + gap) / 2;
       resultButton.draw(c, this, l1, 'replay', bx, by, { id: 'result-replay', onTap: () => this.replayLevel() });
       resultButton.draw(c, this, l2, 'next', bx + w1 + gap, by, { id: 'result-next', onTap: () => this.nextLevel() });
@@ -951,8 +1207,8 @@ class SlideScene extends Scene {
       D.text(c, `⏰ ${t('slide.tipOver')} ⏰`, cx, cy - 26, {
         size: Math.min(20, this.boardW / 12), weight: 'bold', color: T.lose, align: 'center',
       });
-      D.text(c, `${this.leftPairs} ${t('slide.pairsLeftShort')}`, cx, cy + 4, {
-        size: 15, color: T.lose, align: 'center',
+      D.text(c, `${t('slide.score')} ${this.score}  ·  ${this.leftPairs} ${t('slide.pairsLeftShort')}`, cx, cy + 4, {
+        size: 14, color: T.lose, align: 'center',
       });
       const label = t('slide.replayLevel');
       const bw = resultButton.width(c, label);

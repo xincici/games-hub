@@ -345,7 +345,7 @@ class CrushScene extends Scene {
         this.lastConfettiAt = this.now;
         this.emitConfetti();
       }
-      this.confetti = confetti.update(this.confetti, delta, H);
+      if (this.confetti.length) this.confetti = confetti.update(this.confetti, delta, H);
     }
     this.now = this.clock;
   }
@@ -1116,23 +1116,31 @@ class CrushScene extends Scene {
     return 1 + 0.05 * Math.sin((now / 760) * Math.PI * 2);
   }
 
-  // 大 emoji 背后的光晕：径向渐变铺到格子外一圈，让它在盘面里「浮」起来
-  drawBigGlow(c, dx, dy, w, now) {
+  // 大 emoji 的牌面：主色淡底 + 一次 emoji 绘制。旧版先 cards.draw 再重画 emoji，
+  // 每颗大 emoji 每帧要画两遍 emoji 字体，是持续发热的主要来源之一。
+  drawBigCardFace(c, face, dx, dy, w) {
     const T = theme.tokens;
+    D.fillRoundRect(c, dx, dy, w, w, 8, D.mix(T.card, T.primary, theme.dark ? 0.22 : 0.12));
+    D.strokeRoundRect(c, dx, dy, w, w, 8, T.primary, 1.4);
+    cards.drawEmoji(c, face, dx + w / 2, dy + w / 2, Math.max(12, Math.round(w * 0.74)));
+  }
+
+  // 大 emoji 背后的光晕：三层低透明度圆，不再每帧创建径向渐变。
+  drawBigGlow(c, dx, dy, w, now) {
     const pulse = 0.5 + 0.5 * Math.sin((now / BIG_GLOW_MS) * Math.PI * 2);
     const cx = dx + w / 2;
     const cy = dy + w / 2;
     const r = w * (0.72 + 0.14 * pulse);
-    const g = c.createRadialGradient(cx, cy, w * 0.2, cx, cy, r);
-    g.addColorStop(0, theme.dark ? "rgba(120,230,180,0.55)" : "rgba(35,150,100,0.42)");
-    g.addColorStop(0.55, theme.dark ? "rgba(80,200,150,0.26)" : "rgba(35,150,100,0.18)");
-    g.addColorStop(1, "rgba(35,150,100,0)");
+    const rgb = theme.dark ? '120,230,180' : '35,150,100';
     c.save();
-    c.globalAlpha = c.globalAlpha * (0.7 + 0.3 * pulse);
-    c.fillStyle = g;
-    c.beginPath();
-    c.arc(cx, cy, r, 0, Math.PI * 2);
-    c.fill();
+    c.globalAlpha = c.globalAlpha * (0.55 + 0.25 * pulse);
+    // 用三层低透明度圆代替每帧新建径向渐变；手机上省掉大量 gradient 分配。
+    [[1, 0.07], [0.72, 0.10], [0.46, 0.13]].forEach(([k, a]) => {
+      c.fillStyle = `rgba(${rgb},${a})`;
+      c.beginPath();
+      c.arc(cx, cy, r * k, 0, Math.PI * 2);
+      c.fill();
+    });
     c.restore();
   }
 
@@ -1140,11 +1148,8 @@ class CrushScene extends Scene {
   drawBigAura(c, dx, dy, w, now, value) {
     const T = theme.tokens;
     const pulse = 0.5 + 0.5 * Math.sin((now / BIG_GLOW_MS) * Math.PI * 2);
-    // 牌面本身压一层淡主色，和普通牌的白底区分开（emoji 再盖上去，不会被糊住）
-    D.fillRoundRect(c, dx + 0.5, dy + 0.5, w - 1, w - 1, 7,
-      theme.dark ? "rgba(78,201,138,0.18)" : "rgba(35,128,78,0.12)");
-    cards.drawEmoji(c, this.faceOf(value), dx + w / 2, dy + w / 2, Math.max(12, Math.round(w * 0.74)));
     // 双层描边：外层主色 + 内层淡白，呼吸越强越亮
+    // 牌面 tint / emoji 由 drawTile / drawMerges 只画一次，这里不再重复 fillText。
     c.save();
     c.globalAlpha = c.globalAlpha * (0.55 + 0.4 * pulse);
     D.strokeRoundRect(c, dx + 1, dy + 1, w - 2, w - 2, 8, T.primary, 2.5);
@@ -1248,7 +1253,7 @@ class CrushScene extends Scene {
       c.translate(target.x, target.y);
       c.scale(scale, scale);
       this.drawBigGlow(c, -w / 2, -w / 2, w, now);
-      cards.draw(c, face, cards.MODE_EMOJI, -w / 2, -w / 2, w, w, true);
+      this.drawBigCardFace(c, face, -w / 2, -w / 2, w);
       this.drawBigAura(c, -w / 2, -w / 2, w, now, logic.big(m.kind));
       c.restore();
     });
@@ -1392,7 +1397,11 @@ class CrushScene extends Scene {
     c.save();
     D.roundRect(c, this.innerX, this.innerY, this.innerW, this.innerH, 8);
     c.clip();
-    const ordered = this.tiles.slice().sort((a, b) => this.drawRank(a) - this.drawRank(b));
+    // 只有选中 / 提示 / 消除补间需要把特殊牌抬到上层；平时保持稳定顺序，省掉每帧 slice+sort。
+    const needsSort = this.selected >= 0 || !!this.hint || !!this.clearFx || !!this.mergeHide || !!this.lineFx;
+    const ordered = needsSort
+      ? this.tiles.slice().sort((a, b) => this.drawRank(a) - this.drawRank(b))
+      : this.tiles;
     ordered.forEach(tile => this.drawTile(c, tile));
     this.drawMerges(c);
     this.drawDegrades(c);
@@ -1558,8 +1567,12 @@ class CrushScene extends Scene {
       D.fillRoundRect(c, dx - 2.5, dy - 2.5, w + 5, w + 5, 10, theme.dark ? 'rgba(242,208,145,0.5)' : '#fff1c2');
       c.restore();
     }
-    if (bigTile) this.drawBigGlow(c, dx, dy, w, now);
-    cards.draw(c, face, cards.MODE_EMOJI, dx, dy, w, w, true);
+    if (bigTile) {
+      this.drawBigGlow(c, dx, dy, w, now);
+      this.drawBigCardFace(c, face, dx, dy, w);
+    } else {
+      cards.draw(c, face, cards.MODE_EMOJI, dx, dy, w, w, true);
+    }
     // 炸弹 / 万能元素：统一牌面上叠一层淡色 + 重画 emoji，再补一圈语义色描边
     if (value === logic.BOMB || value === logic.WILD) {
       const tint = value === logic.BOMB

@@ -21,23 +21,27 @@ if (!coreI18n.__snakeRegistered) {
   coreI18n.__snakeRegistered = true;
 }
 
-const DIFFICULTY_KEY = '__snake_game__difficulty';
 const BEST_KEY = '__snake_game__best';
 const STATE_KEY = '__snake_game__state';
 const WALL_KEY = '__snake_game__through_wall';
 const GRID = 20;
-const SPEEDS = [400, 320, 250, 190, 140];
-const SCORE_PER_FOOD = [1, 2, 3, 4, 6];
+const BASE_INTERVAL = 300;       // 起始步进
+const MIN_INTERVAL = 90;         // 最快步进
+const SPEED_PER_SCORE = 1.6;     // 每 1 分缩短多少毫秒
+const COMBO_MS = 4000;          // 连吃窗口
+const COMBO_MAX = 5;            // 连击最高倍率
+const GOLD_MS = 5000;           // 金色食物限时
+const SPECIAL_EVERY = 5;        // 每吃 5 颗，下颗换特殊食物
+const SHRINK_SEGMENTS = 3;      // 吃下后先 +1，再减 3 节 = 净缩短 2 节
 const GAMING = 0;
 const LOSE = 1;
-const MIN_DIFFICULTY = 1;
-const MAX_DIFFICULTY = 5;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const easeOut = p => 1 - Math.pow(1 - p, 3);
 
 class SnakeScene extends Scene {
   constructor(app) {
     super(app);
     this.bg = new ParticleField();
-    this.difficulty = this.loadDifficulty();
     this.best = +(getRaw(BEST_KEY, 0) || 0);
     this.throughWall = getRaw(WALL_KEY, '1') !== '0';
     this.snake = [];
@@ -45,6 +49,15 @@ class SnakeScene extends Scene {
     this.nextDir = [0, 1];
     this.food = null;
     this.score = 0;
+    this.combo = 0;
+    this.comboUntil = 0;
+    this.eatCount = 0;
+    this.foodKind = 'normal';
+    this.foodUntil = 0;
+    this.scorePulseAt = -1;
+    this.headPopAt = -1;
+    this.eatFx = [];
+    this.eatText = null;
     this.newBest = false;
     this.phase = GAMING;
     this.started = false;
@@ -57,11 +70,12 @@ class SnakeScene extends Scene {
     this.layout();
     this.boot();
   }
-  loadDifficulty() {
-    const v = +(getRaw(DIFFICULTY_KEY, 1) || 1);
-    return Math.max(MIN_DIFFICULTY, Math.min(MAX_DIFFICULTY, v || 1));
+  get interval() {
+    // 分数越高越快：从 300ms 逐步压到 90ms，不再手动调难度。
+    const fast = Math.min(BASE_INTERVAL - MIN_INTERVAL, Math.floor(this.score * SPEED_PER_SCORE));
+    return Math.max(MIN_INTERVAL, BASE_INTERVAL - fast);
   }
-  get interval() { return SPEEDS[this.difficulty - 1]; }
+  speedFactor() { return BASE_INTERVAL / this.interval; }
   boot() {
     if (!this.restore()) this.startGame();
   }
@@ -73,6 +87,15 @@ class SnakeScene extends Scene {
     this.dir = [0, 1];
     this.nextDir = [0, 1];
     this.score = 0;
+    this.combo = 0;
+    this.comboUntil = 0;
+    this.eatCount = 0;
+    this.foodKind = 'normal';
+    this.foodUntil = 0;
+    this.scorePulseAt = -1;
+    this.headPopAt = -1;
+    this.eatFx = [];
+    this.eatText = null;
     this.newBest = false;
     this.phase = GAMING;
     this.started = true;
@@ -84,17 +107,21 @@ class SnakeScene extends Scene {
     removeRaw(STATE_KEY);
     this.save();
   }
-  spawnFood() {
+  spawnFood(kind) {
     const used = new Set(this.snake.map(([r, c]) => `${r},${c}`));
     const cells = [];
     for (let r = 0; r < GRID; r++) for (let c = 0; c < GRID; c++) if (!used.has(`${r},${c}`)) cells.push([r, c]);
     this.food = cells.length ? cells[Math.floor(Math.random() * cells.length)] : null;
+    this.foodKind = kind === 'gold' || kind === 'shrink' ? kind : 'normal';
+    this.foodUntil = this.foodKind === 'gold' ? Date.now() + GOLD_MS : 0;
   }
   save() {
     if (!this.started || !this.food) return;
     setRaw(STATE_KEY, JSON.stringify({
       snake: this.snake, dir: this.dir, nextDir: this.nextDir, food: this.food,
-      score: this.score, difficulty: this.difficulty,
+      score: this.score,
+      combo: this.combo, comboUntil: this.comboUntil, eatCount: this.eatCount,
+      foodKind: this.foodKind, foodUntil: this.foodUntil,
       result: this.phase === LOSE ? 'lose' : 'gaming', newBest: this.newBest,
     }));
   }
@@ -104,14 +131,22 @@ class SnakeScene extends Scene {
       if (!raw) return false;
       const s = JSON.parse(raw);
       if (!s || !Array.isArray(s.snake) || !s.snake.length || !Array.isArray(s.food)) return false;
-      const d = +s.difficulty;
-      if (d < MIN_DIFFICULTY || d > MAX_DIFFICULTY) return false;
-      this.difficulty = d;
       this.snake = s.snake;
       this.dir = s.dir || [0, 1];
       this.nextDir = s.nextDir || this.dir;
       this.food = s.food;
       this.score = +s.score || 0;
+      this.combo = Math.max(0, Math.floor(+s.combo) || 0);
+      this.comboUntil = Math.max(0, Math.floor(+s.comboUntil) || 0);
+      this.eatCount = Math.max(0, Math.floor(+s.eatCount) || 0);
+      this.foodKind = s.foodKind === 'gold' || s.foodKind === 'shrink' ? s.foodKind : 'normal';
+      this.foodUntil = Math.max(0, Math.floor(+s.foodUntil) || 0);
+      this.scorePulseAt = -1;
+      this.headPopAt = -1;
+      this.eatFx = [];
+      this.eatText = null;
+      if (this.comboUntil <= Date.now()) this.combo = 0;
+      if (this.foodKind === 'gold' && this.foodUntil <= Date.now()) this.spawnFood('normal');
       this.newBest = !!s.newBest;
       this.started = true;
       this.phase = s.result === 'lose' ? LOSE : GAMING;
@@ -130,6 +165,10 @@ class SnakeScene extends Scene {
       }
     }
     if (!this.started || this.phase !== GAMING || this.paused || this.helpOpen) return;
+    const now = Date.now();
+    if (this.combo > 0 && now >= this.comboUntil) this.combo = 0;
+    if (this.food && this.foodKind === 'gold' && now >= this.foodUntil) this.spawnFood('normal');
+    this.updateEatFx(Math.min(50, dt || 16), now);
     this.acc += Math.min(50, dt || 16);
     while (this.acc >= this.interval) {
       this.acc -= this.interval;
@@ -155,7 +194,25 @@ class SnakeScene extends Scene {
     }
     this.snake.unshift(head);
     if (this.food && head[0] === this.food[0] && head[1] === this.food[1]) {
-      this.score += SCORE_PER_FOOD[this.difficulty - 1];
+      const now = Date.now();
+      const kind = this.foodKind;
+      this.combo = this.combo > 0 && now <= this.comboUntil ? this.combo + 1 : 1;
+      this.comboUntil = now + COMBO_MS;
+      const mult = Math.min(COMBO_MAX, this.combo);
+      let points = mult;
+      if (kind === 'gold') points *= 3;
+      this.score += points;
+      this.eatCount += 1;
+      this.scorePulseAt = now;
+      this.headPopAt = now;
+      this.spawnEatFx(head[0], head[1], kind, points);
+      if (kind === 'shrink') {
+        let removed = 0;
+        while (this.snake.length > 3 && removed < SHRINK_SEGMENTS) {
+          this.snake.pop();
+          removed += 1;
+        }
+      }
       daily.report('snake', 'reach', { value: this.score });
       this.app.audio.playElimination();
       if (this.score > this.best) {
@@ -163,22 +220,88 @@ class SnakeScene extends Scene {
         this.newBest = true;
         setRaw(BEST_KEY, String(this.best));
       }
-      this.spawnFood();
+      const nextKind = this.eatCount % SPECIAL_EVERY === 0
+        ? (Math.random() < 0.6 ? 'gold' : 'shrink')
+        : 'normal';
+      this.spawnFood(nextKind);
     } else {
       this.snake.pop();
     }
     this.save();
   }
+  // ---------- 吃食物反馈 ----------
+  spawnEatFx(r, c, kind, points) {
+    const x = this.boardX + (c + 0.5) * this.cell;
+    const y = this.boardY + (r + 0.5) * this.cell;
+    const color = kind === 'gold' ? '#f5c542' : kind === 'shrink' ? '#4aa3df' : '#e05a47';
+    for (let i = 0; i < 10; i += 1) {
+      const a = (i / 10) * Math.PI * 2 + Math.random() * 0.4;
+      const speed = 0.8 + Math.random() * 1.8;
+      this.eatFx.push({
+        x, y,
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed - 0.6,
+        size: Math.max(1.5, this.cell * (0.06 + Math.random() * 0.06)),
+        color, age: 0, life: 320 + Math.random() * 220,
+      });
+    }
+    this.eatText = { text: `+${points}`, x, y, color, age: 0, life: 760, combo: this.combo };
+  }
+
+  updateEatFx(dt, now) {
+    if (this.eatFx.length) {
+      const step = (dt || 16) / 16.67;
+      this.eatFx.forEach((p) => {
+        p.age += dt || 16;
+        p.x += p.vx * step;
+        p.y += p.vy * step;
+        p.vy += 0.16 * step;
+      });
+      this.eatFx = this.eatFx.filter((p) => p.age < p.life);
+    }
+    if (this.eatText) {
+      this.eatText.age += dt || 16;
+      if (this.eatText.age >= this.eatText.life) this.eatText = null;
+    }
+    if (this.scorePulseAt > 0 && now - this.scorePulseAt > 280) this.scorePulseAt = -1;
+    if (this.headPopAt > 0 && now - this.headPopAt > 180) this.headPopAt = -1;
+  }
+
+  drawEatFx(c) {
+    this.eatFx.forEach((p) => {
+      const k = 1 - p.age / p.life;
+      if (k <= 0) return;
+      c.save();
+      c.globalAlpha = k;
+      c.fillStyle = p.color;
+      c.beginPath();
+      c.arc(p.x, p.y, p.size * (0.6 + k * 0.6), 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    });
+    const text = this.eatText;
+    if (text) {
+      const p = Math.min(1, text.age / text.life);
+      c.save();
+      c.globalAlpha = 1 - p * p;
+      D.text(c, text.text, text.x, text.y - 14 - 24 * easeOut(p), {
+        size: text.combo >= 2 ? 16 : 14,
+        weight: 'bold',
+        color: text.color,
+        align: 'center',
+      });
+      if (text.combo >= 2) {
+        D.text(c, `×${Math.min(COMBO_MAX, text.combo)}`, text.x + 28, text.y - 10 - 24 * easeOut(p), {
+          size: 10, weight: 'bold', color: theme.tokens.god, align: 'left',
+        });
+      }
+      c.restore();
+    }
+  }
+
   turn(d) {
     if (d[0] === -this.dir[0] && d[1] === -this.dir[1]) return;
     this.nextDir = d;
-  }
-  changeDifficulty(delta) {
-    const next = this.difficulty + delta;
-    if (next < MIN_DIFFICULTY || next > MAX_DIFFICULTY) return;
-    this.difficulty = next;
-    setRaw(DIFFICULTY_KEY, String(next));
-    this.acc = 0;
   }
   togglePause() {
     if (!this.started || this.phase === LOSE) return;
@@ -252,28 +375,63 @@ class SnakeScene extends Scene {
   }
   drawScore(c) {
     const T = theme.tokens;
+    const now = Date.now();
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
-    const half = this.cw / 2;
-    D.divider(c, this.cx + half, this.scoreY + this.scoreH / 2, 24, T.border, 1);
-    D.text(c, t('snake.bestScore'), this.cx + half / 2, this.scoreY + 24, { size: 12, color: T.muted, align: 'center' });
-    D.text(c, String(this.best), this.cx + half / 2, this.scoreY + 48, { size: 22, weight: 'bold', color: T.text, align: 'center' });
-    D.text(c, t('snake.score'), this.cx + half + half / 2, this.scoreY + 24, { size: 12, color: T.muted, align: 'center' });
-    D.text(c, String(this.score), this.cx + half + half / 2, this.scoreY + 48, { size: 22, weight: 'bold', color: T.primary, align: 'center' });
+    const q = this.cw / 3;
+    const comboShown = this.combo > 0 ? `×${Math.min(COMBO_MAX, this.combo)}` : '--';
+    const stats = [
+      [t('snake.bestScore'), String(this.best), T.text],
+      [t('snake.score'), String(this.score), T.primary],
+      [t('snake.combo'), comboShown, this.combo >= 2 ? T.god : T.muted],
+    ];
+    stats.forEach(([label, value, color], i) => {
+      if (i) D.divider(c, this.cx + q * i, this.scoreY + this.scoreH / 2, 24, T.border, 1);
+      const x = this.cx + q * (i + 0.5);
+      D.text(c, label, x, this.scoreY + 23, {
+        size: 10.5, color: T.muted, align: 'center',
+      });
+      let scale = 1;
+      if (i === 1 && this.scorePulseAt > 0 && now - this.scorePulseAt < 280) {
+        scale = 1 + 0.16 * (1 - (now - this.scorePulseAt) / 280);
+      } else if (i === 2 && this.combo >= 2 && now - this.comboUntil < 0) {
+        scale = 1 + 0.06 * Math.abs(Math.sin(now / 180));
+      }
+      if (scale === 1) {
+        D.text(c, value, x, this.scoreY + 48, { size: 22, weight: 'bold', color, align: 'center' });
+      } else {
+        c.save();
+        c.translate(x, this.scoreY + 48);
+        c.scale(scale, scale);
+        D.text(c, value, 0, 0, { size: 22, weight: 'bold', color, align: 'center' });
+        c.restore();
+      }
+      if (i === 2) {
+        const bw = q - 22;
+        const bx = x - bw / 2;
+        const by = this.scoreY + 62;
+        D.fillRoundRect(c, bx, by, bw, 3, 1.5, T.border);
+        if (this.combo > 0) {
+          const frac = clamp((this.comboUntil - now) / COMBO_MS, 0, 1);
+          D.fillRoundRect(c, bx, by, Math.max(1, bw * frac), 3, 1.5, T.god);
+        }
+      }
+    });
   }
+
   drawOptions(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
-    // 与关灯游戏保持同一套难度步进器：28×28 描边小按钮，点击热区外扩 8。
     const x1 = this.cx + this.cw * 3 / 10;
-    const x2 = this.cx + this.cw * (3 / 10 + 3.5 / 10);
+    const x2 = this.cx + this.cw * 6.5 / 10;
     D.divider(c, x1, this.optY + this.optH / 2, 24, T.border, 1);
     D.divider(c, x2, this.optY + this.optH / 2, 24, T.border, 1);
     const mid = this.optY + this.optH / 2;
-    const minus = { x: this.cx + 16, y: mid - 14, w: 28, h: 28 };
-    const plus = { x: x1 - 44, y: mid - 14, w: 28, h: 28 };
-    this.drawMiniButton(c, minus, '-', this.difficulty > 1, () => this.changeDifficulty(-1));
-    this.drawMiniButton(c, plus, '+', this.difficulty < 5, () => this.changeDifficulty(1));
-    D.text(c, String(this.difficulty), (minus.x + 28 + plus.x) / 2, mid, { size: 18, weight: 'bold', color: T.text, align: 'center' });
+    // 左侧不再是手动难度，显示当前自动加速倍率。
+    const sx = this.cx + (x1 - this.cx) / 2;
+    D.text(c, t('snake.speed'), sx, mid - 10, { size: 10.5, color: T.muted, align: 'center' });
+    D.text(c, `×${this.speedFactor().toFixed(1)}`, sx, mid + 9, {
+      size: 17, weight: 'bold', color: T.primary, align: 'center',
+    });
     const label = t('snake.start');
     const bw = Math.min(100, actionLabel.width(c, label, { size: 12, iconSize: 12, gap: 4 }));
     const bx = (x1 + x2) / 2 - bw / 2;
@@ -283,22 +441,65 @@ class SnakeScene extends Scene {
     const pauseLabel = this.paused ? t('snake.resume') : t('snake.pause');
     const pw = Math.min(Math.round(this.cw / 3) - 16, Math.max(80, actionLabel.width(c, pauseLabel, { size: 13 })));
     const px = (x2 + this.cx + this.cw) / 2 - pw / 2;
-    // 与 Emoji 下坠的暂停 / 继续按钮统一：主色实心 + 白字。
     D.fillRoundRect(c, px, mid - 16, pw, 32, 8, this.phase === LOSE ? T.disabled : T.god);
     actionLabel.draw(c, this.paused ? 'play' : 'pause', pauseLabel, px + pw / 2, mid, {
       size: 12, color: this.phase === LOSE ? '#f3f3f3' : '#fff', iconSize: 12, gap: 4,
     });
     if (this.phase !== LOSE) this.addButton('pause', px, mid - 16, pw, 32, () => this.togglePause());
   }
-  drawMiniButton(c, r, label, enabled, onTap) {
+
+
+  drawFood(c) {
+    if (!this.food) return;
     const T = theme.tokens;
-    D.fillRoundRect(c, r.x, r.y, r.w, r.h, 8, T.card);
-    D.strokeRoundRect(c, r.x, r.y, r.w, r.h, 8, T.border, 1);
-    D.text(c, label, r.x + r.w / 2, r.y + r.h / 2, {
-      size: 15, weight: 'bold', color: enabled ? T.text : T.border, align: 'center',
-    });
-    if (enabled) this.addButton('diff-' + label, r.x - 8, r.y - 8, r.w + 16, r.h + 16, onTap);
+    const now = Date.now();
+    const fx = this.boardX + (this.food[1] + 0.5) * this.cell;
+    const fy = this.boardY + (this.food[0] + 0.5) * this.cell;
+    const r = this.cell * 0.36;
+    const kind = this.foodKind;
+    if (kind === 'gold') {
+      const pulse = 0.5 + 0.5 * Math.sin(now / 180);
+      c.save();
+      c.globalAlpha = 0.35 + 0.2 * pulse;
+      [1.7, 1.35, 1.05].forEach((k, i) => {
+        c.fillStyle = i === 0 ? 'rgba(245,197,66,0.10)' : i === 1 ? 'rgba(245,197,66,0.16)' : 'rgba(245,197,66,0.24)';
+        c.beginPath();
+        c.arc(fx, fy, r * k, 0, Math.PI * 2);
+        c.fill();
+      });
+      c.restore();
+      D.circle(c, fx, fy, r, '#f5c542');
+      D.circle(c, fx - r * 0.3, fy - r * 0.3, r * 0.28, '#fff1b8');
+      // 限时环：金色食物 5 秒内没吃到会变回普通食物
+      if (this.foodUntil) {
+        const left = clamp((this.foodUntil - now) / GOLD_MS, 0, 1);
+        c.save();
+        c.strokeStyle = '#fff6cf';
+        c.lineWidth = Math.max(1.5, this.cell * 0.06);
+        c.beginPath();
+        c.arc(fx, fy, r * 1.45, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+        c.stroke();
+        c.restore();
+      }
+    } else if (kind === 'shrink') {
+      D.circle(c, fx, fy, r * 1.14, 'rgba(74,163,223,0.20)');
+      D.circle(c, fx, fy, r, '#4aa3df');
+      D.circle(c, fx - r * 0.28, fy - r * 0.28, r * 0.26, '#c9ecff');
+      c.save();
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = Math.max(1.8, this.cell * 0.07);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(fx - r * 0.48, fy);
+      c.lineTo(fx + r * 0.48, fy);
+      c.stroke();
+      c.restore();
+    } else {
+      D.circle(c, fx, fy, r, '#e05a47');
+      D.circle(c, fx - this.cell * 0.1, fy - this.cell * 0.1, this.cell * 0.1, '#ffb3a6');
+    }
   }
+
   drawBoard(c) {
     const T = theme.tokens;
     const x0 = this.boardX;
@@ -311,23 +512,32 @@ class SnakeScene extends Scene {
       c.fillStyle = (r + col) % 2 === 0 ? '#e8ecef' : '#e2e7eb';
       c.fillRect(x0 + col * this.cell, y0 + r * this.cell, this.cell + 0.5, this.cell + 0.5);
     }
+    const now = Date.now();
+    const pop = this.headPopAt > 0 ? 1 + 0.14 * (1 - (now - this.headPopAt) / 180) : 1;
     this.snake.forEach(([r, col], i) => {
       const x = x0 + col * this.cell + 1;
       const y = y0 + r * this.cell + 1;
       const s = this.cell - 2;
-      D.fillRoundRect(c, x, y, s, s, i === 0 ? 7 : 5, i === 0 ? T.primary : '#3b9463');
-      if (i === 0) {
+      if (i === 0 && pop > 1) {
+        c.save();
+        c.translate(x + s / 2, y + s / 2);
+        c.scale(pop, pop);
+        D.fillRoundRect(c, -s / 2, -s / 2, s, s, 7, T.primary);
         c.fillStyle = '#fff';
-        D.circle(c, x + s * 0.34, y + s * 0.38, Math.max(1.2, s * 0.1));
-        D.circle(c, x + s * 0.66, y + s * 0.38, Math.max(1.2, s * 0.1));
+        D.circle(c, -s * 0.16, -s * 0.12, Math.max(1.2, s * 0.1));
+        D.circle(c, s * 0.16, -s * 0.12, Math.max(1.2, s * 0.1));
+        c.restore();
+      } else {
+        D.fillRoundRect(c, x, y, s, s, i === 0 ? 7 : 5, i === 0 ? T.primary : '#3b9463');
+        if (i === 0) {
+          c.fillStyle = '#fff';
+          D.circle(c, x + s * 0.34, y + s * 0.38, Math.max(1.2, s * 0.1));
+          D.circle(c, x + s * 0.66, y + s * 0.38, Math.max(1.2, s * 0.1));
+        }
       }
     });
-    if (this.food) {
-      const fx = x0 + (this.food[1] + 0.5) * this.cell;
-      const fy = y0 + (this.food[0] + 0.5) * this.cell;
-      D.circle(c, fx, fy, this.cell * 0.36, '#e05a47');
-      D.circle(c, fx - this.cell * 0.1, fy - this.cell * 0.1, this.cell * 0.1, '#ffb3a6');
-    }
+    this.drawFood(c);
+    this.drawEatFx(c);
     c.restore();
     // 关闭穿墙时，用明显的红色边框提示「边界不可穿过」；开启后边框消失。
     if (!this.throughWall) {

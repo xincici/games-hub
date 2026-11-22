@@ -67,6 +67,8 @@ ICONS = {
     'cowboy': ('mdi', 'account-cowboy-hat'),
     'arrow-right': ('mdi', 'arrow-right-bold'),
     'gamepad': ('mdi', 'gamepad-variant-outline'),
+    'bomb': ('mdi', 'bomb'),
+    'wild': ('mdi', 'star-four-points'),
     'pause': ('mdi', 'pause-circle-outline'),
     'play': ('mdi', 'play-circle-outline'),
     'eye': ('mdi', 'eye-outline'),

@@ -15,6 +15,18 @@ const pitchOf = mode => {
 };
 const TRAY_SIZE = 7;    // 收集槽格数
 const BLOCK_TILES = 9;  // 每 9 张一组发牌（3 组三消，保证按清盘顺序可解）
+// 收集槽随关卡收窄：1~3 关 7 格，4~9 关 6 格，10 关起 5 格。
+// 5 格时必须把发牌块从 9 张缩到 6 张，否则“最多同时 6 张”的可解证明会失效。
+function traySizeFor(level) {
+  const lv = Math.max(1, Math.floor(level) || 1);
+  if (lv >= 10) return 5;
+  if (lv >= 4) return 6;
+  return TRAY_SIZE;
+}
+function blockForTray(traySize) {
+  // 6 格槽不能沿用 9 张块：三组交错的极端顺序会需要第 7 张才凑齐。
+  return traySize >= 7 ? BLOCK_TILES : 6;
+}
 
 const MIN_TRIPLES = 8;   // 第 1 关 8 组三消 = 24 张
 const MAX_TRIPLES = 32;  // 组数上限 = 96 张（这也是分层布局摆得下的上限，见 layoutTiles）
@@ -81,11 +93,12 @@ function levelConfig(level, mode = MODE_EMOJI) {
   // 种类不能超过组数（否则会有「分到 0 组」的牌面白占池子）
   const kinds = Math.min(triples, Math.max(1, Math.min(tune.maxKinds, Math.max(tune.minKinds, rawKinds))));
   const layers = Math.min(MAX_LAYERS, Math.round(MIN_LAYERS + (MAX_LAYERS - MIN_LAYERS) * t));
+  const traySize = traySizeFor(lv);
   const tiles = triples * 3;
   const slots = Array.from({ length: layers }, (_, i) => layerSlots(i, pitch));
   // groups 是历史字段名（早期的「一种 emoji 只出一组」），等价于 triples，保留给旧调用方
   return {
-    level: lv, mode, pitch, slots, triples, groups: triples, kinds, layers, tiles,
+    level: lv, mode, pitch, slots, triples, groups: triples, kinds, layers, tiles, traySize,
     counts: distributeCounts(tiles, layers, slots),
   };
 }
@@ -185,15 +198,21 @@ function buildTripleBag(pool, kinds, triples) {
 // 沿指定清盘顺序按 BLOCK_TILES 一组发牌：一组 9 张 = 3 个三消，每个三消用同一种 emoji。
 // 因此按该顺序点击时，槽内最多同时存在 2×3 = 6 张（第 7 张落下前一定已凑齐一组三消），
 // 而且每消完一组 9 张，槽里属于自己的牌全部清空，该顺序必定可解。
-function dealAlongOrder(tiles, bag, order) {
+function dealAlongOrder(tiles, bag, order, blockSize = BLOCK_TILES) {
   const list = shuffleArray(bag);
   let cursor = 0;
-  for (let start = 0; start < order.length; start += BLOCK_TILES) {
-    const block = order.slice(start, start + BLOCK_TILES);
+  const step = Math.max(3, Math.floor(blockSize / 3) * 3);
+  for (let start = 0; start < order.length; start += step) {
+    const block = order.slice(start, start + step);
     const picked = [];
     for (let i = 0; i < block.length; i += 3) picked.push(list[cursor++ % list.length]);
+    // 同一个发牌块里把三张三张的同款打散，不能按清盘顺序「AAA BBB CCC」直接点。
+    // 这样仍能保证块内最多 6 张（5 格槽用 6 张块时最多 4 张），但玩家必须真的规划槽位。
+    const assignment = [];
+    picked.forEach(emoji => assignment.push(emoji, emoji, emoji));
+    const mixed = shuffleArray(assignment);
     block.forEach((tile, i) => {
-      tile.emoji = picked[~~(i / 3)];
+      tile.emoji = mixed[i];
     });
   }
 }
@@ -328,7 +347,7 @@ function generateTiles(pool, level = 1, mode = MODE_EMOJI) {
   const cfg = levelConfig(level, mode);
   const tiles = layoutTiles(cfg);
   const order = removalOrder(tiles, cfg.pitch);
-  dealAlongOrder(tiles, buildTripleBag(pool, cfg.kinds, cfg.triples), order);
+  dealAlongOrder(tiles, buildTripleBag(pool, cfg.kinds, cfg.triples), order, blockForTray(cfg.traySize));
   return { tiles, cfg, order };
 }
 
@@ -371,6 +390,8 @@ module.exports = {
   SPREAD_RANDOM,
   TILE_UNITS,
   TRAY_SIZE,
+  blockForTray,
+  traySizeFor,
   UNITS,
   buildLayout,
   buildTripleBag,

@@ -31,6 +31,10 @@ const STATE_KEY = `${PREFIX}state`;
 const DEAL_STEP = 7;
 const DEAL_MS = 200;
 const PLAY = 'play', WON = 'won', OVER = 'over';
+const COMBO_MS = 3000;         // 连击窗口
+const COMBO_TIME = [0, 0, 0.6, 1.0, 1.5, 2.0];
+const TURN_BONUS = [0, 50, 120]; // 0 / 1 / 2 转折
+const PAIR_BASE = 100;
 
 function allTiles(board) {
   const out = [];
@@ -57,6 +61,12 @@ class LinkScene extends Scene {
     this.clears = [];
     this.shake = [];
     this.elapsed = 0;
+    this.score = 0;
+    this.maxCombo = 0;
+    this.scorePulseAt = -1;
+    this.clearedPairs = 0;
+    this.specials = {};
+    this.iceGroups = [];
     this.helpOpen = false;
     this.confirming = false;
     this.shuffleAt = 0;
@@ -105,16 +115,90 @@ class LinkScene extends Scene {
     this.bursts = [];
     this.dealStart = Date.now();
     this.elapsed = 0;
+    this.score = 0;
+    this.maxCombo = 0;
+    this.scorePulseAt = -1;
+    this.clearedPairs = 0;
+    this.specials = {};
+    this.iceGroups = [];
+    this.seedLevelSpecials();
     this.helpOpen = false;
     this.confirming = false;
     removeRaw(STATE_KEY);
     this.save();
     this.layout();
   }
+  cellKey(r, c) { return `${r},${c}`; }
+
+  isIce(r, c) {
+    return this.iceGroups.some(group => group.some(([gr, gc]) => gr === r && gc === c));
+  }
+
+  specialAt(r, c) {
+    return this.specials[this.cellKey(r, c)] || '';
+  }
+
+  restoreSpecials(raw, rows, cols) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    Object.keys(raw).forEach((key) => {
+      const [r, c] = String(key).split(',').map(Number);
+      const type = raw[key];
+      if (!(r >= 0 && r < rows && c >= 0 && c < cols)) return;
+      if (type !== 'clock' && type !== 'bomb') return;
+      if (!this.board[r] || !this.board[r][c]) return;
+      out[key] = type;
+    });
+    return out;
+  }
+
+  restoreIce(raw, rows, cols) {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((group) => Array.isArray(group) && group.length === 2
+      && group.every(([r, c]) => r >= 0 && r < rows && c >= 0 && c < cols
+        && this.board[r] && this.board[r][c]))
+      .map(group => group.map(([r, c]) => [r, c]));
+  }
+
+  seedLevelSpecials() {
+    if (this.level >= 2) this.seedSpecial('clock');
+    if (this.level >= 4) this.seedSpecial('bomb');
+    if (this.level >= 6) this.seedSpecial('ice');
+    if (this.level >= 8 && Math.random() < 0.5) this.seedSpecial(Math.random() < 0.5 ? 'clock' : 'bomb');
+  }
+
+  seedSpecial(type) {
+    const byEmoji = new Map();
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.walls[r] && this.walls[r][c]) continue;
+        const value = this.board[r][c];
+        if (!value || this.specialAt(r, c) || this.isIce(r, c)) continue;
+        if (!byEmoji.has(value)) byEmoji.set(value, []);
+        byEmoji.get(value).push([r, c]);
+      }
+    }
+    const candidates = [...byEmoji.values()].filter(list => list.length >= 2);
+    if (!candidates.length) return false;
+    const list = candidates[Math.floor(Math.random() * candidates.length)];
+    const a = list[0];
+    const b = list[1 + Math.floor(Math.random() * (list.length - 1))];
+    if (!a || !b) return false;
+    if (type === 'ice') {
+      this.iceGroups.push([a, b]);
+    } else {
+      this.specials[this.cellKey(a[0], a[1])] = type;
+      this.specials[this.cellKey(b[0], b[1])] = type;
+    }
+    return true;
+  }
+
   save() {
     setRaw(STATE_KEY, JSON.stringify({
       board: this.board, walls: this.walls, level: this.level,
       time: this.elapsed, phase: this.phase,
+      score: this.score, maxCombo: this.maxCombo,
+      clearedPairs: this.clearedPairs, specials: this.specials, iceGroups: this.iceGroups,
     }));
   }
   restore() {
@@ -132,11 +216,18 @@ class LinkScene extends Scene {
         ? s.walls.map(row => (Array.isArray(row) ? row.slice(0, c.cols) : []))
         : [];
       this.elapsed = Math.max(0, +s.time || 0);
+      this.score = Math.max(0, Math.floor(+s.score) || 0);
+      this.maxCombo = Math.max(0, Math.floor(+s.maxCombo) || 0);
+      this.clearedPairs = Math.max(0, Math.floor(+s.clearedPairs) || 0);
+      this.specials = this.restoreSpecials(s.specials, c.rows, c.cols);
+      this.iceGroups = this.restoreIce(s.iceGroups, c.rows, c.cols);
       if (s.phase === WON && !this.leftPairs) this.phase = WON;
       else if (s.phase === OVER && this.leftPairs) this.phase = OVER;
       else if (this.leftPairs) this.phase = PLAY;
       else return false;
       if (this.phase === PLAY && !boardLogic.hasMove(this.board, this.rows, this.cols, this.walls)) {
+        this.specials = {};
+        this.iceGroups = [];
         this.board = boardLogic.shuffleBoard(this.board, this.rows, this.cols, Math.random, this.walls);
       }
       this.dealStart = Date.now();
@@ -162,6 +253,8 @@ class LinkScene extends Scene {
     if (this.shufflePlan && this.now >= this.shufflePlan) {
       this.shufflePlan = 0;
       this.shuffleAt = this.now;
+      this.specials = {};
+      this.iceGroups = [];
       this.board = boardLogic.shuffleBoard(this.board, this.rows, this.cols, Math.random, this.walls);
       if (!boardLogic.hasMove(this.board, this.rows, this.cols, this.walls)) {
         const remaining = allTiles(this.board);
@@ -183,11 +276,89 @@ class LinkScene extends Scene {
       }
     }
   }
+  registerClear(turns) {
+    const now = Date.now();
+    const chained = this.lastClearAt && now - this.lastClearAt < COMBO_MS;
+    this.combo = chained ? this.combo + 1 : 1;
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
+    this.lastClearAt = now;
+    this.comboAt = now;
+    this.comboUntil = now + 1500;
+    const mult = Math.min(5, this.combo);
+    const turn = Math.max(0, Math.min(2, Math.floor(turns) || 0));
+    this.score += (PAIR_BASE + TURN_BONUS[turn]) * mult;
+    this.scorePulseAt = now;
+    const bonus = COMBO_TIME[Math.min(5, this.combo)] || 0;
+    this.comboBonus = bonus;
+    if (bonus) this.elapsed = Math.max(0, this.elapsed - bonus);
+    achv.peak('link', 'combo', this.maxCombo);
+    achv.peak('link', 'score', this.score);
+    if (this.combo >= 2) this.spawnBurst();
+  }
+
+  removeExtraPair(now) {
+    const byEmoji = new Map();
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.walls[r] && this.walls[r][c]) continue;
+        const value = this.board[r][c];
+        if (!value || this.specialAt(r, c) || this.isIce(r, c)) continue;
+        if (!byEmoji.has(value)) byEmoji.set(value, []);
+        byEmoji.get(value).push([r, c]);
+      }
+    }
+    const candidates = [...byEmoji.values()].filter(list => list.length >= 2);
+    if (!candidates.length) return false;
+    const list = candidates[Math.floor(Math.random() * candidates.length)];
+    const a = list[0];
+    const b = list[1 + Math.floor(Math.random() * (list.length - 1))];
+    if (!a || !b) return false;
+    const value = this.board[a[0]][a[1]];
+    [a, b].forEach(([r, c]) => { this.board[r][c] = null; delete this.specials[this.cellKey(r, c)]; });
+    this.score += PAIR_BASE;
+    achv.peak('link', 'score', this.score);
+    this.clears.push({ at: now + 520, start: now, path: [], cells: [a, b], items: [value, value], bomb: true });
+    for (let i = 0; i < 10; i += 1) {
+      const angle = (i / 10) * Math.PI * 2;
+      this.bursts.push({
+        x: W / 2, y: this.boardY + this.boardH / 2,
+        vx: Math.cos(angle) * 3, vy: Math.sin(angle) * 3 - 1,
+        vr: 0, rot: 0, color: '#ff9d4d', w: 4, h: 4, age: 0,
+      });
+    }
+    return true;
+  }
+
+  thawNear(cells) {
+    const thawed = [];
+    this.iceGroups = this.iceGroups.filter((group) => {
+      const near = group.some(([r, c]) => cells.some(([cr, cc]) => Math.max(Math.abs(r - cr), Math.abs(c - cc)) <= 1));
+      if (near) thawed.push(...group);
+      return !near;
+    });
+    thawed.forEach(([r, c]) => {
+      const x = this.cellX(c) + this.cell / 2;
+      const y = this.cellY(r) + this.cell / 2;
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2;
+        this.bursts.push({
+          x, y, vx: Math.cos(a) * 1.6, vy: Math.sin(a) * 1.6 - 0.4,
+          vr: 0, rot: 0, color: '#9ed8ff', w: 3, h: 3, age: 0,
+        });
+      }
+    });
+  }
+
   onCell(r, c) {
     if (this.phase !== PLAY || this.helpOpen || this.confirming || this.shufflePlan) return;
     if (!this.board[r]) return;
     const value = this.board[r][c];
     if (!value || (this.walls[r] && this.walls[r][c])) return;
+    if (this.isIce(r, c)) {
+      this.shake = [[r, c]];
+      setTimeout(() => { this.shake = []; }, 280);
+      return;
+    }
     if (!this.selected) {
       this.selected = [r, c];
       return;
@@ -214,16 +385,24 @@ class LinkScene extends Scene {
       return;
     }
     const now = Date.now();
-    this.combo = this.lastClearAt && now - this.lastClearAt < 2500 ? this.combo + 1 : 1;
-    this.lastClearAt = now;
-    this.comboAt = now;
-    this.comboUntil = now + 1500;
-    if (this.combo >= 2) this.spawnBurst();
+    this.registerClear(path.length - 2);
+    const specials = [this.specialAt(r1, c1), this.specialAt(r, c)].filter(Boolean);
     this.selected = null;
     // 逻辑上立刻移除两张牌，但保留一份闪烁 ghost 和连线；这样其它牌可以继续点。
     this.board[r1][c1] = null;
     this.board[r][c] = null;
-    this.clears.push({ at: now + 520, start: now, path, cells: [[r1, c1], [r, c]], items: [value, value] });
+    delete this.specials[this.cellKey(r1, c1)];
+    delete this.specials[this.cellKey(r, c)];
+    const clearedCells = [[r1, c1], [r, c]];
+    this.clears.push({ at: now + 520, start: now, path, cells: clearedCells, items: [value, value] });
+    this.thawNear(clearedCells);
+    if (specials.includes('clock')) this.elapsed = Math.max(0, this.elapsed - 4);
+    const bombExtra = specials.includes('bomb') && this.removeExtraPair(now);
+    if (bombExtra && this.clears.length) this.thawNear(this.clears[this.clears.length - 1].cells);
+    this.clearedPairs += 1 + (bombExtra ? 1 : 0);
+    if (this.clearedPairs % 8 === 0) {
+      this.seedSpecial(Math.random() < 0.3 ? 'ice' : Math.random() < 0.5 ? 'clock' : 'bomb');
+    }
     this.app.audio.playElimination();
     this.save();
   }
@@ -319,18 +498,28 @@ class LinkScene extends Scene {
   drawScore(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.scoreY, this.cw, this.scoreH, T);
-    const third = this.cw / 3;
-    const stats = [[t('link.levelLabel'), String(this.level)], [t('link.timeLeft'), fmt(this.timeLeft)], [t('link.leftPairs'), String(this.leftPairs)]];
+    const q = this.cw / 4;
+    const stats = [
+      [t('link.levelLabel'), String(this.level)],
+      [t('link.timeLeft'), fmt(this.timeLeft)],
+      [t('link.leftPairs'), String(this.leftPairs)],
+      [t('link.score'), String(this.score)],
+    ];
     stats.forEach(([label, value], i) => {
-      if (i) D.divider(c, this.cx + third * i, this.scoreY + this.scoreH / 2, 24, T.border, 1);
-      D.text(c, label, this.cx + third * (i + 0.5), this.scoreY + 24, { size: 11, color: T.muted, align: 'center' });
+      if (i) D.divider(c, this.cx + q * i, this.scoreY + this.scoreH / 2, 20, T.border, 1);
+      const x = this.cx + q * (i + 0.5);
+      D.text(c, label, x, this.scoreY + 24, { size: 10.5, color: T.muted, align: 'center' });
       if (i === 1) {
-        drawTimer(c, 'hourglass', this.cx + third * 1.5, this.scoreY + 48, value, {
+        drawTimer(c, 'hourglass', x, this.scoreY + 48, value, {
           size: 20, color: this.timeLeft <= 15 ? T.del : T.text,
         });
       } else {
-        D.text(c, value, this.cx + third * (i + 0.5), this.scoreY + 48, {
-          size: 22, weight: 'bold', color: T.text, align: 'center',
+        let size = 20;
+        if (i === 3 && this.scorePulseAt > 0 && Date.now() - this.scorePulseAt < 260) {
+          size = 20 + 2.5 * (1 - (Date.now() - this.scorePulseAt) / 260);
+        }
+        D.text(c, value, x, this.scoreY + 48, {
+          size, weight: 'bold', color: i === 3 ? T.primary : T.text, align: 'center',
         });
       }
     });
@@ -359,7 +548,9 @@ class LinkScene extends Scene {
     let text = '';
     let combo = false;
     if (this.combo >= 2 && Date.now() < this.comboUntil) {
-      text = t('link.comboTip').replace('{n}', String(this.combo));
+      text = t('link.comboTip')
+        .replace('{n}', String(this.combo))
+        .replace('{s}', (this.comboBonus || 0).toFixed(1));
       combo = true;
     } else if (this.shufflePlan) {
       text = t('link.shuffleHint');
@@ -434,6 +625,8 @@ class LinkScene extends Scene {
             D.strokeRoundRect(c, -this.cell / 2 + 1, -this.cell / 2 + 1, this.cell - 2, this.cell - 2, 8, T.primary, 2);
           }
           c.restore();
+          if (this.specialAt(r, col)) this.drawSpecialBadge(c, x, y, this.specialAt(r, col));
+          if (this.isIce(r, col)) this.drawIce(c, x, y);
           if (this.shake.some(([sr, sc]) => sr === r && sc === col)) {
             c.save();
             c.strokeStyle = T.lose;
@@ -461,6 +654,28 @@ class LinkScene extends Scene {
     });
     if (this.phase === WON || this.phase === OVER) this.drawResult(c);
   }
+  drawSpecialBadge(c, x, y, type) {
+    const clock = type === 'clock';
+    const color = clock ? '#2c6aad' : '#d97706';
+    const r = this.cell * 0.18;
+    const bx = x + this.cell - r - 2;
+    const by = y + r + 2;
+    D.circle(c, bx, by, r, color);
+    if (!icons.draw(c, clock ? 'timer' : 'bomb', bx, by, Math.max(8, this.cell * 0.27), '#ffffff')) {
+      D.text(c, clock ? 'T' : 'B', bx, by, {
+        size: Math.max(8, this.cell * 0.24), weight: 'bold', color: '#fff', align: 'center',
+      });
+    }
+  }
+
+  drawIce(c, x, y) {
+    D.fillRoundRect(c, x, y, this.cell, this.cell, 8, 'rgba(120,190,235,0.38)');
+    D.strokeRoundRect(c, x + 1, y + 1, this.cell - 2, this.cell - 2, 7, 'rgba(230,248,255,0.9)', 1.5);
+    D.text(c, '❄', x + this.cell / 2, y + this.cell / 2, {
+      size: Math.max(12, this.cell * 0.46), color: 'rgba(255,255,255,0.92)', align: 'center',
+    });
+  }
+
   drawWall(c, x, y) {
     const T = theme.tokens;
     const bg = theme.dark ? 'rgba(255,255,255,0.14)' : '#d8d2c5';
@@ -488,6 +703,7 @@ class LinkScene extends Scene {
     return { x, y };
   }
   drawPath(c, entry) {
+    if (!entry.path || entry.path.length < 2) return;
     const T = theme.tokens;
     const age = Math.max(0, Date.now() - entry.start);
     const pathAlpha = age < 400 ? 1 : Math.max(0, 1 - (age - 400) / 120);
@@ -545,26 +761,40 @@ class LinkScene extends Scene {
   drawConfetti(c) {
     confetti.draw(c, this.confetti.concat(this.bursts || []));
   }
+  winStars() {
+    let stars = 1;
+    if (this.timeLeft >= this.conf.time * 0.2) stars += 1;
+    if ((this.maxCombo || 0) >= 4) stars += 1;
+    return Math.max(1, Math.min(3, stars));
+  }
+
   drawResult(c) {
     if (!this.resultVisible()) return;
     const T = theme.tokens;
     share.resultPanel(c, this, this.boardY, this.boardH, { w: this.boardW });
     const cx = W / 2, cy = this.boardY + this.boardH / 2;
     if (this.phase === WON) {
-      D.text(c, `🎉🎉 ${t('link.levelDone').replace('{n}', this.level)} 🎉🎉`, cx, cy - 24, { size: 18, weight: 'bold', color: T.win, align: 'center' });
+      D.text(c, `🎉🎉 ${t('link.levelDone').replace('{n}', this.level)} 🎉🎉`, cx, cy - 30, { size: 18, weight: 'bold', color: T.win, align: 'center' });
+      D.text(c, `★${'★'.repeat(this.winStars() - 1)}${'☆'.repeat(3 - this.winStars())}`, cx, cy - 8, {
+        size: 18, color: T.god, align: 'center',
+      });
+      D.text(c, `${t('link.score')} ${this.score} · ${t('link.maxCombo')} ×${Math.min(5, this.maxCombo || 1)}`, cx, cy + 14, {
+        size: 13, color: T.muted, align: 'center',
+      });
       const gap = 10;
       const l1 = t('link.replayLevel');
       const l2 = t('link.nextLevel');
       const w1 = resultButton.width(c, l1);
       const w2 = resultButton.width(c, l2);
       const bx = cx - (w1 + w2 + gap) / 2;
-      resultButton.draw(c, this, l1, 'replay', bx, cy + 20, { id: 'result-replay', onTap: () => this.replayLevel() });
-      resultButton.draw(c, this, l2, 'next', bx + w1 + gap, cy + 20, { id: 'result-next', onTap: () => this.nextLevel() });
+      resultButton.draw(c, this, l1, 'replay', bx, cy + 34, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, l2, 'next', bx + w1 + gap, cy + 34, { id: 'result-next', onTap: () => this.nextLevel() });
     } else {
-      D.text(c, `👻👻 ${t('link.timeUp')} 👻👻`, cx, cy - 18, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
+      D.text(c, `👻👻 ${t('link.timeUp')} 👻👻`, cx, cy - 24, { size: 18, weight: 'bold', color: T.lose, align: 'center' });
+      D.text(c, `${t('link.score')} ${this.score}`, cx, cy, { size: 13, color: T.muted, align: 'center' });
       const label = t('link.replayLevel');
       const bw = resultButton.width(c, label);
-      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 20, { id: 'result-replay', onTap: () => this.replayLevel() });
+      resultButton.draw(c, this, label, 'replay', cx - bw / 2, cy + 24, { id: 'result-replay', onTap: () => this.replayLevel() });
     }
   }
   drawFab(c) {

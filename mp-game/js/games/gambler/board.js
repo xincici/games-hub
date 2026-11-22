@@ -162,7 +162,7 @@ function winningPicks(counts, jokers = 0) {
 //
 // 三样一起爬：① 花牌（万能牌）张数；② 答案个数（玩家必须找全，越多越难）；
 // ③ 形状复杂度（生成时按「拆法数量」挑，见 newRound）。
-const MAX_LEVEL = 99;
+const MAX_LEVEL = 9999;   // 只防溢出；实际不限制玩家继续闯关
 const RAMP = [[1, 1], [3, 1], [4, 2], [7, 2], [8, 3], [12, 4], [18, 5], [26, 6]];
 function levelConfig(level) {
   const lv = Math.max(1, Math.min(MAX_LEVEL, Math.floor(level) || 1));
