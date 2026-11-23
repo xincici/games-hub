@@ -15,17 +15,13 @@ const pitchOf = mode => {
 };
 const TRAY_SIZE = 7;    // 收集槽格数
 const BLOCK_TILES = 9;  // 每 9 张一组发牌（3 组三消，保证按清盘顺序可解）
-// 收集槽随关卡收窄：1~3 关 7 格，4~9 关 6 格，10 关起 5 格。
-// 5 格时必须把发牌块从 9 张缩到 6 张，否则“最多同时 6 张”的可解证明会失效。
-function traySizeFor(level) {
-  const lv = Math.max(1, Math.floor(level) || 1);
-  if (lv >= 10) return 5;
-  if (lv >= 4) return 6;
+// 收集槽**永远是 7 格**（玩家 2026-11 要求：不要靠收窄槽位加难度）。
+// 难度改由「组数 / 种类 / 层数」三条曲线同时爬升 + 发牌块内打散来提供。
+function traySizeFor() {
   return TRAY_SIZE;
 }
-function blockForTray(traySize) {
-  // 6 格槽不能沿用 9 张块：三组交错的极端顺序会需要第 7 张才凑齐。
-  return traySize >= 7 ? BLOCK_TILES : 6;
+function blockForTray() {
+  return BLOCK_TILES;
 }
 
 const MIN_TRIPLES = 8;   // 第 1 关 8 组三消 = 24 张
@@ -85,14 +81,16 @@ function levelConfig(level, mode = MODE_EMOJI) {
   const pitch = pitchOf(mode);
   const lv = Math.max(1, Math.floor(level) || 1);
   const t = Math.min(1, (lv - 1) / (MAX_LEVEL - 1));
-  const triples = Math.min(MAX_TRIPLES, Math.round(MIN_TRIPLES + (MAX_TRIPLES - MIN_TRIPLES) * t));
+  // 曲线用指数 < 1 提前爬升：前 10 关就能感到组数 / 种类 / 层数一起变多，
+  // 而不是把难度全压在 30 关以后（槽位固定 7 格，只能靠这三条曲线加难度）。
+  const triples = Math.min(MAX_TRIPLES, Math.round(MIN_TRIPLES + (MAX_TRIPLES - MIN_TRIPLES) * Math.pow(t, 0.8)));
   const tune = modeTuning(mode);
   const rawKinds = tune.kindRatio == null
-    ? Math.round(tune.minKinds + (tune.maxKinds - tune.minKinds) * t)
+    ? Math.round(tune.minKinds + (tune.maxKinds - tune.minKinds) * Math.pow(t, 0.85))
     : Math.round(triples * tune.kindRatio);
   // 种类不能超过组数（否则会有「分到 0 组」的牌面白占池子）
   const kinds = Math.min(triples, Math.max(1, Math.min(tune.maxKinds, Math.max(tune.minKinds, rawKinds))));
-  const layers = Math.min(MAX_LAYERS, Math.round(MIN_LAYERS + (MAX_LAYERS - MIN_LAYERS) * t));
+  const layers = Math.min(MAX_LAYERS, Math.round(MIN_LAYERS + (MAX_LAYERS - MIN_LAYERS) * Math.pow(t, 0.8)));
   const traySize = traySizeFor(lv);
   const tiles = triples * 3;
   const slots = Array.from({ length: layers }, (_, i) => layerSlots(i, pitch));

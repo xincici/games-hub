@@ -30,6 +30,11 @@ const MIN_INTERVAL = 90;         // 最快步进
 const SPEED_PER_SCORE = 1.6;     // 每 1 分缩短多少毫秒
 const COMBO_MS = 4000;          // 连吃窗口
 const COMBO_MAX = 5;            // 连击最高倍率
+// 按住棋盘不动：延迟后沿当前方向线性加速；松开立刻恢复（不是滑动换向）
+const BOOST_DELAY_MS = 140;     // 按住多久才开始提速
+const BOOST_RAMP_MS = 850;      // 线性加到最高速所需时间
+const BOOST_MAX = 3;            // 最高倍速
+const HOLD_MOVE_PX = 18;        // 按下后移动超过这个距离算滑动，退出按住
 const GOLD_MS = 5000;           // 金色食物限时
 const SPECIAL_EVERY = 5;        // 每吃 5 颗，下颗换特殊食物
 const SHRINK_SEGMENTS = 3;      // 吃下后先 +1，再减 3 节 = 净缩短 2 节
@@ -51,6 +56,10 @@ class SnakeScene extends Scene {
     this.score = 0;
     this.combo = 0;
     this.comboUntil = 0;
+    this.holdAt = 0;           // 按住起点时间（0 = 没在按）
+    this.holdPoint = null;
+    this.holdMoved = false;
+    this.boost = 1;            // 当前提速倍率（松开立刻回 1）
     this.eatCount = 0;
     this.foodKind = 'normal';
     this.foodUntil = 0;
@@ -75,7 +84,23 @@ class SnakeScene extends Scene {
     const fast = Math.min(BASE_INTERVAL - MIN_INTERVAL, Math.floor(this.score * SPEED_PER_SCORE));
     return Math.max(MIN_INTERVAL, BASE_INTERVAL - fast);
   }
-  speedFactor() { return BASE_INTERVAL / this.interval; }
+  // 提速中的实际步进（按住棋盘不动时线性变大）
+  get boostInterval() { return Math.max(40, this.interval / this.boost); }
+  updateBoost(now) {
+    if (!this.holdAt || this.holdMoved) {
+      this.boost = 1;
+      return;
+    }
+    const held = now - this.holdAt - BOOST_DELAY_MS;
+    this.boost = held <= 0 ? 1 : 1 + (BOOST_MAX - 1) * Math.min(1, held / BOOST_RAMP_MS);
+  }
+  cancelHold() {
+    this.holdAt = 0;
+    this.holdPoint = null;
+    this.holdMoved = false;
+    this.boost = 1;
+  }
+  speedFactor() { return BASE_INTERVAL / this.boostInterval; }
   boot() {
     if (!this.restore()) this.startGame();
   }
@@ -89,6 +114,10 @@ class SnakeScene extends Scene {
     this.score = 0;
     this.combo = 0;
     this.comboUntil = 0;
+    this.holdAt = 0;
+    this.holdPoint = null;
+    this.holdMoved = false;
+    this.boost = 1;
     this.eatCount = 0;
     this.foodKind = 'normal';
     this.foodUntil = 0;
@@ -137,6 +166,10 @@ class SnakeScene extends Scene {
       this.food = s.food;
       this.score = +s.score || 0;
       this.combo = Math.max(0, Math.floor(+s.combo) || 0);
+      this.holdAt = 0;
+      this.holdPoint = null;
+      this.holdMoved = false;
+      this.boost = 1;
       this.comboUntil = Math.max(0, Math.floor(+s.comboUntil) || 0);
       this.eatCount = Math.max(0, Math.floor(+s.eatCount) || 0);
       this.foodKind = s.foodKind === 'gold' || s.foodKind === 'shrink' ? s.foodKind : 'normal';
@@ -164,14 +197,19 @@ class SnakeScene extends Scene {
         this.acc = 0;
       }
     }
-    if (!this.started || this.phase !== GAMING || this.paused || this.helpOpen) return;
+    if (!this.started || this.phase !== GAMING || this.paused || this.helpOpen) {
+      this.cancelHold();
+      return;
+    }
     const now = Date.now();
+    this.updateBoost(now);
     if (this.combo > 0 && now >= this.comboUntil) this.combo = 0;
     if (this.food && this.foodKind === 'gold' && now >= this.foodUntil) this.spawnFood('normal');
     this.updateEatFx(Math.min(50, dt || 16), now);
     this.acc += Math.min(50, dt || 16);
-    while (this.acc >= this.interval) {
-      this.acc -= this.interval;
+    const stepMs = this.boostInterval;
+    while (this.acc >= stepMs) {
+      this.acc -= stepMs;
       this.tick();
       if (this.phase !== GAMING) break;
     }
@@ -308,6 +346,7 @@ class SnakeScene extends Scene {
     if (!this.paused) {
       this.paused = true;
       this.resumeCount = 0;
+      this.cancelHold();
     } else if (!this.resumeCount) {
       this.resumeCount = 3;
       this.resumeAt = Date.now() + 800;
@@ -319,12 +358,26 @@ class SnakeScene extends Scene {
     this.throughWall = !this.throughWall;
     setRaw(WALL_KEY, this.throughWall ? '1' : '0');
   }
-  onTouchStart(p) { this.touch = p; }
+  onTouchStart(p) {
+    this.touch = p;
+    this.holdPoint = { x: p.x, y: p.y };
+    this.holdMoved = false;
+    this.holdAt = Date.now();
+  }
+  onTouchMove(p) {
+    if (!this.holdPoint) return;
+    // 按下后明显移动 = 想换方向，不算「按住不动」，立刻取消提速
+    if (Math.hypot(p.x - this.holdPoint.x, p.y - this.holdPoint.y) > HOLD_MOVE_PX) {
+      this.holdMoved = true;
+      this.boost = 1;
+    }
+  }
   onTouchEnd(p) {
     if (!this.touch) return;
     const dx = p.x - this.touch.x;
     const dy = p.y - this.touch.y;
     this.touch = null;
+    this.cancelHold();   // 松开立刻恢复原速
     if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
     if (Math.abs(dx) > Math.abs(dy)) this.turn([0, dx > 0 ? 1 : -1]);
     else this.turn([dy > 0 ? 1 : -1, 0]);
@@ -405,16 +458,6 @@ class SnakeScene extends Scene {
         D.text(c, value, 0, 0, { size: 22, weight: 'bold', color, align: 'center' });
         c.restore();
       }
-      if (i === 2) {
-        const bw = q - 22;
-        const bx = x - bw / 2;
-        const by = this.scoreY + 62;
-        D.fillRoundRect(c, bx, by, bw, 3, 1.5, T.border);
-        if (this.combo > 0) {
-          const frac = clamp((this.comboUntil - now) / COMBO_MS, 0, 1);
-          D.fillRoundRect(c, bx, by, Math.max(1, bw * frac), 3, 1.5, T.god);
-        }
-      }
     });
   }
 
@@ -446,6 +489,11 @@ class SnakeScene extends Scene {
       size: 12, color: this.phase === LOSE ? '#f3f3f3' : '#fff', iconSize: 12, gap: 4,
     });
     if (this.phase !== LOSE) this.addButton('pause', px, mid - 16, pw, 32, () => this.togglePause());
+    // 连击倒计时：新游戏这一行卡片的底部逆向进度条（满 → 空），和消除类的分数进度条同一套样式
+    if (this.combo > 0) {
+      const left = clamp((this.comboUntil - Date.now()) / COMBO_MS, 0, 1);
+      D.progressBar(c, this.cx, this.optY, this.cw, this.optH, left, T.border, this.combo >= 2 ? T.god : T.primary);
+    }
   }
 
 
@@ -613,4 +661,5 @@ class SnakeScene extends Scene {
   onHide() { if (this.started && this.phase === GAMING) { this.paused = true; this.save(); } }
   onShow() {}
 }
+SnakeScene.BOOST = { DELAY: BOOST_DELAY_MS, RAMP: BOOST_RAMP_MS, MAX: BOOST_MAX, MOVE_PX: HOLD_MOVE_PX };
 module.exports = SnakeScene;

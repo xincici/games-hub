@@ -35,6 +35,9 @@ const COMBO_MS = 3000;         // 连击窗口
 const COMBO_TIME = [0, 0, 0.6, 1.0, 1.5, 2.0];
 const TURN_BONUS = [0, 50, 120]; // 0 / 1 / 2 转折
 const PAIR_BASE = 100;
+const COMBO_FREEZE_MS = 2500;   // 3 连击起冻结倒计时
+const COMBO_MILESTONES = [3, 5, 7];  // 连击里程碑：补一个特殊对
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 function allTiles(board) {
   const out = [];
@@ -75,6 +78,9 @@ class LinkScene extends Scene {
     this.comboAt = 0;
     this.comboUntil = 0;
     this.lastClearAt = 0;
+    this.freezeUntil = 0;       // 3 连击起倒计时冻结
+    this.bonusTip = null;       // 里程碑 / 冻结提示
+    this.comboMilestoneAt = 0;  // 里程碑全屏脉冲
     this.dealStart = 0;
     this.confetti = [];
     this.confettiUntil = 0;
@@ -121,6 +127,9 @@ class LinkScene extends Scene {
     this.clearedPairs = 0;
     this.specials = {};
     this.iceGroups = [];
+    this.freezeUntil = 0;
+    this.bonusTip = null;
+    this.comboMilestoneAt = 0;
     this.seedLevelSpecials();
     this.helpOpen = false;
     this.confirming = false;
@@ -136,6 +145,23 @@ class LinkScene extends Scene {
 
   specialAt(r, c) {
     return this.specials[this.cellKey(r, c)] || '';
+  }
+
+  // 死局判定用的墙体：墙 + 冰封（冰点不动，不能作为可消的一对；
+  // 以前只传 walls，盘面只剩冰封对时会误判「有解」而卡死）
+  effectiveWalls() {
+    const merged = this.walls.map(row => (row || []).slice(0, this.cols));
+    while (merged.length < this.rows) merged.push(new Array(this.cols).fill(false));
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.isIce(r, c)) merged[r][c] = true;
+      }
+    }
+    return merged;
+  }
+
+  hasMoveNow() {
+    return boardLogic.hasMove(this.board, this.rows, this.cols, this.effectiveWalls());
   }
 
   restoreSpecials(raw, rows, cols) {
@@ -221,11 +247,14 @@ class LinkScene extends Scene {
       this.clearedPairs = Math.max(0, Math.floor(+s.clearedPairs) || 0);
       this.specials = this.restoreSpecials(s.specials, c.rows, c.cols);
       this.iceGroups = this.restoreIce(s.iceGroups, c.rows, c.cols);
+      this.freezeUntil = 0;
+      this.bonusTip = null;
+      this.comboMilestoneAt = 0;
       if (s.phase === WON && !this.leftPairs) this.phase = WON;
       else if (s.phase === OVER && this.leftPairs) this.phase = OVER;
       else if (this.leftPairs) this.phase = PLAY;
       else return false;
-      if (this.phase === PLAY && !boardLogic.hasMove(this.board, this.rows, this.cols, this.walls)) {
+      if (this.phase === PLAY && !this.hasMoveNow()) {
         this.specials = {};
         this.iceGroups = [];
         this.board = boardLogic.shuffleBoard(this.board, this.rows, this.cols, Math.random, this.walls);
@@ -256,13 +285,14 @@ class LinkScene extends Scene {
       this.specials = {};
       this.iceGroups = [];
       this.board = boardLogic.shuffleBoard(this.board, this.rows, this.cols, Math.random, this.walls);
-      if (!boardLogic.hasMove(this.board, this.rows, this.cols, this.walls)) {
+      if (!this.hasMoveNow()) {
         const remaining = allTiles(this.board);
         this.board = boardLogic.generateBoard(this.rows, this.cols, remaining, Math.random, remaining.length / 2, this.walls);
       }
       this.save();
     }
-    this.elapsed += delta / 1000;
+    const frozen = this.freezeUntil && this.now < this.freezeUntil;
+    if (!frozen) this.elapsed += delta / 1000;
     if (this.elapsed >= this.conf.time) {
       this.phase = OVER;
       this.app.audio.playLose();
@@ -294,6 +324,18 @@ class LinkScene extends Scene {
     achv.peak('link', 'combo', this.maxCombo);
     achv.peak('link', 'score', this.score);
     if (this.combo >= 2) this.spawnBurst();
+    // 连击越深越有实感：3 连击起冻结倒计时，3/5/7 连击各补一个特殊对
+    if (this.combo >= 3) {
+      this.freezeUntil = Math.max(this.freezeUntil, now + COMBO_FREEZE_MS);
+      this.bonusTip = { text: t('link.comboFreeze').replace('{n}', String(this.combo)).replace('{s}', (COMBO_FREEZE_MS / 1000).toFixed(1)), at: now };
+    }
+    if (COMBO_MILESTONES.indexOf(this.combo) >= 0) {
+      const type = this.combo >= 5 ? 'bomb' : (Math.random() < 0.5 ? 'clock' : 'ice');
+      this.seedSpecial(type);
+      this.comboMilestoneAt = now;
+      this.bonusTip = { text: t('link.comboBonus').replace('{n}', String(this.combo)), at: now };
+      if (this.combo === 5) this.app.audio.playFirework();
+    }
   }
 
   removeExtraPair(now) {
@@ -419,7 +461,7 @@ class LinkScene extends Scene {
       this.save();
       return;
     }
-    if (!boardLogic.hasMove(this.board, this.rows, this.cols, this.walls)) {
+    if (!this.hasMoveNow()) {
       // 先提示 0.65s，再真正洗牌；洗牌动画由 drawBoard 用 shuffleAt 驱动。
       this.shufflePlan = Date.now() + 650;
       this.save();
@@ -475,6 +517,7 @@ class LinkScene extends Scene {
     this.drawOptions(c);
     this.drawTip(c);
     this.drawBoard(c);
+    this.drawComboPulse(c);
     if (!this.helpOpen && !this.confirming) this.drawFab(c);
     this.drawConfetti(c);
     if (this.helpOpen) this.drawHelp(c);
@@ -513,6 +556,9 @@ class LinkScene extends Scene {
         drawTimer(c, 'hourglass', x, this.scoreY + 48, value, {
           size: 20, color: this.timeLeft <= 15 ? T.del : T.text,
         });
+        if (this.freezeUntil && Date.now() < this.freezeUntil) {
+          D.text(c, '❄', x - 30, this.scoreY + 48, { size: 13, color: T.primary, align: 'center' });
+        }
       } else {
         let size = 20;
         if (i === 3 && this.scorePulseAt > 0 && Date.now() - this.scorePulseAt < 260) {
@@ -542,12 +588,44 @@ class LinkScene extends Scene {
     D.fillRoundRect(c, bx, this.optY + 20, bw, 32, 8, T.primary);
     actionLabel.draw(c, 'gamepad', label, bx + bw / 2, this.optY + 36, { size: 13, color: '#fff' });
     this.addButton('new', bx, this.optY + 20, bw, 32, () => { this.confirming = true; });
+    // 连击倒计时：新游戏这一行卡片的底部逆向进度条（满 → 空），和消除类的分数进度条同一套样式
+    if (this.combo > 0 && this.lastClearAt) {
+      const left = clamp((this.lastClearAt + COMBO_MS - Date.now()) / COMBO_MS, 0, 1);
+      if (left > 0) {
+        D.progressBar(c, this.cx, this.optY, this.cw, this.optH, left, T.border, this.combo >= 3 ? T.god : T.primary);
+      }
+    }
   }
+  // 3/5/7 连击的里程碑：从棋盘中心扩一圈，给「连起来了」一个全屏反馈
+  drawComboPulse(c) {
+    if (!this.comboMilestoneAt) return;
+    const p = (Date.now() - this.comboMilestoneAt) / 700;
+    if (p >= 1) {
+      this.comboMilestoneAt = 0;
+      return;
+    }
+    const T = theme.tokens;
+    const cx = this.boardX + this.boardW / 2;
+    const cy = this.boardY + this.boardH / 2;
+    c.save();
+    c.globalAlpha = (1 - p) * 0.55;
+    c.strokeStyle = T.god;
+    c.lineWidth = 3;
+    c.beginPath();
+    c.arc(cx, cy, Math.max(this.boardW, this.boardH) * (0.12 + 0.55 * p), 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+
   drawTip(c) {
     const T = theme.tokens;
     let text = '';
     let combo = false;
-    if (this.combo >= 2 && Date.now() < this.comboUntil) {
+    const bonus = this.bonusTip && Date.now() - this.bonusTip.at < 1600 ? this.bonusTip : null;
+    if (bonus) {
+      text = bonus.text;
+      combo = true;
+    } else if (this.combo >= 2 && Date.now() < this.comboUntil) {
       text = t('link.comboTip')
         .replace('{n}', String(this.combo))
         .replace('{s}', (this.comboBonus || 0).toFixed(1));

@@ -51,7 +51,7 @@ const DEAL_STEP = 20; // 入场错峰：行优先逐个出现
 const DEAL_MS = 320; // 单张入场
 const COMBO_MS = 2500; // 连击窗口
 const COMBO_TIP_MS = 1500; // 连击提示停留
-const UPGRADE_TIME = 5; // 时间升级：每层 +5s
+const UPGRADE_TIME = 4; // 时间升级：每层 +4s
 const UPGRADE_COMBO = 400; // 连击升级：每层 +0.4s
 const UPGRADE_POOL = ['time', 'combo', 'special'];
 
@@ -600,9 +600,10 @@ class SlideScene extends Scene {
       });
     }
     // 炸弹牌：清掉盘面上同一种 emoji 的所有完整对子；只整对移除，保证剩余局面仍可解。
+    // 时钟按「这一次消除」算一次 +3s，不按张数叠加（一对时钟 = +3 而不是 +6）
+    if (cells.some(tile => tile.special === 'clock')) clockBonus += 3;
     for (let i = 0; i < cells.length; i += 1) {
       const tile = cells[i];
-      if (tile.special === 'clock') clockBonus += 4;
       if (tile.special === 'bomb') {
         const same = this.tiles.filter(o => !o.popping && o.kind === tile.kind);
         same.forEach(addCell);
@@ -664,7 +665,8 @@ class SlideScene extends Scene {
     this.score += 10 * n * mult;
     this.scorePulseAt = now;
     // 连击直接买时间；这是玩家愿意追连击的核心奖励。
-    const bonus = [0, 0, 0.5, 0.9, 1.3, 1.8][Math.min(5, this.combo)];
+    // 连击返时间收紧了（原来 0.5~1.8s）：无脑连击会把时间越打越多、基本不会输
+    const bonus = [0, 0, 0.3, 0.6, 0.9, 1.2][Math.min(5, this.combo)];
     this.comboBonus = bonus;
     if (bonus) this.elapsed = Math.max(0, this.elapsed - bonus);
     if (this.combo >= 2) {
@@ -697,6 +699,8 @@ class SlideScene extends Scene {
     // 万能牌可以和任意邻居配对，棋盘逻辑不认识这个特殊规则，单独补一条。
     if (this.tiles.some(tile => !tile.popping && tile.special === 'wild' && this.findPartnerFor(tile.r, tile.c))) return;
     this.usedShuffle = true;   // 本关用过死局重排 → 不算「无重排获胜」
+    // 死局重排要付 2 秒时间（说明节奏已经慢了），但不直接把时间清零
+    this.elapsed = Math.min(this.conf.seconds, this.elapsed + 2);
     this.applyGrid(logic.reshuffleBoard(this.grid()));
     this.save();
     this.startShuffle();

@@ -2711,7 +2711,215 @@ i18n.setLang('cn');
   }
   const blockSrc = require('fs').readFileSync(path.join(ROOT, 'js/core/achv.js'), 'utf8');
   if (/unlocked: unlockedCount\(\) >= \d+/.test(blockSrc)) problems.push('成就达人阈值被写回了固定数字');
+  // 文档数字必须与代码一致（AGENTS 写了行数 / 可解锁 / 可达成 / 阈值）
+  const rows = data.games.reduce((n, g) => n + g.achv.length, 0);
+  const unlockRows = data.games.reduce((n, g) => n + g.achv.filter((r) => !r.stat).length, 0);
+  if (rows !== 128) problems.push(`成就总行数 ${rows}（应为 128）`);
+  if (unlockRows !== 109) problems.push(`可解锁行 ${unlockRows}（应为 109）`);
+  if (achvMod.totalCount() !== 114) problems.push(`可达成总数 ${achvMod.totalCount()}（应为 114）`);
+  if (achvMod.achvMasterNeed() !== 69) problems.push(`成就达人阈值 ${achvMod.achvMasterNeed()}（应为 69）`);
+  const agentsSrc = require('fs').readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+  if (!agentsSrc.includes('128 行 / 可解锁 109 条')) problems.push('AGENTS：成就行数没同步（128 / 109）');
+  if (!agentsSrc.includes('当前可达成 **114 条**') || !agentsSrc.includes('阈值 **69**')) {
+    problems.push('AGENTS：成就达人数字没同步（114 / 69）');
+  }
   check(problems.length === 0, `成就「最高得分」/总览：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 难度与趣味调整：消除大师 7 格 / 连连看连击奖励 / 滑行收紧 ----------
+{
+  const problems = [];
+  const MB = require(path.join(ROOT, 'js/games/master/board'));
+  const MasterCls = require(path.join(ROOT, 'js/games/master/scene'));
+  const LinkCls = require(path.join(ROOT, 'js/games/link/scene'));
+  const SlideCls = require(path.join(ROOT, 'js/games/slide/scene'));
+  const SB = require(path.join(ROOT, 'js/games/slide/board'));
+
+  // 消除大师：槽位永远是 7 格，难度靠组数 / 种类 / 层数提前爬升
+  [1, 10, 20, 50].forEach((lv) => {
+    const cfg = MB.levelConfig(lv);
+    if (cfg.traySize !== 7) problems.push(`消除大师 Lv${lv} 槽位 ${cfg.traySize}（应固定 7）`);
+  });
+  if (MB.blockForTray(7) !== 9) problems.push('消除大师 7 格槽的发牌块不是 9 张');
+  const maCfg = MB.levelConfig(10);
+  if (maCfg.triples < 14) problems.push(`消除大师 Lv10 组数 ${maCfg.triples}（难度没提起来，应 ≥14）`);
+  if (maCfg.layers < 4) problems.push(`消除大师 Lv10 层数 ${maCfg.layers}（应 ≥4）`);
+  fakeApp.sceneId = 'master';
+  const maSc = new MasterCls(fakeApp);
+  maSc.startLevel(20);
+  if (maSc.cfg.traySize !== 7 || maSc.traySlots !== 7) problems.push(`消除大师 Lv20 场景槽位 ${maSc.traySlots}（应 7）`);
+  const maI18n = require(path.join(ROOT, 'js/games/master/i18n'));
+  ['cn', 'en'].forEach((lang) => {
+    const msg = maI18n[lang].helpMsg || '';
+    if (/6 格|5 格|6 slots|5 slots/.test(msg)) problems.push(`消除大师 ${lang} 帮助还写着槽位收窄`);
+  });
+
+  // 连连看：冰封牌不能点，死局判定要把它当障碍
+  fakeApp.sceneId = 'link';
+  const liSc = new LinkCls(fakeApp);
+  liSc.startLevel(1);
+  const rows = liSc.rows;
+  const cols = liSc.cols;
+  const blank = () => Array.from({ length: rows }, () => new Array(cols).fill(null));
+  liSc.board = blank();
+  liSc.walls = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  liSc.board[0][0] = '🍎';
+  liSc.board[1][1] = '🍎';
+  liSc.iceGroups = [[[0, 0], [1, 1]]];
+  if (liSc.hasMoveNow()) problems.push('连连看只剩冰封对时仍判「有解」（会卡死）');
+  liSc.iceGroups = [];
+  if (!liSc.hasMoveNow()) problems.push('连连看去掉冰封后同一对应当可消');
+
+  // 连连看：3 连击冻结倒计时 + 补特殊对
+  liSc.startLevel(1);
+  liSc.board = blank();
+  liSc.walls = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  liSc.board[0][0] = '🍎';
+  liSc.board[0][1] = '🍎';
+  liSc.board[1][0] = '🍋';
+  liSc.board[1][1] = '🍋';
+  liSc.combo = 0;
+  liSc.lastClearAt = 0;
+  liSc.specials = {};
+  liSc.iceGroups = [];
+  liSc.registerClear(0);
+  liSc.registerClear(0);
+  const beforeSpecials = Object.keys(liSc.specials).length + liSc.iceGroups.length;
+  liSc.registerClear(0);   // 第 3 连
+  const afterSpecials = Object.keys(liSc.specials).length + liSc.iceGroups.length;
+  if (liSc.combo !== 3) problems.push(`连连看连击应为 3，实际 ${liSc.combo}`);
+  if (!(liSc.freezeUntil > Date.now())) problems.push('连连看 3 连击没有冻结倒计时');
+  if (!liSc.bonusTip || !liSc.bonusTip.text) problems.push('连连看里程碑没有提示');
+  if (afterSpecials <= beforeSpecials) problems.push('连连看里程碑没有补特殊对');
+  // 消除后必须能继续渲染（曾经因为缺 clamp 每帧抛 ReferenceError，表现是「一连就卡死」），
+  // 且连击倒计时要在「新游戏那一行卡片底部」画成逆向进度条（满 → 空）
+  const D = require(path.join(ROOT, 'js/core/draw'));
+  const origPB = D.progressBar;
+  const bars = [];
+  D.progressBar = (...args) => { bars.push(args); return origPB(...args); };
+  try {
+    liSc.render(makeCtx());
+  } catch (e) {
+    problems.push(`连连看消除后渲染抛错：${e.message}`);
+  }
+  D.progressBar = origPB;
+  const liBar = bars.find(b => b[1] === liSc.cx && b[2] === liSc.optY && b[3] === liSc.cw && b[4] === liSc.optH);
+  if (!liBar) problems.push('连连看连击倒计时没有画在新游戏卡片的底部');
+  else if (!(liBar[5] > 0 && liBar[5] <= 1)) problems.push(`连连看连击条进度非法（${liBar[5]}）`);
+  if (liSc.drawComboBar) problems.push('连连看还留着棋盘上沿的旧连击条');
+  // 逆向：时间过去越久，进度越小
+  liSc.lastClearAt -= 1500;
+  const bars2 = [];
+  D.progressBar = (...args) => { bars2.push(args); return origPB(...args); };
+  liSc.render(makeCtx());
+  D.progressBar = origPB;
+  const liBar2 = bars2.find(b => b[1] === liSc.cx && b[2] === liSc.optY);
+  if (!liBar || !liBar2 || !(liBar2[5] < liBar[5])) problems.push('连连看连击条不是逆向递减');
+  // 冻结期间倒计时不走
+  liSc.elapsed = 10;
+  liSc.freezeUntil = Date.now() + 5000;
+  liSc.update(600);
+  if (Math.abs(liSc.elapsed - 10) > 0.01) problems.push(`冻结期间时间还在走（${liSc.elapsed}）`);
+  liSc.freezeUntil = 0;
+  for (let i = 0; i < 10; i++) liSc.update(50);   // update 内部把单帧钳在 50ms
+  if (!(liSc.elapsed > 10.4)) problems.push(`冻结结束后时间没有恢复（${liSc.elapsed}）`);
+
+  // 滑行：限时收紧、连击返时收紧、时钟 +3s
+  const s1 = SB.levelConfig(1);
+  const s15 = SB.levelConfig(15);
+  const s30 = SB.levelConfig(30);
+  if (s1.seconds !== 81) problems.push(`滑行 Lv1 限时 ${s1.seconds}s（应 81）`);
+  if (s15.seconds !== 141) problems.push(`滑行 Lv15 限时 ${s15.seconds}s（应 141）`);
+  if (s30.seconds !== 120) problems.push(`滑行封顶后限时 ${s30.seconds}s（应 120 保底）`);
+  fakeApp.sceneId = 'slide';
+  const slSc = new SlideCls(fakeApp);
+  slSc.startLevel(1);
+  slSc.elapsed = 30;
+  slSc.combo = 4;
+  slSc.lastClearAt = Date.now();
+  slSc.registerClear(1);
+  const comboSpent = 30 - slSc.elapsed;
+  if (Math.abs(comboSpent - 1.2) > 0.01) problems.push(`滑行 5 连击返时 ${comboSpent}s（应 1.2）`);
+  slSc.elapsed = 30;
+  slSc.tiles = [slSc.makeTile(1, 0, 0, 'clock'), slSc.makeTile(1, 0, 1, 'clock')];
+  slSc.eliminatePairs([[[0, 0], [0, 1]]]);
+  if (Math.abs(slSc.elapsed - 25.8) > 0.01) problems.push(`滑行时钟牌返时后 ${slSc.elapsed}s（应 25.8 = 连击 1.2 + 时钟 3）`);
+
+  // 贪吃蛇：连击倒计时同样画在「新游戏」那一行卡片底部（逆向）
+  const SnakeCls = require(path.join(ROOT, 'js/games/snake/scene'));
+  fakeApp.sceneId = 'snake';
+  const snSc = new SnakeCls(fakeApp);
+  snSc.startGame();
+  snSc.combo = 2;
+  snSc.comboUntil = Date.now() + 2000;
+  const snBars = [];
+  D.progressBar = (...args) => { snBars.push(args); return origPB(...args); };
+  try {
+    snSc.render(makeCtx());
+  } catch (e) {
+    problems.push(`贪吃蛇连击时渲染抛错：${e.message}`);
+  }
+  D.progressBar = origPB;
+  const snBar = snBars.find(b => b[1] === snSc.cx && b[2] === snSc.optY && b[3] === snSc.cw && b[4] === snSc.optH);
+  if (!snBar) problems.push('贪吃蛇连击倒计时没有画在新游戏卡片底部');
+  else if (!(snBar[5] > 0 && snBar[5] <= 1)) problems.push(`贪吃蛇连击条进度非法（${snBar[5]}）`);
+  if (snBars.length !== 1) problems.push(`贪吃蛇分数卡里还有多余进度条（${snBars.length} 条）`);
+  snSc.comboUntil -= 1200;
+  const snBars2 = [];
+  D.progressBar = (...args) => { snBars2.push(args); return origPB(...args); };
+  snSc.render(makeCtx());
+  D.progressBar = origPB;
+  const snBar2 = snBars2.find(b => b[1] === snSc.cx && b[2] === snSc.optY);
+  if (!snBar || !snBar2 || !(snBar2[5] < snBar[5])) problems.push('贪吃蛇连击条不是逆向递减');
+
+  // 贪吃蛇：按住棋盘不动 → 沿当前方向线性加速，松开立刻恢复；滑动 / 暂停取消
+  const SB2 = SnakeCls.BOOST;
+  const sn2 = new SnakeCls(fakeApp);
+  sn2.startGame();
+  const baseInt = sn2.interval;
+  sn2.onTouchStart({ x: 100, y: 100 });
+  sn2.holdAt = Date.now() - SB2.DELAY - SB2.RAMP / 2;
+  sn2.update(16);
+  const midBoost = sn2.boost;
+  const midInt = sn2.boostInterval;
+  sn2.holdAt = Date.now() - SB2.DELAY - SB2.RAMP * 2;
+  sn2.update(16);
+  const topBoost = sn2.boost;
+  if (!(midBoost > 1.4 && midBoost < 2.6)) problems.push(`按住半程 boost ${midBoost.toFixed(2)}（应≈2，线性）`);
+  if (Math.abs(topBoost - SB2.MAX) > 0.01) problems.push(`按住足够久 boost ${topBoost.toFixed(2)}（应 ${SB2.MAX}）`);
+  if (!(midInt < baseInt)) problems.push('提速时步进没有变短');
+  sn2.onTouchEnd({ x: 100, y: 100 });
+  if (sn2.boost !== 1 || sn2.boostInterval !== baseInt) problems.push('松开后没有立刻恢复原速');
+  // 按下后明显移动 = 想换向，不能还在加速
+  sn2.onTouchStart({ x: 100, y: 100 });
+  sn2.onTouchMove({ x: 100 + SB2.MOVE_PX + 10, y: 100 });
+  sn2.holdAt = Date.now() - SB2.DELAY - SB2.RAMP;
+  sn2.update(16);
+  if (sn2.boost !== 1) problems.push('按下后滑动（换向）还在加速');
+  sn2.onTouchEnd({ x: 100 + SB2.MOVE_PX + 10, y: 100 });
+  // 暂停要取消提速
+  sn2.onTouchStart({ x: 100, y: 100 });
+  sn2.holdAt = Date.now() - SB2.DELAY - SB2.RAMP;
+  sn2.update(16);
+  sn2.togglePause();
+  if (sn2.boost !== 1) problems.push('暂停后还在加速');
+  // 同样 320ms，按住时的实际步数更多
+  const stepsIn = (hold) => {
+    const s2 = new SnakeCls(fakeApp);
+    s2.startGame();
+    let steps = 0;
+    const origTick = s2.tick.bind(s2);
+    s2.tick = () => { steps += 1; return origTick(); };
+    if (hold) {
+      s2.onTouchStart({ x: 100, y: 100 });
+      s2.holdAt = Date.now() - SB2.DELAY - SB2.RAMP * 2;
+    }
+    for (let i = 0; i < 20; i += 1) s2.update(16);
+    return steps;
+  };
+  if (!(stepsIn(true) > stepsIn(false))) problems.push('按住 320ms 的实际步数没有变多');
+
+  check(problems.length === 0, `难度与趣味调整：${problems.slice(0, 5).join('；')}`);
 }
 
 // ---------- 每日挑战：36 条任务逐条走生产路径，必须能推进 / 完成 ----------
