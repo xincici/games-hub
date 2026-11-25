@@ -1,5 +1,5 @@
 // 逻辑拼图：8×8 棋盘，用 8 个矩形拼块（可旋转）填满所有空格；固定块不可移动，共 88 关。
-// 操作：下方托盘里的拼块直接拖动到棋盘；单击托盘里的拼块旋转 90°；单击棋盘上已放的拼块收回。
+// 操作：托盘拼块直接拖到棋盘；长按 / 拖动棋盘上已放的拼块可直接换位；单击托盘旋转，单击棋盘收回。
 const { W, H, SAFE_BOTTOM } = require('../../core/canvas');
 const { Scene } = require('../../core/app');
 const theme = require('../../core/theme');
@@ -38,6 +38,7 @@ const RESULT_DELAY_MS = 250;
 const PAD = 6;
 const CELL_GAP = 3;
 const TAP_SLOP = 8;
+const LONG_PRESS_MS = 260;   // 棋盘上按住这么久后，即使不动也可开始拖动
 const REVEAL_STEP_MS = 500;
 const REVEAL_MOVE_MS = 420;
 const REVEAL_END_MS = 280;
@@ -57,11 +58,11 @@ class LogicPuzzleScene extends Scene {
     this.streak = Math.max(0, Math.floor(+(getRaw(STREAK_KEY, 0) || 0)) || 0);
     this.bestStreak = Math.max(this.streak, Math.floor(+(getRaw(BEST_STREAK_KEY, 0) || 0)) || 0);
     this.resultAt = 0;
-    this.notice = null;
     this.shakeAt = 0;
     this.drag = null;
     this.touch = null;
     this.tapPiece = null;
+    this.press = null;
     this.reveal = null;
     this.revealed = false;
     this.puzzle = logic.createLevel(this.level - 1);
@@ -153,16 +154,18 @@ class LogicPuzzleScene extends Scene {
       this.drag = null;
       this.touch = null;
       this.tapPiece = null;
+      this.press = null;
       this.confirming = false;
       this.helpOpen = false;
-      this.notice = null;
-      this.shakeAt = 0;
+        this.shakeAt = 0;
       this.reveal = null;
       this.resultAt = 0;
       // 以盘面为准：只有真的铺满才算胜利态（损坏的 state 不能白送胜利）
       if (logic.isSolved(this.puzzle)) {
         this.phase = WON;
-        if (!this.revealed) this.best = Math.max(this.best, Math.min(logic.LEVEL_COUNT + 1, lv + 1));
+        if (!this.revealed && this.mode === 'level') {
+          this.best = Math.max(this.best, Math.min(logic.LEVEL_COUNT + 1, lv + 1));
+        }
       } else {
         this.phase = PLAY;
         this.revealed = false;
@@ -182,11 +185,11 @@ class LogicPuzzleScene extends Scene {
     this.resultAt = 0;
     this.helpOpen = false;
     this.confirming = false;
-    this.notice = null;
     this.shakeAt = 0;
     this.drag = null;
     this.touch = null;
     this.tapPiece = null;
+    this.press = null;
     this.reveal = null;
     this.revealed = false;
     this.save();
@@ -211,7 +214,7 @@ class LogicPuzzleScene extends Scene {
 
   startNewGame() {
     this.confirming = false;
-    this.streak = 0;
+    if (this.mode === 'random') this.streak = 0;
     removeRaw(this.stateKeyFor(this.mode));
     if (this.mode === 'random') this.startRandomLevel();
     else this.startLevel(1);
@@ -300,6 +303,7 @@ class LogicPuzzleScene extends Scene {
     this.drag = null;
     this.touch = null;
     this.tapPiece = null;
+    this.press = null;
   }
 
   cellRect(r, c) {
@@ -377,10 +381,67 @@ class LogicPuzzleScene extends Scene {
     return null;
   }
 
+  // 长按棋盘上已放的拼块：不松手也能直接进入拖动；托盘块仍可直接拖。
+  updateLongPress() {
+    const press = this.press;
+    if (!press || this.drag) return;
+    if (!this.canPlay()) {
+      this.press = null;
+      this.tapPiece = null;
+      return;
+    }
+    if (Date.now() - press.at < LONG_PRESS_MS) return;
+    if (!press.piece || !press.piece.placed) {
+      this.press = null;
+      return;
+    }
+    press.active = true;
+    this.tapPiece = null;
+    this.drag = {
+      piece: press.piece,
+      offX: (press.piece.w * this.cell) / 2,
+      offY: (press.piece.h * this.cell) / 2,
+      x: press.x,
+      y: press.y,
+      moved: false,
+      fromBoard: true,
+      lifted: false,
+      origin: { r: press.piece.r, c: press.piece.c },
+    };
+  }
+
+  startBoardDrag(p) {
+    const press = this.press;
+    if (!press || !press.piece || !press.piece.placed) return;
+    this.tapPiece = null;
+    this.press = null;
+    this.drag = {
+      piece: press.piece,
+      offX: (press.piece.w * this.cell) / 2,
+      offY: (press.piece.h * this.cell) / 2,
+      x: p.x,
+      y: p.y,
+      moved: true,
+      fromBoard: true,
+      lifted: false,
+      origin: { r: press.piece.r, c: press.piece.c },
+    };
+    this.liftBoardDrag();
+  }
+
+  liftBoardDrag() {
+    const drag = this.drag;
+    if (!drag || !drag.fromBoard || drag.lifted) return;
+    logic.lift(this.puzzle, drag.piece);
+    drag.lifted = true;
+  }
+
   onTouchStart(p) {
     if (!this.canPlay()) return;
     this.touch = { x: p.x, y: p.y, moved: false };
     this.tapPiece = null;
+    this.press = null;
+    this.drag = null;
     const slot = this.traySlotAt(p);
     if (slot && slot.piece && !slot.piece.placed) {
       const piece = slot.piece;
@@ -397,7 +458,10 @@ class LogicPuzzleScene extends Scene {
     const cell = this.cellAt(p);
     if (cell) {
       const piece = logic.pieceAt(this.puzzle, cell.r, cell.c);
-      if (piece) this.tapPiece = piece;
+      if (piece) {
+        this.tapPiece = piece;
+        this.press = { piece, x: p.x, y: p.y, at: Date.now(), active: false };
+      }
     }
   }
 
@@ -406,10 +470,15 @@ class LogicPuzzleScene extends Scene {
     const dx = p.x - this.touch.x;
     const dy = p.y - this.touch.y;
     if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) this.touch.moved = true;
+    // 棋盘上的块一旦移动超过点击阈值，立刻转为拖动；长按不动则由 updateLongPress 接管。
+    if (!this.drag && this.touch.moved && this.tapPiece && this.tapPiece.placed) {
+      this.startBoardDrag(p);
+    }
     if (this.drag) {
       this.drag.x = p.x;
       this.drag.y = p.y;
-      this.drag.moved = this.touch.moved;
+      this.drag.moved = this.drag.moved || this.touch.moved;
+      if (this.drag.fromBoard && this.drag.moved) this.liftBoardDrag();
     }
   }
 
@@ -418,10 +487,35 @@ class LogicPuzzleScene extends Scene {
     this.drag = null;
     const tapPiece = this.tapPiece;
     const touch = this.touch;
+    const press = this.press;
     this.tapPiece = null;
     this.touch = null;
+    this.press = null;
 
     if (drag) {
+      if (drag.fromBoard) {
+        // 长按但没移动：保持原位，不误触「收回托盘」。
+        if (!drag.moved) {
+          if (drag.lifted) {
+            logic.place(this.puzzle, drag.piece, drag.origin.r, drag.origin.c);
+            this.save();
+          }
+          return;
+        }
+        this.liftBoardDrag();
+        const target = this.dropTarget(drag, p);
+        if (target) {
+          logic.place(this.puzzle, drag.piece, target.r, target.c);
+                this.save();
+          if (logic.isSolved(this.puzzle)) this.win();
+        } else {
+          // 拖到无效位置：回到拿起前的位置，不要掉回候选区。
+          logic.place(this.puzzle, drag.piece, drag.origin.r, drag.origin.c);
+          this.shakeAt = Date.now();
+          this.save();
+        }
+        return;
+      }
       if (!drag.moved) {
         // 单击托盘里的拼块 = 旋转
         logic.rotate(drag.piece);
@@ -431,17 +525,15 @@ class LogicPuzzleScene extends Scene {
       const target = this.dropTarget(drag, p);
       if (target) {
         logic.place(this.puzzle, drag.piece, target.r, target.c);
-        this.notice = null;
-        this.save();
+            this.save();
         if (logic.isSolved(this.puzzle)) this.win();
       } else {
-        this.notice = { text: t('logicpuzzle.noFit'), at: Date.now() };
         this.shakeAt = Date.now();
       }
       return;
     }
 
-    // 单击棋盘上已放的拼块：收回托盘
+    // 快速点击棋盘上已放的拼块：仍保留「收回托盘」。
     if (tapPiece && touch && !touch.moved && tapPiece.placed) {
       logic.lift(this.puzzle, tapPiece);
       this.save();
@@ -456,6 +548,7 @@ class LogicPuzzleScene extends Scene {
     this.drag = null;
     this.touch = null;
     this.tapPiece = null;
+    this.press = null;
     this.reveal = { t: 0, plans: this.buildRevealPlans(), hidden: new Set(), settled: 0 };
     if (this.reveal.plans[0]) {
       this.reveal.plans[0].started = true;
@@ -525,7 +618,7 @@ class LogicPuzzleScene extends Scene {
     if (!this.reveal) return;
     this.reveal = null;
     this.revealed = true;
-    this.streak = 0;              // 查看答案不计连胜
+    if (this.mode === 'random') this.streak = 0; // 查看答案不计随机连胜
     this.phase = WON;
     this.resultAt = Date.now();
     this.save();
@@ -565,9 +658,13 @@ class LogicPuzzleScene extends Scene {
     this.drag = null;
     this.touch = null;
     this.tapPiece = null;
-    this.best = Math.max(this.best, Math.min(logic.LEVEL_COUNT + 1, this.level + 1));
-    this.streak += 1;
-    this.bestStreak = Math.max(this.bestStreak, this.streak);
+    this.press = null;
+    if (this.mode === 'level') {
+      this.best = Math.max(this.best, Math.min(logic.LEVEL_COUNT + 1, this.level + 1));
+    } else {
+      this.streak += 1;
+      this.bestStreak = Math.max(this.bestStreak, this.streak);
+    }
     this.save();
     try { achv.win('logicpuzzle', { level: this.level }); } catch (e) { /* 成就不影响游戏 */ }
     try { audio.playSuccess(); } catch (e) { /* 静音 / 失败忽略 */ }
@@ -601,6 +698,7 @@ class LogicPuzzleScene extends Scene {
       if (!this.helpOpen && !this.confirming) this.updateReveal(dt);
       return;
     }
+    if (!this.helpOpen && !this.confirming) this.updateLongPress();
   }
 
   // ---------- 渲染 ----------
@@ -617,7 +715,6 @@ class LogicPuzzleScene extends Scene {
     this.drawTray(c);
     this.drawDrag(c);
     this.drawReveal(c);
-    this.drawNotice(c);
     // 帮助 / 静音和其它游戏一样常驻（胜利遮罩只盖棋盘，不挡右下角）
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     if (this.phase === WON && this.resultVisible(RESULT_DELAY_MS, `logicpuzzle-win:${this.level}:${this.resultAt}`)) this.drawResult(c);
@@ -661,14 +758,23 @@ class LogicPuzzleScene extends Scene {
   drawOptions(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
-    const mid = this.cx + this.cw / 2;
-    D.divider(c, mid, this.optY + this.optH / 2, 24, T.border, 1);
     const cy = this.optY + this.optH / 2;
+    // 左侧固定模式区：新游戏按钮不再独自占左半，模式文案始终可见。
+    const modeW = Math.min(88, this.cw * 0.27);
+    const modeX = this.cx + modeW / 2;
+    D.text(c, this.mode === 'random' ? t('logicpuzzle.modeRandom') : t('logicpuzzle.modeLevel'),
+      modeX, cy, {
+        size: 11, weight: 'bold', color: this.mode === 'random' ? T.god : T.primary, align: 'center',
+      });
+    D.divider(c, this.cx + modeW, cy, 24, T.border, 1);
+    const areaX = this.cx + modeW;
+    const areaW = this.cw - modeW;
+    D.divider(c, areaX + areaW / 2, cy, 20, T.border, 1);
     const enabled = this.canPlay();
-    this.drawOptionButton(c, this.cx + this.cw * 0.25, cy, t('logicpuzzle.newGame'),
+    this.drawOptionButton(c, areaX + areaW * 0.25, cy, t('logicpuzzle.newGame'),
       enabled ? T.primary : T.disabled, enabled, 'gamepad', 'new-game',
       () => { this.confirming = true; });
-    this.drawOptionButton(c, this.cx + this.cw * 0.75, cy, t('logicpuzzle.answer'),
+    this.drawOptionButton(c, areaX + areaW * 0.75, cy, t('logicpuzzle.answer'),
       enabled ? T.god : T.disabled, enabled, 'eye', 'answer',
       () => this.startReveal());
   }
@@ -780,17 +886,6 @@ class LogicPuzzleScene extends Scene {
     c.restore();
   }
 
-  drawNotice(c) {
-    if (!this.notice) return;
-    if (Date.now() - this.notice.at > 950) {
-      this.notice = null;
-      return;
-    }
-    const y = this.trayY - 4;
-    D.text(c, this.notice.text, W / 2, y, {
-      size: 10.5, weight: 'bold', color: theme.tokens.god, align: 'center',
-    });
-  }
 
   drawFabs(c) {
     const T = theme.tokens;

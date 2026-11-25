@@ -4988,6 +4988,42 @@ i18n.setLang('cn');
   if (!(rrA.w > aBox.w * sc.cell && rrA.h > aBox.h * sc.cell)) problems.push('拼块没有按整块尺寸跨过格间距');
   dragTo(a, aBox.r, aBox.c);
   if (!a.placed) problems.push('把拼块拖到棋盘后没有放下');
+  // 棋盘上的块长按 / 直接拖动：可以换位；无效落点回原位，不能掉回候选区
+  {
+    const origin = { r: a.r, c: a.c };
+    LB.lift(sc.puzzle, a);
+    let target = null;
+    for (let r = 0; r < 8 && !target; r += 1) {
+      for (let c = 0; c < 8; c += 1) {
+        if ((r !== origin.r || c !== origin.c) && LB.canPlace(sc.puzzle, a, r, c)) {
+          target = { r, c };
+          break;
+        }
+      }
+    }
+    LB.place(sc.puzzle, a, origin.r, origin.c);
+    if (!target) problems.push('棋盘拖动测试找不到第二个落点');
+    else {
+      const from = sc.spanRect(origin.r, origin.c, a.w, a.h);
+      const to = sc.spanRect(target.r, target.c, a.w, a.h);
+      const p1 = { x: from.x + from.w / 2, y: from.y + from.h / 2 };
+      const p2 = { x: to.x + to.w / 2, y: to.y + to.h / 2 };
+      sc.onTouchStart(p1);
+      sc.onTouchMove(p2);
+      sc.onTouchEnd(p2);
+      if (!a.placed || a.r !== target.r || a.c !== target.c) {
+        problems.push('棋盘上的拼块不能直接拖动换位');
+      }
+      const cur = sc.spanRect(a.r, a.c, a.w, a.h);
+      const p3 = { x: cur.x + cur.w / 2, y: cur.y + cur.h / 2 };
+      sc.onTouchStart(p3);
+      sc.onTouchMove({ x: 4, y: 4 });
+      sc.onTouchEnd({ x: 4, y: 4 });
+      if (!a.placed || a.r !== target.r || a.c !== target.c) {
+        problems.push('棋盘拖动到无效位置没有回原位');
+      }
+    }
+  }
   {
     const rr = sc.spanRect(a.r, a.c, a.w, a.h);
     const p = { x: rr.x + rr.w / 2, y: rr.y + rr.h / 2 };
@@ -5006,7 +5042,9 @@ i18n.setLang('cn');
   solveCurrent();
   sc.render(makeCtx());
   if (sc.phase !== 'won') problems.push('铺满后场景没有进入胜利态');
-  if (sc.streak !== 1 || sc.bestStreak !== 1) problems.push(`胜利后连胜不对（${sc.streak}/${sc.bestStreak}）`);
+  if (sc.best !== 2) problems.push(`闯关模式胜利没有提升最高关卡（${sc.best}）`);
+  // 闯关模式不参与随机连胜：胜利不能改 streak / bestStreak
+  if (sc.streak !== 0 || sc.bestStreak !== 0) problems.push(`闯关模式不应改随机连胜（${sc.streak}/${sc.bestStreak}）`);
   if (!sc.buttons.some((b) => b.id === 'result-next')) problems.push('闯关模式胜利后没有「下一关」');
   if (!sc.buttons.some((b) => b.id === 'help')) problems.push('胜利后帮助 FAB 不见了');
   if (!sc.buttons.some((b) => b.id === 'fab-mute')) problems.push('胜利后静音 FAB 不见了');
@@ -5018,7 +5056,7 @@ i18n.setLang('cn');
   if (restored.phase !== 'won') problems.push('已铺满的存档重进没有展示胜利态');
   if (achvMod.winsOf('logicpuzzle') !== winsBeforeRestore) problems.push('重进胜利存档重复上报了成就胜场');
   sc.nextLevel();
-  if (sc.level !== 2 || sc.phase !== 'play' || sc.streak !== 1) problems.push('下一关没有保留连胜');
+  if (sc.level !== 2 || sc.phase !== 'play') problems.push('下一关没有进入第 2 关');
 
   // 随机模式：切换后随机一关；胜利给「再来一局」；再来保留连胜；新游戏清空连胜
   {
@@ -5032,19 +5070,21 @@ i18n.setLang('cn');
       try { sc.render(makeCtx()); } finally { D.text = oldText; }
       if (!texts.includes('最长连胜') || !texts.includes('当前连胜')) problems.push('随机模式分数区没有最长 / 当前连胜');
       if (texts.includes('最高关卡')) problems.push('随机模式不应显示最高关卡');
-      if (texts.includes('随机一局') || texts.includes('闯关模式')) problems.push('模式切换后出现了模式文案');
+      if (!texts.includes('随机模式')) problems.push('随机模式左侧没有固定模式文案');
+      if (texts.includes('闯关模式')) problems.push('随机模式仍显示闯关模式文案');
     }
     solveCurrent();
     sc.render(makeCtx());
     if (sc.phase !== 'won') problems.push('随机模式没有判胜');
-    if (sc.streak !== 2) problems.push(`随机模式连胜没有累加（${sc.streak}）`);
+    if (sc.streak !== 1) problems.push(`随机模式连胜没有累加（${sc.streak}）`);
+    if (sc.best !== 2) problems.push(`随机模式胜利污染了闯关最高关卡（${sc.best}）`);
     if (!sc.buttons.some((b) => b.id === 'result-again')) problems.push('随机模式胜利后没有「再来一局」');
     if (sc.buttons.some((b) => b.id === 'result-next')) problems.push('随机模式不应有「下一关」');
     const againBtn = sc.buttons.find((b) => b.id === 'result-again');
     const before = sc.level;
     if (againBtn) againBtn.onTap();
     if (sc.mode !== 'random' || sc.phase !== 'play') problems.push('再来一局没有回到随机模式');
-    if (sc.streak !== 2) problems.push('再来一局清空了连胜');
+    if (sc.streak !== 1) problems.push('再来一局清空了连胜');
     if (sc.level === before && LB.LEVEL_COUNT > 1) problems.push('再来一局没有换关卡');
     // 随机模式的「新游戏」也要二次确认，确认后随机新开、清空当前连胜
     sc.render(makeCtx());
@@ -5061,6 +5101,7 @@ i18n.setLang('cn');
     if (!okNew) problems.push('随机模式二次确认没有确定按钮');
     if (okNew) okNew.onTap();
     if (sc.streak !== 0 || sc.mode !== 'random') problems.push('随机模式新游戏没有清空连胜 / 保持随机');
+    if (sc.best !== 2) problems.push('随机模式新游戏改了闯关最高关卡');
     if (sc.level < 1 || sc.level > 88) problems.push('随机模式新游戏关卡越界');
   }
   // 切回闯关模式，回到闯关进度
@@ -5087,8 +5128,9 @@ i18n.setLang('cn');
     if (LB.placedCount(sc.puzzle) === 0) problems.push('查看答案动画没有逐块落下');
     if (sc.phase !== 'won') problems.push('查看答案动画走完没有展示胜利');
     if (!sc.revealed) problems.push('查看答案没有标记 revealed');
-    if (sc.streak !== 0) problems.push('查看答案没有清空当前连胜');
-    if (sc.bestStreak !== 5) problems.push('查看答案不应该改最长连胜');
+    // 当前是闯关模式：查看答案不碰随机模式的连胜记录
+    if (sc.streak !== 5) problems.push(`闯关模式查看答案错误清空了随机连胜（${sc.streak}）`);
+    if (sc.bestStreak !== 5) problems.push('闯关模式查看答案不应该改随机最长连胜');
     if (achvMod.winsOf('logicpuzzle') !== wins) problems.push('查看答案不应计入成就胜场');
     if (!LB.isSolved(sc.puzzle)) problems.push('查看答案没有铺满棋盘');
     if (!sc.buttons.some((b) => b.id === 'result-new')) problems.push('查看答案结算没有「新游戏」');
@@ -5122,8 +5164,8 @@ i18n.setLang('cn');
     if (!okBtn || !sc.buttons.some((b) => b.id === 'confirm-mask')) problems.push('统一二次确认面板没有画出来');
     if (okBtn) {
       okBtn.onTap();
-      if (sc.level !== 1 || sc.phase !== 'play' || LB.placedCount(sc.puzzle) !== 0 || sc.streak !== 0) {
-        problems.push('确定重来后状态不对');
+      if (sc.level !== 1 || sc.phase !== 'play' || LB.placedCount(sc.puzzle) !== 0 || sc.streak !== 2) {
+        problems.push('确定重来后状态不对（闯关模式新游戏不应清随机连胜）');
       }
     }
   }
