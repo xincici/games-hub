@@ -4883,9 +4883,39 @@ i18n.setLang('cn');
   if (sc.optY !== sc.scoreY + sc.scoreH + topGap || sc.boardY !== sc.optY + sc.optH + topGap) {
     problems.push('棋盘没有紧贴新游戏卡下方');
   }
-  if (sc.cell < 18) problems.push(`棋盘格太小（${sc.cell}px）`);
+  if (sc.cell < 14 || sc.cell > 36) problems.push(`棋盘格尺寸不对（${sc.cell}px）`);
   if (!(sc.trayY >= sc.boardY + sc.boardH + 8 && sc.trayY + sc.trayH + 8 <= sc.helpFab.y)) {
     problems.push('拼块托盘没有落在棋盘下方 / 压到 FAB');
+  }
+  // 候选区：两行各 4 个，8 块共用同一个缩放（保留实际长宽比例），d/f 也必须有字母
+  {
+    const s0 = sc.traySlotRect(0);
+    const s3 = sc.traySlotRect(3);
+    const s4 = sc.traySlotRect(4);
+    const s7 = sc.traySlotRect(7);
+    if (Math.abs(s0.y - s4.y) < 1) problems.push('候选区不是两行');
+    if (s4.y <= s0.y || Math.abs(s0.x - s4.x) > 0.5 || s3.x <= s0.x || s7.x <= s4.x) {
+      problems.push('候选区 4×2 槽位几何不对');
+    }
+    const hit4 = sc.traySlotAt({ x: s4.x + s4.w / 2, y: s4.y + s4.h / 2 });
+    if (!hit4 || hit4.index !== 4) problems.push('候选区第二行点不中拼块');
+    const blocks = [];
+    const oldBlock = sc.drawBlock;
+    sc.drawBlock = (c, x, y, w, h, color, label, opts) => {
+      blocks.push({ w, h, label });
+      return oldBlock.call(sc, c, x, y, w, h, color, label, opts);
+    };
+    try { sc.drawTray(makeCtx()); } finally { sc.drawBlock = oldBlock; }
+    if (blocks.length !== 8) problems.push(`候选区画了 ${blocks.length} 块（应 8）`);
+    sc.puzzle.pieces.forEach((p, i) => {
+      const b = blocks[i];
+      if (!b) return;
+      if (Math.abs(b.w - p.w * sc.trayUnit) > 0.01 || Math.abs(b.h - p.h * sc.trayUnit) > 0.01) {
+        problems.push(`候选块 ${p.id} 没有按统一比例缩放`);
+      }
+    });
+    const labels = blocks.map((b) => b.label);
+    if (!labels.includes('d') || !labels.includes('f')) problems.push('候选区 d/f 块缺字母');
   }
   // 分数区：最长 / 当前连胜，不画进度条，也没有已放 / 步数
   {

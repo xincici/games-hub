@@ -257,13 +257,13 @@ class LogicPuzzleScene extends Scene {
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
 
-    // 比分卡只放最高 / 当前两格；计时挪到新游戏左边，因此整体比原来紧，棋盘也随之上移。
-    // 320×568 用更紧凑的一档，否则 8×8 棋盘只剩 15px 一格。
+    // 分数卡 + 新游戏/查看答案 + 两行候选区；320×568 用更紧凑的一档。
+    // 棋盘主动缩一点，给两行候选块腾空间，也给 FAB 留更大的下边距。
     const compact = H < 650;
     const scoreH = compact ? 56 : 64;
     const optH = compact ? 48 : 56;
     const topGap = compact ? 8 : 10;
-    const trayH = compact ? 52 : 60;
+    const trayH = compact ? 100 : 110;
     const trayGap = compact ? 10 : 12;
     this.gapTop = topGap;
     this.scoreY = this.top + this.headerH + 12;
@@ -277,10 +277,10 @@ class LogicPuzzleScene extends Scene {
 
     this.cellGap = CELL_GAP;
     this.pad = PAD;
-    const maxBottom = this.helpFab.y - 10 - trayH - trayGap;
+    const maxBottom = this.helpFab.y - 26 - trayH - trayGap;
     const byW = (this.cw - PAD * 2 - CELL_GAP * (logic.SIZE - 1)) / logic.SIZE;
     const byH = (maxBottom - boardTop - PAD * 2 - CELL_GAP * (logic.SIZE - 1)) / logic.SIZE;
-    this.cell = Math.max(14, Math.min(44, Math.floor(Math.min(byW, byH))));
+    this.cell = Math.max(14, Math.min(36, Math.floor(Math.min(byW, byH))));
     this.boardW = PAD * 2 + this.cell * logic.SIZE + CELL_GAP * (logic.SIZE - 1);
     this.boardH = this.boardW;
     this.boardX = (W - this.boardW) / 2;
@@ -291,7 +291,12 @@ class LogicPuzzleScene extends Scene {
     this.trayX = this.cx;
     this.trayY = this.boardY + this.boardH + trayGap;
     this.trayPad = 4;
-    this.traySlotW = (this.trayW - this.trayPad * 2) / 8;
+    this.trayColGap = 4;
+    this.trayRowGap = 4;
+    this.traySlotW = (this.trayW - this.trayPad * 2 - this.trayColGap * 3) / 4;
+    this.trayRowH = (this.trayH - this.trayPad * 2 - this.trayRowGap) / 2;
+    // 所有候选块共用同一个缩放：保留 a~h 的实际长宽比例，不再各自塞满槽位。
+    this.trayUnit = Math.max(2, (Math.min(this.traySlotW, this.trayRowH) - 8) / 5);
     this.drag = null;
     this.touch = null;
     this.tapPiece = null;
@@ -317,11 +322,13 @@ class LogicPuzzleScene extends Scene {
   }
 
   traySlotRect(i) {
+    const row = Math.floor(i / 4);
+    const col = i % 4;
     return {
-      x: this.trayX + this.trayPad + i * this.traySlotW,
-      y: this.trayY + this.trayPad,
+      x: this.trayX + this.trayPad + col * (this.traySlotW + this.trayColGap),
+      y: this.trayY + this.trayPad + row * (this.trayRowH + this.trayRowGap),
       w: this.traySlotW,
-      h: this.trayH - this.trayPad * 2,
+      h: this.trayRowH,
     };
   }
 
@@ -333,9 +340,9 @@ class LogicPuzzleScene extends Scene {
     if (o.alpha != null) c.globalAlpha = o.alpha;
     D.fillRoundRect(c, x, y, w, h, radius, color);
     D.strokeRoundRect(c, x + 0.5, y + 0.5, w - 1, h - 1, radius, o.border || 'rgba(255,255,255,0.75)', o.lineWidth || 1.4);
-    if (label && w >= 12 && h >= 12) {
+    if (label && w >= 6 && h >= 6) {
       D.text(c, label, x + w / 2, y + h / 2, {
-        size: o.labelSize || Math.max(8, Math.min(22, Math.min(w, h) * 0.58)),
+        size: o.labelSize || Math.max(7, Math.min(22, Math.min(w, h) * 0.58)),
         weight: 'bold',
         color: o.labelColor || '#ffffff',
         align: 'center',
@@ -363,7 +370,9 @@ class LogicPuzzleScene extends Scene {
     if (p.y < this.trayY || p.y > this.trayY + this.trayH) return null;
     for (let i = 0; i < 8; i += 1) {
       const r = this.traySlotRect(i);
-      if (p.x >= r.x && p.x <= r.x + r.w) return { index: i, rect: r, piece: this.puzzle.pieces[i] };
+      if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+        return { index: i, rect: r, piece: this.puzzle.pieces[i] };
+      }
     }
     return null;
   }
@@ -473,12 +482,12 @@ class LogicPuzzleScene extends Scene {
       const box = this.solutionBox(piece.id);
       const slot = this.traySlotRect(i);
       const target = this.spanRect(box.r, box.c, box.w, box.h);
-      const scale = Math.max(2, Math.min((slot.w - 8) / box.w, (slot.h - 8) / box.h, 13));
+      const scale = this.trayUnit;
       plans.push({
         piece, r: box.r, c: box.c, w: box.w, h: box.h,
         fromX: slot.x + slot.w / 2, fromY: slot.y + slot.h / 2,
         toX: target.x + target.w / 2, toY: target.y + target.h / 2,
-        fromW: box.w * scale, fromH: box.h * scale, toW: target.w, toH: target.h,
+        fromW: piece.w * scale, fromH: piece.h * scale, toW: target.w, toH: target.h,
         spin: true,
         dir: i % 2 ? 1 : -1,
         start: i * REVEAL_STEP_MS, dur: REVEAL_MOVE_MS,
@@ -727,13 +736,10 @@ class LogicPuzzleScene extends Scene {
       const slot = this.traySlotRect(i);
       if (p.placed || (this.drag && this.drag.piece === p && this.drag.moved)
         || (this.reveal && this.reveal.hidden.has(p.id))) return;
-      const maxW = slot.w - 8;
-      const maxH = slot.h - 8;
-      const scale = Math.max(2, Math.min(maxW / p.w, maxH / p.h, 13));
-      const w = p.w * scale;
-      const h = p.h * scale;
+      const w = p.w * this.trayUnit;
+      const h = p.h * this.trayUnit;
       this.drawBlock(c, slot.x + (slot.w - w) / 2, slot.y + (slot.h - h) / 2, w, h, p.color, p.id, {
-        labelSize: Math.max(7, Math.min(13, scale * 0.9)),
+        labelSize: Math.max(8, Math.min(13, Math.min(w, h) * 0.55)),
       });
     });
   }
