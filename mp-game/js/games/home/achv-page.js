@@ -533,7 +533,7 @@ class AchvPage {
     const chipY = top + 32;
     const chips = [
       { value: `${s.unlocked}/${s.total}`, label: t('achvChipAchv'), accent: T.primary },
-      { value: `${s.cleared}/25`, label: t('achvChipCleared'), accent: T.god || T.primary },
+      { value: `${s.cleared}/${s.games || 25}`, label: t('achvChipCleared'), accent: T.god || T.primary },
       { value: String(s.plays), label: t('achvChipPlays'), accent: T.info || T.primary },
     ];
     chips.forEach((chip, i) => {

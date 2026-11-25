@@ -20,8 +20,8 @@ const GAME_IDS = [
   'g2048', 'three', 'snake', 'link',
   'puzzle', 'mirror', 'down',
   'crush', 'sudoku', 'sort', 'slide',
-  'ttt', 'mahjong', 'solo',
-  'alchemy', 'quesheng', 'legend', 'gambler',
+  'ttt', 'combo', 'solo',
+  'logicpuzzle', 'quesheng', 'legend', 'gambler',
 ];
 
 let latestSceneId = 'home';
@@ -31,6 +31,8 @@ const DEEP_LINK_IDS = GAME_IDS.concat(['poker']);
 
 function normalizeGameId(value) {
   const id = typeof value === 'string' ? value : '';
+  // 老分享链接 / 旧入口：麻将英雄与扑克炼金术已合并成「组牌闯关」
+  if (id === 'mahjong' || id === 'alchemy') return 'combo';
   return DEEP_LINK_IDS.includes(id) ? id : null;
 }
 
@@ -130,8 +132,8 @@ const INTRO = {
   sort: ['把槽顶相同水果整叠搬到空槽或同种上，每槽一种', 'Move stacked fruit onto the same kind or an empty slot'],
   down: ['点一列让落下的图案滑过去，落在同类正上方即消除', 'Tap a column to slide the drop; land it on its twin to pop'],
   slide: ['拖动整排图案，让相同的挨到旁边就一起消除', 'Drag a run so matching tiles touch and pop together'],
-  alchemy: ['落牌凑成一行、列或斜线四张成牌型即消除', 'Lay four in a line or diagonal to make a poker hand'],
-  mahjong: ['在 3×3 落牌，一行、列或斜线凑成三张成组即消除', 'Lay tiles on the 3x3; a line of three that forms a set clears'],
+  combo: ['三模式组牌：炼金落四张、炸金花 / 麻将 3×3 落三张成组', 'Three modes: four-card poker, 3-card and mahjong on a 3x3'],
+  logicpuzzle: ['把 8 个可旋转的拼块摆进 8×8 棋盘，填满所有空格', 'Fit 8 rotatable blocks into an 8x8 board and fill every cell'],
   quesheng: ['滑动让成组牌挨在一起，再点掉三张一组或一对', 'Slide sets together, then tap the three of a set or the pair'],
   legend: ['往空格落牌或点牌换掉，凑成顺子、刻子、杠得分', 'Drop or swap tiles to form runs, triplets and kongs'],
   mirror: ['记住上方图案，点两张交换位置，复原即过关', 'Memorise the pattern, swap two tiles at a time to restore it'],

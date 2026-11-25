@@ -527,11 +527,18 @@ const LEGACY = {
     best: ['__emoji_sort__best_1', '__emoji_sort__best_2'],
     level: ['__emoji_sort__level', '__emoji_sort__level_2'],
   },
+  // 旧游戏存档：只给组牌闯关的 legacyCleared 分流用（不再有独立成就卡）
   alchemy: {
     caps: [0, 0], levelBase: 1,
     best: ['__poker_alchemy__best_1', '__poker_alchemy__best_2'],
     level: ['__poker_alchemy__level', '__poker_alchemy__level_2'],
   },
+  mahjong: { caps: [0], levelBase: 1, best: ['__mahjong_hero__best_1'] },
+  combo: {
+    // 0/1 = 炼金术普通 / 炸金花，2 = 麻将闯关；旧存档在 legacyCleared 里分流
+    caps: [0, 0, 0], levelBase: 1,
+  },
+  logicpuzzle: { caps: [0], levelBase: 1, best: ['__logic_puzzle__best'] },
   quesheng: {
     caps: [0, 0], levelBase: 1,
     level: ['__quesheng__level', '__quesheng__level_2'],
@@ -541,8 +548,6 @@ const LEGACY = {
     best: ['__gambler__best', '__gambler__best_2'],
     level: ['__gambler__level', '__gambler__level_2'],
   },
-  // 麻将英雄：闯关最高关存在 best_1（已开始的最高关，比已通关多 1）
-  mahjong: { caps: [0], levelBase: 1, best: ['__mahjong_hero__best_1'] },
   link: { caps: [0], levelBase: 1, best: ['__emoji_link__best_1'], level: ['__emoji_link__level'] },
   crush: { caps: [0], levelBase: 1, best: ['__emoji_crush__best_1'], level: ['__emoji_crush__level'] },
   slide: { caps: [0], levelBase: 1, level: [], stateLevel: '__emoji_slide__state' },
@@ -550,6 +555,11 @@ const LEGACY = {
 
 // 某一模式「能证明通关过几关」——best / 当前关卡 / 自己记的 max 取最大
 function legacyCleared(id, slot) {
+  // 组牌闯关 = 炼金术 1/2 模式 + 麻将英雄闯关；老存档分别从两个旧 key 推算
+  if (id === 'combo') {
+    const legacy = slot === 3 ? legacyCleared('mahjong', 1) : legacyCleared('alchemy', slot);
+    return Math.max(legacy, modeOf('combo', slot).max);
+  }
   const cfg = LEGACY[id];
   if (!cfg) return modeOf(id, slot).max;
   const i = slot - 1;
@@ -836,28 +846,27 @@ const SPEC = {
       A('完成第 100 关', 'Clear stage 100', () => ({ value: bestClearedOf('slide'), target: 100 })),
     ],
   },
-  alchemy: {
+  combo: {
     icon: 'alchemy', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(totalWins('alchemy'))}`,
+    stats: () => `${i18n.t('achvWins')} ${V(totalWins('combo'))}`,
     achv: [
-      A('两种模式首胜', 'First win · both modes', () => ({ value: modeFirstCount('alchemy'), target: 2 })),
-      A('普通模式最高关卡', 'Poker · top level', () => ({ value: modeLevel('alchemy', 1), target: 1 }), { stat: true, unit: 'achvLv' }),
-      A('炸金花最高关卡', '3-card · top level', () => ({ value: modeLevel('alchemy', 2), target: 1 }), { stat: true, unit: 'achvLv' }),
-      A('完成第 10 关', 'Clear stage 10', () => ({ value: bestClearedOf('alchemy'), target: 10 })),
-      A('完成第 50 关', 'Clear stage 50', () => ({ value: bestClearedOf('alchemy'), target: 50 })),
-      A('完成第 100 关', 'Clear stage 100', () => ({ value: bestClearedOf('alchemy'), target: 100 })),
+      A('三模式首胜', 'First win · all modes', () => ({ value: modeFirstCount('combo'), target: 3 })),
+      A('普通炼金最高关卡', 'Poker · top level', () => ({ value: modeLevel('combo', 1), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('炸金花最高关卡', '3-card · top level', () => ({ value: modeLevel('combo', 2), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('麻将闯关最高关卡', 'Mahjong · top level', () => ({ value: modeLevel('combo', 3), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('完成第 10 关', 'Clear stage 10', () => ({ value: bestClearedOf('combo'), target: 10 })),
+      A('完成第 50 关', 'Clear stage 50', () => ({ value: bestClearedOf('combo'), target: 50 })),
+      A('完成第 100 关', 'Clear stage 100', () => ({ value: bestClearedOf('combo'), target: 100 })),
     ],
   },
-  mahjong: {
-    icon: 'mode-mahjong', accent: '#8f6419',
-    stats: () => `${i18n.t('achvWins')} ${V(totalWins('mahjong'))}`,
+  logicpuzzle: {
+    icon: 'tangram', accent: '#4a6fa5',
+    stats: () => `${i18n.t('achvHigh')} ${lvOf(bestClearedOf('logicpuzzle'))}${winTag('logicpuzzle')}`,
     achv: [
-      A('最高关卡', 'Top stage', () => ({ value: read('__mahjong_hero__best_1'), target: 1 }), { stat: true, unit: 'achvLv' }),
-      A('无尽模式最高分', 'Endless top score', () => ({ value: read('__mahjong_hero__best_2'), target: 1 }), { stat: true, unit: 'achvScore' }),
-      A('最大单次得分', 'Best single clear', () => ({ value: peakOf('mahjong', 'gained'), target: 1 }), { stat: true, unit: 'achvScore' }),
-      A('完成第 10 关', 'Clear stage 10', () => ({ value: bestClearedOf('mahjong'), target: 10 })),
-      A('完成第 50 关', 'Clear stage 50', () => ({ value: bestClearedOf('mahjong'), target: 50 })),
-      A('完成第 100 关', 'Clear stage 100', () => ({ value: bestClearedOf('mahjong'), target: 100 })),
+      A('最高关卡', 'Top stage', () => ({ value: bestClearedOf('logicpuzzle'), target: 1 }), { stat: true, unit: 'achvLv' }),
+      A('完成第 10 关', 'Clear stage 10', () => ({ value: bestClearedOf('logicpuzzle'), target: 10 })),
+      A('完成第 50 关', 'Clear stage 50', () => ({ value: bestClearedOf('logicpuzzle'), target: 50 })),
+      A('完成第 88 关', 'Clear stage 88', () => ({ value: bestClearedOf('logicpuzzle'), target: 88 })),
     ],
   },
   quesheng: {
@@ -947,7 +956,7 @@ Object.keys(SPEC).forEach((id) => {
 });
 
 const ORDER = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective', 'hunter',
-  'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong', 'quesheng',
+  'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle', 'quesheng',
   'legend', 'mirror', 'point24', 'solo', 'gambler'];
 
 const ORDER_KEY = '__games_hub__achv_order';
@@ -978,7 +987,7 @@ function saveOrder(order) {
 
 // ---- 隐藏成就 ----
 // 四条的解锁条件都跨游戏；未解锁时名字显示成 ******。
-const HIDDEN_GAMES = ['master', 'link', 'crush', 'sort', 'slide', 'mahjong', 'alchemy', 'quesheng', 'gambler'];
+const HIDDEN_GAMES = ['master', 'link', 'crush', 'sort', 'slide', 'combo', 'logicpuzzle', 'quesheng', 'gambler'];
 // 「超过第 10 关」= 已经通过第 10 关，即已通关数 ≥ 10（存档里 best = 已通关 + 1 时对应 11）
 const HIDDEN_PASS_LEVEL = 10;
 
@@ -1185,7 +1194,7 @@ function summaryOf(games) {
     total += 1;
     if (a.unlocked) unlocked += 1;
   });
-  return { unlocked, total, cleared, plays: totalPlays() };
+  return { unlocked, total, cleared, plays: totalPlays(), games: games.length };
 }
 
 function pageData() {

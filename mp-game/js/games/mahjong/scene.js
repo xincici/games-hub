@@ -70,16 +70,20 @@ function blinkAlpha(p) {
 }
 
 class MahjongScene extends Scene {
-  constructor(app) {
+  constructor(app, opts) {
     super(app);
+    const o = opts || {};
     this.bg = new ParticleField();
     // 所有动画 / 逻辑计时都用场景时钟：帮助 / 二次确认打开时冻结（PITFALLS #32）
     this.clock = 0;
     this.now = 0;
-    this.mode = this.loadMode();
+    this.gameId = o.gameId || 'mahjong';
+    this.achvMode = o.achvMode || 1;
+    // 2026-11：无尽模式移除，麻将只保留闯关（并入「组牌闯关」的模式 3）
+    this.mode = MODE_LEVEL;
     this.level = this.loadLevel();
     this.best = this.loadBest(this.mode);
-    this.conf = this.mode === MODE_LEVEL ? logic.levelConfig(this.level) : null;
+    this.conf = logic.levelConfig(this.level);
     this.wall = logic.createWall();
     this.board = new Array(logic.CELLS).fill(null);
     this.pile = [];
@@ -118,9 +122,6 @@ class MahjongScene extends Scene {
 
   // ---------- 存档 key ----------
 
-  loadMode() {
-    return +getRaw(MODE_KEY, '') === MODE_ENDLESS ? MODE_ENDLESS : MODE_LEVEL;
-  }
   loadLevel() {
     return Math.max(1, Math.floor(+(getRaw(LEVEL_KEY, 1) || 1)) || 1);
   }
@@ -150,8 +151,7 @@ class MahjongScene extends Scene {
 
   boot() {
     if (!this.restore()) {
-      if (this.mode === MODE_LEVEL) this.startLevel(this.level);
-      else this.startEndless();
+      this.startLevel(this.level);
     } else {
       // 存档可能正好停在最后一手 / 已达标的那一步；重进不重播撒花与音效（PITFALLS #20）
       this.checkEnd(true);
@@ -183,7 +183,7 @@ class MahjongScene extends Scene {
   }
 
   startLevel(level) {
-    achv.beginRound('mahjong');
+    achv.beginRound(this.gameId);
     this.flushTimers();
     this.level = Math.max(1, Math.floor(level) || 1);
     this.conf = logic.levelConfig(this.level);
@@ -201,57 +201,19 @@ class MahjongScene extends Scene {
     this.save();
   }
 
-  startEndless() {
-    this.flushTimers();
-    this.resetRound();
-    this.best = this.loadBest(MODE_ENDLESS);
-    this.conf = null;
-    this.pile = [];
-    this.ensurePile(this.cursor + 1 + logic.PREVIEW);
-    this.startDeal();
-    this.save();
-  }
-
   replayLevel() {
     this.confirming = false;
-    if (this.mode === MODE_LEVEL) this.startLevel(this.level);
-    else this.startEndless();
+    this.startLevel(this.level);
   }
   nextLevel() {
     this.startLevel(this.level + 1);
   }
   startNewGame() {
     this.confirming = false;
-    if (this.mode === MODE_LEVEL) {
-      removeRaw(LEVEL_KEY);
-      removeRaw(BEST_KEY + 1);
-      this.best = 1;
-      this.startLevel(1);
-    } else {
-      // 无尽：只清已用牌数与当前得分，最高分保留
-      this.best = this.loadBest(MODE_ENDLESS);
-      this.startEndless();
-    }
-  }
-
-  toggleMode() {
-    if (this.helpOpen || this.confirming) return;
-    this.save();
-    this.mode = this.mode === MODE_LEVEL ? MODE_ENDLESS : MODE_LEVEL;
-    setRaw(MODE_KEY, String(this.mode));
-    this.flushTimers();
-    this.drag = null;
-    this.best = this.loadBest(this.mode);
-    this.level = this.loadLevel();
-    this.conf = this.mode === MODE_LEVEL ? logic.levelConfig(this.level) : null;
-    this.resetRound();
-    this.layout();     // 两种模式的存档可能对应不同局面，恢复前先按当前尺寸布局
-    if (!this.restore()) {
-      if (this.mode === MODE_LEVEL) this.startLevel(this.level);
-      else this.startEndless();
-    } else {
-      this.checkEnd(true);
-    }
+    removeRaw(LEVEL_KEY);
+    removeRaw(BEST_KEY + 1);
+    this.best = 1;
+    this.startLevel(1);
   }
 
   // ---------- 存档 ----------
@@ -394,7 +356,7 @@ class MahjongScene extends Scene {
       const top = hits.reduce((a, b) => (b.trio.score > a.trio.score ? b : a));
       this.score += gained;
       scorefly.roll(this.scoreAnim, this.score, this.clock);
-      achv.peak('mahjong', 'gained', gained);   // 最大单次得分
+      achv.peak(this.gameId, 'gained', gained);   // 最大单次得分
       const special = hits.length > 1 || this.combo > 1;
       if (gained >= FX_MIN || special) this.app.audio.playFirework();
       else this.app.audio.playElimination();
@@ -449,7 +411,7 @@ class MahjongScene extends Scene {
       this.phase = WON;
       // 每赢一局都要上报（每日挑战「赢一局麻将英雄」/ 成就胜场），不能只在新纪录时记：
       // 以前这一行写在 `if (this.level > this.best)` 里面，重复打已通关的关卡就永远不计数。
-      achv.win('mahjong', { mode: this.mode, level: this.level });
+      achv.win(this.gameId, { mode: this.achvMode, level: this.level });
       if (this.level > this.best) {
         this.best = this.level;
         setRaw(BEST_KEY + 1, String(this.best));
@@ -677,7 +639,7 @@ class MahjongScene extends Scene {
 
   drawHeader(c) {
     const T = theme.tokens;
-    D.text(c, t('mahjong.gameTitle'), W / 2, this.top + this.headerH / 2, {
+    D.text(c, this.titleText || t('mahjong.gameTitle'), W / 2, this.top + this.headerH / 2, {
       size: 15, weight: 'bold', color: T.text, align: 'center',
     });
     const h = this.homeRect;
@@ -753,7 +715,7 @@ class MahjongScene extends Scene {
     D.divider(c, split, this.optY + this.optH / 2, 24, T.border, 1);
     this.drawHand(c);
     const label = t('mahjong.start');
-    const bw = Math.min(112, actionLabel.width(c, label, { size: 13 }));
+    const bw = Math.min(112, Math.max(96, actionLabel.width(c, label, { size: 13 })));
     const bx = split + (this.cx + this.cw - split) / 2 - bw / 2;
     const by = this.optY + (this.optH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
@@ -998,11 +960,6 @@ class MahjongScene extends Scene {
     const helpRect = { x: this.helpX, y: this.fabY, w: this.fabSize, h: this.fabSize };
     const muteRect = fabKit.muteSlot(helpRect);
     if (muteRect) fabKit.drawMute(this, c, muteRect);
-    const levelMode = this.mode === MODE_LEVEL;
-    // 闯关 = 奖杯、无尽 = 无限（web 顶栏同款语义）。图标字体里暂时没有这两个 glyph，
-    // 字体是共享资源、不在本游戏改动范围内，所以先用文字兜底；以后补 glyph 会自动走图标。
-    this.drawRoundFab(c, fabKit.slotLeft(helpRect, muteRect ? 2 : 1).x, this.fabY, levelMode ? 'trophy' : 'infinity',
-      levelMode ? 'T' : '∞', () => this.toggleMode(), 'mode');
   }
 
   drawRoundFab(c, x, y, iconKey, fallback, onTap, id) {

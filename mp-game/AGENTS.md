@@ -19,7 +19,7 @@
 ```
 game.js
   └─ js/core/app.js          场景生命周期 + requestAnimationFrame + 输入
-      ├─ js/games/home/      首页：25 个游戏，4+3+4+3+4+3+4 蜂窝入口
+      ├─ js/games/home/      首页：25 个游戏（空位已被「逻辑拼图」占用），蜂窝入口
       ├─ js/games/click/     关灯游戏
       ├─ js/games/match/     对对碰（三种牌面）
       ├─ js/games/point24/   24 点（精确分数 / 连胜）
@@ -40,9 +40,11 @@ game.js
       ├─ js/games/slide/     Emoji 滑行（board + scene）
       ├─ js/games/poker/     德州扑克（隐藏入口，仅保留代码）
       ├─ js/games/ttt/       井字棋（board + scene + i18n）
-      ├─ js/games/mahjong/   麻将英雄（board + scene）
+      ├─ js/games/mahjong/   麻将英雄（仅闯关；作为「组牌闯关」模式 3 的内嵌实现）
       ├─ js/games/solo/      单人麻将（board + scene）
-      ├─ js/games/alchemy/   扑克炼金术（board + scene）
+      ├─ js/games/alchemy/   扑克炼金术（作为「组牌闯关」模式 1/2 的内嵌实现）
+      ├─ js/games/combo/     组牌闯关（3 模式外壳 + mode 标签）
+      ├─ js/games/logicpuzzle/ 逻辑拼图（8×8 拼块，88 关）
       ├─ js/games/quesheng/  雀圣（board + scene）
       ├─ js/games/legend/    麻将传奇（board + scene）
       └─ js/games/gambler/   赌神（board + scene）
@@ -120,7 +122,7 @@ game.js
 
 ## 背景浅景（`core/particles.js`）
 
-- 每个场景构造时 `this.bg = new ParticleField()`，`update(dt)` + `draw(c, theme.dark)`，已覆盖 25 个场景；
+- 每个场景构造时 `this.bg = new ParticleField()`，`update(dt)` + `draw(c, theme.dark)`，已覆盖 25 个游戏（combo 由内嵌场景画）；
   它只是「浅景」，**不能抢内容**：全部元素透明度都很低、运动很慢、没有高频闪烁。
 - 四层（从下往上）：**光斑** 4 团巨大径向渐变（色相 50 秒一轮在绿/蓝/紫之间缓慢插值）、
   **蜂窝** 10~16 个空心六边形（呼应首页，少数填色，缓慢上浮 + 自转）、
@@ -217,10 +219,10 @@ game.js
 - **隐藏成就（列表最末一张卡）**：8 条跨游戏的成就，未达成时名字显示 `******` + 右侧「未达成」，
   达成后换成**橙色**真名 + 一行说明（行高 `HIDDEN_ROW_H = 34`，比普通行高）。卡片不参与拖动排序
   （`hitIndex` 命中隐藏卡返回 -1）。
-  - 求知好学：25 个游戏的帮助弹窗都看过（`markHelp`，App 在 `scene.helpOpen` 首次为真时记一次）
+  - 求知好学：25 个游戏的帮助弹窗都看过（`markHelp`，App 在 `scene.helpOpen` 首次为真时记一次；阈值 25）
   - 我已沉迷：游戏内累计时长 ≥ 1 小时（`addPlayMs`，每帧累加、满 3 秒或 `wx.onHide` 时落盘）
   - 锲而不舍：累计失败 ≥ 100 次（`markFail`，由 `audio.setLoseHook` 注入，不直接依赖 audio）
-  - 我爱闯关：`HIDDEN_GAMES`（消除大师 / 连连看 / 消消乐 / 排序 / 滑行 / 麻将英雄 / 炼金术 / 雀圣 / 赌神）
+  - 我爱闯关：`HIDDEN_GAMES`（消除大师 / 连连看 / 消消乐 / 排序 / 滑行 / 组牌闯关 / 逻辑拼图 / 雀圣 / 赌神）
     每个都至少有一个模式**通过第 10 关**（`bestClearedOf(id) >= HIDDEN_PASS_LEVEL`，阈值是**已通关数 10**，
     对应存档里 `best = 11` —— 别写成 11，那会差一关永远解锁不了）。走 LEGACY，老存档也算。
   - 再也不赌了：扑克英雄**单次猜大小输掉的奖金 > 10000**（`peak('poker','lost', bonus)`，
@@ -228,15 +230,15 @@ game.js
   - 赢上瘾了：任一游戏累计胜利 ≥ 800 次（`bestWinsOfAny`，走 `totalWins`，含历史推算）
   - 闯关英豪：任一闯关游戏关卡 ≥ 500 关（`bestClearedOfAny`，同样走 LEGACY）
   - 成就达人：`unlockedCount() >= achvMasterNeed()` = **可达成总成就数的 60%**（`ACHV_MASTER_RATIO = 0.6`，
-    **不含隐藏成就自己**，否则会自指）。当前可达成 **114 条**（25 张卡 109 条 + 每日 5 条；指标行 19 行不计）→ 阈值 **69**，加成就后自动上浮。
+    **不含隐藏成就自己**，否则会自指）。当前可达成 **114 条**（25 张卡 109 条 + 每日 5 条；指标行不计）→ 阈值 **69**，加成就后自动上浮。
   - 这些数据不进「成就总数 / 已入门」总览（那三个 chip 只统计 25 张游戏卡）。
   - **`contentHeight()` 必须把隐藏卡也算进去**（`+ cardHeight(hiddenCard()) + CARD_GAP`），
     否则滑到底时最后一张卡会被 ✕ / 底部标签压住；末尾的 84px 留白同时清开 ✕ 与提示行。
 - **成就条数 2~8 条**：机制复杂的（关卡 + 连胜 + 分数）给 3~4 条，纯刷分的给 2 条就够，不必凑满；
-  目前 **128 行 / 可解锁 109 条**（连连看 / 消除大师 / 炼金术 / 赌神 / 单人麻将 7 行最多，扑克 / 传奇 / 1A2B / 滑行 / 麻将英雄 / 雀圣 4~5 行），
+  目前 **127 行 / 可解锁 109 条**（组牌闯关 7 行最多；连连看 / 消除大师 / 赌神 / 单人麻将 7 行，扑克 / 传奇 / 1A2B / 滑行 / 雀圣 4~5 行），
   卡片高度按行数自动长（冒烟上限 8 行，`rows*22 + 16 + 6`）。
 - **「完成第 N 关」一律走 `bestClearedOf(id)`**（= 各模式 `legacyCleared` 取最大，自动满足「任意模式达成即可」）：
-  排序 / 滑行 / 麻将英雄 / 雀圣 / 扑克炼金术各 3 条（**第 10 关 / 第 50 关 / 第 100 关**，10 关那条排在 50 前面）；
+  排序 / 滑行 / 雀圣 / 组牌闯关各 3 条（**第 10 关 / 第 50 关 / 第 100 关**，10 关那条排在 50 前面）；
   滑行 `CAP_LEVEL = 15` 之后盘面封顶、只继续收限时（120s 保底）；雀圣 `MAX_LEVEL = 20` 之后配置固定；
   所以 50 / 100 关是「能刷到」而不是「越来越难」，写文案时别暗示难度递增。
 - **实时解锁提示**：`core/achv.js` 的 `setUnlockHook(fn)` + 一份 `knownUnlocks` 基线。
@@ -273,7 +275,7 @@ game.js
   - 对局：`App.openGame()` → `achv.trackPlay(id)`
   - 胜利：`achv.win(id, { level, mode, perfect, fast })`（全部可选）—— 21 个有胜场的游戏都接了：
     click / guess / ttt / puzzle / g2048 / match / link / detective / hunter / crush / sudoku /
-    master / sort / slide / alchemy / mahjong / quesheng / mirror / point24 / solo / gambler
+    master / sort / slide / combo / quesheng / mirror / point24 / solo / gambler
     - `level`：本局关卡（1 基）→ 记 `bestLevel` + `modes[id][mode].max / .first`
     - `mode`：模式号 / 难度号 → `modes[id][mode].wins` 分开统计
     - `perfect`：完美操作（见下）
@@ -298,9 +300,9 @@ game.js
   而不是 `x/target`（「累计胜利次数」「达成 2048 x 次」这类）。普通成就才用 target 进度。
 - **指标行**：`A(name, en, fn, { stat: true, unit: 'achvLv' })` —— 只显示「数值 + 单位」，**没有进度条**、
   不算成就解锁（`ratio` 恒为 0，`target` 恒为 1）。适合「最高资产 / 最大单次得分 / 最长连胜」这类
-  有数值但没目标的口径；一个游戏可以全是指标行（麻将英雄）。
+  有数值但没目标的口径；一个游戏可以全是指标行。
   任意峰值用 `peak(id, field, value)` / `peakOf`，任意计数用 `bump(id, field)` / `countOf`。
-- **9 个游戏的口径（2026-11 定稿）**：
+- **各游戏成就口径（节选）**：
   - 关灯：**累计 100 胜 / 累计 500 胜** / 所有难度通关 n/8 / 完美操作胜利（计数）。
     （2026-11 起，「累计胜利次数」这种只显示次数的计数行**在全部 25 款里都删掉了**，统一改成
     100 / 500 胜两档：关灯 / 侦探 / 猎手 / 连连看 / 消消乐 / 消除大师 / 滑行 / 对对碰 / 排序 ——
@@ -335,14 +337,12 @@ game.js
     `peak('poker','payout'|'gstreak')` 在结算 / 每次猜大小处更新；
     `bump('poker','four'|'flush')` 在 **`resolveHand()` 评牌时**（猜大小之前）按牌型 +1 ——
     之后猜大小输了也算达成，别等 `settle()`；`resolveHand(silent=true)`（恢复存档）不重复记。
-  - 麻将英雄：最高关卡 / 无尽模式最高分 / 最大单次得分（3 条**指标行**，没有进度型成就）。
-    `peak('mahjong','gained')` 每次消除记最大单次得分。
   - 单人麻将：最长连胜（指标行）+ 5 次摸牌内获胜（计数）+ **达成 10 连胜 / 达成 30 连胜**
     + 累计 100 胜 / 累计 500 胜 / 累计对局 1000 局（共 7 行）。连胜取
     `max(__solo__best_streak, peakOf('solo','streak'))`，老存档也认。
     **这款没有关卡概念**（存档只有 `__solo__state|streak|best_streak`），
     所以没有「最高关卡」——「累计对局」用 `playsOf('solo')`。
-  - 扑克炼金术：两种模式首胜 n/2 + 普通 / 炸金花各自最高关卡（2 条指标行）+ 完成第 10 / 50 / 100 关（共 6 行）。**「最大单次得分」两条已删**（2026-11 玩家要求），场景里 `peak('alchemy', 'gain1|gain2')` 仍在记，只是不再展示。
+  - 逻辑拼图：最高关卡（指标行）+ 完成第 10 / 50 / 88 关（共 4 行；88 是最后一关，best 存「已通关 + 1」）。
   - 雀圣：两种模式首胜 n/2 + 滑底（mode 1）/ 步进（mode 2）最高关卡。
   - 麻将传奇：最高得分（指标行）+ 1000 / 5000 / 10000 分达成次数 + 字牌消除次数。
     得分在 `gameOver()` 用 `reach('legend', score, […])` 上报。
@@ -376,23 +376,23 @@ game.js
 - **中英双语**：任务池每条都有 `cn` / `en`，取文案统一走 `daily.descOf(task)`（内部按 `i18n.lang` 选，
   ⚠️ 不是 `i18n.language`）；月历标题 `monthData().title` 也是 `Nov 2026` / `2026 年 11 月` 两套，
   星期行用 `dailyWeek`（`一二三四五六日` / `MTWTFSS`）。其余标签全走 `t('daily*')`。
-- **任务池 36 条**（2026-11 删掉「开一局新的 2048」「任意游戏开 5 局」「任意游戏完美赢一局」），覆盖 25 个游戏（`POOL`）。任务字段：`{ id, game, kind, need, field?, cn, en }`，
+- **任务池 38 条**（2026-11 删掉「开一局新的 2048」「任意游戏开 5 局」「任意游戏完美赢一局」），覆盖 25 个游戏（`POOL`）。任务字段：`{ id, game, kind, need, field?, cn, en }`，
   `game: '*'` 表示任意游戏；`kind` 有 `play / win / perfect / fast / level / reach / bump / peak`。
 - **「开一局」的口径 = 开始一局新游戏，不是进入场景**：`achv.beginRound(id)` → `daily.report(id, 'play')`。
   每个游戏都插在**最底层的开新局方法**里（`startLevel / startGame / newGame / initLevel / deal / startRound`，
   随「新游戏 / 重玩本关 / 下一关 / 切模式」一起走）；进场景时构造函数调同一个方法，所以「进游戏」天然算第 1 局。
   ⚠️ `trackPlay()`（`openGame` 里调）**只统计成就用的 `plays`，不再上报每日 `play`** ——
   以前挂在它上面，玩家在同一个游戏里连开 5 局永远只算 1 局。新增游戏记得在开新局入口补一行
-  `achv.beginRound('<id>')`（冒烟会扫 25 个场景源码检查）。
+  `achv.beginRound('<id>')`（冒烟会扫 25 个游戏源码检查）。
 - **「每赢一局」必须无条件上报**：`achv.win()` 只能受「这局真的赢了」约束，**不能**写在
   `if (this.level > this.best)` / 新纪录 / `if (!silent)` 这类「第一次」分支里 ——
   麻将英雄就踩过：胜利上报被包在 `level > best` 内，重复打已通关的关卡永远不计数，
   「赢一局麻将英雄」怎么打都完不成。
-- **任务池要能整体回归**：`daily.taskList()` 导出全部 36 条；冒烟会逐条把 `cur` 设成该任务、
+- **任务池要能整体回归**：`daily.taskList()` 导出全部 38 条；冒烟会逐条把 `cur` 设成该任务、
   用生产 API（`achv.win / peak / reach / beginRound`、`daily.markNewRun`）推进到完成，
   再静态对照「每条具名任务的场景里真的有对应上报调用」，并禁止 `achv.win` 出现在 best 判断附近。
   新增 / 改任务后必须让这三把尺子全绿。
-- **判定挂成就埋点**（不碰 25 个场景）：`core/achv.js` 在 `trackPlay / win / reach / peak / bump`
+- **判定挂成就埋点**（不碰 25 个游戏）：`core/achv.js` 在 `trackPlay / win / reach / peak / bump`
   里调 `daily.report(gameId, kind, payload)`；`level` 用 `payload.value` 比较，计数类每次 +1。
 - **完成反馈**：`daily.setOnComplete()` 由 `App` 注入 → `App.notifyDaily(task)`（提示条与成就解锁共用
   `App.pushToast` 队列，一次显示一条、3.2s 后换下一条）：
@@ -428,7 +428,7 @@ game.js
     新加这类任务时直接用 `markNewRun` / `beginRound` 即可。
   - 文案统一写成「开一局新的 X，达到 …」，别写「X：单局 50 分」这种含糊说法。
 - **太靠运气的任务不要**：已删掉「滑行：不用死局重排赢一局」「扑克：拿到四条」；
-  2026-11 又删了 3 条参与感弱 / 太泛的：「开一局新的 2048」「任意游戏开 5 局」「任意游戏完美赢一局」；池子 **36 条**。
+  2026-11 又删了 3 条参与感弱 / 太泛的：「开一局新的 2048」「任意游戏开 5 局」「任意游戏完美赢一局」；池子 **38 条**。
 - **面板背景要不透明**：先 `fillStyle = T.bg` 铺满整屏，再叠一层淡暖色渐变；
   只画渐变不铺底的话，首页蜂窝会透上来，文字看不清（踩过）。
 - **能提前判定的就在场景里直接上报**：2048（合并出新高牌）、贪吃蛇（吃一口）、下坠（消一排）
@@ -582,7 +582,101 @@ game.js
 - 冒烟断言：消除大师 1/10/20/50 关 `traySize === 7`、Lv10 组数 ≥14 / 层数 ≥4、帮助不再写 6/5 格；
   连连看冰封对判无解（去掉冰封后同对可消）、3 连击有冻结 + 提示 + 特殊对、冻结期间时间不走；
   滑行 Lv1/Lv15/Lv30 限时 81/141/120、5 连击返时 1.2、时钟一对 +3（`elapsed` 25.8）；
-  以及成就总行数 128 / 可解锁 109 / 可达成 114 / 阈值 69 与 AGENTS 文案一致。
+  以及成就总行数 127 / 可解锁 109 / 可达成 114 / 阈值 69 与 AGENTS 文案一致。
+
+## 组牌闯关（`combo/`，2026-11 合并）
+
+- **由来**：麻将英雄的无尽模式移除，只保留闯关；它与扑克炼金术的普通 / 炸金花两个模式合并成
+  「组牌闯关」，3 个模式在同一个游戏里，通过静音旁的圆形模式按钮循环切换。规则、存档、内部实现都不变。
+- **目录**：`combo/scene.js` 只是外壳，真正玩法仍在 `alchemy/scene.js`（模式 1/2）与
+  `mahjong/scene.js`（只剩闯关）。两者都支持 `new Scene(app, { gameId, mode, achvMode })`：
+  - `gameId = 'combo'`：成就 / 每日上报都写到 combo（`achv.win(this.gameId, { mode: achvMode })`）；
+  - `mode`：炼金术固定模式（1 普通 / 2 炸金花），**不写** `__poker_alchemy__mode`；
+  - `achvMode`：combo 的模式号 1/2/3（麻将闯关 = 3），用于三模式首胜 / 三模式最高关。
+- **外壳职责**：建内嵌场景、把标题换成 `combo.gameTitle`；内嵌场景的 `drawHelp` 置空、帮助由 App 用
+  `combo.helpMsg` 统一画；`startConfetti` 转成外层全屏烟花；代理 `helpOpen / confirming / phase /
+  result / score / level / boardW / cw / homeRect / helpFab` 等 App 与分享会用到的字段；
+  `update / render / onTouch* / onHide / onShow / onTheme / onResize` 全部转发。
+- **顶部三块三模式共用同一套坐标**：`scoreY = top + headerH + 12`、`scoreH = 72`、
+  `optY = scoreY + scoreH + 16`、`optH = 72`、`boardY = optY + optH + 16`（新游戏卡到棋盘固定 16px）。
+  炼金术原来 `scoreH = 64`、没有 `optY/optH`（用 rowY 居中），并入后必须改成这套共享值，
+  否则切模式时分数卡 / 新游戏卡会跳；冒烟会跨模式比较 `scoreY/scoreH/optY/optH/cw/boardY-optBottom`。
+- **两种扑克模式的盘面牌缩小 10%**：炼金术 `POKER_CARD_SCALE = 0.9`（导出为 `AlchemyScene.POKER_CARD_SCALE`），
+  `cellW = floor(max(20, min(byW, byH, cap) * scale))`。只调 `cap` 不够 —— 小屏上先被宽度 / 高度卡住，
+  必须乘缩放系数；改完确认 `boardY + boardH + 20 <= helpFab.y`（320×568 最容易压 FAB）。
+  最小格是 **20**（原先 28 在 320×568 的 4×4 会压到提示行 / FAB，实测 boardBottom 480 > fabY 474）。
+  新游戏按钮两种模式统一 `min(112, max(96, 文字宽))`、右半区居中。
+- **模式切换是圆形 FAB**（和猎手在 3 种牌面间切换完全一致）：在静音左边那颗圆钮
+  （`fabKit.slotLeft(helpRect, mute ? 2 : 1)`），图标随模式变 —— 模式 1 `alchemy` / 2 `mode-poker` /
+  3 `mode-mahjong`，点一下循环 `0→1→2→0`；**不要做成三格胶囊 / 分段控件**。
+  内嵌场景自己的 `mode` FAB 按钮被过滤掉，外层在同一位置重画（同尺寸盖住原图标）。
+- **存档**：`__combo__mode` 记当前模式；旧 key 全部保留 —— 炼金术 `__poker_alchemy__*`、
+  麻将 `__mahjong_hero__best_1/level/state`。成就 LEGACY 里 `combo` 的 3 个槽位分别映射到
+  旧炼金术 1/2 与旧麻将闯关，老玩家的关卡 / 胜场不会清零。
+- **成就**：`SPEC.combo` 7 行（三模式首胜 + 普通炼金 / 炸金花 / 麻将闯关最高关卡 + 第 10/50/100 关），
+  可解锁 4 行。总行数变为 **127**、可解锁 **109**、可达成 **114**（109 + 每日 5）、成就达人阈值 **69**。
+- **每日挑战**：`combo_win1` / `combo_win3`，由内嵌场景用 `this.gameId` 上报。
+- **首页**：25 个游戏。`DEFAULT_ORDER` 里原来的 `''` 空位已由「逻辑拼图」占用，小组件标题 `home.comboTitle`，图标复用炼金术图标（`kind: 'combo'` → `glyphs.combo = 'alchemy'`）。
+- **另**：旧的 `alchemy` / `mahjong` 不再进首页 / 成就页 / 场景注册表；分享老链接 `alchemy|mahjong`
+  会在 `normalizeGameId` 里映射到 `combo`。
+- **注册表有两处**：`game.js` 末尾手工传给 `new App(...)` 的对象（**真正启动用**）和
+  `js/games/index.js`（成就 / 分享）。加游戏两处都要加，漏了 game.js 的现象是「首页点了没反应」。
+- **首页图标按 kind 查表**：`names.combo` 的 kind 必须是 `combo`，再由 `glyphs.combo = 'alchemy'`、
+  `fallbacks.combo = '⚗'` 复用炼金术图标；kind 写成 `alchemy` 会得到 undefined（表里只有 combo）。
+
+## 逻辑拼图（`logicpuzzle/`，2026-11 新增）
+
+- **玩法**：8×8 棋盘，固定块（1/2/3 各一块，共 6 格）不能动；玩家有 8 个矩形拼块
+  `a 3×4 / b 2×5 / c 2×2 / d 1×5 / e 2×3 / f 1×4 / g 3×3 / h 2×4`，可旋转 90°，要铺满 64 格。
+  共 **88 关**，关卡答案来自用户提供的 `mp-game/question.js`（`levels.js` 只是 require 它）。
+- **两种模式**（静音左边的圆形模式 FAB 切换，图标：闯关 `list-numbered` / 随机 `dice-5`；
+  **切换时不要在游戏区下方弹「闯关模式 / 随机一局」文案**）：
+  - **闯关模式**（默认）：按 `seqLevel` 顺序推进，胜利后「下一关」；
+  - **随机模式**：从 88 关里随机抽一局，不改变闯关进度；胜利后提示「再来一局」，
+    再来一局继续当前连胜；选项里的「新游戏」仍要二次确认，确认后随机新开一局。
+  - **两种模式各有独立局面存档**：切换模式时先把当前局面存回当前模式，再恢复另一模式的局面；
+    有记录就绝不新开一局（包括已胜利 / 查看答案后的结算态），只有该模式从未玩过才新开。
+    模式存 `__logic_puzzle__mode`；切换模式不重置最长 / 当前连胜。
+- **操作（玩家定稿）**：8 个拼块**全部平铺在棋盘下方的托盘里**，每个拼块是一个整体圆角块 + 一个居中字母。
+  - **按住拼块拖到棋盘**：拖动时画半透明整块 + 目标绿框，松手吸附（距离 > 3 格不吸附）；
+  - **单击托盘拼块**：旋转 90°；
+  - **单击棋盘上已放的拼块**：收回托盘；
+  - 托盘 / 棋盘都用原始触摸，不要注册逐格按钮。
+- **分数区按模式切换**（都不画进度条）：闯关模式显示 **最高关卡 / 当前关卡**
+  （最高 = `best - 1`，没通关显示 `—`）；随机模式显示 **最长连胜 / 当前连胜**。
+  **不再显示计时器**；选项卡只有「新游戏 / 查看答案」两枚，样式和 24 点一致：
+  实心圆角 8px、高 32、宽度 `min(132, 文案宽 + 40)`，新游戏主色、查看答案橙色（禁用灰）。连胜规则：
+  - 正常胜利 `streak += 1`，`bestStreak = max(bestStreak, streak)`；
+  - **查看答案**完成演示后 `streak = 0`，不计入成就胜场；
+  - **新游戏（二次确认后）** 清空当前连胜；「下一关 / 再来一局 / 重玩本关」保留当前连胜；
+  - 存档：`__logic_puzzle__streak` / `__logic_puzzle__best_streak`。
+- **查看答案动画**（`startReveal / updateReveal / finishReveal`）：
+  - 点击后先 `createLevel` 清空游戏区（只留固定块），清空拖拽状态；
+  - 按答案算出 8 块的目标 bbox、托盘起点、目标中心；每块间隔 `REVEAL_STEP_MS = 500`、
+    飞行 `REVEAL_MOVE_MS = 420`，从托盘缩放到棋盘大小；每块都从 `-90° / +90°` 转回 0（相邻反向，看起来更有节奏）；
+  - 动画用 `update(dt)` 的累计时间（不是 Date.now），帮助 / 二次确认打开时暂停；
+  - 最后一块落位后再等 `REVEAL_END_MS = 280`，设 `revealed = true`、`streak = 0`、
+    `phase = won`、落盘，弹标准胜利遮罩；**不调用 `achv.win`**，结算只有「重玩本关 + 新游戏 / 再来一局」，
+    没有「下一关」。
+- **布局**：正常屏 `scoreH = 64`、`optH = 56`、间距 10、`trayH = 60`；短屏（`H < 650`，如 320×568）
+  `56 / 48 / 8 / 52`。棋盘从选项卡下方开始（375 下 `boardY = 236`，320 下 216），
+  下方 `trayGap` 是托盘；棋盘格高度上限扣掉托盘 + FAB。
+- **绘制**：已放拼块按 `spanRect` 画一整块；固定块按同一数字 bbox 各画一整块；空格才画小圆角槽。
+- **存档**：`__logic_puzzle__level`（闯关进度 `seqLevel`）/ `__logic_puzzle__best` /
+  `__logic_puzzle__mode` / `__logic_puzzle__streak` / `__logic_puzzle__best_streak` /
+  `__logic_puzzle__state_level` + `__logic_puzzle__state_random`（v3，各存 level / revealed / phase / pieces）。
+  旧版单份 `__logic_puzzle__state` 启动时按里面的 mode 迁到对应槽位。
+  `best` 仍是「已通关 + 1」供成就 LEGACY 用；随机模式的当前关卡不写进 `LEVEL_KEY`。
+  重进已通关 state 直接展示胜利，但不重复上报成就；`startNewGame` 只清当前模式的存档。
+- **成就 / 每日**：`SPEC.logicpuzzle` 4 行（最高关卡 + 第 10/50/88 关）；每日 `logicpuzzle_win1/win3`；
+  `HIDDEN_GAMES` 已包含。查看答案不计胜场 / 成就。
+- **注册**：`game.js` + `js/games/index.js` + 首页 `DEFAULT_ORDER`；首页 / 成就图标 `mdi:tangram`。
+- **帮助 / 二次确认**都要留空 `drawHelp()` / `drawConfirm()` 给 App 接管。
+- **胜利遮罩**：只 `share.resultPanel` 盖棋盘、文案居中、按钮 `core/result-button`；
+  帮助 / 静音 / 模式 FAB 在胜利态继续画；320 按钮放不下时竖排；第 88 关要能「新游戏」。
+- 冒烟：88 关数据、按答案铺满、拖动 / 旋转 / 收回、连胜、随机模式 + 再来一局、查看答案逐块动画 /
+  不计连胜 / 无下一关、**两种模式各自恢复局面（含胜利态）且不重开**、确认面板、
+  遮罩只盖棋盘 / 居中 / 按钮在棋盘内、注册表。
 
 ## 生命（爱心）
 
@@ -662,7 +756,7 @@ game.js
 - **语义点跟音效对齐**（因为音效调用本身就是「语义点」，见上面的音效接入点）：
   `core/audio.js` 里 `playSuccess` → `haptics.success()`（medium）、`playFail` → `fail()`（medium, 90ms 窗口）、
   `playLose` → `fail()`、`playFirework` → `heavy()`、`playElimination` → `tap()`（light）。
-  **不要**在 25 个场景里各写一遍震动；也别把震动塞进 `play()`，因为 `play()` 会被静音拦掉。
+  **不要**在 25 个游戏里各写一遍震动；也别把震动塞进 `play()`，因为 `play()` 会被静音拦掉。
 - **节流 45ms**：连击 / 连消时不会一直震（`ELIM_REPLACE_MS` 的烟花替换规则也一并继承）。
 - `wx.vibrateShort({ type })` 在部分基础库不支持 `type`，包在 try/catch 里、返回 Promise 也 `catch` 掉；
   震动失败绝不影响游戏。冒烟断言：三个语义点各震一次、音效关掉仍震、关开关后完全不震、连续两次只震一次、
@@ -694,7 +788,7 @@ game.js
     **不是**照着 `opts.w` 自我一致）；② 所有 `result-*` 按钮必须整个落在面板内。
   **兜底**（万一某个场景没注册自己的入口）：`App` 画在右上角 `SAFE_TOP + 44`（96×26）——
   注意**不能**放 `SAFE_TOP + 6`，那里被微信胶囊（关闭 / 更多）压住（踩过）。
-  冒烟断言：兜底矩形与 25 个场景的按钮**零重叠**（375/667、320/568、390/844 都验过）。
+  冒烟断言：兜底矩形与 25 个游戏的按钮**零重叠**（375/667、320/568、390/844 都验过）。
   - **按钮图标**：`share.drawShareIcon()` 优先用图标字体里的 `share`（**mdi:share-variant-outline**），
     字体没加载出来时才退回手绘「盒子 + 向上的箭头」；左下角分享 FAB 和结算遮罩的「炫耀一下」共用它。
     `drawResultChip()` 返回 `{ icon, label, rect }`，冒烟据此断言画了图标。
@@ -1188,7 +1282,7 @@ game.js
 
 - 构建：`python3 mp-game/scripts/build-icons.py`；数据来自 `@iconify-json/{carbon,mdi,dinkie-icons}`，与 web UnoCSS 同源。
 - 输出 `fonts/games-hub-icons.ttf` + `js/core/icon-glyphs.js`；`game.js` 中 `icons.init()` 调 `wx.loadFont('fonts/games-hub-icons.ttf')`。
-- 单色 UI 图标走 `icons.draw`；首页 25 个游戏图标全部来自 icon font（idea / bulb / calculator / counter / incognito / target / layers / calculator / numeric-3 / snake / link / puzzle / mirror / down / crush / sudoku / sort / slide / mode-poker / mode-mahjong / alchemy / quesheng / legend / gambler），不要再手绘首页图标。彩色牌面仍用 `images/mahjong-tiles.png`，icon font 不能保留多色。
+- 单色 UI 图标走 `icons.draw`；首页 25 个游戏图标全部来自 icon font（idea / bulb / calculator / counter / incognito / target / layers / calculator / numeric-3 / snake / link / sort-numeric-ascending-variant / tangram / mirror / down / crush / sudoku / sort / slide / mode-poker / mode-mahjong / alchemy / quesheng / legend / gambler），不要再手绘首页图标。彩色牌面仍用 `images/mahjong-tiles.png`，icon font 不能保留多色。
 - `wx.loadFont` 失败必须回退：场景里的 home/help/backspace 都保留了文字/矢量兜底。
 
 ## 对对碰（`js/games/match/`）

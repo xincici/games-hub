@@ -22,7 +22,7 @@
 
 | 游戏 | 状态 | 路由 / 场景 |
 | --- | --- | --- |
-| 首页 | ✅ 已搭好（25 个游戏，4+3+4+3+4+3+4 蜂窝） | `HomeScene` |
+| 首页 | ✅ 已搭好（25 个游戏，蜂窝网格） | `HomeScene` |
 | 关灯游戏（Lights Out） | ✅ 已移植 | `ClickScene` |
 | 对对碰（Match） | ✅ 已移植（emoji / 扑克 / 麻将） | `MatchScene` |
 | 24 点（24 Game） | ✅ 已移植 | `Point24Scene` |
@@ -42,9 +42,10 @@
 | Emoji 排序 | ✅ 已移植 | `SortScene` |
 | Emoji 滑行 | ✅ 已移植 | `SlideScene` |
 | 井字棋 | ✅ 新入口（扑克英雄入口已隐藏） | `TttScene` |
-| 麻将英雄 | ✅ 已移植 | `MahjongScene` |
+| 组牌闯关 | ✅ 合并（普通炼金 / 炸金花 / 麻将闯关） | `ComboScene` |
+| 逻辑拼图 | ✅ 新增（88 关） | `LogicPuzzleScene` |
 | 单人麻将 | ✅ 已移植 | `SoloScene` |
-| 扑克炼金术 | ✅ 已移植 | `AlchemyScene` |
+| 雀圣 | ✅ 已移植 | `QueshengScene` |
 | 雀圣 | ✅ 已移植 | `QueshengScene` |
 | 麻将传奇 | ✅ 已移植 | `LegendScene` |
 | 赌神 | ✅ 已移植 | `GamblerScene` |
@@ -84,9 +85,11 @@ mp-game/
         ├── sort/           Emoji 排序（board + scene + i18n）
         ├── slide/          Emoji 滑行（board + scene + i18n）
         ├── ttt/            井字棋（board + scene + i18n；扑克入口已隐藏）
-        ├── mahjong/        麻将英雄（board + scene + i18n）
+        ├── mahjong/        麻将英雄闯关（「组牌闯关」模式 3 的内嵌实现）
         ├── solo/           单人麻将（board + scene + i18n）
-        ├── alchemy/        扑克炼金术（board + scene + i18n）
+        ├── alchemy/        扑克炼金术（「组牌闯关」模式 1/2 的内嵌实现）
+        ├── combo/          组牌闯关（3 模式外壳 + 圆形模式按钮）
+        ├── logicpuzzle/    逻辑拼图（8×8 拼块 + 托盘拖动 + 随机/闯关 + question.js 88 关数据）
         ├── quesheng/       雀圣（board + scene + i18n）
         ├── legend/         麻将传奇（board + scene + i18n）
         └── gambler/        赌神（board + scene + i18n）
@@ -157,15 +160,16 @@ mp-game/
 - **Emoji 排序**：水排序，经典/紧凑两种模式；抬起整摞同种水果、自动搬运、暗牌翻面、死局判定；存档按模式独立 `__emoji_sort__*`。
 - **Emoji 滑行**：成对消除；连击加分并小幅返还时间（0.3~1.2s），一次滑动可触发多对；时钟（每次消除 +3s）/ 炸弹 / 万能三种特殊牌；每对时间 4.5→3.2s、死局重排 +2s；过关按时间与连击评星，并三选一升级带入后续关卡；自动重排、胜利礼炮；存档 `__emoji_slide__state`。
 
-## 已实现：井字棋 / 麻将英雄 / 单人麻将
+## 已实现：井字棋 / 组牌闯关 / 单人麻将
 
 - **井字棋**：3×3 连三获胜；每方最多 3 子，第 4 子挤掉己方最旧子；棋子按落子顺序渐暗；支持人机（自动续局、连胜记录）和双人模式；存档 `__ttt__*`。
-- **麻将英雄**：3×3 麻将落子，一行/列/对角线凑顺子或刻子消除，支持闯关/无尽、连击与关卡曲线；存档 `__mahjong__*`。
+- **逻辑拼图**：8×8 棋盘，6 个固定块 + 8 个可旋转拼块（3×4 / 2×5 / 2×2 / 1×5 / 2×3 / 1×4 / 3×3 / 2×4），拼块平铺在棋盘下方，拖到棋盘放置、单击旋转，铺满 64 格过关；共 88 关，关卡数据来自 `mp-game/question.js`。静音左边圆钮可切「闯关 / 随机一局」：两个模式各自保存当前局面，切换时恢复原局、不会重开；闯关分数区记最高 / 当前关卡，随机模式记最长 / 当前连胜；「查看答案」会逐块演示答案（不计连胜）。
+- **组牌闯关**：普通炼金 / 炸金花 / 麻将闯关三种玩法合成一个游戏，底部标签切换；炼金 4×4 凑四张牌型、炸金花与麻将闯关在 3×3 上凑三张成组；各模式独立关卡与存档（旧 `__poker_alchemy__*` / `__mahjong__*` 继续沿用）；两种扑克模式的盘面牌比原来小 10%，顶部分数区 / 新游戏区在切模式时保持同一尺寸与间距。
 - **单人麻将**：14 张手牌摸打，四组+将或七对子胡牌；有限牌墙、缺一门、连胜难度与最佳连胜；存档 `__solo__*`。
 
-## 已实现：扑克炼金术 / 雀圣 / 麻将传奇 / 赌神
+## 已实现：雀圣 / 麻将传奇 / 赌神
 
-- **扑克炼金术**：4×4 扑克炼金 / 3×3 炸金花，两种模式独立关卡与存档，凑牌型消线得分。
+
 - **雀圣**：5×5 麻将滑牌，滑动不合并，点齐顺子/刻子/将消除，清完整副牌过关。
 - **麻将传奇**：8×7 条牌 + 字牌 + 花牌，升行顶出即结束，刻子/杠消除。
 - **赌神**：13 张听牌手牌，从全牌面中找出所有能胡的牌，全对才过关。
@@ -226,7 +230,7 @@ python3 mp-game/scripts/build-icons.py
 - `fonts/games-hub-icons.ttf`
 - `js/core/icon-glyphs.js`
 
-`game.js` 启动时 `icons.init()` 调 `wx.loadFont()`；场景用 `icons.draw(ctx, name, x, y, size, color)` 绘制。首页 25 个游戏图标也全部来自这套 Iconify 字体：关灯 `idea`、对对碰 `bulb`、24 点 `calculator`、1A2B `counter`、侦探 `incognito`、猎手 `target`、消除大师 `layers`、2048 `numeric`、Threes `numeric-3`、贪吃蛇 `snake`、连连看 `link`、数字迷宫 `puzzle`、镜像 `mirror`、下坠 `down`、消消乐 `crush`、数独 `sudoku`、排序 `sort`、滑行 `slide`、井字棋 `ttt`、麻将英雄/单人麻将 `mode-mahjong`、炼金 `alchemy`、雀圣 `quesheng`、传奇 `legend`、赌神 `gambler`。没加载成功时保留文字 / emoji 兜底。彩色牌面（麻将）仍走图片雪碧图，因为 icon font 只能单色。
+`game.js` 启动时 `icons.init()` 调 `wx.loadFont()`；场景用 `icons.draw(ctx, name, x, y, size, color)` 绘制。首页 25 个游戏图标也全部来自这套 Iconify 字体：关灯 `idea`、对对碰 `bulb`、24 点 `calculator`、1A2B `counter`、侦探 `incognito`、猎手 `target`、消除大师 `layers`、2048 `numeric`、Threes `numeric-3`、贪吃蛇 `snake`、连连看 `link`、数字迷宫 `sort-numeric-ascending-variant`、逻辑拼图 `tangram`、镜像 `mirror`、下坠 `down`、消消乐 `crush`、数独 `sudoku`、排序 `sort`、滑行 `slide`、井字棋 `ttt`、单人麻将 `mode-mahjong`、组牌闯关 `alchemy`、雀圣 `quesheng`、传奇 `legend`、赌神 `gambler`。没加载成功时保留文字 / emoji 兜底。彩色牌面（麻将）仍走图片雪碧图，因为 icon font 只能单色。
 
 ## 后续移植约定
 
@@ -238,7 +242,7 @@ python3 mp-game/scripts/build-icons.py
 
 ## 当前未做
 
-- 首页目前是 25 个入口，按 4+3+4+3+4+3+4 蜂窝排列；每个游戏使用自己的 accent 强调色（logic / number / memory / action / card），六边形边框和图标不同色。
+- 首页目前是 25 个入口；每个游戏使用自己的 accent 强调色（logic / number / memory / action / card），六边形边框和图标不同色。
 - 首页右下角设置（参考小程序）：主题（跟随系统 / 浅色 / 深色）、语言（跟随系统 / 中文 / English）、默认牌面、音效；底部抽屉动画，选项按钮组靠右。
 - 背景音乐（暂未接入；主题 / 语言 / 音效 / 默认牌面已有设置面板）；
 - 横屏适配（首版锁竖屏）；

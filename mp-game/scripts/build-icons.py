@@ -50,7 +50,7 @@ ICONS = {
     'snake': ('mdi', 'snake'),
     'link': ('mdi', 'link'),
     'wall': ('mdi', 'wall'),
-    'puzzle': ('mdi', 'puzzle'),
+    'puzzle': ('mdi', 'sort-numeric-ascending-variant'),
     'mirror': ('mdi', 'mirror-variant'),
     'down': ('mdi', 'format-vertical-align-bottom'),
     'stopwatch': ('mdi', 'timer'),
@@ -90,6 +90,7 @@ ICONS = {
     'monitor': ('mdi', 'monitor'),
     'sun': ('mdi', 'white-balance-sunny'),
     'moon': ('mdi', 'moon-waning-crescent'),
+    'tangram': ('mdi', 'tangram'),
 }
 
 FAMILY = 'Games Hub Icons'

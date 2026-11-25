@@ -36,8 +36,8 @@ const DEFAULT_ORDER = [
   'g2048', 'three', 'snake', 'link',
   'puzzle', 'mirror', 'down',
   'crush', 'sudoku', 'sort', 'slide',
-  'ttt', 'mahjong', 'solo',
-  'alchemy', 'quesheng', 'legend', 'gambler',
+  'ttt', 'combo', 'solo',
+  'logicpuzzle', 'quesheng', 'legend', 'gambler',
 ];
 
 const coreI18n = require('../../core/i18n');
@@ -140,9 +140,10 @@ class HomeScene extends Scene {
       puzzle: ['home.puzzleTitle', 'puzzle'], mirror: ['home.mirrorTitle', 'mirror'], down: ['home.downTitle', 'down'],
       crush: ['home.crushTitle', 'crush'], sudoku: ['home.sudokuTitle', 'sudoku'],
       sort: ['home.sortTitle', 'sort'], slide: ['home.slideTitle', 'slide'],
-      ttt: ['home.tttTitle', 'ttt'], mahjong: ['home.mahjongTitle', 'mahjong'],
+      ttt: ['home.tttTitle', 'ttt'], combo: ['home.comboTitle', 'combo'],
       solo: ['home.soloTitle', 'solo'],
-      alchemy: ['home.alchemyTitle', 'alchemy'], quesheng: ['home.queshengTitle', 'quesheng'],
+      logicpuzzle: ['home.logicpuzzleTitle', 'tangram'],
+      quesheng: ['home.queshengTitle', 'quesheng'],
       legend: ['home.legendTitle', 'legend'], gambler: ['home.gamblerTitle', 'gambler'],
     };
     const accents = {
@@ -151,8 +152,8 @@ class HomeScene extends Scene {
       g2048: 'number', three: 'number', snake: 'action', link: 'logic',
       puzzle: 'logic', mirror: 'memory', down: 'action',
       crush: 'memory', sudoku: 'number', sort: 'logic', slide: 'action',
-      ttt: 'logic', mahjong: 'card', solo: 'card',
-      alchemy: 'card', quesheng: 'card', legend: 'card', gambler: 'card',
+      ttt: 'logic', combo: 'card', solo: 'card', logicpuzzle: 'logic',
+      quesheng: 'card', legend: 'card', gambler: 'card',
     };
     this.hexes = [];
     this.order.forEach((id, i) => {
@@ -590,8 +591,8 @@ class HomeScene extends Scene {
       g2048: 'numeric', three: 'numeric-3', snake: 'snake', link: 'link',
       puzzle: 'puzzle', mirror: 'mirror', down: 'down',
       crush: 'crush', sudoku: 'sudoku', sort: 'sort', slide: 'slide',
-      ttt: 'ttt', poker: 'mode-poker', mahjong: 'mode-mahjong', solo: 'mode-mahjong',
-      alchemy: 'alchemy', quesheng: 'quesheng', legend: 'legend', gambler: 'gambler',
+      ttt: 'ttt', poker: 'mode-poker', solo: 'mode-mahjong',
+      combo: 'alchemy', tangram: 'tangram', quesheng: 'quesheng', legend: 'legend', gambler: 'gambler',
     };
     const fallbacks = {
       click: '💡', match: '💡', point24: '🧮', guess: '1A2B',
@@ -599,8 +600,8 @@ class HomeScene extends Scene {
       g2048: '2048', three: '3', snake: '🐍', link: '🔗',
       puzzle: '🧩', mirror: '🪞', down: '⬇️',
       crush: '😄', sudoku: '数', sort: '🧃', slide: '↔',
-      ttt: '#', poker: '🃏', mahjong: '🀄', solo: '🀄',
-      alchemy: '⚗', quesheng: '🀄', legend: '🀄', gambler: '🀄',
+      ttt: '#', poker: '🃏', solo: '🀄',
+      combo: '⚗', tangram: '🧩', quesheng: '🀄', legend: '🀄', gambler: '🀄',
     };
     if (!icons.draw(c, glyphs[item.kind], cx, iy, iconSize, accent)) {
       D.text(c, fallbacks[item.kind], cx, iy, {
@@ -744,9 +745,9 @@ class HomeScene extends Scene {
       if (item.id === 'slide') item.title = t('home.slideTitle');
       if (item.id === 'ttt') item.title = t('home.tttTitle');
       if (item.id === 'poker') item.title = t('home.pokerTitle');
-      if (item.id === 'mahjong') item.title = t('home.mahjongTitle');
+      if (item.id === 'combo') item.title = t('home.comboTitle');
       if (item.id === 'solo') item.title = t('home.soloTitle');
-      if (item.id === 'alchemy') item.title = t('home.alchemyTitle');
+      if (item.id === 'logicpuzzle') item.title = t('home.logicpuzzleTitle');
       if (item.id === 'quesheng') item.title = t('home.queshengTitle');
       if (item.id === 'legend') item.title = t('home.legendTitle');
       if (item.id === 'gambler') item.title = t('home.gamblerTitle');

@@ -1781,6 +1781,88 @@
 - 线性公式用 `BOOST_DELAY_MS / BOOST_RAMP_MS / BOOST_MAX`，冒烟断言半程 ≈2、封顶 =3、步进变短、松开 =1、
   并对比同样 320ms 内按住/不按的实际 `tick` 次数。
 
+### 146. 组牌闯关：三模式合并 / 麻将无尽移除 / 首页空位
+
+- **外壳只做代理，不要复制玩法**：`combo/scene.js` 把 `update / render / onTouch* / onHide / onShow /
+  onTheme / onResize` 全部转给内嵌的 AlchemyScene / MahjongScene；App / 分享需要的字段
+  （`helpOpen / confirming / phase / result / score / level / boardW / cw / homeRect / helpFab`）用 getter 代理，
+  `phase / result / stage` 还要有 setter（冒烟会直接给场景赋结算态）。
+- **帮助必须走外层**：内嵌场景的 `drawHelp` 置空，外层 `combo.scene.js` 自己定义空的 `drawHelp()`
+  让 App 用 `core/help` + `combo.helpMsg` 画；否则打开帮助什么都不显示（内层被置空、外层又没接管）。
+- **合并游戏的内嵌场景各有 layout，切换会跳**：炼金术 `scoreH=64` 且新游戏区是 `rowY/rowH`（居中），
+  麻将 `scoreH=72` + `optY/optH=72`；不统一时切模式分数卡和新游戏卡的位置 / 高度都会变。
+  统一成 `scoreH=72 / optY=scoreY+88 / optH=72 / boardY=optBottom+16`，冒烟跨模式比较这些字段。
+- **只改 cap 缩不小牌**：棋盘宽或高先卡住时 `min(byW, byH, cap)` 根本到不了 cap；要乘
+  `POKER_CARD_SCALE`（炼金术 0.9）。缩完在最小屏确认棋盘 + 提示不压 FAB 行：
+  320×568 下 4×4 的最小格必须有 20（写成 28 时 boardBottom 480 > fabY 474，会压住帮助 / 静音）。
+- **模式切换用圆形 FAB，不是三格标签**：和猎手三牌面一致 —— 静音左边一格、图标随模式
+  （`alchemy` / `mode-poker` / `mode-mahjong`）、点击循环 0→1→2。内嵌场景自己的 `mode` FAB
+  按钮要过滤掉，并在同一位置重画同尺寸圆钮盖住它；不要改成分段控件（玩家明确要求）。
+- **内嵌场景上报要用 `this.gameId`**：炼金术 / 麻将都改成 `achv.beginRound(this.gameId)`、
+  `achv.win(this.gameId, { mode: this.achvMode })`、`achv.peak(this.gameId, …)`；构造参数
+  `{ gameId: 'combo', mode: 1|2, achvMode: 1|2|3 }`。`opts.mode` 只给炼金术用，不要写 `__poker_alchemy__mode`。
+- **老存档分流**：`LEGACY.combo` 的 3 个槽位在 `legacyCleared` 里分别转给旧 `alchemy`（1/2）与
+  `mahjong`（闯关）；旧的 alchemy / mahjong LEGACY 条目要保留（不再有成就卡），删了老玩家进度会归零。
+- **麻将无尽**：构造时 `this.mode = MODE_LEVEL`、删 `toggleMode` 与模式 FAB、删 `startEndless`；
+  旧 `__mahjong_hero__mode=2` 不再读取，`best_2` 也不再参与成就。
+- **首页空位**：`DEFAULT_ORDER` 用 `''` 占位，`layout` 遇到没有 `names` 的 id 直接跳过；`loadOrder`
+  要保留 `''`（它是合法 order 项）。hexes 是 24 个，order 仍是 25 项。
+- **场景注册有两处，必须都改**：`js/games/index.js` 只是给成就 / 分享用的注册表，真正启动用的是
+  **`game.js` 末尾手工传给 `new App(...)` 的对象**。只在 index 里加 combo、忘了 game.js，现象就是
+  首页点进去没有任何反应（`app.openGame` 找不到 `scenes.combo` 直接 return）。改完搜一遍
+  `MahjongScene` / `AlchemyScene` 是否还残留在 game.js。
+- **首页图标表按 `kind` 查，不按 id**：`names[id][1]` 是 kind，`glyphs[kind]` / `fallbacks[kind]` 必须有值。
+  这次把 kind 写成 `'alchemy'` 而表里只有 `combo: 'alchemy'`，首页就画出一个 undefined 图标；
+  正确写法是 kind = `'combo'`，再由 `glyphs.combo = 'alchemy'` 复用炼金术图标。
+- **成就 / 每日**：`SPEC.combo` 7 行（三模式首胜 + 三模式最高关 + 第 10/50/100 关），可解锁 4 行；
+  总数变为 123 / 106 / 111、阈值 67；每日池仍是 36 条，两条改成 `combo_win1` / `combo_win3`。
+  静态冒烟要允许 combo 从 alchemy/mahjong 源码里找 `this.gameId` 上报，不能只认字面量 `'combo'`。
+
+### 147. 逻辑拼图：88 关数据 / 托盘拖动 / 整块绘制
+
+- **关卡数据是用户给的 `mp-game/question.js`**（88 个 8×8 矩阵）：`levels.js` 只 require 它，
+  不要手改 / 压缩；每关必须恰好 8 个拼块（a~h 面积 12/10/4/5/6/4/9/8）+ 固定块 1/2/3 各一块，总共 64 格。
+  冒烟逐关校验这四件事，再按答案坐标铺满一次确认判胜。
+- **拼块可旋转**：基准尺寸 a 3×4 / b 2×5 / c 2×2 / d 1×5 / e 2×3 / f 1×4 / g 3×3 / h 2×4；
+  旋转只交换 w/h（c/g 旋转无变化），不要给非矩形形状。
+- **玩家定的操作**：8 个块直接平铺在棋盘下方托盘里（不是弹窗），**拖动到棋盘**放置，**单击旋转**；
+  单击棋盘上已放的块收回托盘。棋盘 / 托盘用原始 `onTouchStart/Move/End`，不要再注册逐格按钮或选块 FAB。
+  单击和拖动的区分阈值 8px；拖动源在 `moved` 之前必须继续画着，否则点一下会闪空。
+  松手吸附要限制距离（离影子 > 3 格就不吸附），否则点在满格上会被吸到棋盘另一侧。
+- **每个拼块是一个整体**：棋盘上的块按 `spanRect` 画一块跨格圆角矩形 + 居中字母，不要逐格画小方块；
+  托盘里的块也按槽位等比缩放整块画。固定块按同一数字 1/2/3 的 bbox 各画一整块。
+  - **顶部分数区按模式切换，都不画进度条**：闯关模式是最高 / 当前关卡（最高 = `best - 1`），
+    随机模式是最长 / 当前连胜；正常 `scoreH = 64`、`optH = 56`、间距 10；
+    短屏 `H < 650` 用 `56 / 48 / 8`，否则 320×568 只剩 15px 一格。不要恢复「已放 / 步数」。
+    选项卡只有 **新游戏 / 查看答案**（无计时器）；按钮和 24 点同款：实心圆角 8、高 32、
+    宽 `min(132, 文案宽 + 40)`，新游戏主色、查看答案橙色；切换模式时**不要在游戏区下方弹模式文案**。
+  - **两种模式 / 连胜**：静音左边圆形模式 FAB，闯关 `list-numbered` / 随机 `dice-5`；随机模式从 88 关抽，
+    不改进度；胜利后「再来一局」保留连胜，「新游戏」二次确认后清空连胜并随机新开；查看答案完成演示后
+    当前连胜清 0、最长连胜不变、**不调用 `achv.win`**。存 `__logic_puzzle__mode|streak|best_streak`。
+    - **切换模式必须恢复各自局面，不能重开**：`state_level` / `state_random` 各存一份；切换前先 save 当前，
+      再 restore 目标；有记录（包括 WON）直接恢复，只有目标从没玩过才 start；`startNewGame` 只清当前模式。
+  - **查看答案动画**：先 `createLevel` 清空棋盘，再按答案 bbox 每 500ms 一块、420ms 飞入（每块从 ±90° 转回 0）；
+    用 `update(dt)` 累计时间驱动，帮助 / 确认时暂停，最后一块 + 280ms 才结算；中场不落盘。
+  - **托盘必须在棋盘下方、且不压 FAB**：正常 `trayH = 60`、短屏 52；`trayY = boardY + boardH + trayGap`；
+    算棋盘格时高度上限先扣掉托盘：`maxBottom = helpFab.y - 10 - trayH - trayGap`，否则 320×568 会压 FAB。
+    - **存档**：`__logic_puzzle__level`（进度）/ `best` / `mode` / `streak` / `best_streak` /
+      `state_level` + `state_random`（v3，各存 level / revealed / phase / pieces）；旧单份 `state` 启动时迁移。
+      `best = 已通关 + 1`，成就 LEGACY 用 `best - 1` 换算。重进已铺满 → 直接展示胜利遮罩，但**不要重复 `achv.win`**。
+- **二次确认必须有 `drawConfirm` 空方法**：`App` 只在 `typeof scene.drawConfirm === 'function'` 时才用统一面板接管；
+  只写 `startNewGame/replayLevel`、不写 `drawConfirm` 的现象是「点新游戏 → `confirming` 变 true → 按钮全禁用，
+  面板不出现，界面卡死」。和 `drawHelp()` 一样留一个空方法即可，冒烟要检查 `confirm.canOverride(scene)` + `confirm.draw`。
+- **1 基关卡不能直接用 `share.resultLine`**：它默认 `level + 1` 输出「第 N 关」（为 0 基游戏写的）；
+  逻辑拼图 `level` 是 1 基，直接分享会把第 1 关显示成第 2 关。场景要自己给 `shareLine` getter。
+- **第 88 关结算要能重新开始**：只画「重玩本关」会让通关玩家永远卡在最后一关，必须再加「新游戏」。
+- **胜利遮罩只盖游戏区、文案居中，但帮助 / 静音 FAB 要继续画**：别用 `phase === PLAY` 把整个 `drawFabs` 跳过，
+  否则胜利后右下角两颗按钮直接消失（玩家会认为每个游戏都该常驻）。参考雀圣 / 赌神 —— `share.resultPanel(c, scene, boardY, boardH, { color: 0.94 不透明底 })`，
+  **不要**再 `fillRect(0,0,W,H)` 铺满全屏；标题 / 副标题 / 统计全部 `align:'center'`，按钮用 `core/result-button`。
+  320 下棋盘只有 ~185px，两枚按钮一行放不下时改竖排，且必须仍在棋盘矩形内（冒烟会查全屏 fill 和按钮越界）。
+- **结算面板必须用 `share.resultPanel`**：通用冒烟会按它画出的面板比宽度并找 `share-result` 按钮；
+  自己画一个固定面板会报「面板宽 ≠ 游戏区 / 没有炫耀按钮」。
+- **注册**：`game.js` + `js/games/index.js` + 首页 `DEFAULT_ORDER` 三处都要加（并占掉原来的空位）；
+  首页 / 成就图标用 `mdi:tangram`（`kind: 'tangram'` → `glyphs.tangram`）。成就 / 每日 / HIDDEN_GAMES 也各补一行。
+
 ## 迁移前检查清单
 
 - [ ] 新游戏是否注册到 `game.js` / `js/games/index.js` / 首页？

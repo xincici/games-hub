@@ -66,4 +66,5 @@ module.exports = {
   'monitor': 0xE03F,
   'sun': 0xE040,
   'moon': 0xE041,
+  'tangram': 0xE042,
 };

@@ -19,9 +19,9 @@ const SudokuScene = require('./sudoku/scene');
 const SortScene = require('./sort/scene');
 const SlideScene = require('./slide/scene');
 const PokerScene = require('./poker/scene');
-const MahjongScene = require('./mahjong/scene');
 const SoloScene = require('./solo/scene');
-const AlchemyScene = require('./alchemy/scene');
+const ComboScene = require('./combo/scene');
+const LogicPuzzleScene = require('./logicpuzzle/scene');
 const QueshengScene = require('./quesheng/scene');
 const LegendScene = require('./legend/scene');
 const GamblerScene = require('./gambler/scene');
@@ -47,9 +47,9 @@ const games = {
   sort: { title: 'sort.gameTitle', Scene: SortScene },
   slide: { title: 'slide.gameTitle', Scene: SlideScene },
   poker: { title: 'poker.gameTitle', Scene: PokerScene },
-  mahjong: { title: 'mahjong.gameTitle', Scene: MahjongScene },
   solo: { title: 'solo.gameTitle', Scene: SoloScene },
-  alchemy: { title: 'alchemy.gameTitle', Scene: AlchemyScene },
+  combo: { title: 'combo.gameTitle', Scene: ComboScene },
+  logicpuzzle: { title: 'logicpuzzle.gameTitle', Scene: LogicPuzzleScene },
   quesheng: { title: 'quesheng.gameTitle', Scene: QueshengScene },
   legend: { title: 'legend.gameTitle', Scene: LegendScene },
   gambler: { title: 'gambler.gameTitle', Scene: GamblerScene },

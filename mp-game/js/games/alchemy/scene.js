@@ -59,6 +59,8 @@ const BACK_FALLBACK = '⚗';
 const FX_MIN = 300;
 // 得分浮字先露一下脸，再铺结算层（web 共用 RESULT_DELAY_MS）。
 const RESULT_DELAY_MS = 500;
+// 两种扑克模式的盘面牌缩放（玩家反馈太大，缩 10%）
+const POKER_CARD_SCALE = 0.9;
 const FLIGHT_MS = 210;
 const LAND_MS = 220;
 const FLASH_MS = 450;
@@ -69,10 +71,14 @@ const SHAKE_MS = 340;
 const GLOW_MS = 900;
 
 class AlchemyScene extends Scene {
-  constructor(app) {
+  constructor(app, opts) {
     super(app);
+    const o = opts || {};
     this.bg = new ParticleField();
-    this.mode = this.loadMode();
+    this.gameId = o.gameId || 'alchemy';
+    // combo 会固定传入 mode，避免 / 覆盖独立游戏的 __poker_alchemy__mode
+    this.mode = o.mode === 2 ? 2 : (o.mode === 1 ? 1 : this.loadMode());
+    this.achvMode = this.mode;
     this.size = this.mode === 2 ? board.SIZE3 : board.SIZE;
     this.cellCount = this.size * this.size;
     this.now = Date.now();
@@ -198,7 +204,7 @@ class AlchemyScene extends Scene {
   // ---------- level lifecycle ----------
 
   startLevel(lv) {
-    achv.beginRound('alchemy');
+    achv.beginRound(this.gameId);
     this.level = Math.max(1, Math.floor(lv) || 1);
     this.cfg = this.configFor(this.level);
     this.score = 0;
@@ -342,7 +348,7 @@ class AlchemyScene extends Scene {
     if (this.score >= this.cfg.target) {
       this.phase = WON;
       if (!silent) {
-      achv.win('alchemy', { mode: this.mode, level: this.level });
+      achv.win(this.gameId, { mode: this.achvMode, level: this.level });
         this.sfx('playSuccess');
         this.startConfetti();
       }
@@ -384,7 +390,7 @@ class AlchemyScene extends Scene {
       }
       this.score += gained;
       scorefly.roll(this.scoreAnim, this.score, now);
-      achv.peak('alchemy', this.mode === 2 ? 'gain2' : 'gain1', gained);
+      achv.peak(this.gameId, this.mode === 2 ? 'gain2' : 'gain1', gained);
       if (!silent) {
         if (gained >= FX_MIN) this.app.audio.playFirework();
         else this.sfx('playElimination');
@@ -527,40 +533,42 @@ class AlchemyScene extends Scene {
     this.headerH = HEADER.HEIGHT;
     this.homeRect = { ...HEADER.HOME_RECT };
 
+    // 顶部三块（分数卡 / 新游戏卡 / 棋盘起点）与麻将闯关完全一致：
+    // 切模式时只换下面的棋盘，不改变顶部间距和尺寸。
     this.scoreY = this.top + this.headerH + 12;
-    this.scoreH = 64;
+    this.scoreH = 72;
+    this.optY = this.scoreY + this.scoreH + 16;
+    this.optH = 72;
+    const boardTop = this.optY + this.optH + 16;
 
     this.fabSize = fabKit.SIZE;
     this.helpFab = { x: W - 16 - fabKit.SIZE, y: H - SAFE_BOTTOM - 16 - fabKit.SIZE, w: fabKit.SIZE, h: fabKit.SIZE };
 
-    this.rowH = 66;
+    // 新游戏 / 手牌这一行沿用原来的 rowY / rowH 字段，但位置和高度换成共享值
+    this.rowY = this.optY;
+    this.rowH = this.optH;
+
     const n = this.size;
     const pad = 8;
     const gap = 8;
-    const availTop = this.scoreY + this.scoreH + 10;
-    // 棋盘下方还要放一句玩法提示：底部再让 16px，棋盘不会压到提示和 FAB
     const hintGap = 16;
     const availBottom = this.helpFab.y - 12 - hintGap;
-    const maxGroupH = Math.max(150, availBottom - availTop);
-    const maxBoardH = Math.max(120, maxGroupH - 12 - this.rowH);
+    const maxBoardH = Math.max(120, availBottom - boardTop);
     const byW = (this.cw - pad * 2 - gap * (n - 1)) / n;
-    const byH = (maxBoardH - pad * 2 - gap * (n - 1)) / n / 1.5;
+    const byH = ((maxBoardH - pad * 2 - gap * (n - 1)) / n) / 1.5;
     const cap = n === 3 ? 104 : 84;
-    const cw = Math.max(28, Math.min(byW, byH, cap));
-    this.cellW = Math.floor(cw);
+    // 两种扑克模式的牌缩小 10%（3×3 / 4×4 都按比例缩，棋子 / 牌面不会变糊）
+    const scale = POKER_CARD_SCALE;
+    this.cellW = Math.floor(Math.max(20, Math.min(byW, byH, cap) * scale));
     this.cellH = Math.round(this.cellW * 1.5);
     this.pad = pad;
     this.gap = gap;
     this.boardW = pad * 2 + this.cellW * n + gap * (n - 1);
     this.boardH = pad * 2 + this.cellH * n + gap * (n - 1);
 
-    // board + hand row 作为一个整体在剩余空间里居中（4×4 几乎占满，3×3 上下留白）
-    const groupH = this.boardH + 12 + this.rowH;
-    const groupY = availTop + Math.max(0, (maxGroupH - groupH) / 2);
-    // 候选牌 + 新游戏卡片在游戏区上方（与麻将英雄一致）。
-    this.rowY = groupY;
+    // 棋盘紧跟新游戏卡（间距固定 16），三种模式的顶部间距完全一致
+    this.boardY = boardTop;
     this.boardX = (W - this.boardW) / 2;
-    this.boardY = this.rowY + this.rowH + 12;
     this.handW = 36;
     this.handH = 54;
     // 卡片左右平分：候选牌整组在左半区居中，新游戏按钮在右半区居中。
@@ -662,7 +670,7 @@ class AlchemyScene extends Scene {
 
   drawHeader(c) {
     const T = theme.tokens;
-    D.text(c, t('alchemy.gameTitle'), W / 2, this.top + this.headerH / 2, {
+    D.text(c, this.titleText || t('alchemy.gameTitle'), W / 2, this.top + this.headerH / 2, {
       size: 15, weight: 'bold', color: T.text, align: 'center',
     });
     const h = this.homeRect;
@@ -930,7 +938,7 @@ class AlchemyScene extends Scene {
     });
 
     const label = t('alchemy.start');
-    const bw = Math.min(this.cw / 2 - 16, Math.max(96, actionLabel.width(c, label, { size: 13 })));
+    const bw = Math.min(112, Math.max(96, actionLabel.width(c, label, { size: 13 })));
     const bx = this.cx + this.cw * 0.75 - bw / 2;
     const by = this.rowY + (this.rowH - 32) / 2;
     D.fillRoundRect(c, bx, by, bw, 32, 8, T.primary);
@@ -1062,4 +1070,5 @@ class AlchemyScene extends Scene {
   }
 }
 
+AlchemyScene.POKER_CARD_SCALE = POKER_CARD_SCALE;
 module.exports = AlchemyScene;

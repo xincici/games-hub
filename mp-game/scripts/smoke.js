@@ -161,7 +161,7 @@ const D = require(path.join(ROOT, 'js/core/draw'));
 const GAMES = [
   'click', 'match', 'point24', 'guess', 'detective', 'hunter', 'master', 'g2048', 'snake',
   'three', 'link', 'puzzle', 'mirror', 'down', 'crush', 'sudoku', 'sort', 'slide', 'ttt',
-  'mahjong', 'solo', 'alchemy', 'quesheng', 'legend', 'gambler',
+  'combo', 'logicpuzzle', 'solo', 'quesheng', 'legend', 'gambler',
 ];
 
 const fakeApp = {
@@ -704,6 +704,7 @@ i18n.setLang('cn');
     wx.setStorageSync('__emoji_slide__state', JSON.stringify({ level: 12 }));
     wx.setStorageSync('__mahjong_hero__best_1', '12');
     wx.setStorageSync('__poker_alchemy__best_1', '13');
+    wx.setStorageSync('__logic_puzzle__best', '12');
     wx.setStorageSync('__quesheng__level', '12');
     wx.setStorageSync('__gambler__best', '13');
     // 任一游戏 800 胜 / 任一闯关游戏 500 关
@@ -755,17 +756,17 @@ i18n.setLang('cn');
     wx.setStorageSync('__emoji_slide__state', JSON.stringify({ level: 101 }));
     check(names('slide').indexOf('完成第 100 关') >= 0, '成就：滑行第 100 关没解锁');
 
-    // 炼金术：只玩炸金花（模式 2）打到第 51 关，也要算「任意模式」
+    // 组牌闯关：旧炼金术只玩炸金花（模式 2）打到第 51 关，也要算「任意模式」
     wx.setStorageSync('__poker_alchemy__level_2', '51');
-    check(names('alchemy').indexOf('完成第 50 关') >= 0, '成就：炼金术只有模式 2 通关时没算');
+    check(names('combo').indexOf('完成第 50 关') >= 0, '成就：组牌闯关（旧炼金术模式 2）第 50 关没算');
 
     // 雀圣：步进模式（level_2）
     wx.setStorageSync('__quesheng__level_2', '101');
     check(names('quesheng').indexOf('完成第 100 关') >= 0, '成就：雀圣第 100 关没解锁');
 
-    // 麻将英雄：闯关 best_1 存的是「已开始的最高关」
+    // 组牌闯关：旧麻将英雄闯关 best_1 存的是「已开始的最高关」
     wx.setStorageSync('__mahjong_hero__best_1', '101');
-    check(names('mahjong').indexOf('完成第 100 关') >= 0, '成就：麻将英雄第 100 关没解锁');
+    check(names('combo').indexOf('完成第 100 关') >= 0, '成就：组牌闯关（旧麻将闯关）第 100 关没解锁');
 
     // Emoji 排序：第 50 / 100 关（两种模式任一）+ 累计 100 / 500 胜
     wx.setStorageSync('__emoji_sort__level_2', '51');
@@ -777,7 +778,7 @@ i18n.setLang('cn');
     check(names('sort').indexOf('累计 100 胜') >= 0, '成就：排序累计 100 胜没解锁');
     check(names('sort').indexOf('累计 500 胜') < 0, '成就：排序累计 500 胜提前解锁');
 
-    // 全部 25 个游戏：不再有「累计胜利次数」/「累计 10 胜」这两类低门槛行
+    // 全部 24 个游戏：不再有「累计胜利次数」/「累计 10 胜」这两类低门槛行
     achvMod.pageData().games.forEach((g) => {
       check(!g.achv.some((a) => a.name === '累计胜利次数'), `成就：${g.id} 还有「累计胜利次数」`);
       check(!g.achv.some((a) => /10\s*胜/.test(a.name)), `成就：${g.id} 还有「累计 10 胜」`);
@@ -1159,34 +1160,38 @@ i18n.setLang('cn');
     });
     const bad = [];
     daily.POOL.forEach((t) => {
-      if (t.game === '*') return;          // 任意游戏类靠 achv 公共埋点
-      const code = srcOf[t.game] || '';
-      const winCall = code.indexOf(`achv.win('${t.game}'`) >= 0;
-      let ok = true;
-      switch (t.kind) {
-        case 'play': ok = true; break;
-        case 'win': ok = winCall; break;
-        case 'perfect': ok = winCall && /perfect:/.test(code); break;
-        case 'fast': ok = winCall && /fast:/.test(code); break;
-        case 'level': ok = winCall && /level:/.test(code); break;
-        case 'reach':
-          ok = code.indexOf(`achv.reach('${t.game}'`) >= 0
-            || code.indexOf(`daily.report('${t.game}', 'reach'`) >= 0;
-          break;
-        case 'peak':
-          ok = code.indexOf(`achv.peak('${t.game}'`) >= 0 && code.indexOf(`'${t.field}'`) >= 0;
-          break;
-        case 'bump':
-          ok = code.indexOf(`achv.bump('${t.game}'`) >= 0;
-          break;
-        case 'run':
-          ok = code.indexOf(`daily.markNewRun('${t.game}')`) >= 0;
-          break;
-        default: ok = false;
-      }
-      if (!ok) bad.push(`${t.id}（${t.game}/${t.kind}）`);
-    });
-    check(bad.length === 0, `每日挑战：这些任务没有埋点，永远做不完 → ${bad.join('、')}`);
+    if (t.game === '*') return;          // 任意游戏类靠 achv 公共埋点
+    const combo = t.game === 'combo';
+    const code = combo
+      ? `${srcOf.alchemy || ''}\n${srcOf.mahjong || ''}`
+      : (srcOf[t.game] || '');
+    const winCall = combo ? code.indexOf('achv.win(this.gameId') >= 0 : code.indexOf(`achv.win('${t.game}'`) >= 0;
+    let ok = true;
+    switch (t.kind) {
+      case 'play': ok = true; break;
+      case 'win': ok = winCall; break;
+      case 'perfect': ok = winCall && /perfect:/.test(code); break;
+      case 'fast': ok = winCall && /fast:/.test(code); break;
+      case 'level': ok = winCall && /level:/.test(code); break;
+      case 'reach':
+        ok = code.indexOf(`achv.reach('${t.game}'`) >= 0
+          || code.indexOf(`daily.report('${t.game}', 'reach'`) >= 0;
+        break;
+      case 'peak':
+        ok = (combo ? code.indexOf('achv.peak(this.gameId') >= 0 : code.indexOf(`achv.peak('${t.game}'`) >= 0)
+          && code.indexOf(`'${t.field}'`) >= 0;
+        break;
+      case 'bump':
+        ok = code.indexOf(`achv.bump('${t.game}'`) >= 0;
+        break;
+      case 'run':
+        ok = code.indexOf(`daily.markNewRun('${t.game}')`) >= 0;
+        break;
+      default: ok = false;
+    }
+    if (!ok) bad.push(`${t.id}（${t.game}/${t.kind}）`);
+  });
+  check(bad.length === 0, `每日挑战：这些任务没有埋点，永远做不完 → ${bad.join('、')}`);
   }
 
 
@@ -1337,8 +1342,9 @@ i18n.setLang('cn');
   const fs = require('fs');
   // 扑克入口已隐藏，但冒烟仍检查它的旧文件；ttt 是首页新入口。
   require(path.join(ROOT, 'js/games/poker/scene'));
+  require(path.join(ROOT, 'js/games/combo/scene'));
   const GAME_IDS = ['click', 'guess', 'poker', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const missing = [];
   GAME_IDS.forEach((id) => {
@@ -1361,7 +1367,7 @@ i18n.setLang('cn');
 {
   const helpPanel = require(path.join(ROOT, 'js/core/help'));
   const GAME_IDS = ['click', 'guess', 'poker', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   GAME_IDS.forEach((id) => {
     require(path.join(ROOT, `js/games/${id}/scene`));
@@ -1928,7 +1934,7 @@ i18n.setLang('cn');
   const chip = shareMod.chipRect();
   check(chip.x + chip.w <= W - 8 && chip.y >= 0, `分享：入口位置越界（${JSON.stringify(chip)}）`);
   const GAME_IDS2 = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const clashes = [];
   GAME_IDS2.forEach((id) => {
@@ -2173,7 +2179,7 @@ i18n.setLang('cn');
 {
   const theme2 = require(path.join(ROOT, 'js/core/theme'));
   const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const problems = [];
   IDS.forEach((id) => {
@@ -2219,7 +2225,7 @@ i18n.setLang('cn');
   const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
   const fabKit2 = require(path.join(ROOT, 'js/core/fab'));
   const IDS = ['home', 'click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const problems = [];
   IDS.forEach((id) => {
@@ -2264,7 +2270,7 @@ i18n.setLang('cn');
   // 这四个游戏没有胜利态（无尽 / 失败结束），永远不应该出现「炫耀一下」
   const NO_WIN = ['snake', 'three', 'down', 'legend'];
   const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'match', 'link', 'detective',
-    'hunter', 'crush', 'sudoku', 'master', 'sort', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'crush', 'sudoku', 'master', 'sort', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'mirror', 'point24', 'solo', 'gambler'];
   const problems = [];
   NO_WIN.forEach((id) => {
@@ -2524,9 +2530,8 @@ i18n.setLang('cn');
   const BEST_TO_CLEAR10 = {
     sort: ['__emoji_sort__best_1', '11'],
     slide: ['__emoji_slide__state', JSON.stringify({ level: 11 })],
-    mahjong: ['__mahjong_hero__best_1', '11'],
+    combo: ['__mahjong_hero__best_1', '11'],
     quesheng: ['__quesheng__level', '11'],
-    alchemy: ['__poker_alchemy__best_1', '11'],
   };
   // 先清掉这些游戏的旧存档 / 成就记录，保证「已通 10 关」是唯一证据
   [
@@ -2537,6 +2542,8 @@ i18n.setLang('cn');
     '__games_hub__achv',
   ].forEach((k) => wx.removeStorageSync(k));
   Object.values(BEST_TO_CLEAR10).forEach(([k, v]) => wx.setStorageSync(k, v));
+  // 组牌闯关的两个来源：旧炼金术与旧麻将闯关都只通到第 10 关
+  wx.setStorageSync('__poker_alchemy__best_1', '11');
   const data = achvMod.pageData();
   Object.keys(BEST_TO_CLEAR10).forEach((id) => {
     const game = data.games.find((g) => g.id === id);
@@ -2549,12 +2556,12 @@ i18n.setLang('cn');
     if (r10.value !== 10 || !r10.unlocked) problems.push(`${id} 第 10 关：value ${r10.value} unlocked ${r10.unlocked}（存档已通 10 关）`);
     if (r50.unlocked) problems.push(`${id} 第 50 关不该解锁`);
   });
-  const alchemy = data.games.find((g) => g.id === 'alchemy');
-  if (alchemy.achv.some((r) => /最大单次得分/.test(r.name))) problems.push('炼金术还留着「最大单次得分」行');
-  ['普通模式最高关卡', '炸金花最高关卡'].forEach((name) => {
-    if (!alchemy.achv.some((r) => r.name === name)) problems.push(`炼金术缺少「${name}」`);
+  const combo = data.games.find((g) => g.id === 'combo');
+  if (combo.achv.some((r) => /最大单次得分|无尽模式/.test(r.name))) problems.push('组牌闯关还留着得分 / 无尽指标行');
+  ['普通炼金最高关卡', '炸金花最高关卡', '麻将闯关最高关卡'].forEach((name) => {
+    if (!combo.achv.some((r) => r.name === name)) problems.push(`组牌闯关缺少「${name}」`);
   });
-  check(problems.length === 0, `第 10 关 / 炼金术成就：${problems.slice(0, 4).join('；')}`);
+  check(problems.length === 0, `第 10 关 / 组牌闯关成就：${problems.slice(0, 4).join('；')}`);
 }
 
 // ---------- 首页标题 / 已玩·连续 统计不受「全局文字大小」影响 ----------
@@ -2714,12 +2721,12 @@ i18n.setLang('cn');
   // 文档数字必须与代码一致（AGENTS 写了行数 / 可解锁 / 可达成 / 阈值）
   const rows = data.games.reduce((n, g) => n + g.achv.length, 0);
   const unlockRows = data.games.reduce((n, g) => n + g.achv.filter((r) => !r.stat).length, 0);
-  if (rows !== 128) problems.push(`成就总行数 ${rows}（应为 128）`);
+  if (rows !== 127) problems.push(`成就总行数 ${rows}（应为 127）`);
   if (unlockRows !== 109) problems.push(`可解锁行 ${unlockRows}（应为 109）`);
   if (achvMod.totalCount() !== 114) problems.push(`可达成总数 ${achvMod.totalCount()}（应为 114）`);
   if (achvMod.achvMasterNeed() !== 69) problems.push(`成就达人阈值 ${achvMod.achvMasterNeed()}（应为 69）`);
   const agentsSrc = require('fs').readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
-  if (!agentsSrc.includes('128 行 / 可解锁 109 条')) problems.push('AGENTS：成就行数没同步（128 / 109）');
+  if (!agentsSrc.includes('127 行 / 可解锁 109 条')) problems.push('AGENTS：成就行数没同步（127 / 109）');
   if (!agentsSrc.includes('当前可达成 **114 条**') || !agentsSrc.includes('阈值 **69**')) {
     problems.push('AGENTS：成就达人数字没同步（114 / 69）');
   }
@@ -2936,7 +2943,7 @@ i18n.setLang('cn');
   };
   const problems = [];
   const tasks = dailyMod.taskList();
-  if (tasks.length !== 36) problems.push(`任务池应为 39 条，实际 ${tasks.length}`);
+  if (tasks.length !== 38) problems.push(`任务池应为 38 条，实际 ${tasks.length}`);
   tasks.forEach((task) => {
     const gid = task.game === '*' ? 'click' : task.game;
     setTask(task.id);
@@ -2971,31 +2978,31 @@ i18n.setLang('cn');
 
   // 麻将英雄：重复打「已通关的关卡」也必须算赢（以前 achv.win 写在 level > best 里面）
   const MahjongCls = require(path.join(ROOT, 'js/games/mahjong/scene'));
-  fakeApp.sceneId = 'mahjong';
-  const mj = new MahjongCls(fakeApp);
-  mj.mode = 1;                       // MODE_LEVEL
-  mj.level = 1;
-  mj.best = 9;                       // 已经通关过更高关：不该影响本局计数
-  mj.conf = { target: 100 };
-  mj.score = 200;
-  mj.phase = 'play';
-  const winsBefore = achvMod.winsOf('mahjong');
-  setTask('mahjong_win1');
-  mj.checkEnd(true);
-  const winsAfter1 = achvMod.winsOf('mahjong');
-  mj.phase = 'play';
-  mj.score = 300;
-  mj.checkEnd(true);
-  const winsAfter2 = achvMod.winsOf('mahjong');
-  const mjProblems = [];
-  if (winsAfter1 !== winsBefore + 1) mjProblems.push(`第一次胜利没计数（${winsBefore} → ${winsAfter1}）`);
-  if (winsAfter2 !== winsBefore + 2) mjProblems.push(`重复打已通关关卡没计数（${winsAfter1} → ${winsAfter2}）`);
-  if (!dailyMod.todayTask().done) mjProblems.push('「赢一局麻将英雄」没有完成');
+    fakeApp.sceneId = 'combo';
+    const mj = new MahjongCls(fakeApp, { gameId: 'combo', achvMode: 3 });
+    mj.mode = 1;                       // MODE_LEVEL
+    mj.level = 1;
+    mj.best = 9;                       // 已经通关过更高关：不该影响本局计数
+    mj.conf = { target: 100 };
+    mj.score = 200;
+    mj.phase = 'play';
+    const winsBefore = achvMod.winsOf('combo');
+    setTask('combo_win1');
+    mj.checkEnd(true);
+    const winsAfter1 = achvMod.winsOf('combo');
+    mj.phase = 'play';
+    mj.score = 300;
+    mj.checkEnd(true);
+    const winsAfter2 = achvMod.winsOf('combo');
+    const mjProblems = [];
+    if (winsAfter1 !== winsBefore + 1) mjProblems.push(`第一次胜利没计数（${winsBefore} → ${winsAfter1}）`);
+    if (winsAfter2 !== winsBefore + 2) mjProblems.push(`重复打已通关关卡没计数（${winsAfter1} → ${winsAfter2}）`);
+    if (!dailyMod.todayTask().done) mjProblems.push('「赢一局组牌闯关」没有完成');
   check(mjProblems.length === 0, `麻将英雄胜利计数：${mjProblems.join('；')}`);
 
   // 静态兜底：achv.win 不能写在 level > best / 新纪录判断里（这类门把「每一局胜利」变成「第一次」
   const scenes = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const gated = [];
   scenes.forEach((id) => {
@@ -3015,20 +3022,25 @@ i18n.setLang('cn');
   const missing = [];
   tasks.forEach((task) => {
     if (task.game === '*') return;
+    const combo = task.game === 'combo';
+    const srcOf = (id) => require('fs').readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
     let src = '';
-    try { src = require('fs').readFileSync(path.join(ROOT, `js/games/${task.game}/scene.js`), 'utf8'); } catch (e) {
+    try { src = combo ? srcOf('alchemy') + srcOf('mahjong') : srcOf(task.game); } catch (e) {
       missing.push(`${task.id}: 场景文件不存在`);
       return;
     }
+    const winCall = combo ? 'achv.win(this.gameId' : `achv.win('${task.game}'`;
+    const peakCall = combo ? 'achv.peak(this.gameId' : `achv.peak('${task.game}'`;
+    const roundCall = combo ? 'achv.beginRound(this.gameId' : `achv.beginRound('${task.game}'`;
     let ok = false;
     switch (task.kind) {
-      case 'win': ok = src.includes(`achv.win('${task.game}'`); break;
-      case 'perfect': ok = /achv\.win\('[^']+'[^)]*perfect:/.test(src); break;
-      case 'fast': ok = /achv\.win\('[^']+'[^)]*fast:/.test(src); break;
-      case 'peak': ok = src.includes(`achv.peak('${task.game}'`) && src.includes(`'${task.field}'`); break;
+      case 'win': ok = src.includes(winCall); break;
+      case 'perfect': ok = /achv\.win\([^)]*perfect:/.test(src); break;
+      case 'fast': ok = /achv\.win\([^)]*fast:/.test(src); break;
+      case 'peak': ok = src.includes(peakCall) && src.includes(`'${task.field}'`); break;
       case 'run': ok = src.includes(`daily.markNewRun('${task.game}'`); break;
       case 'reach': ok = src.includes(`daily.report('${task.game}', 'reach'`) || src.includes(`achv.reach('${task.game}'`); break;
-      case 'play': ok = src.includes('achv.beginRound('); break;
+      case 'play': ok = src.includes(roundCall); break;
       default: ok = true;
     }
     if (!ok) missing.push(`${task.id}（${task.game}/${task.kind}）`);
@@ -3060,9 +3072,15 @@ i18n.setLang('cn');
   if (task.prog !== 4 || !task.done) problems.push(`赢 4 局后应是 4/4 已完成，实际 ${task.prog}/4 完成=${task.done}`);
   // 每个游戏都要在自己的「开新局」入口上报（机制保留，供以后加开局面板任务）
   const ids = ['click', 'guess', 'ttt', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   ids.forEach((id) => {
+    if (id === 'combo') {
+      const joined = ['alchemy', 'mahjong']
+        .map((x) => require('fs').readFileSync(path.join(ROOT, `js/games/${x}/scene.js`), 'utf8')).join('\n');
+      if (joined.indexOf('achv.beginRound(this.gameId') < 0) problems.push('combo: 开新局没有上报 beginRound');
+      return;
+    }
     const src = require('fs').readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
     if (src.indexOf(`achv.beginRound('${id}')`) < 0) problems.push(`${id}: 开新局没有上报 beginRound`);
   });
@@ -3414,7 +3432,7 @@ i18n.setLang('cn');
   const problems = [];
 
   // 三个游戏的中央绿卡都必须删掉，改成游戏区上方的提示条
-  ['legend', 'mahjong', 'alchemy'].forEach((id) => {
+  ['legend', 'alchemy', 'mahjong'].forEach((id) => {
     const src = fs.readFileSync(path.join(ROOT, `js/games/${id}/scene.js`), 'utf8');
     if (src.includes('drawCelebration')) problems.push(`${id}: 中央得分浮字还在`);
     if (!src.includes('scorefly.spawn')) problems.push(`${id}: 没有飞向得分区的圆点`);
@@ -3797,7 +3815,7 @@ i18n.setLang('cn');
 {
   const shareMod3 = require(path.join(ROOT, 'js/core/share'));
   const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   // 用假的截图函数（只要有画布就行，这里不验画面内容）
   shareMod3.setCapture(() => true);
@@ -4173,7 +4191,7 @@ i18n.setLang('cn');
   }
   // 2) 25 个游戏：结算态的截图比进行态多出遮罩内容（标题 / 分数 / 按钮 / 分享）
   const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   IDS.forEach((id) => {
     const SceneClass = require(path.join(ROOT, `js/games/${id}/scene`));
@@ -4210,7 +4228,7 @@ i18n.setLang('cn');
   const { App: AppCls } = require(path.join(ROOT, 'js/core/app'));
   const shareMod = require(path.join(ROOT, 'js/core/share'));
   const IDS = ['home', 'click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const problems = [];
   IDS.forEach((id) => {
@@ -4313,6 +4331,36 @@ i18n.setLang('cn');
   const g = home.grid;
   if (!g || g.cols !== 5 || g.rows !== 5) problems.push('网格不是 5×5');
   if (home.hexes.length !== 25) problems.push(`格子数 ${home.hexes.length}（应 25）`);
+  if (home.order.length !== 25 || home.order.includes('')) problems.push('首页顺序不是 25 个有效游戏（空位没被逻辑拼图占满）');
+  const comboHex = home.hexes.find((h) => h.id === 'combo');
+  if (!comboHex) problems.push('首页没有组牌闯关入口');
+  else if (comboHex.kind !== 'combo') problems.push(`组牌闯关的图标 kind=${comboHex.kind}（应 combo）`);
+  const lpHex = home.hexes.find((h) => h.id === 'logicpuzzle');
+  if (!lpHex) problems.push('首页没有逻辑拼图入口');
+  if (!require(path.join(ROOT, 'js/core/icon-glyphs')).tangram) problems.push('icon-glyphs 缺少 tangram 字形');
+  else if (lpHex.kind !== 'tangram') problems.push(`逻辑拼图的图标 kind=${lpHex.kind}（应 tangram）`);
+  // 图标必须真的按 combo 的 kind 查到 glyph：曾把 kind 写成 alchemy，图标表里只有 combo → undefined
+  {
+    const iconsMod = require(path.join(ROOT, 'js/core/icons'));
+    const origDraw = iconsMod.draw;
+    const calls = [];
+    iconsMod.draw = (c, name, x, y, ...rest) => {
+      calls.push({ name, x, y });
+      return origDraw.call(iconsMod, c, name, x, y, ...rest);
+    };
+    try { home.render(makeCtx()); } finally { iconsMod.draw = origDraw; }
+    const hit = comboHex && calls.some((k) => k.name === 'alchemy' && Math.abs(k.x - comboHex.cx) < 1);
+    const hitLp = lpHex && calls.some((k) => k.name === 'tangram' && Math.abs(k.x - lpHex.cx) < 1);
+    if (!hitLp) problems.push('逻辑拼图首页图标没有按 tangram glyph 画出来');
+    if (!hit) problems.push('组牌闯关的首页图标没有解析到 alchemy glyph（会画成 undefined / 兜底）');
+  }
+  // game.js 的场景注册表：首页点击走 app.openGame(id)，漏注册就进不去
+  {
+    const gameSrc = require('fs').readFileSync(path.join(ROOT, 'game.js'), 'utf8');
+    if (!/combo:\s*ComboScene/.test(gameSrc)) problems.push('game.js 没有注册 combo（首页点了进不去）');
+    if (!/logicpuzzle:\s*LogicPuzzleScene/.test(gameSrc)) problems.push('game.js 没有注册 logicpuzzle（首页点了进不去）');
+    if (/mahjong:\s*MahjongScene|alchemy:\s*AlchemyScene/.test(gameSrc)) problems.push('game.js 还注册着旧的麻将 / 炼金入口');
+  }
   // 单元格不重叠、都在屏内
   for (let a = 0; a < home.hexes.length; a += 1) {
     const p1 = home.hexes[a];
@@ -4429,7 +4477,7 @@ i18n.setLang('cn');
   const canvasMod = require(path.join(ROOT, 'js/core/canvas'));
   const problems = [];
   const IDS = ['home', 'click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   // 顶部公式：安全区 - 24（不小于 0），有标题栏按钮时再保证按钮上方 ≥18px
   // mock 里 SAFE_TOP = 0，运行期算出来一定是 0，所以再对源码断言一次（防止改回「裁满安全区」）
@@ -4489,7 +4537,7 @@ i18n.setLang('cn');
   const shareMod = require(path.join(ROOT, 'js/core/share'));
   const canvasMod = require(path.join(ROOT, 'js/core/canvas'));
   const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const texts = [];
   const ctx = makeCtx();
@@ -4615,7 +4663,7 @@ i18n.setLang('cn');
     return origCircle.apply(DMod, arguments);
   };
   const IDS = ['click', 'guess', 'poker', 'puzzle', 'g2048', 'snake', 'match', 'link', 'detective',
-    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'alchemy', 'mahjong',
+    'hunter', 'three', 'crush', 'sudoku', 'master', 'sort', 'down', 'slide', 'combo', 'logicpuzzle',
     'quesheng', 'legend', 'mirror', 'point24', 'solo', 'gambler'];
   const problems = [];
   // 前面的用例已经把 25 个帮助都看过了，这里用桩控制「看过 / 没看过」两态
@@ -4664,9 +4712,497 @@ i18n.setLang('cn');
   check(problems.length === 0, `帮助红点：${problems.slice(0, 5).join('；')}`);
 }
 
+// ---------- 组牌闯关：3 模式 / 麻将无尽移除 / 首页空位 / 成就与每日 ----------
+{
+  const problems = [];
+  const ComboCls = require(path.join(ROOT, 'js/games/combo/scene'));
+  const MahCls = require(path.join(ROOT, 'js/games/mahjong/scene'));
+  fakeApp.sceneId = 'combo';
+  const sc = new ComboCls(fakeApp);
+  const seen = [];
+  const fabKit = require(path.join(ROOT, 'js/core/fab'));
+  const iconsMod = require(path.join(ROOT, 'js/core/icons'));
+  const origDraw = iconsMod.draw;
+  const draws = [];
+  iconsMod.draw = (c, name, x, y, ...rest) => {
+    draws.push({ name, x, y });
+    return origDraw.call(iconsMod, c, name, x, y, ...rest);
+  };
+  const wantKeys = ['alchemy', 'mode-poker', 'mode-mahjong'];
+  try {
+    for (let m = 0; m < 3; m += 1) {
+      sc.setMode(m);
+      if (sc.mode !== m) problems.push(`切到模式 ${m} 后 mode=${sc.mode}`);
+      const c = makeCtx();
+      draws.length = 0;
+      try { sc.render(c); } catch (e) { problems.push(`模式 ${m} 渲染抛错：${e.message}`); continue; }
+      const texts = c.__texts.map((x) => String(x.value));
+      if (texts.indexOf('组牌闯关') < 0) problems.push(`模式 ${m} 标题不是「组牌闯关」`);
+      const modeBtns = sc.buttons.filter((b) => b.id === 'mode');
+      if (modeBtns.length !== 1) problems.push(`模式 ${m} 的模式圆钮有 ${modeBtns.length} 个（应 1）`);
+      if (sc.buttons.some((b) => /^combo-mode-/.test(b.id))) problems.push('还留着三格模式标签按钮');
+      const btn = modeBtns[0];
+      if (btn) {
+        const hr = sc.helpRect;
+        const mute = fabKit.muteSlot(hr);
+        const slot = fabKit.slotLeft(hr, mute ? 2 : 1);
+        if (Math.abs(btn.x - slot.x) > 0.5 || Math.abs(btn.y - slot.y) > 0.5) {
+          problems.push(`模式 ${m} 的圆钮不在静音左侧的标准位置`);
+        }
+        const iconHit = draws.some((k) => k.name === wantKeys[m] && Math.abs(k.x - (btn.x + btn.w / 2)) < 1);
+        if (!iconHit) problems.push(`模式 ${m} 的圆钮图标不是 ${wantKeys[m]}`);
+      }
+      seen.push(`${sc.inner.constructor.name}:${sc.inner.mode}`);
+    }
+  } finally {
+    iconsMod.draw = origDraw;
+  }
+  // 点圆钮必须循环 0 → 1 → 2 → 0
+  sc.setMode(0);
+  [1, 2, 0].forEach((want) => {
+    sc.buttons = [];
+    sc.render(makeCtx());
+    const btn = sc.buttons.find((b) => b.id === 'mode');
+    if (!btn) { problems.push('模式圆钮按钮不存在'); return; }
+    btn.onTap();
+    if (sc.mode !== want) problems.push(`点模式圆钮后 mode=${sc.mode}（应 ${want}）`);
+  });
+  if (Number(wx.getStorageSync('__combo__mode')) !== 0) problems.push('模式没有写进 __combo__mode');
+  if (typeof MahCls.prototype.toggleMode !== 'undefined') problems.push('麻将英雄还留着无尽模式切换');
+  const mah = new MahCls(fakeApp, { gameId: 'combo' });
+  if (mah.mode !== 1 || mah.conf == null) problems.push('麻将内嵌场景没有强制闯关');
+  // 三种模式的顶部分数区 / 新游戏区必须完全一致（切模式不能跳动）
+  {
+    const tops = [];
+    const newBtns = [];
+    for (let m = 0; m < 3; m += 1) {
+      sc.setMode(m);
+      sc.render(makeCtx());
+      const inner = sc.inner;
+      tops.push([inner.scoreY, inner.scoreH, inner.optY, inner.optH, inner.cw, inner.boardY - (inner.optY + inner.optH)]);
+      const btn = sc.buttons.find((b) => b.id === 'new' || b.id === 'new-game');
+      newBtns.push(btn ? [btn.x, btn.y, btn.w, btn.h] : null);
+      if (m < 2) {
+        const scale = inner.constructor.POKER_CARD_SCALE;
+        if (!(scale > 0 && scale < 1)) problems.push('扑克模式的盘面缩放系数应在 (0,1)');
+        const n = inner.size;
+        const byW = (inner.cw - inner.pad * 2 - inner.gap * (n - 1)) / n;
+        const availBottom = inner.helpFab.y - 12 - 16;
+        const boardTop = inner.optY + inner.optH + 16;
+        const maxBoardH = Math.max(120, availBottom - boardTop);
+        const byH = ((maxBoardH - inner.pad * 2 - inner.gap * (n - 1)) / n) / 1.5;
+        const full = Math.min(byW, byH, n === 3 ? 104 : 84);
+        if (!(inner.cellW <= full * 0.93 + 1)) problems.push(`扑克模式的牌没有缩小（${inner.cellW} vs 满尺寸 ${full.toFixed(1)}）`);
+        if (inner.boardY + inner.boardH + 20 > inner.helpFab.y) problems.push('扑克模式棋盘压到了 FAB 行');
+      }
+    }
+    const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.6);
+    if (!same(tops[0], tops[1]) || !same(tops[0], tops[2])) {
+      problems.push(`切模式后顶部区不一致（${JSON.stringify(tops)}）`);
+    }
+    if (!same(newBtns[0], newBtns[1]) || !same(newBtns[0], newBtns[2])) {
+      problems.push(`切模式后新游戏按钮不一致（${JSON.stringify(newBtns)}）`);
+    }
+  }
+  // 成就：只有 combo 卡，7 行；旧的 alchemy / mahjong 卡已移除
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const data = achvMod.pageData();
+  if (!data.games.some((g) => g.id === 'combo')) problems.push('成就页没有组牌闯关卡');
+  if (data.games.some((g) => g.id === 'alchemy' || g.id === 'mahjong')) problems.push('成就页还留着炼金术 / 麻将英雄卡');
+  const comboCard = data.games.find((g) => g.id === 'combo');
+  if (!comboCard || comboCard.achv.length !== 7) problems.push(`组牌闯关成就有 ${comboCard ? comboCard.achv.length : 0} 行（应 7）`);
+  // 每日：两条 combo 任务替换旧的两条，池子仍是 36 条
+  const dailyMod = require(path.join(ROOT, 'js/core/daily'));
+  const pool = dailyMod.taskList();
+  if (pool.length !== 38) problems.push(`每日任务池 ${pool.length} 条（应 38）`);
+  ['combo_win1', 'combo_win3'].forEach((id) => {
+    if (!dailyMod.taskOf(id)) problems.push(`每日任务缺少 ${id}`);
+  });
+  if (pool.some((x) => x.game === 'alchemy' || x.game === 'mahjong')) problems.push('每日任务还指向旧的炼金术 / 麻将英雄');
+  check(problems.length === 0, `组牌闯关：${problems.slice(0, 5).join('；')}`);
+}
+
+// ---------- 逻辑拼图：88 关 / 连胜 / 随机模式 / 查看答案 / 拖放 ----------
+{
+  const problems = [];
+  const LB = require(path.join(ROOT, 'js/games/logicpuzzle/board'));
+  const LogicCls = require(path.join(ROOT, 'js/games/logicpuzzle/scene'));
+  const achvMod = require(path.join(ROOT, 'js/core/achv'));
+  const confirmMod = require(path.join(ROOT, 'js/core/confirm'));
+  const tmod = require(path.join(ROOT, 'js/core/i18n'));
+  ['__logic_puzzle__level', '__logic_puzzle__best', '__logic_puzzle__mode',
+    '__logic_puzzle__streak', '__logic_puzzle__best_streak',
+    '__logic_puzzle__state', '__logic_puzzle__state_level', '__logic_puzzle__state_random'].forEach((k) => wx.removeStorageSync(k));
+  if (LB.LEVEL_COUNT !== 88) problems.push(`逻辑拼图关卡数 ${LB.LEVEL_COUNT}（应 88）`);
+  LB.LEVELS.forEach((g, li) => {
+    if (g.length !== 8 || g.some((row) => row.length !== 8)) { problems.push(`第 ${li + 1} 关不是 8×8`); return; }
+    const count = {};
+    g.flat().forEach((v) => { count[v] = (count[v] || 0) + 1; });
+    LB.PIECES.forEach((pc) => {
+      if ((count[pc.id] || 0) !== pc.w * pc.h) problems.push(`第 ${li + 1} 关拼块 ${pc.id} 面积不对`);
+    });
+    if ((count[1] || 0) !== 1 || (count[2] || 0) !== 2 || (count[3] || 0) !== 3) {
+      problems.push(`第 ${li + 1} 关固定块不是 1/2/3 各一块`);
+    }
+  });
+  const cellOf = (g, id) => {
+    const out = [];
+    g.forEach((row, r) => row.forEach((v, c) => { if (v === id) out.push([r, c]); }));
+    return {
+      r: Math.min(...out.map((x) => x[0])), c: Math.min(...out.map((x) => x[1])),
+      h: Math.max(...out.map((x) => x[0])) - Math.min(...out.map((x) => x[0])) + 1,
+      w: Math.max(...out.map((x) => x[1])) - Math.min(...out.map((x) => x[1])) + 1,
+    };
+  };
+  {
+    const grid = LB.levelGrid(0);
+    const pz = LB.createLevel(0);
+    LB.PIECES.forEach((pc) => {
+      const box = cellOf(grid, pc.id);
+      const piece = pz.pieces.find((x) => x.id === pc.id);
+      piece.w = box.w; piece.h = box.h;
+      if (!LB.place(pz, piece, box.r, box.c)) problems.push(`答案拼块 ${pc.id} 放不下`);
+    });
+    if (!LB.isSolved(pz)) problems.push('按答案铺满后没有判胜');
+  }
+
+  fakeApp.sceneId = 'logicpuzzle';
+  const sc = new LogicCls(fakeApp);
+  sc.startLevel(1);
+  sc.render(makeCtx());
+  let ids = sc.buttons.map((b) => b.id);
+  ['help', 'new-game', 'answer', 'mode', 'home'].forEach((id) => {
+    if (!ids.includes(id)) problems.push(`逻辑拼图缺少按钮 ${id}`);
+  });
+  if (ids.some((id) => /^cell-/.test(id))) problems.push('棋盘仍然注册了逐格按钮（应整块拖动）');
+  const compact = sc.scoreH === 56;
+  const topGap = compact ? 8 : 10;
+  if (!((sc.scoreH === 64 || sc.scoreH === 56) && (sc.optH === 56 || sc.optH === 48))) {
+    problems.push(`逻辑拼图顶部两栏尺寸不对（${sc.scoreH}/${sc.optH}）`);
+  }
+  if (sc.optY !== sc.scoreY + sc.scoreH + topGap || sc.boardY !== sc.optY + sc.optH + topGap) {
+    problems.push('棋盘没有紧贴新游戏卡下方');
+  }
+  if (sc.cell < 18) problems.push(`棋盘格太小（${sc.cell}px）`);
+  if (!(sc.trayY >= sc.boardY + sc.boardH + 8 && sc.trayY + sc.trayH + 8 <= sc.helpFab.y)) {
+    problems.push('拼块托盘没有落在棋盘下方 / 压到 FAB');
+  }
+  // 分数区：最长 / 当前连胜，不画进度条，也没有已放 / 步数
+  {
+    const texts = [];
+    const oldText = D.text;
+    let bars = 0;
+    const oldProgress = D.progressBar;
+    D.text = (c, str, ...rest) => { texts.push(String(str)); return oldText(c, str, ...rest); };
+    D.progressBar = () => { bars += 1; };
+    try { sc.render(makeCtx()); } finally { D.text = oldText; D.progressBar = oldProgress; }
+    if (!texts.includes('最高关卡') || !texts.includes('当前关卡')) problems.push('闯关模式分数区没有最高 / 当前关卡');
+    if (texts.includes('最长连胜') || texts.includes('当前连胜')) problems.push('闯关模式不应显示连胜');
+    if (texts.includes('已放') || texts.includes('步数')) problems.push('分数区还留着旧字段');
+    if (bars > 0) problems.push('分数区还在画进度条');
+  }
+  // 不再显示计时器；查看答案在新游戏右边
+  {
+    const hits = [];
+    const oldText = D.text;
+    D.text = (c, str, x, y, opts) => { hits.push({ s: String(str), x, y }); return oldText(c, str, x, y, opts); };
+    try { sc.render(makeCtx()); } finally { D.text = oldText; }
+    if (hits.some((h) => /^\d\d:\d\d$/.test(h.s) || h.s === '用时' || h.s === 'Time')) {
+      problems.push('游戏里还显示计时器');
+    }
+    const newBtn = sc.buttons.find((b) => b.id === 'new-game');
+    const ansBtn = sc.buttons.find((b) => b.id === 'answer');
+    if (!ansBtn || !newBtn || ansBtn.x <= newBtn.x) problems.push('查看答案没有在新游戏右边');
+    if (!ansBtn || !newBtn || ansBtn.x + ansBtn.w > sc.cx + sc.cw + 1) problems.push('查看答案超出选项卡');
+    const modeBtn = sc.buttons.find((b) => b.id === 'mode');
+    const muteBtn = sc.buttons.find((b) => b.id === 'fab-mute');
+    if (!modeBtn || !muteBtn || modeBtn.x >= muteBtn.x) problems.push('模式切换按钮不在静音左边');
+  }
+
+  const tapTray = (i) => {
+    const r = sc.traySlotRect(i);
+    const p = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+    sc.onTouchStart(p); sc.onTouchEnd(p);
+  };
+  const rotateTo = (piece, w, h) => {
+    const i = sc.puzzle.pieces.indexOf(piece);
+    for (let k = 0; k < 3 && (piece.w !== w || piece.h !== h); k += 1) tapTray(i);
+  };
+  const dragTo = (piece, r, c) => {
+    const i = sc.puzzle.pieces.indexOf(piece);
+    const slot = sc.traySlotRect(i);
+    const start = { x: slot.x + slot.w / 2, y: slot.y + slot.h / 2 };
+    const rr = sc.spanRect(r, c, piece.w, piece.h);
+    const end = { x: rr.x + (piece.w * sc.cell) / 2, y: rr.y + (piece.h * sc.cell) / 2 };
+    sc.onTouchStart(start); sc.onTouchMove(end); sc.onTouchEnd(end);
+  };
+  const solveCurrent = () => {
+    const grid = LB.levelGrid(sc.level - 1);
+    LB.PIECES.forEach((pc) => {
+      const box = cellOf(grid, pc.id);
+      const piece = sc.puzzle.pieces.find((x) => x.id === pc.id);
+      if (piece.placed) return;
+      rotateTo(piece, box.w, box.h);
+      dragTo(piece, box.r, box.c);
+      if (!piece.placed) problems.push(`拼块 ${pc.id} 没能拖上去`);
+    });
+  };
+
+  // 单击旋转 / 整块 / 拖放
+  const grid1 = LB.levelGrid(0);
+  const aBox = cellOf(grid1, 'a');
+  const a = sc.puzzle.pieces.find((x) => x.id === 'a');
+  rotateTo(a, aBox.w, aBox.h);
+  if (a.w !== aBox.w || a.h !== aBox.h) problems.push('单击托盘拼块没有旋转');
+  const rrA = sc.spanRect(aBox.r, aBox.c, aBox.w, aBox.h);
+  if (!(rrA.w > aBox.w * sc.cell && rrA.h > aBox.h * sc.cell)) problems.push('拼块没有按整块尺寸跨过格间距');
+  dragTo(a, aBox.r, aBox.c);
+  if (!a.placed) problems.push('把拼块拖到棋盘后没有放下');
+  {
+    const rr = sc.spanRect(a.r, a.c, a.w, a.h);
+    const p = { x: rr.x + rr.w / 2, y: rr.y + rr.h / 2 };
+    sc.onTouchStart(p); sc.onTouchEnd(p);
+    if (a.placed) problems.push('单击已放拼块没有收回');
+  }
+  {
+    const i = sc.puzzle.pieces.indexOf(a);
+    const slot = sc.traySlotRect(i);
+    const start = { x: slot.x + slot.w / 2, y: slot.y + slot.h / 2 };
+    sc.onTouchStart(start);
+    sc.onTouchMove({ x: start.x, y: sc.helpFab.y + 20 });
+    sc.onTouchEnd({ x: start.x, y: sc.helpFab.y + 20 });
+    if (a.placed) problems.push('拖到棋盘外也放下了');
+  }
+  solveCurrent();
+  sc.render(makeCtx());
+  if (sc.phase !== 'won') problems.push('铺满后场景没有进入胜利态');
+  if (sc.streak !== 1 || sc.bestStreak !== 1) problems.push(`胜利后连胜不对（${sc.streak}/${sc.bestStreak}）`);
+  if (!sc.buttons.some((b) => b.id === 'result-next')) problems.push('闯关模式胜利后没有「下一关」');
+  if (!sc.buttons.some((b) => b.id === 'help')) problems.push('胜利后帮助 FAB 不见了');
+  if (!sc.buttons.some((b) => b.id === 'fab-mute')) problems.push('胜利后静音 FAB 不见了');
+  if (!sc.buttons.some((b) => b.id === 'mode')) problems.push('胜利后模式 FAB 不见了');
+
+  // 重进已通关存档：展示胜利、不重复成就
+  const winsBeforeRestore = achvMod.winsOf('logicpuzzle');
+  const restored = new LogicCls(fakeApp);
+  if (restored.phase !== 'won') problems.push('已铺满的存档重进没有展示胜利态');
+  if (achvMod.winsOf('logicpuzzle') !== winsBeforeRestore) problems.push('重进胜利存档重复上报了成就胜场');
+  sc.nextLevel();
+  if (sc.level !== 2 || sc.phase !== 'play' || sc.streak !== 1) problems.push('下一关没有保留连胜');
+
+  // 随机模式：切换后随机一关；胜利给「再来一局」；再来保留连胜；新游戏清空连胜
+  {
+    sc.toggleMode();
+    if (sc.mode !== 'random') problems.push('模式切换没有进入随机一局');
+    if (sc.level < 1 || sc.level > 88) problems.push('随机模式关卡越界');
+    {
+      const texts = [];
+      const oldText = D.text;
+      D.text = (c, str, ...rest) => { texts.push(String(str)); return oldText(c, str, ...rest); };
+      try { sc.render(makeCtx()); } finally { D.text = oldText; }
+      if (!texts.includes('最长连胜') || !texts.includes('当前连胜')) problems.push('随机模式分数区没有最长 / 当前连胜');
+      if (texts.includes('最高关卡')) problems.push('随机模式不应显示最高关卡');
+      if (texts.includes('随机一局') || texts.includes('闯关模式')) problems.push('模式切换后出现了模式文案');
+    }
+    solveCurrent();
+    sc.render(makeCtx());
+    if (sc.phase !== 'won') problems.push('随机模式没有判胜');
+    if (sc.streak !== 2) problems.push(`随机模式连胜没有累加（${sc.streak}）`);
+    if (!sc.buttons.some((b) => b.id === 'result-again')) problems.push('随机模式胜利后没有「再来一局」');
+    if (sc.buttons.some((b) => b.id === 'result-next')) problems.push('随机模式不应有「下一关」');
+    const againBtn = sc.buttons.find((b) => b.id === 'result-again');
+    const before = sc.level;
+    if (againBtn) againBtn.onTap();
+    if (sc.mode !== 'random' || sc.phase !== 'play') problems.push('再来一局没有回到随机模式');
+    if (sc.streak !== 2) problems.push('再来一局清空了连胜');
+    if (sc.level === before && LB.LEVEL_COUNT > 1) problems.push('再来一局没有换关卡');
+    // 随机模式的「新游戏」也要二次确认，确认后随机新开、清空当前连胜
+    sc.render(makeCtx());
+    const ng = sc.buttons.find((b) => b.id === 'new-game');
+    const levelBeforeNew = sc.level;
+    if (!ng) problems.push('随机模式没有新游戏按钮');
+    if (ng) ng.onTap();
+    if (!sc.confirming) problems.push('随机模式点新游戏没有弹二次确认');
+    if (sc.level !== levelBeforeNew) problems.push('二次确认前就换关了');
+    sc.render(makeCtx());
+    sc.buttons = [];
+    confirmMod.draw(makeCtx(), sc);
+    const okNew = sc.buttons.find((b) => b.id === 'confirm-ok');
+    if (!okNew) problems.push('随机模式二次确认没有确定按钮');
+    if (okNew) okNew.onTap();
+    if (sc.streak !== 0 || sc.mode !== 'random') problems.push('随机模式新游戏没有清空连胜 / 保持随机');
+    if (sc.level < 1 || sc.level > 88) problems.push('随机模式新游戏关卡越界');
+  }
+  // 切回闯关模式，回到闯关进度
+  {
+    sc.toggleMode();
+    if (sc.mode !== 'level' || sc.level !== 2) problems.push(`切回闯关没有回到进度（${sc.mode}/${sc.level}）`);
+  }
+
+  // 查看答案：先清空，再逐块动画，最后展示胜利；不计连胜、不给成就
+  {
+    sc.startNewGame(); // mode level, level 1, streak 0
+    sc.streak = 5;
+    sc.bestStreak = 5;
+    const wins = achvMod.winsOf('logicpuzzle');
+    sc.render(makeCtx());
+    const answerBtn = sc.buttons.find((b) => b.id === 'answer');
+    if (!answerBtn) problems.push('查看答案按钮没有注册');
+    if (answerBtn) answerBtn.onTap();
+    if (!sc.reveal) problems.push('查看答案没有开始演示');
+    if (LB.placedCount(sc.puzzle) !== 0 || LB.filledCount(sc.puzzle) !== 6) problems.push('查看答案前没有清空游戏区');
+    if (sc.phase !== 'play') problems.push('查看答案开始后不应立刻结算');
+    for (let i = 0; i < 50; i += 1) sc.update(100);
+    sc.render(makeCtx());
+    if (LB.placedCount(sc.puzzle) === 0) problems.push('查看答案动画没有逐块落下');
+    if (sc.phase !== 'won') problems.push('查看答案动画走完没有展示胜利');
+    if (!sc.revealed) problems.push('查看答案没有标记 revealed');
+    if (sc.streak !== 0) problems.push('查看答案没有清空当前连胜');
+    if (sc.bestStreak !== 5) problems.push('查看答案不应该改最长连胜');
+    if (achvMod.winsOf('logicpuzzle') !== wins) problems.push('查看答案不应计入成就胜场');
+    if (!LB.isSolved(sc.puzzle)) problems.push('查看答案没有铺满棋盘');
+    if (!sc.buttons.some((b) => b.id === 'result-new')) problems.push('查看答案结算没有「新游戏」');
+    if (sc.buttons.some((b) => b.id === 'result-next')) problems.push('查看答案结算不应有「下一关」');
+  }
+
+  // 中途恢复：已放拼块 / 关卡 / 连胜都要回得来
+  sc.startLevel(4);
+  const g4 = LB.levelGrid(3);
+  const a4 = sc.puzzle.pieces.find((x) => x.id === 'a');
+  const box4 = cellOf(g4, 'a');
+  rotateTo(a4, box4.w, box4.h);
+  dragTo(a4, box4.r, box4.c);
+  sc.streak = 2;
+  sc.bestStreak = 3;
+  sc.save();
+  const resumed = new LogicCls(fakeApp);
+  if (resumed.level !== 4 || LB.placedCount(resumed.puzzle) !== 1) {
+    problems.push(`中途存档恢复不对（关卡 ${resumed.level} / 已放 ${LB.placedCount(resumed.puzzle)}）`);
+  }
+  if (resumed.streak !== 2 || resumed.bestStreak !== 3) problems.push('连胜没有恢复');
+
+  // 确认面板：新游戏要二次确认
+  {
+    sc.confirming = true;
+    if (!confirmMod.canOverride(sc) || typeof sc.drawConfirm !== 'function') problems.push('新游戏确认面板没接上');
+    sc.render(makeCtx());
+    sc.buttons = [];
+    confirmMod.draw(makeCtx(), sc);
+    const okBtn = sc.buttons.find((b) => b.id === 'confirm-ok');
+    if (!okBtn || !sc.buttons.some((b) => b.id === 'confirm-mask')) problems.push('统一二次确认面板没有画出来');
+    if (okBtn) {
+      okBtn.onTap();
+      if (sc.level !== 1 || sc.phase !== 'play' || LB.placedCount(sc.puzzle) !== 0 || sc.streak !== 0) {
+        problems.push('确定重来后状态不对');
+      }
+    }
+  }
+
+  // 胜利遮罩：只盖棋盘、文案居中、按钮在棋盘内
+  {
+    sc.level = 3;
+    sc.mode = 'level';
+    sc.phase = 'won';
+    sc.revealed = false;
+    sc.resultAt = Date.now() - 1000;
+    sc.buttons = [];
+    const ctx = makeCtx();
+    const fills = [];
+    const oldFill = ctx.fillRect;
+    ctx.fillRect = (x, y, w, h) => { fills.push([x, y, w, h]); return oldFill(x, y, w, h); };
+    const texts = [];
+    const oldText = D.text;
+    D.text = (c, str, x, y, opts) => { texts.push({ s: String(str), x, y }); return oldText(c, str, x, y, opts); };
+    try { sc.drawResult(ctx); } finally { D.text = oldText; }
+    if (fills.some(([x, y, w, h]) => x === 0 && y === 0 && w === W && h === H)) problems.push('胜利遮罩铺满了全屏');
+    const cx = sc.boardX + sc.boardW / 2;
+    const title = tmod.t('logicpuzzle.winTitle');
+    const hit = texts.find((x) => x.s === title);
+    if (!hit || Math.abs(hit.x - cx) > 0.6) problems.push('胜利标题没有居中');
+    ['result-replay', 'result-next'].forEach((id) => {
+      const b = sc.buttons.find((x) => x.id === id);
+      if (!b) { problems.push(`胜利遮罩缺少 ${id}`); return; }
+      if (b.x < sc.boardX - 1 || b.x + b.w > sc.boardX + sc.boardW + 1
+        || b.y < sc.boardY - 1 || b.y + b.h > sc.boardY + sc.boardH + 1) {
+        problems.push(`胜利按钮 ${id} 超出棋盘`);
+      }
+    });
+  }
+
+  // 分享成绩行：1 基关卡不能显示成下一关
+  sc.level = 7;
+  sc.phase = 'won';
+  if (!/7/.test(sc.shareLine) || /8/.test(sc.shareLine)) problems.push(`分享成绩行关卡不对（${sc.shareLine}）`);
+  // 第 88 关结算要能重新开始
+  sc.level = 88;
+  sc.mode = 'level';
+  sc.revealed = false;
+  sc.phase = 'won';
+  sc.resultAt = Date.now() - 1000;
+  sc.buttons = [];
+  sc.drawResult(makeCtx());
+  const newBtn = sc.buttons.find((b) => b.id === 'result-new');
+  if (!newBtn) problems.push('第 88 关结算没有「新游戏」');
+  else {
+    newBtn.onTap();
+    if (sc.level !== 1 || sc.phase !== 'play') problems.push(`第 88 关点新游戏没回到第 1 关（${sc.level}/${sc.phase}）`);
+  }
+  // 两种模式各自保留局面：切走再切回，恢复原局而不是新开一局
+  {
+    wx.removeStorageSync('__logic_puzzle__state_level');
+    wx.removeStorageSync('__logic_puzzle__state_random');
+    sc.startLevel(1);
+    sc.streak = 0;
+    sc.bestStreak = 0;
+    const gridL = LB.levelGrid(0);
+    const aL = sc.puzzle.pieces.find((x) => x.id === 'a');
+    const boxL = cellOf(gridL, 'a');
+    rotateTo(aL, boxL.w, boxL.h);
+    dragTo(aL, boxL.r, boxL.c);
+    const levelPlaced = LB.placedCount(sc.puzzle);
+    sc.save();
+    if (levelPlaced !== 1) problems.push('切换测试：闯关局面没有放下一块');
+
+    sc.toggleMode();
+    if (sc.mode !== 'random') problems.push('切换测试：没有进入随机模式');
+    const randomLevel = sc.level;
+    const gridR = LB.levelGrid(randomLevel - 1);
+    const aR = sc.puzzle.pieces.find((x) => x.id === 'a');
+    const boxR = cellOf(gridR, 'a');
+    rotateTo(aR, boxR.w, boxR.h);
+    dragTo(aR, boxR.r, boxR.c);
+    const randomPlaced = LB.placedCount(sc.puzzle);
+    sc.save();
+    if (randomPlaced !== 1) problems.push('切换测试：随机局面没有放下一块');
+
+    sc.toggleMode();
+    if (sc.mode !== 'level' || sc.level !== 1 || LB.placedCount(sc.puzzle) !== levelPlaced) {
+      problems.push(`切回闯关没有恢复局面（${sc.mode}/${sc.level}/${LB.placedCount(sc.puzzle)}）`);
+    }
+    sc.toggleMode();
+    if (sc.mode !== 'random' || sc.level !== randomLevel || LB.placedCount(sc.puzzle) !== randomPlaced) {
+      problems.push(`切回随机没有恢复局面（${sc.mode}/${sc.level}/${LB.placedCount(sc.puzzle)}）`);
+    }
+
+    // 胜利态也要恢复，而不是重开
+    solveCurrent();
+    if (sc.phase !== 'won') problems.push('切换测试：随机局面没有判胜');
+    sc.toggleMode();
+    if (sc.mode !== 'level' || sc.phase !== 'play' || LB.placedCount(sc.puzzle) !== levelPlaced) {
+      problems.push('切走后闯关胜利态 / 局面不对');
+    }
+    sc.toggleMode();
+    if (sc.mode !== 'random' || sc.phase !== 'won' || !LB.isSolved(sc.puzzle)) {
+      problems.push(`切回随机没有恢复胜利态（${sc.mode}/${sc.phase}）`);
+    }
+  }
+
+  check(problems.length === 0, `逻辑拼图：${problems.slice(0, 6).join('；')}`);
+}
+
 if (failures.length) {
   console.error(`✗ ${failures.length} 处失败：`);
   failures.forEach((f) => console.error('  - ' + f));
   process.exit(1);
 }
-console.log('✓ 25 个场景：渲染无异常、静音 FAB 位置正确、静音真拦住了音效、全局关闭时不展示');
+console.log('✓ 25 个游戏场景：渲染无异常、静音 FAB 位置正确、静音真拦住了音效、全局关闭时不展示');

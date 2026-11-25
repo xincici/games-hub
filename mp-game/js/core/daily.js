@@ -8,7 +8,7 @@ const VERSION = 1;
 const KEEP_RECENT = 5;
 const KEEP_DAYS = 400;
 
-// ---- 任务池（41 条，覆盖 25 个游戏）----
+// ---- 任务池（38 条，覆盖 25 个游戏）----
 // kind：play 开一局 / win 赢一局 / perfect 完美胜利 / fast 速通 / level 通关到第 N 关 /
 //       reach 分数或里程碑到 N / bump 计数（四条、同花顺…）/ peak 峰值（连胜…）
 const POOL = [
@@ -33,11 +33,13 @@ const POOL = [
   { id: 'slide_win1', game: 'slide', kind: 'win', need: 1, cn: '赢一局 Emoji 滑行', en: 'Win a Slide round' },
   { id: 'detective_win1', game: 'detective', kind: 'win', need: 1, cn: '赢一局侦探', en: 'Win a Detective round' },
   { id: 'hunter_win1', game: 'hunter', kind: 'win', need: 1, cn: '赢一局猎手', en: 'Win a Hunter round' },
-  { id: 'mahjong_win1', game: 'mahjong', kind: 'win', need: 1, cn: '赢一局麻将英雄', en: 'Win a Mahjong Hero round' },
+  { id: 'combo_win1', game: 'combo', kind: 'win', need: 1, cn: '赢一局组牌闯关', en: 'Win a Tile Quest round' },
   { id: 'solo_win1', game: 'solo', kind: 'win', need: 1, cn: '赢一局单人麻将', en: 'Win a Solo Mahjong round' },
   { id: 'ttt_win1', game: 'ttt', kind: 'win', need: 1, cn: '赢一局井字棋', en: 'Win a Tic-Tac-Toe round' },
   { id: 'ttt_win2', game: 'ttt', kind: 'win', need: 2, cn: '赢 2 局井字棋', en: 'Win 2 Tic-Tac-Toe rounds' },
-  { id: 'alchemy_win1', game: 'alchemy', kind: 'win', need: 1, cn: '赢一局扑克炼金术', en: 'Win an Alchemy round' },
+  { id: 'combo_win3', game: 'combo', kind: 'win', need: 3, cn: '赢 3 局组牌闯关', en: 'Win 3 Tile Quest rounds' },
+  { id: 'logicpuzzle_win1', game: 'logicpuzzle', kind: 'win', need: 1, cn: '赢一局逻辑拼图', en: 'Clear a Logic Puzzle stage' },
+  { id: 'logicpuzzle_win3', game: 'logicpuzzle', kind: 'win', need: 3, cn: '赢 3 局逻辑拼图', en: 'Win 3 Logic Puzzle stages' },
   { id: 'quesheng_win1', game: 'quesheng', kind: 'win', need: 1, cn: '赢一局雀圣', en: 'Win a Quesheng round' },
   { id: 'gambler_win1', game: 'gambler', kind: 'win', need: 1, cn: '赢一局赌神', en: 'Win a Gambler round' },
   { id: 'gambler_streak3', game: 'gambler', kind: 'peak', field: 'streak1', need: 3, cn: '赌神：即时模式连胜 3 场', en: 'Gambler: 3 wins in a row' },

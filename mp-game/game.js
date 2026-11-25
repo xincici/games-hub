@@ -24,9 +24,9 @@ const SortScene = require('./js/games/sort/scene');
 const SlideScene = require('./js/games/slide/scene');
 const TttScene = require('./js/games/ttt/scene');
 const PokerScene = require('./js/games/poker/scene');
-const MahjongScene = require('./js/games/mahjong/scene');
 const SoloScene = require('./js/games/solo/scene');
-const AlchemyScene = require('./js/games/alchemy/scene');
+const ComboScene = require('./js/games/combo/scene');
+const LogicPuzzleScene = require('./js/games/logicpuzzle/scene');
 const QueshengScene = require('./js/games/quesheng/scene');
 const LegendScene = require('./js/games/legend/scene');
 const GamblerScene = require('./js/games/gambler/scene');
@@ -35,4 +35,4 @@ if (wx.setPreferredFramesPerSecond) wx.setPreferredFramesPerSecond(60);
 icons.init();
 tiles.preload();
 
-new App(HomeScene, { home: HomeScene, click: ClickScene, match: MatchScene, point24: Point24Scene, guess: GuessScene, detective: DetectiveScene, hunter: HunterScene, master: MasterScene, g2048: G2048Scene, snake: SnakeScene, three: ThreeScene, link: LinkScene, puzzle: PuzzleScene, mirror: MirrorScene, down: DownScene, crush: CrushScene, sudoku: SudokuScene, sort: SortScene, slide: SlideScene, ttt: TttScene, poker: PokerScene, mahjong: MahjongScene, solo: SoloScene, alchemy: AlchemyScene, quesheng: QueshengScene, legend: LegendScene, gambler: GamblerScene });
+new App(HomeScene, { home: HomeScene, click: ClickScene, match: MatchScene, point24: Point24Scene, guess: GuessScene, detective: DetectiveScene, hunter: HunterScene, master: MasterScene, g2048: G2048Scene, snake: SnakeScene, three: ThreeScene, link: LinkScene, puzzle: PuzzleScene, mirror: MirrorScene, down: DownScene, crush: CrushScene, sudoku: SudokuScene, sort: SortScene, slide: SlideScene, ttt: TttScene, poker: PokerScene, solo: SoloScene, combo: ComboScene, logicpuzzle: LogicPuzzleScene, quesheng: QueshengScene, legend: LegendScene, gambler: GamblerScene });
