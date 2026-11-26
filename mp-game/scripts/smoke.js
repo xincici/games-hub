@@ -4949,6 +4949,29 @@ i18n.setLang('cn');
     if (!modeBtn || !muteBtn || modeBtn.x >= muteBtn.x) problems.push('模式切换按钮不在静音左边');
   }
 
+  // 长条块命中：点在块内格缝上时，应命中长条本身，不能按 cellAt 四舍五入到相邻块
+  {
+    const probe = new LogicCls(fakeApp);
+    probe.startLevel(1);
+    const d = probe.puzzle.pieces.find((p) => p.id === 'd');
+    let at = null;
+    for (let r = 0; r < 8 && !at; r += 1) {
+      for (let c = 0; c < 8; c += 1) {
+        if (LB.canPlace(probe.puzzle, d, r, c)) { at = { r, c }; break; }
+      }
+    }
+    if (!at || !LB.place(probe.puzzle, d, at.r, at.c)) {
+      problems.push('长条块命中测试无法放置 d');
+    } else {
+      const rr = probe.spanRect(d.r, d.c, d.w, d.h);
+      const gapPoint = { x: rr.x + rr.w / 2, y: rr.y + probe.cell + probe.cellGap / 2 };
+      if (probe.pieceAtPoint(gapPoint) !== d) problems.push('点在长条块格缝上没有命中长条块');
+      probe.onTouchStart(gapPoint);
+      if (probe.tapPiece !== d) problems.push('长条块格缝点击选错了色块');
+      probe.onTouchEnd(gapPoint);
+    }
+  }
+
   const tapTray = (i) => {
     const r = sc.traySlotRect(i);
     const p = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
@@ -5025,19 +5048,33 @@ i18n.setLang('cn');
     }
   }
   {
+    const beforeW = a.w;
+    const beforeH = a.h;
     const rr = sc.spanRect(a.r, a.c, a.w, a.h);
     const p = { x: rr.x + rr.w / 2, y: rr.y + rr.h / 2 };
     sc.onTouchStart(p); sc.onTouchEnd(p);
-    if (a.placed) problems.push('单击已放拼块没有收回');
+    if (!a.placed || (a.w === beforeW && a.h === beforeH)) {
+      problems.push('单击棋盘拼块没有原地旋转');
+    }
   }
   {
-    const i = sc.puzzle.pieces.indexOf(a);
-    const slot = sc.traySlotRect(i);
-    const start = { x: slot.x + slot.w / 2, y: slot.y + slot.h / 2 };
+    // 拖到棋盘外的其他位置：放不下应回原棋盘位置，不能收回候选区
+    const cur = sc.spanRect(a.r, a.c, a.w, a.h);
+    const start = { x: cur.x + cur.w / 2, y: cur.y + cur.h / 2 };
     sc.onTouchStart(start);
     sc.onTouchMove({ x: start.x, y: sc.helpFab.y + 20 });
     sc.onTouchEnd({ x: start.x, y: sc.helpFab.y + 20 });
-    if (a.placed) problems.push('拖到棋盘外也放下了');
+    if (!a.placed) problems.push('拖到棋盘外其他位置不应收回候选区');
+  }
+  {
+    // 只有拖到候选区松手才收回
+    const cur = sc.spanRect(a.r, a.c, a.w, a.h);
+    const start = { x: cur.x + cur.w / 2, y: cur.y + cur.h / 2 };
+    const target = { x: sc.trayX + sc.trayW / 2, y: sc.trayY + sc.trayH / 2 };
+    sc.onTouchStart(start);
+    sc.onTouchMove(target);
+    sc.onTouchEnd(target);
+    if (a.placed) problems.push('拖到候选区没有收回拼块');
   }
   solveCurrent();
   sc.render(makeCtx());
@@ -5058,7 +5095,7 @@ i18n.setLang('cn');
   sc.nextLevel();
   if (sc.level !== 2 || sc.phase !== 'play') problems.push('下一关没有进入第 2 关');
 
-  // 随机模式：切换后随机一关；胜利给「再来一局」；再来保留连胜；新游戏清空连胜
+  // 随机模式：胜利给「重玩 / 选一关 / 随机一关」；新游戏面板也支持选关或随机
   {
     sc.toggleMode();
     if (sc.mode !== 'random') problems.push('模式切换没有进入随机一局');
@@ -5078,31 +5115,91 @@ i18n.setLang('cn');
     if (sc.phase !== 'won') problems.push('随机模式没有判胜');
     if (sc.streak !== 1) problems.push(`随机模式连胜没有累加（${sc.streak}）`);
     if (sc.best !== 2) problems.push(`随机模式胜利污染了闯关最高关卡（${sc.best}）`);
-    if (!sc.buttons.some((b) => b.id === 'result-again')) problems.push('随机模式胜利后没有「再来一局」');
+    ['result-replay', 'result-pick', 'result-again'].forEach((id) => {
+      const b = sc.buttons.find((x) => x.id === id);
+      if (!b) { problems.push(`随机模式胜利后缺少 ${id}`); return; }
+      if (b.x < sc.boardX - 1 || b.x + b.w > sc.boardX + sc.boardW + 1
+        || b.y < sc.boardY - 1 || b.y + b.h > sc.boardY + sc.boardH + 1) {
+        problems.push(`随机模式胜利按钮 ${id} 超出棋盘`);
+      }
+    });
     if (sc.buttons.some((b) => b.id === 'result-next')) problems.push('随机模式不应有「下一关」');
+    const pickBtn = sc.buttons.find((b) => b.id === 'result-pick');
+    if (pickBtn) {
+      pickBtn.onTap();
+      if (!sc.pickerOpen) problems.push('随机胜利「选一关」没有打开选关面板');
+      sc.render(makeCtx());
+      const cancelPick = sc.buttons.find((b) => b.id === 'picker-cancel');
+      if (cancelPick) cancelPick.onTap();
+      if (sc.pickerOpen) problems.push('选关面板取消后没有关闭');
+    }
     const againBtn = sc.buttons.find((b) => b.id === 'result-again');
     const before = sc.level;
     if (againBtn) againBtn.onTap();
     if (sc.mode !== 'random' || sc.phase !== 'play') problems.push('再来一局没有回到随机模式');
     if (sc.streak !== 1) problems.push('再来一局清空了连胜');
     if (sc.level === before && LB.LEVEL_COUNT > 1) problems.push('再来一局没有换关卡');
-    // 随机模式的「新游戏」也要二次确认，确认后随机新开、清空当前连胜
+    // 随机模式新游戏：取消 / 选一关 / 随机一关，不走统一二次确认
     sc.render(makeCtx());
     const ng = sc.buttons.find((b) => b.id === 'new-game');
     const levelBeforeNew = sc.level;
     if (!ng) problems.push('随机模式没有新游戏按钮');
     if (ng) ng.onTap();
-    if (!sc.confirming) problems.push('随机模式点新游戏没有弹二次确认');
-    if (sc.level !== levelBeforeNew) problems.push('二次确认前就换关了');
+    if (!sc.randomNewGameOpen || sc.confirming) problems.push('随机模式新游戏没有打开三选一面板');
+    if (sc.level !== levelBeforeNew) problems.push('打开新游戏面板前就换关了');
     sc.render(makeCtx());
-    sc.buttons = [];
-    confirmMod.draw(makeCtx(), sc);
-    const okNew = sc.buttons.find((b) => b.id === 'confirm-ok');
-    if (!okNew) problems.push('随机模式二次确认没有确定按钮');
-    if (okNew) okNew.onTap();
-    if (sc.streak !== 0 || sc.mode !== 'random') problems.push('随机模式新游戏没有清空连胜 / 保持随机');
+    ['random-new-cancel', 'random-new-pick', 'random-new-random'].forEach((id) => {
+      if (!sc.buttons.some((b) => b.id === id)) problems.push(`随机模式新游戏缺少 ${id}`);
+    });
+    const randomNew = sc.buttons.find((b) => b.id === 'random-new-random');
+    if (randomNew) randomNew.onTap();
+    if (sc.randomNewGameOpen || sc.streak !== 0 || sc.mode !== 'random') {
+      problems.push('随机模式新游戏随机一关没有清空连胜 / 关闭面板');
+    }
     if (sc.best !== 2) problems.push('随机模式新游戏改了闯关最高关卡');
     if (sc.level < 1 || sc.level > 88) problems.push('随机模式新游戏关卡越界');
+
+    // 选关面板：分页 8×5，通关后选择指定关卡，仍是随机模式且不改闯关进度
+    const seqBeforePick = sc.seqLevel;
+    sc.level = 1;
+    sc.streak = 4;
+    sc.openLevelPicker(true);
+    if (!sc.pickerOpen || sc.pickerOffset[0] !== 0 || sc.pickerOffset[1] !== 1) {
+      problems.push('选关滚轮没有定位到当前第 1 关');
+    }
+    sc.render(makeCtx());
+    ['picker-confirm', 'picker-cancel'].forEach((id) => {
+      if (!sc.buttons.some((b) => b.id === id)) problems.push(`选关面板缺少 ${id}`);
+    });
+    const wheel0 = sc.pickerWheelRects[0];
+    const wheel1 = sc.pickerWheelRects[1];
+    const rowH = sc.pickerWheelRows;
+    if (!wheel0 || !wheel1 || !(rowH > 0)) problems.push('选关滚轮几何不对');
+    else {
+      const p0 = { x: wheel0.x + wheel0.w / 2, y: wheel0.y + wheel0.h / 2 };
+      sc.onTouchStart(p0);
+      sc.onTouchMove({ x: p0.x, y: p0.y - rowH * 4 });
+      sc.onTouchEnd({ x: p0.x, y: p0.y - rowH * 4 });
+      if (Math.round(sc.pickerOffset[0]) !== 4) problems.push('第一个滚轮没有滚到 4');
+      const p1 = { x: wheel1.x + wheel1.w / 2, y: wheel1.y + wheel1.h / 2 };
+      sc.onTouchStart(p1);
+      sc.onTouchMove({ x: p1.x, y: p1.y - rowH });
+      sc.onTouchEnd({ x: p1.x, y: p1.y - rowH });
+      if (sc.pickerLevel() !== 42) problems.push(`两个滚轮没有组成 42（${sc.pickerLevel()}）`);
+    }
+    const confirmPick = sc.buttons.find((b) => b.id === 'picker-confirm');
+    if (confirmPick) confirmPick.onTap();
+    if (sc.pickerOpen || sc.mode !== 'random' || sc.level !== 42 || sc.streak !== 0) {
+      problems.push('选关后模式 / 关卡 / 连胜不对');
+    }
+    if (sc.seqLevel !== seqBeforePick) problems.push('随机模式选关改了闯关进度');
+    // 滚轮边界：8 开头个位最多 8；0 开头不能组成 00
+    sc.openLevelPicker(true);
+    sc.pickerOffset = [8, 9];
+    if (sc.pickerLevel() !== 88) problems.push(`滚轮 8/9 应夹到 88（${sc.pickerLevel()}）`);
+    sc.pickerOffset = [0, 0];
+    if (sc.pickerLevel() !== 1) problems.push(`滚轮 0/0 应夹到 1（${sc.pickerLevel()}）`);
+    sc.pickerOpen = false;
   }
   // 切回闯关模式，回到闯关进度
   {
@@ -5113,6 +5210,7 @@ i18n.setLang('cn');
   // 查看答案：先清空，再逐块动画，最后展示胜利；不计连胜、不给成就
   {
     sc.startNewGame(); // mode level, level 1, streak 0
+    sc.best = 1;
     sc.streak = 5;
     sc.bestStreak = 5;
     const wins = achvMod.winsOf('logicpuzzle');
@@ -5133,8 +5231,9 @@ i18n.setLang('cn');
     if (sc.bestStreak !== 5) problems.push('闯关模式查看答案不应该改随机最长连胜');
     if (achvMod.winsOf('logicpuzzle') !== wins) problems.push('查看答案不应计入成就胜场');
     if (!LB.isSolved(sc.puzzle)) problems.push('查看答案没有铺满棋盘');
-    if (!sc.buttons.some((b) => b.id === 'result-new')) problems.push('查看答案结算没有「新游戏」');
-    if (sc.buttons.some((b) => b.id === 'result-next')) problems.push('查看答案结算不应有「下一关」');
+    if (sc.best !== 2) problems.push(`查看答案获胜没有计入最高关卡（${sc.best}）`);
+    if (!sc.buttons.some((b) => b.id === 'result-next')) problems.push('闯关模式查看答案结算没有「下一关」');
+    if (sc.buttons.some((b) => b.id === 'result-new')) problems.push('闯关模式查看答案结算不应从第一关新游戏');
   }
 
   // 中途恢复：已放拼块 / 关卡 / 连胜都要回得来

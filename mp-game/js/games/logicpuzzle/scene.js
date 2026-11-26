@@ -65,6 +65,14 @@ class LogicPuzzleScene extends Scene {
     this.press = null;
     this.reveal = null;
     this.revealed = false;
+    this.randomNewGameOpen = false;
+    this.pickerOpen = false;
+    this.pickerResetStreak = false;
+    this.pickerOffset = [0, 1];
+    this.pickerWheelRects = [];
+    this.pickerWheelRows = 0;
+    this.pickerDrag = null;
+    this.pickerAnim = null;
     this.puzzle = logic.createLevel(this.level - 1);
     this.layout();
     if (!this.restore()) {
@@ -159,11 +167,14 @@ class LogicPuzzleScene extends Scene {
       this.helpOpen = false;
         this.shakeAt = 0;
       this.reveal = null;
+      this.randomNewGameOpen = false;
+      this.pickerOpen = false;
+      this.pickerDrag = null;
       this.resultAt = 0;
       // 以盘面为准：只有真的铺满才算胜利态（损坏的 state 不能白送胜利）
       if (logic.isSolved(this.puzzle)) {
         this.phase = WON;
-        if (!this.revealed && this.mode === 'level') {
+        if (this.mode === 'level') {
           this.best = Math.max(this.best, Math.min(logic.LEVEL_COUNT + 1, lv + 1));
         }
       } else {
@@ -192,6 +203,14 @@ class LogicPuzzleScene extends Scene {
     this.press = null;
     this.reveal = null;
     this.revealed = false;
+    this.randomNewGameOpen = false;
+    this.pickerOpen = false;
+    this.pickerResetStreak = false;
+    this.pickerOffset = [0, 1];
+    this.pickerWheelRects = [];
+    this.pickerWheelRows = 0;
+    this.pickerDrag = null;
+    this.pickerAnim = null;
     this.save();
     achv.beginRound('logicpuzzle');
   }
@@ -214,6 +233,8 @@ class LogicPuzzleScene extends Scene {
 
   startNewGame() {
     this.confirming = false;
+    this.randomNewGameOpen = false;
+    this.pickerOpen = false;
     if (this.mode === 'random') this.streak = 0;
     removeRaw(this.stateKeyFor(this.mode));
     if (this.mode === 'random') this.startRandomLevel();
@@ -238,7 +259,7 @@ class LogicPuzzleScene extends Scene {
   }
 
   toggleMode() {
-    if (this.reveal || this.confirming || this.helpOpen) return;
+    if (this.reveal || this.confirming || this.helpOpen || this.randomNewGameOpen || this.pickerOpen) return;
     this.save();                       // 先把手头这局的盘面存下来
     const target = this.mode === 'random' ? 'level' : 'random';
     this.mode = target;
@@ -357,16 +378,22 @@ class LogicPuzzleScene extends Scene {
 
   // ---------- 交互 ----------
   canPlay() {
-    return this.phase === PLAY && !this.helpOpen && !this.confirming && !this.reveal;
+    return this.phase === PLAY && !this.helpOpen && !this.confirming && !this.reveal
+      && !this.randomNewGameOpen && !this.pickerOpen;
   }
 
-  cellAt(p) {
+
+  // 按整块的可视矩形命中，而不是按「点落在哪个格」再反查。
+  // 长条块跨过格间距，点它的边缘/缝隙时 Math.round 很容易四舍五入到相邻块。
+  pieceAtPoint(p) {
     if (!p) return null;
-    const span = this.cell + CELL_GAP;
-    const c = Math.round((p.x - this.boardX - this.pad) / span);
-    const r = Math.round((p.y - this.boardY - this.pad) / span);
-    if (r < 0 || c < 0 || r >= logic.SIZE || c >= logic.SIZE) return null;
-    return { r, c };
+    for (let i = 0; i < this.puzzle.pieces.length; i += 1) {
+      const piece = this.puzzle.pieces[i];
+      if (!piece.placed) continue;
+      const rr = this.spanRect(piece.r, piece.c, piece.w, piece.h);
+      if (p.x >= rr.x && p.x <= rr.x + rr.w && p.y >= rr.y && p.y <= rr.y + rr.h) return piece;
+    }
+    return null;
   }
 
   traySlotAt(p) {
@@ -429,6 +456,57 @@ class LogicPuzzleScene extends Scene {
     this.liftBoardDrag();
   }
 
+  // 单击棋盘上的拼块：先尝试原地旋转；周围放不下时找最近的合法位置。
+  // 放不下才晃动，绝不把拼块收回候选区（收回只能拖到托盘）。
+  rotatePlaced(piece) {
+    if (!piece || !piece.placed) return false;
+    const oldR = piece.r;
+    const oldC = piece.c;
+    const centerR = oldR + piece.h / 2;
+    const centerC = oldC + piece.w / 2;
+    logic.lift(this.puzzle, piece);
+    logic.rotate(piece);
+    const seen = new Set();
+    const candidates = [];
+    const add = (r, c) => {
+      const rr = Math.round(r);
+      const cc = Math.round(c);
+      if (rr < 0 || cc < 0 || rr > logic.SIZE - piece.h || cc > logic.SIZE - piece.w) return;
+      const key = `${rr},${cc}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push({ r: rr, c: cc });
+    };
+    // 只尝试「原位置 + 以原中心为锚点」的附近位置；转不下就晃动，不把块甩到棋盘另一头。
+    for (let dr = -2; dr <= 2; dr += 1) {
+      for (let dc = -2; dc <= 2; dc += 1) {
+        add(oldR + dr, oldC + dc);
+        add(centerR - piece.h / 2 + dr, centerC - piece.w / 2 + dc);
+      }
+    }
+    let best = null;
+    let bestD = Infinity;
+    candidates.forEach(({ r, c }) => {
+      if (!logic.canPlace(this.puzzle, piece, r, c)) return;
+      const dd = (r - oldR) * (r - oldR) + (c - oldC) * (c - oldC);
+      if (dd < bestD) { bestD = dd; best = { r, c }; }
+    });
+    if (best && logic.place(this.puzzle, piece, best.r, best.c)) {
+      this.save();
+      return true;
+    }
+    // 附近没有位置：转回原方向，放回原位并晃动提示。
+    logic.rotate(piece);
+    logic.place(this.puzzle, piece, oldR, oldC);
+    this.shakeAt = Date.now();
+    return false;
+  }
+
+  trayDropPoint(p) {
+    return !!p && p.x >= this.trayX && p.x <= this.trayX + this.trayW
+      && p.y >= this.trayY && p.y <= this.trayY + this.trayH;
+  }
+
   liftBoardDrag() {
     const drag = this.drag;
     if (!drag || !drag.fromBoard || drag.lifted) return;
@@ -437,6 +515,7 @@ class LogicPuzzleScene extends Scene {
   }
 
   onTouchStart(p) {
+    if (this.pickerOpen) { this.pickerTouchStart(p); return; }
     if (!this.canPlay()) return;
     this.touch = { x: p.x, y: p.y, moved: false };
     this.tapPiece = null;
@@ -455,17 +534,15 @@ class LogicPuzzleScene extends Scene {
       };
       return;
     }
-    const cell = this.cellAt(p);
-    if (cell) {
-      const piece = logic.pieceAt(this.puzzle, cell.r, cell.c);
-      if (piece) {
-        this.tapPiece = piece;
-        this.press = { piece, x: p.x, y: p.y, at: Date.now(), active: false };
-      }
+    const piece = this.pieceAtPoint(p);
+    if (piece) {
+      this.tapPiece = piece;
+      this.press = { piece, x: p.x, y: p.y, at: Date.now(), active: false };
     }
   }
 
   onTouchMove(p) {
+    if (this.pickerOpen) { this.pickerTouchMove(p); return; }
     if (!this.touch) return;
     const dx = p.x - this.touch.x;
     const dy = p.y - this.touch.y;
@@ -483,6 +560,7 @@ class LogicPuzzleScene extends Scene {
   }
 
   onTouchEnd(p) {
+    if (this.pickerOpen) { this.pickerTouchEnd(p); return; }
     const drag = this.drag;
     this.drag = null;
     const tapPiece = this.tapPiece;
@@ -503,6 +581,11 @@ class LogicPuzzleScene extends Scene {
           return;
         }
         this.liftBoardDrag();
+        if (this.trayDropPoint(p)) {
+          // 拖到候选区松手：留在候选区；这是唯一的「收回」方式。
+          this.save();
+          return;
+        }
         const target = this.dropTarget(drag, p);
         if (target) {
           logic.place(this.puzzle, drag.piece, target.r, target.c);
@@ -533,10 +616,9 @@ class LogicPuzzleScene extends Scene {
       return;
     }
 
-    // 快速点击棋盘上已放的拼块：仍保留「收回托盘」。
+    // 快速点击棋盘上已放的拼块：原地/就近旋转，不收回托盘。
     if (tapPiece && touch && !touch.moved && tapPiece.placed) {
-      logic.lift(this.puzzle, tapPiece);
-      this.save();
+      this.rotatePlaced(tapPiece);
     }
   }
 
@@ -619,6 +701,7 @@ class LogicPuzzleScene extends Scene {
     this.reveal = null;
     this.revealed = true;
     if (this.mode === 'random') this.streak = 0; // 查看答案不计随机连胜
+    else this.best = Math.max(this.best, Math.min(logic.LEVEL_COUNT + 1, this.level + 1));
     this.phase = WON;
     this.resultAt = Date.now();
     this.save();
@@ -694,6 +777,10 @@ class LogicPuzzleScene extends Scene {
   update(dt) {
     this.now = Date.now();
     if (this.bg) this.bg.update(dt || 16);
+    if (this.pickerOpen) {
+      this.updatePicker();
+      return;
+    }
     if (this.reveal) {
       if (!this.helpOpen && !this.confirming) this.updateReveal(dt);
       return;
@@ -718,6 +805,8 @@ class LogicPuzzleScene extends Scene {
     // 帮助 / 静音和其它游戏一样常驻（胜利遮罩只盖棋盘，不挡右下角）
     if (!this.helpOpen && !this.confirming) this.drawFabs(c);
     if (this.phase === WON && this.resultVisible(RESULT_DELAY_MS, `logicpuzzle-win:${this.level}:${this.resultAt}`)) this.drawResult(c);
+    if (this.randomNewGameOpen) this.drawRandomNewGame(c);
+    if (this.pickerOpen) this.drawLevelPicker(c);
   }
 
   drawHeader(c) {
@@ -755,6 +844,263 @@ class LogicPuzzleScene extends Scene {
     });
   }
 
+  openRandomNewGame() {
+    if (this.mode !== 'random' || !this.canPlay()) return;
+    this.randomNewGameOpen = true;
+    this.confirming = false;
+    this.drag = null;
+    this.touch = null;
+    this.tapPiece = null;
+    this.press = null;
+  }
+
+  openLevelPicker(resetStreak) {
+    this.randomNewGameOpen = false;
+    this.pickerOpen = true;
+    this.pickerResetStreak = !!resetStreak;
+    const level = Math.max(1, Math.min(logic.LEVEL_COUNT, this.level));
+    this.pickerOffset = [Math.floor(level / 10), level % 10];
+    this.pickerDrag = null;
+    this.pickerAnim = null;
+  }
+
+  wheelBounds(which) {
+    if (which === 0) return [0, 8];
+    const first = Math.max(0, Math.min(8, Math.round(this.pickerOffset[0])));
+    if (first === 8) return [0, 8];
+    if (first === 0) return [1, 9];
+    return [0, 9];
+  }
+
+  pickerLevel() {
+    const first = Math.max(0, Math.min(8, Math.round(this.pickerOffset[0])));
+    const second = Math.max(this.wheelBounds(1)[0], Math.min(this.wheelBounds(1)[1], Math.round(this.pickerOffset[1])));
+    return Math.max(1, Math.min(logic.LEVEL_COUNT, first * 10 + second));
+  }
+
+  confirmLevelPick() {
+    if (!this.pickerOpen) return;
+    this.finishPickerAnim();
+    const level = this.pickerLevel();
+    this.pickerOpen = false;
+    this.pickerDrag = null;
+    if (this.pickerResetStreak) this.streak = 0;
+    this.mode = 'random';
+    setRaw(MODE_KEY, 'random');
+    this.startPuzzle(level);
+  }
+
+  pickerWheelAt(p) {
+    if (!p || !this.pickerOpen) return -1;
+    for (let i = 0; i < this.pickerWheelRects.length; i += 1) {
+      const r = this.pickerWheelRects[i];
+      if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return i;
+    }
+    return -1;
+  }
+
+  finishPickerAnim() {
+    const anim = this.pickerAnim;
+    if (!anim) return;
+    this.pickerOffset[anim.which] = anim.to;
+    this.pickerAnim = null;
+    if (anim.which === 0) {
+      const bounds = this.wheelBounds(1);
+      this.pickerOffset[1] = Math.max(bounds[0], Math.min(bounds[1], this.pickerOffset[1]));
+    }
+  }
+
+  pickerTouchStart(p) {
+    this.finishPickerAnim();
+    const which = this.pickerWheelAt(p);
+    if (which < 0) return;
+    this.pickerAnim = null;
+    this.pickerDrag = {
+      which,
+      startY: p.y,
+      startOffset: this.pickerOffset[which],
+      moved: false,
+    };
+  }
+
+  pickerTouchMove(p) {
+    const drag = this.pickerDrag;
+    if (!drag) return;
+    const rowH = this.pickerWheelRows || 1;
+    const bounds = drag.which === 0 ? [0, 8] : this.wheelBounds(1);
+    const value = Math.max(bounds[0], Math.min(bounds[1],
+      drag.startOffset + (drag.startY - p.y) / rowH));
+    this.pickerOffset[drag.which] = value;
+    if (drag.which === 0) {
+      const secondBounds = this.wheelBounds(1);
+      this.pickerOffset[1] = Math.max(secondBounds[0], Math.min(secondBounds[1], this.pickerOffset[1]));
+    }
+    if (Math.abs(p.y - drag.startY) > 4) drag.moved = true;
+  }
+
+  pickerTouchEnd(p) {
+    const drag = this.pickerDrag;
+    if (!drag) return;
+    const which = drag.which;
+    const rowH = this.pickerWheelRows || 1;
+    const bounds = which === 0 ? [0, 8] : this.wheelBounds(1);
+    let target = this.pickerOffset[which];
+    if (!drag.moved && p) {
+      const rect = this.pickerWheelRects[which];
+      if (rect) {
+        const center = rect.y + rect.h / 2;
+        target = this.pickerOffset[which] + (center - p.y) / rowH;
+      }
+    }
+    target = Math.max(bounds[0], Math.min(bounds[1], Math.round(target)));
+    this.pickerAnim = { which, from: this.pickerOffset[which], to: target, at: Date.now() };
+    this.pickerDrag = null;
+  }
+
+  updatePicker() {
+    const anim = this.pickerAnim;
+    if (!anim) return;
+    const p = Math.min(1, (Date.now() - anim.at) / 240);
+    const e = 1 - Math.pow(1 - p, 3);
+    this.pickerOffset[anim.which] = anim.from + (anim.to - anim.from) * e;
+    if (p >= 1) {
+      this.pickerOffset[anim.which] = anim.to;
+      this.pickerAnim = null;
+    }
+    if (anim.which === 0) {
+      const bounds = this.wheelBounds(1);
+      this.pickerOffset[1] = Math.max(bounds[0], Math.min(bounds[1], this.pickerOffset[1]));
+    }
+  }
+
+
+  drawModalButton(c, x, y, w, h, label, kind, id, onTap, enabled) {
+    const T = theme.tokens;
+    if (kind === 'primary') {
+      D.fillRoundRect(c, x, y, w, h, 8, enabled === false ? T.disabled : T.primary);
+    } else {
+      D.fillRoundRect(c, x, y, w, h, 8, T.card);
+      D.strokeRoundRect(c, x, y, w, h, 8, enabled === false ? T.border : T.god, 1);
+    }
+    D.text(c, label, x + w / 2, y + h / 2, {
+      size: 12.5, weight: 'bold',
+      color: kind === 'primary' ? '#fff' : enabled === false ? T.muted : T.god,
+      align: 'center',
+    });
+    if (enabled !== false) this.addButton(id, x, y, w, h, onTap);
+  }
+
+  drawRandomNewGame(c) {
+    const T = theme.tokens;
+    c.fillStyle = 'rgba(0,0,0,0.48)';
+    c.fillRect(0, 0, W, H);
+    const w = W - 52;
+    const h = 196;
+    const x = (W - w) / 2;
+    const y = (H - h) / 2;
+    D.card(c, x, y, w, h, T);
+    this.addButton('random-new-mask', 0, 0, W, H, () => {});
+    D.text(c, t('logicpuzzle.newGameTitle'), W / 2, y + 30, {
+      size: 17, weight: 'bold', color: T.text, align: 'center',
+    });
+    D.text(c, t('logicpuzzle.newGameRandomMsg'), W / 2, y + 58, {
+      size: 12, color: T.muted, align: 'center',
+    });
+    const gap = 8;
+    const bw = (w - 40 - gap * 2) / 3;
+    const by = y + h - 48;
+    this.drawModalButton(c, x + 20, by, bw, 32, t('cancel'), 'secondary', 'random-new-cancel',
+      () => { this.randomNewGameOpen = false; });
+    // 与随机胜利遮罩保持同一套样式：选一关=橙色实心，随机一关=主色实心。
+    this.drawCompactResultButton(c, x + 20 + bw + gap, by, bw, 32,
+      t('logicpuzzle.pickLevelShort'), 'pick', 'random-new-pick', () => this.openLevelPicker(true));
+    this.drawCompactResultButton(c, x + 20 + (bw + gap) * 2, by, bw, 32,
+      t('logicpuzzle.randomLevelShort'), 'random', 'random-new-random',
+      () => { this.randomNewGameOpen = false; this.startNewGame(); });
+  }
+
+  drawLevelPicker(c) {
+    const T = theme.tokens;
+    c.fillStyle = 'rgba(0,0,0,0.48)';
+    c.fillRect(0, 0, W, H);
+    const w = Math.min(W - 24, 360);
+    const h = Math.min(H - 70, 360);
+    const x = (W - w) / 2;
+    const y = (H - h) / 2;
+    D.card(c, x, y, w, h, T);
+    this.addButton('picker-mask', 0, 0, W, H, () => {});
+    D.text(c, t('logicpuzzle.chooseLevelTitle'), W / 2, y + 28, {
+      size: 16, weight: 'bold', color: T.text, align: 'center',
+    });
+    D.text(c, t('logicpuzzle.levelPreview').replace('{n}', String(this.pickerLevel())),
+      W / 2, y + 52, { size: 12, color: T.muted, align: 'center' });
+    const wheelW = Math.min(112, (w - 80) / 2);
+    const wheelH = 170;
+    const wheelY = y + 70;
+    const wheelGap = 16;
+    const wheelStart = (W - (wheelW * 2 + wheelGap)) / 2;
+    this.pickerWheelRects = [
+      { x: wheelStart, y: wheelY, w: wheelW, h: wheelH },
+      { x: wheelStart + wheelW + wheelGap, y: wheelY, w: wheelW, h: wheelH },
+    ];
+    this.drawPickerWheel(c, this.pickerWheelRects[0], 0);
+    this.drawPickerWheel(c, this.pickerWheelRects[1], 1);
+    const fw = (w - 40 - 8) / 2;
+    const fy = y + h - 46;
+    this.drawModalButton(c, x + 20, fy, fw, 32, t('cancel'), 'secondary',
+      'picker-cancel', () => { this.pickerOpen = false; this.pickerDrag = null; this.pickerAnim = null; });
+    this.drawModalButton(c, x + 28 + fw, fy, fw, 32, t('logicpuzzle.pickConfirm'), 'primary',
+      'picker-confirm', () => this.confirmLevelPick());
+  }
+
+  drawPickerWheel(c, rect, which) {
+    const T = theme.tokens;
+    const rowH = rect.h / 5;
+    this.pickerWheelRows = rowH;
+    const centerY = rect.y + rect.h / 2;
+    const bounds = this.wheelBounds(which);
+    const offset = this.pickerOffset[which];
+    D.fillRoundRect(c, rect.x, rect.y, rect.w, rect.h, 10, T.enter);
+    c.save();
+    D.roundRect(c, rect.x, rect.y, rect.w, rect.h, 10);
+    c.clip();
+    // 中间选中行
+    D.fillRoundRect(c, rect.x + 4, centerY - rowH / 2, rect.w - 8, rowH, 8,
+      theme.dark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.72)');
+    for (let index = bounds[0]; index <= bounds[1]; index += 1) {
+      const d = index - offset;
+      if (Math.abs(d) > 2.45) continue;
+      const py = centerY + d * rowH;
+      const active = Math.abs(d) < 0.5;
+      const alpha = Math.max(0.15, 1 - Math.abs(d) * 0.36);
+      c.save();
+      c.globalAlpha = alpha;
+      D.text(c, String(index), rect.x + rect.w / 2, py, {
+        size: active ? 27 : 20,
+        weight: 'bold',
+        color: active ? T.primary : T.muted,
+        align: 'center',
+      });
+      c.restore();
+    }
+    c.restore();
+    D.strokeRoundRect(c, rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1, 10, T.border, 1);
+  }
+
+  drawCompactResultButton(c, x, y, w, h, label, kind, id, onTap) {
+    const T = theme.tokens;
+    if (kind === 'replay') {
+      D.strokeRoundRect(c, x, y, w, h, 7, T.god, 1);
+    } else {
+      D.fillRoundRect(c, x, y, w, h, 7, kind === 'pick' ? T.god : T.primary);
+    }
+    D.text(c, label, x + w / 2, y + h / 2, {
+      size: Math.max(9, Math.min(11.5, w / 4.4)), weight: 'bold',
+      color: kind === 'replay' ? T.god : '#ffffff', align: 'center',
+    });
+    this.addButton(id, x, y, w, h, onTap);
+  }
+
   drawOptions(c) {
     const T = theme.tokens;
     D.card(c, this.cx, this.optY, this.cw, this.optH, T);
@@ -773,7 +1119,10 @@ class LogicPuzzleScene extends Scene {
     const enabled = this.canPlay();
     this.drawOptionButton(c, areaX + areaW * 0.25, cy, t('logicpuzzle.newGame'),
       enabled ? T.primary : T.disabled, enabled, 'gamepad', 'new-game',
-      () => { this.confirming = true; });
+      () => {
+        if (this.mode === 'random') this.openRandomNewGame();
+        else this.confirming = true;
+      });
     this.drawOptionButton(c, areaX + areaW * 0.75, cy, t('logicpuzzle.answer'),
       enabled ? T.god : T.disabled, enabled, 'eye', 'answer',
       () => this.startReveal());
@@ -932,39 +1281,26 @@ class LogicPuzzleScene extends Scene {
       size: 13, color: T.text, align: 'center',
     });
 
-    let primaryLabel;
-    let primaryKind;
-    let primaryId;
-    let primaryTap;
-    if (this.revealed) {
-      if (random) {
-        primaryLabel = t('logicpuzzle.again');
-        primaryKind = 'continue';
-        primaryId = 'result-again';
-        primaryTap = () => this.again();
-      } else {
-        primaryLabel = t('logicpuzzle.newGame');
-        primaryKind = 'new';
-        primaryId = 'result-new';
-        primaryTap = () => this.startNewGame();
-      }
-    } else if (random) {
-      primaryLabel = t('logicpuzzle.again');
-      primaryKind = 'continue';
-      primaryId = 'result-again';
-      primaryTap = () => this.again();
-    } else if (final) {
-      primaryLabel = t('logicpuzzle.newGame');
-      primaryKind = 'new';
-      primaryId = 'result-new';
-      primaryTap = () => this.startNewGame();
-    } else {
-      primaryLabel = t('logicpuzzle.next');
-      primaryKind = 'next';
-      primaryId = 'result-next';
-      primaryTap = () => this.nextLevel();
+    if (random) {
+      // 随机模式：重玩本关 / 选一关 / 随机一关
+      const labels = [t('logicpuzzle.replay'), t('logicpuzzle.pickLevelShort'), t('logicpuzzle.randomLevelShort')];
+      const gap = 4;
+      const bw = (rect.w - 24 - gap * 2) / 3;
+      const by = cy + 28;
+      this.drawCompactResultButton(c, rect.x + 12, by, bw, 30, labels[0], 'replay',
+        'result-replay', () => this.replayLevel());
+      this.drawCompactResultButton(c, rect.x + 12 + bw + gap, by, bw, 30, labels[1], 'pick',
+        'result-pick', () => this.openLevelPicker(false));
+      this.drawCompactResultButton(c, rect.x + 12 + (bw + gap) * 2, by, bw, 30, labels[2],
+        'random', 'result-again', () => this.again());
+      return;
     }
 
+    const finalLevel = this.level >= logic.LEVEL_COUNT;
+    const primaryLabel = finalLevel ? t('logicpuzzle.newGame') : t('logicpuzzle.next');
+    const primaryKind = finalLevel ? 'new' : 'next';
+    const primaryId = finalLevel ? 'result-new' : 'result-next';
+    const primaryTap = finalLevel ? (() => this.startNewGame()) : (() => this.nextLevel());
     const labels = [t('logicpuzzle.replay'), primaryLabel];
     const gap = 10;
     const widths = labels.map((label) => resultButton.width(c, label));
